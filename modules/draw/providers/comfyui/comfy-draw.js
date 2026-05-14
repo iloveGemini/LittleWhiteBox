@@ -1038,8 +1038,9 @@ function validateComfyTextNode(workflow, nodeId, label, { required = false } = {
         return;
     }
     const node = requireComfyNode(workflow, id, label);
-    if (!('text' in node.inputs)) {
-        throw new Error(`${label}需要填 CLIP Text Encode 这类带 text 输入的节点：${id}`);
+    const hasTextField = ['text', 'positive', 'negative', 'prompt'].some(k => k in node.inputs);
+    if (!hasTextField) {
+        throw new Error(`${label}需要填带 text/positive/prompt 输入的节点：${id}`);
     }
 }
 
