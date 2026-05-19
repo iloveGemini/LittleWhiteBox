@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-19T04:04:48.582Z",
+  "generatedAt": "2026-05-19T06:08:22.845Z",
   "version": 2,
   "files": [
     {
@@ -357,7 +357,7 @@
       "publicPath": "scripts/extensions/third-party/LittleWhiteBox/modules/assistant/app-src/ui/chat-ui.js",
       "relativePath": "modules/assistant/app-src/ui/chat-ui.js",
       "extension": ".js",
-      "sizeBytes": 36998
+      "sizeBytes": 37741
     },
     {
       "source": "littlewhitebox",

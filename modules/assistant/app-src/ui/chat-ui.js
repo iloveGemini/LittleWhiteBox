@@ -744,6 +744,36 @@ export function createChatUi(deps) {
         return units;
     }
 
+    function applyRenderUnits(container, previousUnits, unitSpecs) {
+        const nextUnits = [];
+
+        unitSpecs.forEach((unit, index) => {
+            const previousUnit = previousUnits[index];
+            const canReuseNode = previousUnit?.signature === unit.signature
+                && previousUnit.node?.parentNode === container;
+            const node = canReuseNode ? previousUnit.node : unit.build();
+            const currentNode = container.children[index] || null;
+
+            if (currentNode !== node) {
+                container.insertBefore(node, currentNode);
+            }
+            if (!canReuseNode && previousUnit?.node?.parentNode === container && previousUnit.node !== node) {
+                previousUnit.node.remove();
+            }
+
+            nextUnits.push({
+                signature: unit.signature,
+                node,
+            });
+        });
+
+        while (container.children.length > unitSpecs.length) {
+            container.lastElementChild?.remove();
+        }
+
+        return nextUnits;
+    }
+
     function renderMessages(container) {
         if (!container) return;
         container.classList.toggle('is-busy', !!state.isBusy);
@@ -769,19 +799,8 @@ export function createChatUi(deps) {
             return;
         }
 
-        const fragment = document.createDocumentFragment();
-        const nextUnits = unitSpecs.map((unit, index) => {
-            const previousUnit = previousUnits[index];
-            const node = previousUnit?.signature === unit.signature
-                ? previousUnit.node
-                : unit.build();
-            fragment.appendChild(node);
-            return {
-                signature: unit.signature,
-                node,
-            };
-        });
-        container.replaceChildren(fragment);
+        const previousScrollTop = container.scrollTop;
+        const nextUnits = applyRenderUnits(container, previousUnits, unitSpecs);
         renderCache = {
             kind: 'messages',
             units: nextUnits,
@@ -789,6 +808,8 @@ export function createChatUi(deps) {
 
         if (state.autoScroll) {
             container.scrollTop = container.scrollHeight;
+        } else {
+            container.scrollTop = previousScrollTop;
         }
     }
 
