@@ -201,19 +201,17 @@ function num(value) {
 }
 
 function buildSamplingFields(source) {
-    const temp = num(oai_settings?.temp_openai);
     const presence = num(oai_settings?.pres_pen_openai);
     const frequency = num(oai_settings?.freq_pen_openai);
-    const topPOpenAI = num(oai_settings?.top_p_openai ?? oai_settings?.top_p);
-    const topPGemini = num(oai_settings?.makersuite_top_p ?? oai_settings?.top_p);
     const topKGemini = num(oai_settings?.makersuite_top_k ?? oai_settings?.top_k);
     const maxOpenAI = num(oai_settings?.openai_max_tokens ?? oai_settings?.max_tokens);
     const maxGemini = num(oai_settings?.makersuite_max_tokens ?? oai_settings?.max_output_tokens ?? oai_settings?.openai_max_tokens ?? oai_settings?.max_tokens);
     const fields = {
-        temperature: temp ?? 0.7,
+        // Scene planner should use a stable default instead of inheriting the
+        // main chat sampling, which can carry provider-specific invalid values.
+        temperature: 0.7,
         presence_penalty: presence,
         frequency_penalty: frequency,
-        top_p: source === chat_completion_sources.MAKERSUITE ? topPGemini : topPOpenAI,
         max_tokens: source === chat_completion_sources.MAKERSUITE ? (maxGemini ?? maxOpenAI ?? 4000) : (maxOpenAI ?? 4000),
         include_reasoning: oai_settings?.show_thoughts ?? true,
         reasoning_effort: oai_settings?.reasoning_effort || 'medium',
