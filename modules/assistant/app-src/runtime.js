@@ -78,6 +78,7 @@ export function createAssistantRuntime(deps) {
         getToolDefinitions,
         isJsApiEnabled,
         getActiveProviderConfig,
+        getDelegateProviderConfig,
         getSystemPrompt,
         getEphemeralUserContextText,
         SYSTEM_PROMPT,
@@ -414,6 +415,7 @@ export function createAssistantRuntime(deps) {
             delegateRunner = createDelegateRunner({
                 createAdapter,
                 getActiveProviderConfig,
+                getDelegateProviderConfig,
                 getSystemPrompt: resolveSystemPrompt,
                 resolveToolDefinitions,
                 safeJsonParse,

@@ -59,6 +59,14 @@ export function buildDefaultPreset() {
     };
 }
 
+export function buildDefaultDelegateConfig(sourcePreset = buildDefaultPreset()) {
+    const preset = sourcePreset && typeof sourcePreset === 'object' ? sourcePreset : buildDefaultPreset();
+    return {
+        provider: normalizeProvider(preset.provider),
+        modelConfigs: normalizeModelConfigs(preset.modelConfigs || {}),
+    };
+}
+
 export function normalizePermissionMode(value) {
     return value === 'full' ? 'full' : DEFAULT_PERMISSION_MODE;
 }
@@ -129,6 +137,22 @@ function resolveCurrentPresetName(presets, requestedName) {
     return presets[normalizedName] ? normalizedName : Object.keys(presets)[0];
 }
 
+function resolveDelegatePresetName(presets, requestedName, fallbackName) {
+    const normalizedName = normalizePresetName(requestedName || fallbackName);
+    if (presets[normalizedName]) return normalizedName;
+    if (presets[fallbackName]) return fallbackName;
+    return Object.keys(presets)[0];
+}
+
+function normalizeDelegateConfig(input = {}, fallbackPreset = buildDefaultPreset()) {
+    const fallback = buildDefaultDelegateConfig(fallbackPreset);
+    const source = input && typeof input === 'object' ? input : {};
+    return {
+        provider: normalizeProvider(source.provider || fallback.provider),
+        modelConfigs: normalizeModelConfigs(source.modelConfigs || fallback.modelConfigs),
+    };
+}
+
 export function normalizeAgentSettings(saved = {}, options = {}) {
     const {
         defaultWorkspaceFileName = '',
@@ -137,12 +161,17 @@ export function normalizeAgentSettings(saved = {}, options = {}) {
     const legacyPresetName = normalizePresetName(saved.currentPresetName || saved.presetName || DEFAULT_PRESET_NAME);
     const presets = normalizePresets(saved, legacyPresetName);
     const currentPresetName = resolveCurrentPresetName(presets, saved.currentPresetName);
+    const delegatePresetName = resolveDelegatePresetName(presets, saved.delegatePresetName, currentPresetName);
+    const delegateFallbackPreset = presets[delegatePresetName] || presets[currentPresetName] || buildDefaultPreset();
+    const delegateConfig = normalizeDelegateConfig(saved.delegateConfig, delegateFallbackPreset);
 
     return {
         enabled: !!saved.enabled,
         workspaceFileName: normalizeWorkspaceName(saved.workspaceFileName || defaultWorkspaceFileName),
         jsApiPermission: normalizeJsApiPermission(saved.jsApiPermission),
         currentPresetName,
+        delegatePresetName,
+        delegateConfig,
         presets,
         updatedAt: Number(saved.updatedAt) || 0,
         configVersion: Number(saved.configVersion) || 0,
@@ -153,12 +182,17 @@ export function normalizeAgentConfig(config = {}) {
     const legacyPresetName = normalizePresetName(config.currentPresetName || config.presetDraftName || DEFAULT_PRESET_NAME);
     const presets = normalizePresets(config, legacyPresetName);
     const currentPresetName = resolveCurrentPresetName(presets, config.currentPresetName);
+    const delegatePresetName = resolveDelegatePresetName(presets, config.delegatePresetName, currentPresetName);
     const currentPreset = presets[currentPresetName] || buildDefaultPreset();
+    const delegateFallbackPreset = presets[delegatePresetName] || currentPreset;
+    const delegateConfig = normalizeDelegateConfig(config.delegateConfig, delegateFallbackPreset);
 
     return {
         workspaceFileName: String(config.workspaceFileName || ''),
         jsApiPermission: normalizeJsApiPermission(config.jsApiPermission),
         currentPresetName,
+        delegatePresetName,
+        delegateConfig,
         presetDraftName: normalizePresetName(config.presetDraftName || currentPresetName),
         presetNames: Object.keys(presets),
         presets,

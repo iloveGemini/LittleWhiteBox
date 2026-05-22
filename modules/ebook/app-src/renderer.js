@@ -22,7 +22,7 @@ const STUDIO_FILE_SECTIONS = [
         badge: '草稿',
         empty: '还没有设定草稿。',
         matches: (path) => (
-            ['book/outline.md', 'book/style.md', 'book/characters.md', 'book/world.md'].includes(path)
+            ['book/outline.md', 'book/style.md', 'book/characters.md', 'book/world.md', 'book/state.md', 'book/review-rules.md'].includes(path)
             || path.startsWith('book/reviews/')
             || path.startsWith('book/notes/')
         ),
@@ -30,7 +30,7 @@ const STUDIO_FILE_SECTIONS = [
     {
         key: 'sources',
         title: '导入资料',
-        description: '从酒馆导入的聊天、角色、剧情总结和世界书，会放在这里。',
+        description: '从酒馆导入的当前聊天全部楼层、当前角色信息、小白X剧情总结和关联世界书，会放在这里。',
         badge: '素材',
         empty: '还没有导入资料。',
         matches: (path) => path.startsWith('book/sources/'),
@@ -43,6 +43,8 @@ const FILE_ORDER = [
     'book/style.md',
     'book/characters.md',
     'book/world.md',
+    'book/state.md',
+    'book/review-rules.md',
     'book/reviews/',
     'book/notes/',
     'book/sources/',
@@ -93,6 +95,8 @@ function formatFileTitle(path = '') {
         'book/style.md': '文风规则',
         'book/characters.md': '角色设定',
         'book/world.md': '世界设定',
+        'book/state.md': '状态追踪',
+        'book/review-rules.md': '审稿规则',
         'book/notes/revision-plan.md': '修订计划',
         'book/sources/chat.md': '当前聊天资料',
         'book/sources/character.md': '角色资料',
@@ -189,13 +193,17 @@ function renderThoughtDetails(message = {}, options = {}) {
     const thoughts = normalizeThoughtBlocks(message.thoughts);
     if (!thoughts.length) return '';
     const thoughtKey = String(options.key || '').trim();
-    const isOpen = message.streaming
+    const autoOpen = !!message.streaming;
+    const isOpen = autoOpen
         || (thoughtKey && Array.isArray(options.openThoughtKeys) && options.openThoughtKeys.includes(thoughtKey));
     const label = thoughts.length > 1
         ? `${message.streaming ? '正在思考' : '展开思考块'}（${thoughts.length} 段）`
         : (message.streaming ? '正在思考' : '展开思考块');
+    const thoughtKeyAttr = thoughtKey ? ` data-thought-key="${escapeHtml(thoughtKey)}"` : '';
+    const autoOpenAttr = autoOpen ? ' data-auto-open-thought="true"' : '';
+    const openAttr = isOpen ? ' open' : '';
     return `
-        <details class="xb-thought-details" ${thoughtKey ? `data-thought-key="${escapeHtml(thoughtKey)}"` : ''} ${isOpen ? 'open' : ''}>
+        <details class="xb-thought-details"${thoughtKeyAttr}${autoOpenAttr}${openAttr}>
             <summary>${escapeHtml(label)}</summary>
             ${thoughts.map((item) => `
                 <div class="xb-thought-block">
@@ -218,6 +226,15 @@ function buildToolTurnKey(batches = [], fallbackIndex = 0) {
     return ids.length
         ? `tool-turn:${ids.join('|')}`
         : `tool-turn:fallback:${fallbackIndex}`;
+}
+
+function shouldAutoOpenActiveToolTurn(state = {}, startIndex = -1) {
+    return !!(
+        state.isBusy
+        && Number.isInteger(state.activeTurnStartIndex)
+        && state.activeTurnStartIndex >= 0
+        && startIndex > state.activeTurnStartIndex
+    );
 }
 
 function parseToolContent(content = '') {
@@ -322,7 +339,10 @@ function renderBookEntryShell(options = {}) {
                     </div>
                     <div class="xb-entry-copy">
                         <div class="xb-kicker">书本入口</div>
-                        <h2>${escapeHtml(bookTitle)}</h2>
+                        <div class="xb-title-row">
+                            <h2>${escapeHtml(bookTitle)}</h2>
+                            <button class="xb-icon-button" data-book-rename title="修改书名" aria-label="修改书名" ${state.isBusy ? 'disabled' : ''}>✎</button>
+                        </div>
                         <p>一本书有两种状态：写的时候去创作台，读的时候进阅读器。先选你现在想做的事。</p>
                     </div>
                 </section>
@@ -371,10 +391,10 @@ function renderImportActions(disabledAttr = '') {
     return `
         <div class="xb-section-subtitle">可导入</div>
         <div class="xb-imports">
-            <button data-import="chat" ${disabledAttr}>当前聊天</button>
+            <button data-import="chat" title="导入当前聊天的全部楼层" ${disabledAttr}>聊天记录</button>
             <button data-import="character" ${disabledAttr}>角色信息</button>
-            <button data-import="summary" ${disabledAttr}>剧情总结</button>
-            <button data-import="worldbook" ${disabledAttr}>世界书</button>
+            <button data-import="summary" title="导入小白X剧情总结模块里的当前总结" ${disabledAttr}>剧情总结</button>
+            <button data-import="worldbook" title="导入当前角色/聊天关联世界书的启用条目" ${disabledAttr}>世界书</button>
         </div>
     `;
 }
@@ -428,7 +448,6 @@ function renderMessages(state = {}) {
     const renderMessageActions = (message = {}, messageIndex = 0) => {
         const canAct = message.role === 'assistant'
             && !message.streaming
-            && !message.error
             && String(message.content || '').trim()
             && !(Array.isArray(message.toolCalls) && message.toolCalls.length);
         if (!canAct) return '';
@@ -503,11 +522,14 @@ function renderMessages(state = {}) {
             batches.push({ assistantMessage, toolMessages });
             index = nextIndex;
         }
-        const toolCount = batches.reduce((count, batch) => count + batch.toolMessages.length, 0);
         const turnKey = buildToolTurnKey(batches, startIndex);
-        const isOpen = Array.isArray(state.openToolTurnKeys) && state.openToolTurnKeys.includes(turnKey);
+        const autoOpen = shouldAutoOpenActiveToolTurn(state, startIndex);
+        const isOpen = autoOpen
+            || (Array.isArray(state.openToolTurnKeys) && state.openToolTurnKeys.includes(turnKey));
+        const autoOpenAttr = autoOpen ? ' data-auto-open-tool-turn="true"' : '';
+        const openAttr = isOpen ? ' open' : '';
         const html = `
-            <details class="xb-tool-trace xb-tool-turn" data-tool-turn-key="${escapeHtml(turnKey)}" ${isOpen ? 'open' : ''}>
+            <details class="xb-tool-trace xb-tool-turn" data-tool-turn-key="${escapeHtml(turnKey)}"${autoOpenAttr}${openAttr}>
                 <summary><span>已创作 ${batches.length || 1} 轮</span><span class="xb-tool-fold-indicator" aria-hidden="true"></span></summary>
                 <div class="xb-tool-trace-body">
                     ${batches.map((batch, batchIndex) => `
@@ -526,7 +548,6 @@ function renderMessages(state = {}) {
                             `).join('')}
                         </div>
                     `).join('')}
-                    <div class="xb-tool-trace-note">共 ${toolCount} 个过程项。折叠只影响显示，不影响后续上下文。</div>
                 </div>
             </details>
         `;
@@ -556,7 +577,7 @@ function renderToolTrace(state = {}) {
     if (!state.toolTrace.length) return '';
     const rounds = new Set(state.toolTrace.map((item) => Number(item.round) || 1)).size || 1;
     return `
-        <details class="xb-tool-trace">
+        <details class="xb-tool-trace" open>
             <summary>已创作 ${rounds} 轮 ›</summary>
             <div class="xb-tool-trace-body">
                 ${state.toolTrace.slice(-8).map((item) => `
@@ -565,7 +586,6 @@ function renderToolTrace(state = {}) {
                         <small>${escapeHtml(trimInlineText(item.summary, 220))}</small>
                     </div>
                 `).join('')}
-                <div class="xb-tool-trace-note">${escapeHtml(state.toolTrace.length > 8 ? `只显示最近 8 个过程项，共 ${state.toolTrace.length} 个。` : `共 ${state.toolTrace.length} 个过程项。`)}</div>
             </div>
         </details>
     `;
@@ -592,6 +612,9 @@ function renderSettingsDialog(state = {}) {
                         configSave: state.configSave,
                         runtimeText: '',
                         showInlineToast: false,
+                        showAssistantPermissions: false,
+                        activePage: state.configPage,
+                        delegatePresetHint: '电纸书审稿分身会使用这里的独立 API 配置；可以和主助手使用不同 Provider、Base URL、模型和 Tool 调用格式。',
                         isBusy: state.isBusy,
                         canDeletePreset: (state.config?.presetNames || []).length > 1,
                     })}
@@ -616,18 +639,13 @@ function renderStudioShell(options = {}) {
         <div class="xb-ebook-shell">
             <aside class="xb-sidebar">
                 <div class="xb-brand">
-                    <div>
-                        <div class="xb-kicker">创作台</div>
+                    <div class="xb-title-row">
                         <h1>${escapeHtml(state.book?.title || '未命名书稿')}</h1>
+                        <button class="xb-icon-button" data-book-rename title="修改书名" aria-label="修改书名" ${state.isBusy ? 'disabled' : ''}>✎</button>
+                        <button id="xb-entry-link" class="xb-icon-button" title="返回书本入口" aria-label="返回书本入口">↩</button>
                     </div>
-                    <button id="xb-entry-link" title="返回书本入口" aria-label="返回书本入口">入口</button>
                 </div>
                 <section class="xb-panel xb-files-panel">
-                    <div class="xb-panel-head">
-                        <span>本书内容</span>
-                        <button id="xb-new-file" ${writeActionAttr}>新章节</button>
-                    </div>
-                    <div class="xb-panel-note">正式章节会进入阅读器；其他内容是写作依据。</div>
                     <div class="xb-files">${renderStudioFileSections(state, { writeActionAttr })}</div>
                 </section>
             </aside>

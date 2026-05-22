@@ -35,6 +35,10 @@ export async function saveEbookAgentConfig(patch = {}, options = {}) {
         workspaceFileName: normalizedCurrent.workspaceFileName || '',
         jsApiPermission: normalizeJsApiPermission(patch.jsApiPermission ?? normalizedCurrent.jsApiPermission),
         currentPresetName: normalizePresetName(patch.currentPresetName || normalizedCurrent.currentPresetName),
+        delegatePresetName: normalizePresetName(patch.delegatePresetName || normalizedCurrent.delegatePresetName || patch.currentPresetName || normalizedCurrent.currentPresetName),
+        delegateConfig: patch.delegateConfig && typeof patch.delegateConfig === 'object'
+            ? patch.delegateConfig
+            : normalizedCurrent.delegateConfig,
         presets: patch.presets && typeof patch.presets === 'object'
             ? patch.presets
             : normalizedCurrent.presets,

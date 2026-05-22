@@ -4,6 +4,7 @@ import {
     getBook,
     listBookFiles,
     listBooks,
+    renameBook,
     setSelectedBookId,
     upsertBookFile,
 } from '../shared/ebook-db.js';
@@ -144,6 +145,20 @@ export function createBookController(deps = {}) {
         render();
     }
 
+    async function renameCurrentBook() {
+        if (!state.book || state.isBusy) return;
+        const title = prompt('书名', state.book.title || '未命名书稿');
+        if (title === null) return;
+        try {
+            state.book = await renameBook(state.book.id, title);
+            await refreshBooksAndFiles();
+            showToast('书名已更新');
+            render();
+        } catch (error) {
+            showToast(`改名失败：${error?.message || error}`);
+        }
+    }
+
     async function createNewFile() {
         if (!state.book || state.isBusy) return;
         if (isEditorDirty() && !confirm('当前文件还没保存，确定新建章节吗？')) return;
@@ -205,6 +220,7 @@ export function createBookController(deps = {}) {
         importMaterial,
         initializeBook,
         isEditorDirty,
+        renameCurrentBook,
         refreshBooksAndFiles,
         saveCurrentFile,
         selectBook,

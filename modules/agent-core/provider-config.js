@@ -3,7 +3,7 @@ import { GoogleAdapter } from './adapters/google.js';
 import { OpenAICompatibleAdapter } from './adapters/openai-compatible.js';
 import { OpenAIResponsesAdapter } from './adapters/openai-responses.js';
 import { SillyTavernOpenAICompatibleAdapter } from './adapters/sillytavern-openai-compatible.js';
-import { buildDefaultPreset, cloneDefaultModelConfigs, normalizeAgentConfig } from './config.js';
+import { DEFAULT_PRESET_NAME, buildDefaultPreset, cloneDefaultModelConfigs, normalizeAgentConfig, normalizePresetName } from './config.js';
 
 export const AGENT_REQUEST_TIMEOUT_MS = 180000;
 
@@ -49,12 +49,39 @@ export function getToolModeLabel(providerConfig = {}) {
 
 export function resolveActiveProviderConfig(configValue = {}, options = {}) {
     const config = normalizeAgentConfig(configValue || {});
-    const currentPreset = config.presets?.[config.currentPresetName] || buildDefaultPreset();
+    if (options.role === 'delegate' && config.delegateConfig) {
+        const provider = config.delegateConfig.provider || 'openai-compatible';
+        const modelConfigs = config.delegateConfig.modelConfigs || cloneDefaultModelConfigs();
+        const providerConfig = modelConfigs[provider] || cloneDefaultModelConfigs()[provider] || {};
+        return {
+            currentPresetName: String(config.delegatePresetName || config.currentPresetName || ''),
+            provider,
+            baseUrl: String(providerConfig.baseUrl || ''),
+            model: String(providerConfig.model || ''),
+            apiKey: String(providerConfig.apiKey || ''),
+            temperature: Number(providerConfig.temperature ?? 0.2),
+            maxTokens: provider === 'anthropic' ? 32000 : null,
+            timeoutMs: Number(options.timeoutMs) || AGENT_REQUEST_TIMEOUT_MS,
+            toolMode: providerConfig.toolMode || 'native',
+            reasoningEnabled: Boolean(providerConfig.reasoningEnabled),
+            reasoningEffort: normalizeReasoningEffort(providerConfig.reasoningEffort),
+        };
+    }
+
+    const requestedPresetName = normalizePresetName(
+        options.presetName
+            || (options.role === 'delegate' ? config.delegatePresetName : config.currentPresetName)
+            || DEFAULT_PRESET_NAME,
+    );
+    const activePresetName = config.presets?.[requestedPresetName]
+        ? requestedPresetName
+        : (config.presets?.[config.currentPresetName] ? config.currentPresetName : DEFAULT_PRESET_NAME);
+    const currentPreset = config.presets?.[activePresetName] || buildDefaultPreset();
     const provider = currentPreset.provider || config.provider || 'openai-compatible';
     const modelConfigs = currentPreset.modelConfigs || config.modelConfigs || cloneDefaultModelConfigs();
     const providerConfig = modelConfigs[provider] || cloneDefaultModelConfigs()[provider] || {};
     return {
-        currentPresetName: String(config.currentPresetName || ''),
+        currentPresetName: String(activePresetName || ''),
         provider,
         baseUrl: String(providerConfig.baseUrl || ''),
         model: String(providerConfig.model || ''),

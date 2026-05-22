@@ -19,6 +19,7 @@ export function buildAppMarkup(state) {
                         inlineToastText: state.toast,
                         isBusy: state.isBusy,
                         canDeletePreset: (state.config?.presetNames || []).length > 1,
+                        activePage: state.configPage,
                         runtimeText: '',
                     })}
                 </div>

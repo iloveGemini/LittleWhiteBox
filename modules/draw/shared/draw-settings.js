@@ -4,8 +4,10 @@ import { normalizeDrawLlmApi } from "./draw-llm.js";
 // 历史兼容：共享画图设置仍存放在 LittleWhiteBox_NovelDraw.json/settings。
 // 不改文件名，避免迁移用户数据；这里仅抽出 provider-neutral 字段读写。
 const SERVER_FILE_KEY = 'settings';
+export const DEFAULT_SHARED_GALLERY_CACHE_DAYS = 3;
 
 const DEFAULT_SHARED_DRAW_SETTINGS = {
+    cacheDays: DEFAULT_SHARED_GALLERY_CACHE_DAYS,
     llmApi: { provider: 'st', url: '', key: '', model: '', modelCache: [] },
     useStream: false,
     useWorldInfo: false,
@@ -39,6 +41,12 @@ function normalizeCharacterOutfits(outfits = []) {
         .filter(outfit => outfit.name || outfit.tags);
 }
 
+export function normalizeSharedCacheDays(value, fallback = DEFAULT_SHARED_GALLERY_CACHE_DAYS) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.min(30, Math.max(1, Math.round(number)));
+}
+
 function normalizeSharedDrawSettings(saved = {}) {
     const merged = {
         ...saved,
@@ -49,6 +57,7 @@ function normalizeSharedDrawSettings(saved = {}) {
     if (!Array.isArray(merged.worldbooks.uploadedBooks)) merged.worldbooks.uploadedBooks = [];
     if (!Array.isArray(merged.paramsPresets)) merged.paramsPresets = [];
     if (!Array.isArray(merged.messageFilterRules)) merged.messageFilterRules = [];
+    merged.cacheDays = normalizeSharedCacheDays(merged.cacheDays);
     merged.messageFilterRules = merged.messageFilterRules
         .filter(rule => rule && typeof rule === 'object')
         .map(rule => ({ start: String(rule.start || ''), end: String(rule.end || '') }));

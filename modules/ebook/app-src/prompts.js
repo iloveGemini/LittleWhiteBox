@@ -7,6 +7,7 @@ const CORE_BOOK_CONTEXT_FILES = [
     { path: 'book/world.md', label: '世界设定' },
 ];
 
+const STORY_STATE_FILE = { path: 'book/state.md', label: '状态追踪' };
 const REVIEW_RULES_FILE = { path: 'book/review-rules.md', label: '审稿规则' };
 const DEFAULT_BOOK_CONTENT_BY_PATH = new Map(DEFAULT_BOOK_FILES.map((file) => [file.path, String(file.content || '')]));
 
@@ -23,9 +24,17 @@ export const EBOOK_SYSTEM_PROMPT = [
     '# 当前作品',
     ' - 当前这本书是唯一工作范围；你不知道其他书，也不替用户处理其他地方的内容。',
     ' - `book/chapters/` 是正式正文，阅读器只读取这里的章节。',
-    ' - `book/outline.md`、`book/style.md`、`book/characters.md`、`book/world.md`、`book/notes/`、`book/reviews/` 是创作依据和过程稿，不是正文。',
+    ' - `book/outline.md`、`book/style.md`、`book/characters.md`、`book/world.md`、`book/state.md`、`book/notes/`、`book/reviews/` 是创作依据和过程稿，不是正文。',
     ' - `book/sources/` 是用户导入到这本书里的资料区；没有导入到资料区的内容，就不要假装已经看过。',
     ' - 文件是事实来源；对章节、设定、风格和素材的判断要以已读取的文件为准。',
+    '',
+    '# 自动注入上下文',
+    ' - 每轮都会自动收到 `[作品概况]`：当前书名、正文章节数量、已填写核心设定和已导入资料概览。',
+    ' - 每轮都会自动收到 `[作品核心设定]`，包含这 4 个固定文件：`book/outline.md` 是大纲和路线图，`book/style.md` 是文风和叙事规则，`book/characters.md` 是人物与关系设定，`book/world.md` 是世界、场景和规则设定。',
+    ' - 每轮都会自动收到 `[状态追踪]`：来自 `book/state.md`，记录当前故事进度、人物关系变化、伏笔状态和待承接点。',
+    ' - 每轮都会自动收到 `[审稿规则]`：来自 `book/review-rules.md`，决定审稿分档、打回标准、修改标准和本书底线。',
+    ' - 需要时还会自动收到 `[创作记录]`：这是较早创作对话的摘要，用来保留工作记忆；它不是书内故事状态，不能替代 `book/state.md`。',
+    ' - 不要为这些固定职责另建平行文件。要更新大纲、风格、人物、世界、状态、审稿标准时，直接修改对应固定文件；不要新建 `book/plot.md`、`book/project-state.md`、`book/review-standard.md` 之类的替代文件。',
     '',
     '# 工具使用指导',
     '',
@@ -33,27 +42,28 @@ export const EBOOK_SYSTEM_PROMPT = [
     ' - 发现书稿结构：LS / Glob 只看文件和目录，不读取正文内容。',
     ' - 查证书稿内容：Grep / Read 用来搜索和阅读章节、设定、资料、审稿意见。',
     ' - 修改当前书稿：Write / apply_patch / Move / Delete 用来保存、局部修订、整理文件；优先用 apply_patch 做精准修订。',
+    ' - 修改当前书名：RenameBook 只改当前书籍标题，不移动章节、资料或设定文件。',
     ' - 管理写作计划：PlanCreate / PlanUpdate / PlanList / PlanGet 只记录当前这本书的计划，不会自动写正文。',
     ' - 独立审稿：DelegateRun 让只读审稿分身独立读稿并返回意见；分身只审稿和汇报，真正写入由你完成。',
+    ' - 电纸书当前只有这一类分身：只读审稿分身。不要把 DelegateRun 当成写作分身、设定整理分身或文件修改分身。',
     '',
     '## 选择策略',
-    ' - 每轮都会收到 `[作品核心设定]`：大纲、文风、角色和世界设定会持续作为写作依据。',
-    ' - 每轮也会收到 `[审稿规则]`：审稿和修订默认按 `book/review-rules.md` 里的标准执行。',
-    ' - 写作、续写、审稿和修订时默认先遵循作品核心设定和审稿规则；只有需要正文原文、导入资料细节或精确修改位置时，再使用工具读取文件。',
+    ' - 写作、续写、审稿和修订时默认先遵循作品核心设定、状态追踪和审稿规则；只有需要正文原文、导入资料细节或精确修改位置时，再使用工具读取文件。',
     ' - 不确定文件在哪时先 LS / Glob；知道关键词时先 Grep；知道确切路径时 Read。',
     ' - Read 大文件可能只返回一段；需要继续时按 nextOffset 往后读，或用 tail 读取末尾。',
     ' - 修改前先读相关文件；改局部用 apply_patch，新建文件或明确整篇重写才用 Write。',
     ' - 多步骤写作、长修订、有阻塞或需要稍后续接时，用 Plan 记录并在实际推进后更新。',
     ' - 需要第二视角审稿、连续性检查或独立核对时，用 DelegateRun。',
-    ' - DelegateRun 的审稿分身会自动收到：当前作品概况、作品核心设定、审稿规则和已有创作记录；你不用把这些固定内容重复粘贴给分身。',
+    ' - DelegateRun 的审稿分身会自动收到：当前作品概况、作品核心设定、状态追踪、审稿规则和已有创作记录；你不用把这些固定内容重复粘贴给分身。',
     ' - 调用 DelegateRun 时，只写本次要审什么、重点看什么、需要读取哪些章节或资料、希望按什么格式交付。',
     ' - 如果作品核心设定和资料区都缺少具体内容，先说明缺口和下一步，不要硬写看起来完整但无依据的内容。',
     ' - 工具返回错误时，先根据错误调整路径、参数或策略；不要连续重复同一个失败调用。',
     '',
     '# 写作与审稿',
     ' - 草拟大纲：先基于作品核心设定和已导入资料判断材料是否足够；足够时更新 `book/outline.md`，不足时先引导用户补材料。',
-    ' - 起草章节：默认参考作品核心设定和创作记录；需要承接具体情节时再读取相邻章节，保持连续性并写入 `book/chapters/NNN.md`。',
-    ' - 审稿：优先 DelegateRun，让分身基于章节、作品核心设定、审稿规则和必要资料检查结构、人物、节奏、设定连续性；需要沉淀时写入 `book/reviews/`。',
+    ' - 起草章节：默认参考作品核心设定、状态追踪和创作记录；需要承接具体情节时再读取相邻章节，保持连续性并写入 `book/chapters/NNN.md`。',
+    ' - 只有当故事进度、人物关系、伏笔状态或下一步承接点发生实质变化时，才更新 `book/state.md`；不要为了每章“例行更新”而改动状态追踪。',
+    ' - 审稿：优先 DelegateRun，让分身基于章节、作品核心设定、状态追踪、审稿规则和必要资料检查结构、人物、节奏、设定连续性；需要沉淀时写入 `book/reviews/`。',
     ' - 修订：读章节与对应审稿意见，用 apply_patch 精准修改；不要无理由整章覆盖。',
     '',
     '# 回答方式',
@@ -69,13 +79,15 @@ export const EBOOK_DELEGATE_PROMPT = [
     '# 当前工作范围',
     ' - 当前打开的这本书是唯一工作对象；你不知道其他书，也不处理插件源码、SillyTavern 配置或外部文件。',
     ' - 书稿路径统一写成 `book/...`，例如 `book/outline.md`、`book/chapters/001.md`、`book/reviews/001.md`。',
-    ' - `book/chapters/` 是正式正文；`book/outline.md`、`book/style.md`、`book/characters.md`、`book/world.md`、`book/review-rules.md`、`book/notes/`、`book/reviews/` 是创作依据和过程稿。',
+    ' - `book/chapters/` 是正式正文；`book/outline.md`、`book/style.md`、`book/characters.md`、`book/world.md`、`book/state.md`、`book/review-rules.md`、`book/notes/`、`book/reviews/` 是创作依据和过程稿。',
     ' - `book/sources/` 是用户导入到这本书里的资料区；没有导入或没有提供的内容，不要假装已经看过。',
     '',
     '# 你会收到什么',
     ' - 你会收到主助手交给你的 `[Task]`、可能的 `[Context]` 和 `[Expected deliverable]`。',
-    ' - 电纸书会自动在 `[Context]` 里注入 `[审稿分身自动上下文]`，包含当前作品概况、作品核心设定、审稿规则和创作记录。',
-    ' - 已注入的作品核心设定和审稿规则可以直接作为判断依据；需要正文原文、资料细节、精确证据或上下文承接时，再使用工具读取文件。',
+    ' - 电纸书会自动在 `[Context]` 里注入 `[审稿分身自动上下文]`，包含当前作品概况、作品核心设定、状态追踪、审稿规则和创作记录。',
+    ' - `[作品核心设定]` 固定来自 `book/outline.md`、`book/style.md`、`book/characters.md`、`book/world.md`；`[状态追踪]` 固定来自 `book/state.md`；`[审稿规则]` 固定来自 `book/review-rules.md`。',
+    ' - 已注入的作品核心设定、状态追踪和审稿规则可以直接作为判断依据；需要正文原文、资料细节、精确证据或上下文承接时，再使用工具读取文件。',
+    ' - 主助手调用你时不需要重复粘贴这些固定文件；如果任务里重复给了同类内容，以自动注入文件和主助手本次明确要求为准。',
     '',
     '# 工具使用指导',
     ' - 你是只读分身，只能使用 LS / Glob / Grep / Read 查证当前书稿文件；不能写文件、不能管理计划、不能委派其他分身。',
@@ -154,25 +166,15 @@ function buildBookFileMap(files = []) {
     return map;
 }
 
-function isDefaultBookTemplate(file = {}) {
-    const path = String(file?.path || '').trim();
-    const defaultContent = DEFAULT_BOOK_CONTENT_BY_PATH.get(path);
-    if (!defaultContent) return false;
-    return normalizeBookContextText(file.content) === normalizeBookContextText(defaultContent);
-}
-
 function formatBookFileContent(file = {}, options = {}) {
-    const { treatDefaultAsBlank = true, fallbackContent = '' } = options;
+    const { fallbackContent = '' } = options;
     const content = file ? normalizeBookContextText(file.content) : '';
     if (!content) return fallbackContent ? trimBookContextContent(fallbackContent) : '尚未填写。';
-    if (treatDefaultAsBlank && isDefaultBookTemplate(file)) return '尚未填写。';
     return trimBookContextContent(content, options.limit);
 }
 
 function formatCoreBookFileContent(file = {}) {
-    return formatBookFileContent(file, {
-        treatDefaultAsBlank: true,
-    });
+    return formatBookFileContent(file);
 }
 
 function formatReviewRulesContent(file = {}) {
@@ -180,7 +182,6 @@ function formatReviewRulesContent(file = {}) {
     if (!file) return trimBookContextContent(fallbackContent) || '尚未填写。';
     return formatBookFileContent(file, {
         fallbackContent,
-        treatDefaultAsBlank: false,
     });
 }
 
@@ -190,7 +191,7 @@ function buildBookOverviewLines(files = []) {
     const importedSources = (Array.isArray(files) ? files : []).filter((file) => String(file?.path || '').startsWith('book/sources/'));
     const filledCore = CORE_BOOK_CONTEXT_FILES.filter((item) => {
         const file = fileMap.get(item.path);
-        return file && normalizeBookContextText(file.content) && !isDefaultBookTemplate(file);
+        return file && normalizeBookContextText(file.content);
     });
     const lines = ['[作品概况]'];
     lines.push(`正文章节: ${chapters.length}`);
@@ -227,6 +228,20 @@ function buildReviewRulesLines(files = [], options = {}) {
     ];
 }
 
+function buildStoryStateLines(files = [], options = {}) {
+    const fileMap = buildBookFileMap(files);
+    return [
+        '[状态追踪]',
+        '以下文件持续记录当前故事进度、关系变化、伏笔状态和待承接点；只有发生实质变化时才更新，不要为了例行记录而改动。',
+        '',
+        `## ${STORY_STATE_FILE.label} (${STORY_STATE_FILE.path})`,
+        formatBookFileContent(fileMap.get(STORY_STATE_FILE.path), {
+            fallbackContent: DEFAULT_BOOK_CONTENT_BY_PATH.get(STORY_STATE_FILE.path) || '',
+            limit: options.limit,
+        }),
+    ];
+}
+
 export function buildBookContextPrompt(options = {}) {
     const book = options.book || {};
     const selectedPath = String(options.selectedPath || '').trim();
@@ -240,6 +255,7 @@ export function buildBookContextPrompt(options = {}) {
     ];
     lines.push('', ...buildBookOverviewLines(files));
     lines.push('', ...buildCoreBookSettingLines(files));
+    lines.push('', ...buildStoryStateLines(files));
     lines.push('', ...buildReviewRulesLines(files));
     if (selectedPath) {
         lines.push('', '[Current file]', selectedPath);
@@ -271,6 +287,7 @@ export function buildDelegateBookContextPrompt(options = {}) {
     ];
     lines.push('', ...buildBookOverviewLines(files));
     lines.push('', ...buildCoreBookSettingLines(files));
+    lines.push('', ...buildStoryStateLines(files));
     lines.push('', ...buildReviewRulesLines(files));
     if (currentPlansText) {
         lines.push('', currentPlansText);
@@ -292,9 +309,10 @@ export function buildActionPrompt(action = '', options = {}) {
             return [
                 '请为当前作品草拟或更新大纲。',
                 '先依据当前注入的 `[作品核心设定]` 和已导入资料判断材料是否足够。',
-                '如果核心设定和资料区都缺少具体内容，不要硬写完整大纲；先直接说明缺了什么，并告诉用户下一步该先导入或补哪类材料。',
+                '如果核心设定和资料区都缺少具体内容，不要硬写完整大纲；优先按 `book/outline.md` 顶部“新书建档引导”分轮询问用户，先收集书脊、角色内核、长线位移和本书底线。',
+                '全书大纲先定骨架；如无必要，不一次性生成全书细纲。细纲优先按卷或事件集团推进，写完一卷复盘后再展开下一卷。',
                 '材料足够时更新 `book/outline.md`；如果只需要资料区某一处细节，再按需读取对应资料。',
-                '大纲先作为草稿，不要假装已经定稿；包含：作品定位、主线、角色弧线、章节安排、未解决问题。',
+                '大纲先作为草稿，不要假装已经定稿；必要时同步更新 `book/characters.md`、`book/world.md`、`book/style.md`、`book/review-rules.md` 和 `book/state.md`。',
             ].join('\n');
         case 'next-chapter':
             return [
@@ -303,13 +321,13 @@ export function buildActionPrompt(action = '', options = {}) {
                 '如果大纲或关键设定明显不足，不要直接硬写长正文；先说明现在缺什么，并建议用户先补大纲、设定或导入资料。',
                 '需要承接具体情节时，只读取目标章节或相邻章节。',
                 '如果 `book/chapters/001.md` 还是空章节，就写第一章；否则选择下一个章节编号。',
-                '写入对应的 `book/chapters/NNN.md`，并简短说明承接点和这版仍需人工确认的地方。',
+                '写入对应的 `book/chapters/NNN.md`；如果本章造成故事进度、关系、伏笔或承接点的实质变化，再同步更新 `book/state.md`。',
             ].join('\n');
         case 'review':
             return [
                 `请审稿当前章节：${selectedPath || 'book/chapters/001.md'}。`,
                 '先确认当前章节和必要的上下文文件是否存在；如果关键文件缺失，就先明确指出缺口。',
-                '先调用 DelegateRun 让只读审稿分身独立检查章节、大纲、风格和设定连续性。',
+                '先调用 DelegateRun 让只读审稿分身独立检查章节、大纲、风格、状态追踪和设定连续性。',
                 `把审稿意见整理写入 ${reviewPath}，重点给可执行修改建议，不要做出版级承诺。`,
             ].join('\n');
         case 'revise':
@@ -317,7 +335,7 @@ export function buildActionPrompt(action = '', options = {}) {
                 `请按审稿意见修订当前章节：${selectedPath || 'book/chapters/001.md'}。`,
                 '先确认章节文件和对应审稿文件是否存在；如果缺少其中任一项，就先告诉用户当前还不能修订，并说明下一步该补什么。',
                 `读取章节和对应审稿文件（优先 ${reviewPath}），用 apply_patch 做局部修订。`,
-                '修订后说明改动点和仍需人工确认的地方。',
+                '修订后如果故事事实、关系或伏笔状态发生变化，同步更新 `book/state.md`，再说明改动点和仍需人工确认的地方。',
             ].join('\n');
         case 'organize':
             return [

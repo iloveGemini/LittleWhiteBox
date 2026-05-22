@@ -81,6 +81,51 @@ test('DelegateRun completes from a direct model answer', async () => {
     assert.equal(seenTask.tools.some((tool) => tool.function?.name === TOOL_NAMES.DELEGATE_RUN), false);
 });
 
+test('DelegateRun can use a separate delegate provider config', async () => {
+    let seenProviderConfig = null;
+    const adapter = {
+        chat: async () => ({
+            text: 'delegate result',
+            toolCalls: [],
+        }),
+    };
+    const runner = createDelegateRunner({
+        createAdapter: (providerConfig) => {
+            seenProviderConfig = providerConfig;
+            return adapter;
+        },
+        executeToolCall: async () => ({ ok: true }),
+        getActiveProviderConfig: () => ({
+            provider: 'main',
+            model: 'main-model',
+            temperature: 0.2,
+            maxTokens: 1000,
+            reasoningEnabled: false,
+            reasoningEffort: 'medium',
+        }),
+        getDelegateProviderConfig: () => ({
+            provider: 'delegate',
+            model: 'delegate-model',
+            temperature: 0.1,
+            maxTokens: 2000,
+            reasoningEnabled: false,
+            reasoningEffort: 'medium',
+        }),
+        getSystemPrompt: () => 'base system prompt',
+        resolveToolDefinitions: () => TOOL_DEFINITIONS,
+        safeJsonParse,
+        isAbortError: () => false,
+        TOOL_NAMES,
+        maxRounds: 2,
+    });
+
+    const result = await runner.runDelegate({ task: 'review chapter' });
+
+    assert.equal(result.ok, true);
+    assert.equal(seenProviderConfig.provider, 'delegate');
+    assert.equal(seenProviderConfig.model, 'delegate-model');
+});
+
 test('DelegateRun does not impose a separate context cap', async () => {
     let seenUserPrompt = '';
     const adapter = {

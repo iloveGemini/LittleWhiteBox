@@ -17,6 +17,8 @@ import {
     getPreview,
     getGallerySummary,
     getCharacterPreviews,
+    clearExpiredCache,
+    clearAllCache,
     deletePreview,
     deleteFailedRecordsForSlot,
     updatePreviewSavedUrl,
@@ -31,6 +33,7 @@ import {
     loadSharedDrawSettings,
     getSharedDrawSettings,
     updateSharedDrawSettingsPersistent,
+    normalizeSharedCacheDays,
 } from "../../shared/draw-settings.js";
 import { fetchDrawLlmModels, getLastDrawLlmRequestSnapshot } from "../../shared/draw-llm.js";
 import {
@@ -1499,6 +1502,43 @@ function bindOverlayEvents() {
     querySettings('#comfy-gallery-refresh')?.addEventListener('click', async () => {
         await renderGalleryManagement();
     });
+    querySettings('#comfy-gallery-save-cache-days')?.addEventListener('click', async (event) => {
+        const nextDays = normalizeSharedCacheDays(getValue('comfy-gallery-cache-days'), getSharedDrawSettings().cacheDays);
+        const ok = await runSaveButtonTask(event.currentTarget, () => updateSharedDrawSettingsPersistent((settings) => {
+            settings.cacheDays = nextDays;
+        }, '自动清理设置已保存', { notify: false, silent: false }), {
+            statusElementId: 'comfy-gallery-status',
+            pendingText: '正在保存...',
+            successText: `自动清理已设为 ${nextDays} 天`,
+            errorText: '保存失败，请重试',
+        });
+        if (ok) {
+            setValue('comfy-gallery-cache-days', nextDays);
+        }
+    });
+    querySettings('#comfy-gallery-clear-expired')?.addEventListener('click', async () => {
+        updateStatusText('comfy-gallery-status', '', '正在清理...');
+        try {
+            const cleaned = await clearExpiredCache(getSharedDrawSettings().cacheDays);
+            updateStatusText('comfy-gallery-status', 'success', `已清理/瘦身 ${cleaned} 条`);
+            await renderGalleryManagement();
+        } catch (error) {
+            console.warn('[ComfyDraw] clearExpiredCache failed:', error);
+            updateStatusText('comfy-gallery-status', 'error', '清理失败，请重试');
+        }
+    });
+    querySettings('#comfy-gallery-clear-all')?.addEventListener('click', async () => {
+        if (!confirm('确定清空全部图片记录？已保存到服务器的文件不会被删除。')) return;
+        updateStatusText('comfy-gallery-status', '', '正在清空...');
+        try {
+            await clearAllCache();
+            updateStatusText('comfy-gallery-status', 'success', '已清空');
+            await renderGalleryManagement();
+        } catch (error) {
+            console.warn('[ComfyDraw] clearAllCache failed:', error);
+            updateStatusText('comfy-gallery-status', 'error', '清空失败，请重试');
+        }
+    });
     querySettingsAll('[data-comfy-mode]').forEach((button) => {
         button.addEventListener('click', async () => {
             const nextMode = button.dataset.comfyMode === 'auto' ? 'auto' : 'manual';
@@ -2168,6 +2208,7 @@ function fillForm(settings) {
     setValue('comfy-draw-negative-prefix', preset.negativePrefix);
     setValue('comfy-draw-max-images', preset.maxImages || 0);
     setValue('comfy-draw-max-chars', preset.maxCharactersPerImage || 0);
+    setValue('comfy-gallery-cache-days', getSharedDrawSettings().cacheDays);
 
     // 模型配置页面
     populateModelSelect(settings.modelCache || []);
@@ -2521,7 +2562,11 @@ async function renderGalleryManagement() {
     const empty = getSettingsElement('comfy-gallery-empty');
     const countEl = getSettingsElement('comfy-gallery-count');
     const sizeEl = getSettingsElement('comfy-gallery-size');
+    const cacheDaysEl = getSettingsElement('comfy-gallery-cache-days');
     if (!container || !empty || !countEl || !sizeEl) return;
+    if (cacheDaysEl) {
+        cacheDaysEl.value = String(getSharedDrawSettings().cacheDays);
+    }
 
     container.textContent = '加载中...';
     empty.style.display = 'none';
@@ -4855,9 +4900,10 @@ export async function initComfyDraw() {
     await loadPromptTemplates();
     await loadTagGuide();
     await loadSettings();
+    const sharedDrawSettings = await loadSharedDrawSettings();
     ensureDrawImageStyles();
     setupImageDelegation();
-    await openDB().catch(() => {});
+    await openDB().then(() => clearExpiredCache(sharedDrawSettings.cacheDays)).catch(() => {});
 
     const floatingPanel = await import('./floating-panel.js');
     ensureComfyDrawPanelRef = floatingPanel.ensureComfyDrawPanel;

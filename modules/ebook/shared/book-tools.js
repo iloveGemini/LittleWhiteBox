@@ -1,5 +1,5 @@
 import { createPlanLedger } from '../../agent-core/plan-ledger.js';
-import { ebookPlansTable, listBookFiles } from './ebook-db.js';
+import { ebookPlansTable, listBookFiles, renameBook } from './ebook-db.js';
 import { createBookFileToolHandlers, collectDirectoryEntries } from './book-file-tools.js';
 import {
     EBOOK_TOOL_NAMES,
@@ -89,6 +89,17 @@ export function createBookToolRuntime(options = {}) {
             case EBOOK_TOOL_NAMES.PLAN_GET:
                 assertWritable();
                 return await planLedger.execute(name, bookId, args);
+            case EBOOK_TOOL_NAMES.RENAME_BOOK: {
+                assertWritable();
+                const book = await renameBook(bookId, args.title);
+                await onFilesChanged?.();
+                return {
+                    ok: true,
+                    book,
+                    title: book.title,
+                    summary: `书名已改为《${book.title}》。`,
+                };
+            }
             case EBOOK_TOOL_NAMES.DELEGATE_RUN:
                 assertWritable();
                 if (!runDelegate) throw new Error('delegate_unavailable');

@@ -110,6 +110,19 @@ export async function getBook(bookId = '') {
     return book ? cloneBook(book) : null;
 }
 
+export async function renameBook(bookId = '', title = '') {
+    const id = String(bookId || '').trim();
+    if (!id) throw new Error('book_required');
+    const nextTitle = normalizeTitle(title, '未命名书稿');
+    const updatedAt = now();
+    const changed = await booksTable.update(id, {
+        title: nextTitle,
+        updatedAt,
+    });
+    if (!changed) throw new Error('book_not_found');
+    return cloneBook(await booksTable.get(id));
+}
+
 export async function touchBook(bookId = '') {
     const id = String(bookId || '').trim();
     if (!id) return;

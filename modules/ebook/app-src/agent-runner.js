@@ -31,6 +31,13 @@ import { safeJsonParse, safeJsonStringify } from './text-utils.js';
 
 const MAX_TOOL_ROUNDS = 48;
 
+function findLastUserMessageIndex(messages = []) {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (messages[index]?.role === 'user') return index;
+    }
+    return -1;
+}
+
 function buildStoredAssistantToolCallMessage(result = {}, toolCalls = []) {
     return {
         role: 'assistant',
@@ -123,7 +130,7 @@ export function createEbookAgentRunner(deps = {}) {
     });
 
     const delegateRunner = createDelegateRunner({
-        createAdapter: () => createAdapter(getActiveProviderConfig()),
+        createAdapter,
         executeToolCall: async (toolCall, args, parentRun = {}) => {
             const runtime = createBookToolRuntime({
                 getBookId: () => parentRun.bookId || state.book?.id,
@@ -137,6 +144,7 @@ export function createEbookAgentRunner(deps = {}) {
             }
         },
         getActiveProviderConfig,
+        getDelegateProviderConfig: () => getActiveProviderConfig({ role: 'delegate' }),
         getSystemPrompt: () => EBOOK_DELEGATE_PROMPT,
         resolveToolDefinitions: () => getEbookToolDefinitions({ readOnly: true }),
         safeJsonParse,
@@ -179,6 +187,7 @@ export function createEbookAgentRunner(deps = {}) {
         if (appendUserMessage) {
             state.messages.push({ role: 'user', content: taskText });
         }
+        state.activeTurnStartIndex = findLastUserMessageIndex(state.messages);
         await persistConversation?.(runBookId);
         render();
 
@@ -423,6 +432,7 @@ export function createEbookAgentRunner(deps = {}) {
             state.isBusy = false;
             state.activeController = null;
             state.toolTrace = [];
+            state.activeTurnStartIndex = -1;
             await refreshBooksAndFiles().catch(() => {});
             render();
         }

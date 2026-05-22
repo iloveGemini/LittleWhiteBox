@@ -261,6 +261,8 @@ function buildRuntimeConfig() {
         modelConfigs: currentPreset.modelConfigs || cloneDefaultModelConfigs(),
         permissionMode: normalizePermissionMode(currentPreset.permissionMode),
         currentPresetName: settings.currentPresetName || DEFAULT_PRESET_NAME,
+        delegatePresetName: settings.delegatePresetName || settings.currentPresetName || DEFAULT_PRESET_NAME,
+        delegateConfig: settings.delegateConfig || {},
         presetNames: Object.keys(settings.presets || {}),
         presets: settings.presets || {},
         toolInfo: {
@@ -3598,6 +3600,10 @@ async function handleIframeMessage(event) {
                 workspaceFileName: normalizeWorkspaceName(patch.workspaceFileName || current.workspaceFileName),
                 jsApiPermission: normalizeJsApiPermission(patch.jsApiPermission ?? current.jsApiPermission),
                 currentPresetName: normalizePresetName(patch.currentPresetName || current.currentPresetName),
+                delegatePresetName: normalizePresetName(patch.delegatePresetName || current.delegatePresetName || patch.currentPresetName || current.currentPresetName),
+                delegateConfig: patch.delegateConfig && typeof patch.delegateConfig === 'object'
+                    ? patch.delegateConfig
+                    : current.delegateConfig,
                 presets: patch.presets && typeof patch.presets === 'object'
                     ? patch.presets
                     : current.presets,

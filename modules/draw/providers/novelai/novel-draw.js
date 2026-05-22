@@ -23,6 +23,12 @@ import {
     LLMServiceError,
     generateAndParseScenePlan,
 } from '../../shared/scene-planner.js';
+import {
+    loadSharedDrawSettings,
+    getSharedDrawSettings,
+    updateSharedDrawSettingsPersistent,
+    normalizeSharedCacheDays,
+} from '../../shared/draw-settings.js';
 import { fetchDrawLlmModels, getLastDrawLlmRequestSnapshot, normalizeDrawLlmApi } from '../../shared/draw-llm.js';
 import {
     loadTagGuide,
@@ -150,7 +156,6 @@ const DEFAULT_SETTINGS = {
     updatedAt: 0,
     mode: 'manual',
     apiKey: '',
-    cacheDays: 3,
     selectedParamsPresetId: null,
     paramsPresets: [],
     requestDelay: { min: 15000, max: 30000 },
@@ -2938,7 +2943,7 @@ async function sendInitData() {
             apiKey: settings.apiKey,
             timeout: settings.timeout,
             requestDelay: settings.requestDelay,
-            cacheDays: settings.cacheDays,
+            cacheDays: getSharedDrawSettings().cacheDays,
             selectedParamsPresetId: settings.selectedParamsPresetId,
             paramsPresets: settings.paramsPresets,
             llmApi: settings.llmApi,
@@ -3080,11 +3085,12 @@ async function handleFrameMessage(event) {
         }
 
         case 'SAVE_CACHE_DAYS': {
-            await updateSettingsPersistent((settings) => {
-                if (typeof data.cacheDays === 'number' && data.cacheDays >= 1 && data.cacheDays <= 30) {
-                    settings.cacheDays = data.cacheDays;
-                }
-            }, '已保存', { target: 'gallery' });
+            const nextDays = normalizeSharedCacheDays(data.cacheDays, getSharedDrawSettings().cacheDays);
+            const ok = await updateSharedDrawSettingsPersistent((settings) => {
+                settings.cacheDays = nextDays;
+            }, '已保存', { notify: false, silent: false });
+            postStatus(ok ? 'success' : 'error', ok ? '已保存' : '保存失败', 'gallery');
+            if (ok) sendInitData();
             break;
         }
 
@@ -3452,8 +3458,7 @@ async function handleFrameMessage(event) {
         }
 
         case 'CLEAR_EXPIRED_CACHE': {
-            const s = getSettings();
-            const n = await clearExpiredCache(s.cacheDays || 3);
+            const n = await clearExpiredCache(getSharedDrawSettings().cacheDays);
             sendInitData();
             postStatus('success', `已清理/瘦身 ${n} 条`, 'gallery');
             break;
@@ -3596,6 +3601,7 @@ async function handleFrameMessage(event) {
 
 export async function openNovelDrawSettings() {
     await loadSettings();
+    await loadSharedDrawSettings();
     showOverlay();
 }
 
@@ -3605,6 +3611,7 @@ export async function initNovelDraw() {
 
     await loadPromptTemplates();
     await loadSettings();
+    const sharedDrawSettings = await loadSharedDrawSettings();
     moduleInitialized = true;
     initAfterAiGate();
     afterAiGateDispose?.();
@@ -3621,8 +3628,7 @@ export async function initNovelDraw() {
 
     setupEventDelegation();
     await openDB().then(() => {
-        const s = getSettings();
-        clearExpiredCache(s.cacheDays || 3);
+        clearExpiredCache(sharedDrawSettings.cacheDays);
     }).catch(() => {});
     startSharedDrawPreviewRuntime();
 

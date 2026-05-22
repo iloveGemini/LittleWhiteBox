@@ -73,7 +73,6 @@ function isEditableAssistantTextMessage(message = {}) {
     return message
         && message.role === 'assistant'
         && !message.streaming
-        && !message.error
         && String(message.content || '').trim()
         && !(Array.isArray(message.toolCalls) && message.toolCalls.length);
 }
@@ -102,6 +101,9 @@ export function bindEbookEvents(options = {}) {
     root.querySelector('#xb-reader-link')?.addEventListener('click', () => void bookController.showReader());
     root.querySelector('#xb-new-book')?.addEventListener('click', () => void bookController.createNewBook());
     root.querySelector('#xb-new-file')?.addEventListener('click', () => void bookController.createNewFile());
+    root.querySelectorAll('[data-book-rename]').forEach((button) => {
+        button.addEventListener('click', () => void bookController.renameCurrentBook());
+    });
     root.querySelector('#xb-save')?.addEventListener('click', () => void bookController.saveCurrentFile());
     root.querySelector('#xb-agent-close')?.addEventListener('click', () => postToHost('xb-ebook:close'));
     root.querySelector('#xb-agent-open-settings')?.addEventListener('click', () => {
@@ -178,6 +180,7 @@ export function bindEbookEvents(options = {}) {
     });
     root.querySelectorAll('.xb-tool-turn[data-tool-turn-key]').forEach((details) => {
         details.addEventListener('toggle', () => {
+            if (state.isBusy && details.dataset.autoOpenToolTurn === 'true') return;
             state.openToolTurnKeys = updateOpenKeyList(
                 state.openToolTurnKeys,
                 details.dataset.toolTurnKey || '',
@@ -187,6 +190,7 @@ export function bindEbookEvents(options = {}) {
     });
     root.querySelectorAll('.xb-thought-details[data-thought-key]').forEach((details) => {
         details.addEventListener('toggle', () => {
+            if (state.isBusy && details.dataset.autoOpenThought === 'true') return;
             state.openThoughtKeys = updateOpenKeyList(
                 state.openThoughtKeys,
                 details.dataset.thoughtKey || '',

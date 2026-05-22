@@ -123,6 +123,7 @@ const state = {
     treeExpandedKeys: [],
     skillTreeExpandedKeys: [],
     sidebarCollapsed: true,
+    configPage: 'main',
     configFormSyncPending: true,
     editingMessageIndex: -1,
     messageActionFeedback: {},
@@ -1091,9 +1092,9 @@ const settingsPanel = createSettingsPanel({
         beginConfigSave(requestId);
         post('xb-assistant:save-config', payload);
     },
-    getRuntimeSummaryText: ({ draft, provider, pullState, providerLabel }) => state.runtime
-        ? `预设「${draft.currentPresetName || DEFAULT_PRESET_NAME}」 · ${providerLabel} · 已索引 ${state.runtime.indexedFileCount || 0} 个前端源码文件${pullState.message ? ` · ${pullState.message}` : ''}`
-        : (pullState.message || ''),
+    getRuntimeSummaryText: ({ draft, providerLabel }) => state.runtime
+        ? `预设「${draft.currentPresetName || DEFAULT_PRESET_NAME}」 · ${providerLabel} · 已索引 ${state.runtime.indexedFileCount || 0} 个前端源码文件`
+        : providerLabel,
 });
 
 const {
@@ -1135,8 +1136,7 @@ const {
     copyText,
 } = chatUi;
 
-function createAdapter() {
-    const providerConfig = getActiveProviderConfig();
+function createAdapter(providerConfig = getActiveProviderConfig()) {
     return createAgentAdapter(providerConfig, {
         missingApiKeyMessage: '请先在小白助手里填写当前提供商的 API Key。',
     });
@@ -1371,6 +1371,7 @@ const runtime = createAssistantRuntime({
     getToolDefinitions: getEnabledToolDefinitions,
     isJsApiEnabled: isJsApiPermissionEnabled,
     getActiveProviderConfig,
+    getDelegateProviderConfig: () => getActiveProviderConfig({ role: 'delegate' }),
     getSystemPrompt: getInjectedSystemPrompt,
     getEphemeralUserContextText,
     flushPendingWorkspaceChanges,

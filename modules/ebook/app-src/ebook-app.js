@@ -29,8 +29,8 @@ export function createEbookApp(options = {}) {
     let configSaveTimeout = null;
     let configSaveResetTimer = null;
 
-    function getActiveProviderConfig() {
-        return resolveActiveProviderConfig(state.config);
+    function getActiveProviderConfig(options = {}) {
+        return resolveActiveProviderConfig(state.config, options);
     }
 
     function createAdapter(providerConfig = getActiveProviderConfig()) {
@@ -144,7 +144,7 @@ export function createEbookApp(options = {}) {
                 showToast(describeError(error));
             }
         },
-        getRuntimeSummaryText: ({ providerLabel, pullState }) => `${providerLabel}${pullState.message ? ` · ${pullState.message}` : ''}`,
+        getRuntimeSummaryText: ({ providerLabel }) => providerLabel,
     });
 
     function captureScrollState(root, selector) {
@@ -171,6 +171,7 @@ export function createEbookApp(options = {}) {
         const root = document.getElementById(rootId);
         if (!root) return;
         const agentScroll = captureScrollState(root, '.xb-agent-main');
+        const settingsScroll = captureScrollState(root, '.xb-ebook-settings-body');
         const providerConfig = getActiveProviderConfig();
         // Dynamic values are escaped by renderer helpers before interpolation.
         // eslint-disable-next-line no-unsanitized/property
@@ -202,6 +203,7 @@ export function createEbookApp(options = {}) {
             showToast,
         });
         restoreScrollState(root, agentScroll);
+        restoreScrollState(root, settingsScroll);
     }
 
     bookController = createBookController({

@@ -136,6 +136,57 @@ export function injectAssistantStyles(rootId) {
             letter-spacing: 0.08em;
         }
         .xb-assistant-config { display: grid; gap: 12px; }
+        .xb-assistant-config-tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            padding: 4px;
+            border-radius: 14px;
+            background: rgba(27, 55, 88, 0.08);
+        }
+        .xb-assistant-config-tab {
+            min-height: 34px;
+            border: 0;
+            border-radius: 10px;
+            background: transparent;
+            color: #41526a;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .xb-assistant-config-tab.is-active {
+            background: rgba(255, 255, 255, 0.92);
+            color: #142033;
+            box-shadow: 0 6px 18px rgba(20, 32, 51, 0.08);
+        }
+        .xb-assistant-config-page {
+            display: grid;
+            gap: 12px;
+        }
+        .xb-assistant-config-page[hidden] {
+            display: none;
+        }
+        .xb-assistant-config-note {
+            margin: 0;
+            color: #65758a;
+            font-size: 12px;
+            line-height: 1.55;
+        }
+        .xb-assistant-inline-status {
+            min-height: 18px;
+            margin-top: -6px;
+            color: #65758a;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .xb-assistant-inline-status.is-success {
+            color: #2e6a39;
+        }
+        .xb-assistant-inline-status.is-error {
+            color: #9a3d2a;
+        }
+        .xb-assistant-inline-status.is-loading {
+            color: #41526a;
+        }
         .xb-assistant-config label { display: grid; gap: 6px; font-size: 13px; color: #41526a; }
         .xb-assistant-config input,
         .xb-assistant-config select,

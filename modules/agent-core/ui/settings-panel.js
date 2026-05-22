@@ -7,6 +7,7 @@ import {
     cloneDefaultModelConfigs,
     normalizeAgentConfig,
     normalizeJsApiPermission,
+    normalizeModelConfigs,
     normalizePermissionMode,
     normalizePresetName,
 } from '../config.js';
@@ -51,6 +52,10 @@ function filterModels(models = []) {
         return !rule.exclude.some((keyword) => lower.includes(keyword));
     });
     return filtered.length ? filtered : normalized;
+}
+
+function normalizeConfigPage(value = '') {
+    return value === 'delegate' ? 'delegate' : 'main';
 }
 
 function normalizeBaseUrl(rawBaseUrl) {
@@ -288,26 +293,60 @@ export function createAgentSettingsPanel(deps = {}) {
         state.configFormSyncPending = true;
     }
 
-    function getPullState(provider) {
-        return state.pullStateByProvider?.[provider] || { status: 'idle', message: '' };
+    function getProviderStateKey(provider, scope = 'main') {
+        const normalizedProvider = String(provider || '').trim() || 'openai-compatible';
+        return scope === 'delegate' ? `delegate:${normalizedProvider}` : normalizedProvider;
     }
 
-    function setPullState(provider, nextState) {
+    function getPullState(provider, scope = 'main') {
+        return state.pullStateByProvider?.[getProviderStateKey(provider, scope)] || { status: 'idle', message: '' };
+    }
+
+    function setPullState(provider, nextState, scope = 'main') {
         state.pullStateByProvider = {
             ...(state.pullStateByProvider || {}),
-            [provider]: nextState,
+            [getProviderStateKey(provider, scope)]: nextState,
         };
     }
 
-    function setProviderModels(provider, models) {
+    function setProviderModels(provider, models, scope = 'main') {
         state.modelOptionsByProvider = {
             ...(state.modelOptionsByProvider || {}),
-            [provider]: Array.isArray(models) ? models : [],
+            [getProviderStateKey(provider, scope)]: Array.isArray(models) ? models : [],
         };
     }
 
-    function getProviderModels(provider) {
-        return Array.isArray(state.modelOptionsByProvider?.[provider]) ? state.modelOptionsByProvider[provider] : [];
+    function getProviderModels(provider, scope = 'main') {
+        const key = getProviderStateKey(provider, scope);
+        return Array.isArray(state.modelOptionsByProvider?.[key]) ? state.modelOptionsByProvider[key] : [];
+    }
+
+    function resolveExistingPresetName(presetName, fallbackName) {
+        const presets = state.config?.presets || {};
+        const normalizedName = normalizePresetName(presetName || fallbackName || DEFAULT_PRESET_NAME);
+        if (presets[normalizedName]) return normalizedName;
+        if (fallbackName && presets[fallbackName]) return fallbackName;
+        return Object.keys(presets)[0] || DEFAULT_PRESET_NAME;
+    }
+
+    function buildDelegateDraftFromPreset(presetName, preset) {
+        const normalizedPresetName = resolveExistingPresetName(presetName, DEFAULT_PRESET_NAME);
+        const sourcePreset = preset && typeof preset === 'object' ? preset : buildDefaultPreset();
+        const delegateProvider = sourcePreset.provider || 'openai-compatible';
+        const delegateModelConfigs = normalizeModelConfigs(sourcePreset.modelConfigs || {});
+        const delegateProviderConfig = delegateModelConfigs[delegateProvider] || {};
+        return {
+            delegatePresetName: normalizedPresetName,
+            delegateProvider,
+            delegateModelConfigs,
+            delegateBaseUrl: String(delegateProviderConfig.baseUrl || ''),
+            delegateModel: String(delegateProviderConfig.model || ''),
+            delegateApiKey: String(delegateProviderConfig.apiKey || ''),
+            delegateTemperature: Number(delegateProviderConfig.temperature ?? 0.2),
+            delegateReasoningEnabled: Boolean(delegateProviderConfig.reasoningEnabled),
+            delegateReasoningEffort: normalizeReasoningEffort(delegateProviderConfig.reasoningEffort),
+            delegateToolMode: delegateProviderConfig.toolMode || 'native',
+        };
     }
 
     function buildDraftFromPreset(presetName, preset, sourceConfig = state.config) {
@@ -315,6 +354,11 @@ export function createAgentSettingsPanel(deps = {}) {
         const sourcePreset = preset && typeof preset === 'object' ? preset : buildDefaultPreset();
         const provider = sourcePreset.provider || 'openai-compatible';
         const providerConfig = (sourcePreset.modelConfigs || cloneDefaultModelConfigs())[provider] || {};
+        const delegatePresetName = resolveExistingPresetName(sourceConfig?.delegatePresetName, normalizedPresetName);
+        const delegateSource = sourceConfig?.delegateConfig && typeof sourceConfig.delegateConfig === 'object'
+            ? sourceConfig.delegateConfig
+            : ((sourceConfig?.presets || {})[delegatePresetName] || sourcePreset);
+        const delegateDraft = buildDelegateDraftFromPreset(delegatePresetName, delegateSource);
         return {
             currentPresetName: normalizedPresetName,
             presetDraftName: normalizedPresetName,
@@ -328,6 +372,7 @@ export function createAgentSettingsPanel(deps = {}) {
             toolMode: providerConfig.toolMode || 'native',
             permissionMode: normalizePermissionMode(sourcePreset.permissionMode),
             jsApiPermission: normalizeJsApiPermission(sourceConfig?.jsApiPermission),
+            ...delegateDraft,
         };
     }
 
@@ -355,6 +400,15 @@ export function createAgentSettingsPanel(deps = {}) {
             toolMode: (root.querySelector('#xb-assistant-tool-mode')?.value || draft.toolMode || 'native'),
             permissionMode: normalizePermissionMode(root.querySelector('#xb-assistant-permission-mode')?.value || draft.permissionMode),
             jsApiPermission: normalizeJsApiPermission(root.querySelector('#xb-assistant-jsapi-permission')?.value || draft.jsApiPermission),
+            delegatePresetName: resolveExistingPresetName(root.querySelector('#xb-assistant-delegate-preset-select')?.value || draft.delegatePresetName, draft.currentPresetName),
+            delegateProvider: root.querySelector('#xb-assistant-delegate-provider')?.value || draft.delegateProvider || 'openai-compatible',
+            delegateBaseUrl: root.querySelector('#xb-assistant-delegate-base-url')?.value.trim() || '',
+            delegateModel: root.querySelector('#xb-assistant-delegate-model')?.value.trim() || '',
+            delegateApiKey: root.querySelector('#xb-assistant-delegate-api-key')?.value.trim() || '',
+            delegateTemperature: Number(draft.delegateTemperature ?? 0.2),
+            delegateReasoningEnabled: root.querySelector('#xb-assistant-delegate-reasoning-enabled')?.checked || false,
+            delegateReasoningEffort: normalizeReasoningEffort(root.querySelector('#xb-assistant-delegate-reasoning-effort')?.value || draft.delegateReasoningEffort),
+            delegateToolMode: root.querySelector('#xb-assistant-delegate-tool-mode')?.value || draft.delegateToolMode || 'native',
         };
     }
 
@@ -384,8 +438,36 @@ export function createAgentSettingsPanel(deps = {}) {
         };
     }
 
-    function getActiveProviderConfig() {
-        const draft = ensureConfigDraft();
+    function buildDelegateProviderConfigFromDraft(draft = ensureConfigDraft()) {
+        return {
+            baseUrl: String(draft.delegateBaseUrl || ''),
+            model: String(draft.delegateModel || ''),
+            apiKey: String(draft.delegateApiKey || ''),
+            temperature: Number(draft.delegateTemperature ?? 0.2),
+            reasoningEnabled: Boolean(draft.delegateReasoningEnabled),
+            reasoningEffort: normalizeReasoningEffort(draft.delegateReasoningEffort),
+            toolMode: (draft.delegateProvider === 'openai-compatible' || draft.delegateProvider === 'sillytavern-openai-compatible')
+                ? (draft.delegateToolMode || 'native')
+                : undefined,
+        };
+    }
+
+    function buildDelegateConfigFromDraft(draft = ensureConfigDraft()) {
+        const provider = draft.delegateProvider || 'openai-compatible';
+        const modelConfigs = normalizeModelConfigs(draft.delegateModelConfigs || {});
+        return {
+            provider,
+            modelConfigs: {
+                ...modelConfigs,
+                [provider]: {
+                    ...(modelConfigs[provider] || {}),
+                    ...buildDelegateProviderConfigFromDraft(draft),
+                },
+            },
+        };
+    }
+
+    function buildRuntimeProviderConfigFromDraft(draft = ensureConfigDraft()) {
         return {
             provider: draft.provider || 'openai-compatible',
             baseUrl: draft.baseUrl || '',
@@ -400,6 +482,30 @@ export function createAgentSettingsPanel(deps = {}) {
         };
     }
 
+    function buildDelegateRuntimeProviderConfigFromDraft(draft = ensureConfigDraft()) {
+        return {
+            provider: draft.delegateProvider || 'openai-compatible',
+            baseUrl: draft.delegateBaseUrl || '',
+            model: draft.delegateModel || '',
+            apiKey: draft.delegateApiKey || '',
+            temperature: Number(draft.delegateTemperature ?? 0.2),
+            maxTokens: draft.delegateProvider === 'anthropic' ? 32000 : null,
+            timeoutMs: AGENT_REQUEST_TIMEOUT_MS,
+            toolMode: draft.delegateToolMode || 'native',
+            reasoningEnabled: Boolean(draft.delegateReasoningEnabled),
+            reasoningEffort: normalizeReasoningEffort(draft.delegateReasoningEffort),
+        };
+    }
+
+    function getActiveProviderConfig(options = {}) {
+        const draft = options.role === 'delegate'
+            ? ensureConfigDraft()
+            : ensureConfigDraft();
+        return options.role === 'delegate'
+            ? buildDelegateRuntimeProviderConfigFromDraft(draft)
+            : buildRuntimeProviderConfigFromDraft(draft);
+    }
+
     function syncPresetDraftName(root) {
         ensureConfigDraft();
         state.configDraft = {
@@ -408,8 +514,8 @@ export function createAgentSettingsPanel(deps = {}) {
         };
     }
 
-    function buildRuntimeText(draft = ensureConfigDraft(), provider = draft.provider || 'openai-compatible') {
-        const pullState = getPullState(provider);
+    function buildRuntimeText(draft = ensureConfigDraft(), provider = draft.provider || 'openai-compatible', scope = 'main') {
+        const pullState = getPullState(provider, scope);
         if (typeof getRuntimeSummaryText === 'function') {
             return getRuntimeSummaryText({
                 state,
@@ -419,7 +525,19 @@ export function createAgentSettingsPanel(deps = {}) {
                 providerLabel: getProviderLabel(provider),
             });
         }
-        return `预设「${draft.currentPresetName || DEFAULT_PRESET_NAME}」 · ${getProviderLabel(provider)}${pullState.message ? ` · ${pullState.message}` : ''}`;
+        return `预设「${draft.currentPresetName || DEFAULT_PRESET_NAME}」 · ${getProviderLabel(provider)}`;
+    }
+
+    function syncInlinePullStatus(root, selector, pullState) {
+        const node = root?.querySelector?.(selector);
+        if (!node) return;
+        const status = String(pullState?.status || 'idle');
+        const message = String(pullState?.message || '').trim();
+        node.textContent = message;
+        node.hidden = !message;
+        node.classList.toggle('is-loading', status === 'loading');
+        node.classList.toggle('is-success', status === 'success');
+        node.classList.toggle('is-error', status === 'error');
     }
 
     function syncConfigToForm(root) {
@@ -427,6 +545,8 @@ export function createAgentSettingsPanel(deps = {}) {
         const draft = ensureConfigDraft();
         const provider = draft.provider || 'openai-compatible';
         const pulledModels = getProviderModels(provider);
+        const delegateProvider = draft.delegateProvider || 'openai-compatible';
+        const delegatePulledModels = getProviderModels(delegateProvider, 'delegate');
         const toolModeWrap = root.querySelector('#xb-assistant-tool-mode-wrap');
         const toolModeSelect = root.querySelector('#xb-assistant-tool-mode');
         const reasoningEnabledInput = root.querySelector('#xb-assistant-reasoning-enabled');
@@ -437,13 +557,29 @@ export function createAgentSettingsPanel(deps = {}) {
         const pulledSelect = root.querySelector('#xb-assistant-model-pulled');
         const presetSelect = root.querySelector('#xb-assistant-preset-select');
         const presetNameInput = root.querySelector('#xb-assistant-preset-name');
+        const delegatePresetSelect = root.querySelector('#xb-assistant-delegate-preset-select');
+        const delegateProviderSelect = root.querySelector('#xb-assistant-delegate-provider');
+        const delegateBaseUrlInput = root.querySelector('#xb-assistant-delegate-base-url');
+        const delegateModelInput = root.querySelector('#xb-assistant-delegate-model');
+        const delegateApiKeyInput = root.querySelector('#xb-assistant-delegate-api-key');
+        const delegatePulledSelect = root.querySelector('#xb-assistant-delegate-model-pulled');
+        const delegateToolModeWrap = root.querySelector('#xb-assistant-delegate-tool-mode-wrap');
+        const delegateToolModeSelect = root.querySelector('#xb-assistant-delegate-tool-mode');
+        const delegateReasoningEnabledInput = root.querySelector('#xb-assistant-delegate-reasoning-enabled');
+        const delegateReasoningEffortWrap = root.querySelector('#xb-assistant-delegate-reasoning-effort-wrap');
+        const delegateReasoningEffortSelect = root.querySelector('#xb-assistant-delegate-reasoning-effort');
         if (!presetSelect || !presetNameInput) return;
+        const presetOptions = (state.config.presetNames || []).map((name) => ({ value: name, label: name }));
 
         refillSelect(
             presetSelect,
-            (state.config.presetNames || []).map((name) => ({ value: name, label: name })),
+            presetOptions,
         );
         presetSelect.value = draft.currentPresetName || state.config.currentPresetName || DEFAULT_PRESET_NAME;
+        if (delegatePresetSelect) {
+            refillSelect(delegatePresetSelect, presetOptions);
+            delegatePresetSelect.value = resolveExistingPresetName(draft.delegatePresetName, draft.currentPresetName);
+        }
         presetNameInput.value = draft.presetDraftName || draft.currentPresetName || DEFAULT_PRESET_NAME;
         root.querySelector('#xb-assistant-provider').value = provider;
         root.querySelector('#xb-assistant-base-url').value = draft.baseUrl || '';
@@ -452,20 +588,55 @@ export function createAgentSettingsPanel(deps = {}) {
         toolModeWrap.style.display = (provider === 'openai-compatible' || provider === 'sillytavern-openai-compatible') ? '' : 'none';
         refillSelect(toolModeSelect, TOOL_MODE_OPTIONS);
         toolModeSelect.value = draft.toolMode || 'native';
-        refillSelect(permissionModeSelect, AGENT_PERMISSION_MODE_OPTIONS);
-        permissionModeSelect.value = normalizePermissionMode(draft.permissionMode);
-        refillSelect(jsApiPermissionSelect, AGENT_JSAPI_PERMISSION_OPTIONS);
-        jsApiPermissionSelect.value = normalizeJsApiPermission(draft.jsApiPermission);
+        if (permissionModeSelect) {
+            refillSelect(permissionModeSelect, AGENT_PERMISSION_MODE_OPTIONS);
+            permissionModeSelect.value = normalizePermissionMode(draft.permissionMode);
+        }
+        if (jsApiPermissionSelect) {
+            refillSelect(jsApiPermissionSelect, AGENT_JSAPI_PERMISSION_OPTIONS);
+            jsApiPermissionSelect.value = normalizeJsApiPermission(draft.jsApiPermission);
+        }
         refillSelect(reasoningEffortSelect, REASONING_EFFORT_OPTIONS);
         reasoningEnabledInput.checked = Boolean(draft.reasoningEnabled);
         reasoningEffortSelect.value = normalizeReasoningEffort(draft.reasoningEffort);
         reasoningEffortWrap.style.display = reasoningEnabledInput.checked ? '' : 'none';
         refillSelect(pulledSelect, pulledModels.map((model) => ({ value: model, label: model })), '手动填写');
         pulledSelect.value = pulledModels.includes(draft.model) ? draft.model : '';
+        if (delegateProviderSelect) delegateProviderSelect.value = delegateProvider;
+        if (delegateBaseUrlInput) delegateBaseUrlInput.value = draft.delegateBaseUrl || '';
+        if (delegateModelInput) delegateModelInput.value = draft.delegateModel || '';
+        if (delegateApiKeyInput) delegateApiKeyInput.value = draft.delegateApiKey || '';
+        if (delegateToolModeWrap) {
+            delegateToolModeWrap.style.display = (delegateProvider === 'openai-compatible' || delegateProvider === 'sillytavern-openai-compatible') ? '' : 'none';
+        }
+        if (delegateToolModeSelect) {
+            refillSelect(delegateToolModeSelect, TOOL_MODE_OPTIONS);
+            delegateToolModeSelect.value = draft.delegateToolMode || 'native';
+        }
+        if (delegateReasoningEffortSelect) {
+            refillSelect(delegateReasoningEffortSelect, REASONING_EFFORT_OPTIONS);
+            delegateReasoningEffortSelect.value = normalizeReasoningEffort(draft.delegateReasoningEffort);
+        }
+        if (delegateReasoningEnabledInput) {
+            delegateReasoningEnabledInput.checked = Boolean(draft.delegateReasoningEnabled);
+        }
+        if (delegateReasoningEffortWrap) {
+            delegateReasoningEffortWrap.style.display = draft.delegateReasoningEnabled ? '' : 'none';
+        }
+        if (delegatePulledSelect) {
+            refillSelect(delegatePulledSelect, delegatePulledModels.map((model) => ({ value: model, label: model })), '手动填写');
+            delegatePulledSelect.value = delegatePulledModels.includes(draft.delegateModel) ? draft.delegateModel : '';
+        }
+        syncInlinePullStatus(root, '#xb-assistant-model-pull-status', getPullState(provider));
+        syncInlinePullStatus(root, '#xb-assistant-delegate-model-pull-status', getPullState(delegateProvider, 'delegate'));
 
         const runtimeEl = root.querySelector('#xb-assistant-runtime');
         if (runtimeEl) {
-            runtimeEl.textContent = buildRuntimeText(draft, provider);
+            const isDelegatePage = state.configPage === 'delegate';
+            const runtimeDraft = isDelegatePage
+                ? { ...draft, currentPresetName: '分身', provider: delegateProvider }
+                : draft;
+            runtimeEl.textContent = buildRuntimeText(runtimeDraft, isDelegatePage ? delegateProvider : provider, isDelegatePage ? 'delegate' : 'main');
         }
     }
 
@@ -504,6 +675,8 @@ export function createAgentSettingsPanel(deps = {}) {
             ...state.config,
             jsApiPermission: normalizeJsApiPermission(draft.jsApiPermission),
             currentPresetName: nextPresetName,
+            delegatePresetName: resolveExistingPresetName(draft.delegatePresetName, nextPresetName),
+            delegateConfig: buildDelegateConfigFromDraft(draft),
             presets: nextPresets,
         });
         state.configDraft = buildDraftFromPreset(nextPresetName, nextPreset, state.config);
@@ -515,6 +688,8 @@ export function createAgentSettingsPanel(deps = {}) {
                 workspaceFileName: state.config?.workspaceFileName || '',
                 jsApiPermission: normalizeJsApiPermission(state.config?.jsApiPermission),
                 currentPresetName: state.config?.currentPresetName || DEFAULT_PRESET_NAME,
+                delegatePresetName: state.config?.delegatePresetName || state.config?.currentPresetName || DEFAULT_PRESET_NAME,
+                delegateConfig: state.config?.delegateConfig || {},
                 presets: state.config?.presets || {},
             },
         });
@@ -538,6 +713,8 @@ export function createAgentSettingsPanel(deps = {}) {
             ...state.config,
             jsApiPermission: normalizeJsApiPermission(draft.jsApiPermission),
             currentPresetName: nextPresetName,
+            delegatePresetName: resolveExistingPresetName(draft.delegatePresetName, nextPresetName),
+            delegateConfig: buildDelegateConfigFromDraft(draft),
             presets: nextPresets,
         });
         state.configDraft = buildDraftFromPreset(nextPresetName, nextPreset, state.config);
@@ -549,6 +726,8 @@ export function createAgentSettingsPanel(deps = {}) {
                 workspaceFileName: state.config?.workspaceFileName || '',
                 jsApiPermission: normalizeJsApiPermission(state.config?.jsApiPermission),
                 currentPresetName: state.config?.currentPresetName || DEFAULT_PRESET_NAME,
+                delegatePresetName: state.config?.delegatePresetName || state.config?.currentPresetName || DEFAULT_PRESET_NAME,
+                delegateConfig: state.config?.delegateConfig || {},
                 presets: state.config?.presets || {},
             },
         });
@@ -577,6 +756,8 @@ export function createAgentSettingsPanel(deps = {}) {
                 ...state.config,
                 jsApiPermission: normalizeJsApiPermission(draft.jsApiPermission),
                 currentPresetName: nextPresetName,
+                delegatePresetName: resolveExistingPresetName(draft.delegatePresetName, nextPresetName),
+                delegateConfig: buildDelegateConfigFromDraft(draft),
             });
             state.configDraft = buildDraftFromPreset(nextPresetName, nextPreset, state.config);
             requestConfigFormSync();
@@ -612,6 +793,42 @@ export function createAgentSettingsPanel(deps = {}) {
             keyInput.type = keyInput.type === 'password' ? 'text' : 'password';
         });
 
+        root.querySelector('#xb-assistant-delegate-provider')?.addEventListener('change', (event) => {
+            ensureConfigDraft();
+            state.configDraft = {
+                ...state.configDraft,
+                delegateProvider: event.currentTarget.value,
+            };
+            requestConfigFormSync();
+            render?.();
+        });
+
+        root.querySelector('#xb-assistant-delegate-base-url')?.addEventListener('input', () => {
+            syncConfigDraft(root);
+        });
+
+        root.querySelector('#xb-assistant-delegate-model')?.addEventListener('input', () => {
+            syncConfigDraft(root);
+        });
+
+        root.querySelector('#xb-assistant-delegate-api-key')?.addEventListener('input', () => {
+            syncConfigDraft(root);
+        });
+
+        root.querySelector('#xb-assistant-delegate-model-pulled')?.addEventListener('change', (event) => {
+            const value = event.currentTarget.value;
+            if (!value) return;
+            const modelInput = root.querySelector('#xb-assistant-delegate-model');
+            if (modelInput) modelInput.value = value;
+            syncConfigDraft(root);
+        });
+
+        root.querySelector('#xb-assistant-delegate-toggle-key')?.addEventListener('click', () => {
+            const keyInput = root.querySelector('#xb-assistant-delegate-api-key');
+            if (!keyInput) return;
+            keyInput.type = keyInput.type === 'password' ? 'text' : 'password';
+        });
+
         root.querySelector('#xb-assistant-reasoning-enabled').addEventListener('change', () => {
             syncConfigDraft(root);
             requestConfigFormSync();
@@ -626,12 +843,48 @@ export function createAgentSettingsPanel(deps = {}) {
             syncConfigDraft(root);
         });
 
-        root.querySelector('#xb-assistant-permission-mode').addEventListener('change', () => {
+        root.querySelector('#xb-assistant-delegate-reasoning-enabled')?.addEventListener('change', () => {
+            syncConfigDraft(root);
+            requestConfigFormSync();
+            render?.();
+        });
+
+        root.querySelector('#xb-assistant-delegate-reasoning-effort')?.addEventListener('change', () => {
             syncConfigDraft(root);
         });
 
-        root.querySelector('#xb-assistant-jsapi-permission').addEventListener('change', () => {
+        root.querySelector('#xb-assistant-delegate-tool-mode')?.addEventListener('change', () => {
             syncConfigDraft(root);
+        });
+
+        root.querySelector('#xb-assistant-permission-mode')?.addEventListener('change', () => {
+            syncConfigDraft(root);
+        });
+
+        root.querySelector('#xb-assistant-jsapi-permission')?.addEventListener('change', () => {
+            syncConfigDraft(root);
+        });
+
+        root.querySelector('#xb-assistant-delegate-preset-select')?.addEventListener('change', (event) => {
+            const nextPresetName = resolveExistingPresetName(
+                event.currentTarget?.value,
+                state.configDraft?.currentPresetName || state.config?.currentPresetName || DEFAULT_PRESET_NAME,
+            );
+            const nextPreset = (state.config?.presets || {})[nextPresetName] || buildDefaultPreset();
+            const draft = syncConfigDraft(root);
+            state.configDraft = {
+                ...draft,
+                ...buildDelegateDraftFromPreset(nextPresetName, nextPreset),
+            };
+            requestConfigFormSync();
+            render?.();
+        });
+
+        root.querySelectorAll('[data-config-page]').forEach((button) => {
+            button.addEventListener('click', (event) => {
+                state.configPage = normalizeConfigPage(event.currentTarget?.dataset?.configPage);
+                render?.();
+            });
         });
 
         root.querySelector('#xb-assistant-pull-models').addEventListener('click', async () => {
@@ -653,6 +906,30 @@ export function createAgentSettingsPanel(deps = {}) {
                     status: 'error',
                     message: describeError(error),
                 });
+            }
+            requestConfigFormSync();
+            render?.();
+        });
+
+        root.querySelector('#xb-assistant-delegate-pull-models')?.addEventListener('click', async () => {
+            syncConfigDraft(root);
+            requestConfigFormSync();
+            const providerConfig = getActiveProviderConfig({ role: 'delegate' });
+            setPullState(providerConfig.provider, { status: 'loading', message: '正在拉取模型列表…' }, 'delegate');
+            render?.();
+            try {
+                const models = await pullModelsForProvider(providerConfig);
+                setProviderModels(providerConfig.provider, models, 'delegate');
+                setPullState(providerConfig.provider, {
+                    status: 'success',
+                    message: `已拉取 ${models.length} 个模型`,
+                }, 'delegate');
+            } catch (error) {
+                setProviderModels(providerConfig.provider, [], 'delegate');
+                setPullState(providerConfig.provider, {
+                    status: 'error',
+                    message: describeError(error),
+                }, 'delegate');
             }
             requestConfigFormSync();
             render?.();

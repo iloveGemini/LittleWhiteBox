@@ -177,6 +177,7 @@ export function createDelegateRunner(deps = {}) {
         createAdapter,
         executeToolCall,
         getActiveProviderConfig,
+        getDelegateProviderConfig,
         getSystemPrompt,
         resolveToolDefinitions,
         safeJsonParse,
@@ -200,8 +201,10 @@ export function createDelegateRunner(deps = {}) {
             };
         }
 
-        const adapter = createAdapter();
-        const providerConfig = getActiveProviderConfig();
+        const providerConfig = typeof getDelegateProviderConfig === 'function'
+            ? getDelegateProviderConfig(parentRun)
+            : getActiveProviderConfig({ role: 'delegate' });
+        const adapter = createAdapter(providerConfig);
         const systemPrompt = buildDelegateSystemPrompt(getSystemPrompt());
         const tools = filterDelegateToolDefinitions(resolveToolDefinitions(), TOOL_NAMES);
         const allowedToolNames = new Set(tools.map(getToolName).filter(Boolean));

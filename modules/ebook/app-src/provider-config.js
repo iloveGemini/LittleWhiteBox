@@ -16,8 +16,8 @@ export function normalizeEbookConfig(configValue = {}) {
     return normalizeAgentConfig(configValue || {});
 }
 
-export function getActiveProviderConfig(configValue = {}) {
-    return resolveActiveProviderConfig(configValue);
+export function getActiveProviderConfig(configValue = {}, options = {}) {
+    return resolveActiveProviderConfig(configValue, options);
 }
 
 export function createAdapter(providerConfig = {}) {

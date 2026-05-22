@@ -69,6 +69,7 @@ function normalizeRestoredMessage(message = {}) {
 function resetConversationUiState(state) {
     state.toolTrace = [];
     state.openToolTurnKeys = [];
+    state.activeTurnStartIndex = -1;
     state.openThoughtKeys = [];
     state.editingMessageIndex = -1;
     state.messageActionFeedback = {};

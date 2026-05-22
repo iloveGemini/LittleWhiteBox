@@ -17,6 +17,8 @@ import {
     getPreview,
     getGallerySummary,
     getCharacterPreviews,
+    clearExpiredCache,
+    clearAllCache,
     deletePreview,
     deleteFailedRecordsForSlot,
     updatePreviewSavedUrl,
@@ -31,6 +33,7 @@ import {
     loadSharedDrawSettings,
     getSharedDrawSettings,
     updateSharedDrawSettingsPersistent,
+    normalizeSharedCacheDays,
 } from "../../shared/draw-settings.js";
 import { fetchDrawLlmModels, getLastDrawLlmRequestSnapshot } from "../../shared/draw-llm.js";
 import {
@@ -833,6 +836,43 @@ function bindOverlayEvents() {
     querySettings('#sd-gallery-refresh')?.addEventListener('click', async () => {
         await renderGalleryManagement();
     });
+    querySettings('#sd-gallery-save-cache-days')?.addEventListener('click', async (event) => {
+        const nextDays = normalizeSharedCacheDays(getValue('sd-gallery-cache-days'), getSharedDrawSettings().cacheDays);
+        const ok = await runSaveButtonTask(event.currentTarget, () => updateSharedDrawSettingsPersistent((settings) => {
+            settings.cacheDays = nextDays;
+        }, '自动清理设置已保存', { notify: false, silent: false }), {
+            statusElementId: 'sd-gallery-status',
+            pendingText: '正在保存...',
+            successText: `自动清理已设为 ${nextDays} 天`,
+            errorText: '保存失败，请重试',
+        });
+        if (ok) {
+            setValue('sd-gallery-cache-days', nextDays);
+        }
+    });
+    querySettings('#sd-gallery-clear-expired')?.addEventListener('click', async () => {
+        updateStatusText('sd-gallery-status', '', '正在清理...');
+        try {
+            const cleaned = await clearExpiredCache(getSharedDrawSettings().cacheDays);
+            updateStatusText('sd-gallery-status', 'success', `已清理/瘦身 ${cleaned} 条`);
+            await renderGalleryManagement();
+        } catch (error) {
+            console.warn('[SdDraw] clearExpiredCache failed:', error);
+            updateStatusText('sd-gallery-status', 'error', '清理失败，请重试');
+        }
+    });
+    querySettings('#sd-gallery-clear-all')?.addEventListener('click', async () => {
+        if (!confirm('确定清空全部图片记录？已保存到服务器的文件不会被删除。')) return;
+        updateStatusText('sd-gallery-status', '', '正在清空...');
+        try {
+            await clearAllCache();
+            updateStatusText('sd-gallery-status', 'success', '已清空');
+            await renderGalleryManagement();
+        } catch (error) {
+            console.warn('[SdDraw] clearAllCache failed:', error);
+            updateStatusText('sd-gallery-status', 'error', '清空失败，请重试');
+        }
+    });
     querySettingsAll('[data-sd-mode]').forEach((button) => {
         button.addEventListener('click', async () => {
             const nextMode = button.dataset.sdMode === 'auto' ? 'auto' : 'manual';
@@ -1228,6 +1268,7 @@ function fillForm(settings) {
     setValue('sd-draw-negative-prefix', preset.negativePrefix);
     setValue('sd-draw-max-images', preset.maxImages || 0);
     setValue('sd-draw-max-chars', preset.maxCharactersPerImage || 0);
+    setValue('sd-gallery-cache-days', getSharedDrawSettings().cacheDays);
     setSelectValue('sd-draw-model', preset.model || '');
     setSelectValue('sd-draw-sampler', preset.sampler_name || '');
     applyPromptPresetToForm(settings);
@@ -1413,7 +1454,11 @@ async function renderGalleryManagement() {
     const empty = getSettingsElement('sd-gallery-empty');
     const countEl = getSettingsElement('sd-gallery-count');
     const sizeEl = getSettingsElement('sd-gallery-size');
+    const cacheDaysEl = getSettingsElement('sd-gallery-cache-days');
     if (!container || !empty || !countEl || !sizeEl) return;
+    if (cacheDaysEl) {
+        cacheDaysEl.value = String(getSharedDrawSettings().cacheDays);
+    }
 
     container.textContent = '加载中...';
     empty.style.display = 'none';
@@ -3979,9 +4024,10 @@ export async function initSdDraw() {
     await loadPromptTemplates();
     await loadTagGuide();
     await loadSettings();
+    const sharedDrawSettings = await loadSharedDrawSettings();
     ensureDrawImageStyles();
     setupImageDelegation();
-    await openDB().catch(() => {});
+    await openDB().then(() => clearExpiredCache(sharedDrawSettings.cacheDays)).catch(() => {});
 
     const floatingPanel = await import('./floating-panel.js');
     ensureSdDrawPanelRef = floatingPanel.ensureSdDrawPanel;

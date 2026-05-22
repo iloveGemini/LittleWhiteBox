@@ -11,6 +11,7 @@ export const EBOOK_TOOL_NAMES = Object.freeze({
     PLAN_UPDATE: 'PlanUpdate',
     PLAN_LIST: 'PlanList',
     PLAN_GET: 'PlanGet',
+    RENAME_BOOK: 'RenameBook',
     DELEGATE_RUN: 'DelegateRun',
 });
 
@@ -286,6 +287,25 @@ export function getEbookToolDefinitions(options = {}) {
             {
                 type: 'function',
                 function: {
+                    name: EBOOK_TOOL_NAMES.RENAME_BOOK,
+                    description: [
+                        '修改当前书的书名。',
+                        '只改变书籍标题，不移动章节、资料或设定文件。',
+                        '当用户要求改书名、换标题、重命名当前作品时使用。',
+                    ].join('\n'),
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            title: { type: 'string', description: '新的书名。会自动去掉首尾空白，最长保留 120 字。' },
+                        },
+                        required: ['title'],
+                        additionalProperties: false,
+                    },
+                },
+            },
+            {
+                type: 'function',
+                function: {
                     name: EBOOK_TOOL_NAMES.DELEGATE_RUN,
                     description: [
                         '请一个只读审稿分身独立阅读当前书稿，并把结果交回给你。',
@@ -337,6 +357,8 @@ export function describeEbookToolCall(name = '', args = {}) {
             return '查看书籍计划';
         case EBOOK_TOOL_NAMES.PLAN_GET:
             return `查看计划 ${args.id || ''}`.trim();
+        case EBOOK_TOOL_NAMES.RENAME_BOOK:
+            return `修改书名 ${args.title || ''}`.trim();
         case EBOOK_TOOL_NAMES.DELEGATE_RUN:
             return `审稿分身 ${args.task || ''}`.trim();
         default:
