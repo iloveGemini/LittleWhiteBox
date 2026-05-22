@@ -2533,7 +2533,15 @@ window.addEventListener('message', event => {
             applyStateToUI();
             shuffleCredits();
             break;
-            
+
+        case 'CACHE_DATA':
+            state.cacheStats = data.cacheStats || state.cacheStats;
+            gallerySummary = data.gallerySummary || {};
+            if ($('nd_cache_count')) $('nd_cache_count').textContent = state.cacheStats?.count || 0;
+            if ($('nd_cache_size')) $('nd_cache_size').textContent = (state.cacheStats?.sizeMB || 0) + ' MB';
+            renderGalleryView();
+            break;
+
         case 'CHARACTER_PREVIEWS_LOADED':
             loadedCharPreviews[data.charName] = data.slots;
             renderCharacterSlots(data.charName, data.slots);

@@ -518,20 +518,22 @@
       b.addEventListener('mouseleave', function () { if (!this.classList.contains('updating')) { this.style.backgroundColor = 'transparent'; this.style.transform = 'scale(1)'; } });
       b.addEventListener('click', async function (e) {
         e.preventDefault(); e.stopPropagation();
-        this.className = 'menu_button fa-solid fa-spinner fa-spin interactable updating';
-        this.style.color = '#007bff'; this.style.backgroundColor = 'transparent'; this.style.transform = 'scale(1)'; this.title = '正在更新...';
+        const originalTitle = this.title || '查看更新说明并安装小白X更新';
+        this.classList.add('updating');
+        this.style.pointerEvents = 'none';
+        this.style.opacity = '.7';
         try {
           let ok = false;
-          if (window.updateLittleWhiteBoxExtension) ok = await window.updateLittleWhiteBoxExtension();
+          if (window.showLittleWhiteBoxUpdateDialog) ok = await window.showLittleWhiteBoxUpdateDialog();
+          else if (window.updateLittleWhiteBoxExtension) ok = await window.updateLittleWhiteBoxExtension();
           else console.error('[小白X] 更新函数不可用');
-          if (ok) { if (window.removeAllUpdateNotices) window.removeAllUpdateNotices(); }
-          else {
-            this.className = 'menu_button fa-solid fa-cloud-arrow-down interactable has-update';
-            this.classList.remove('updating'); this.style.color = '#28a745'; this.title = '下載並安裝小白x的更新';
-          }
+          if (!ok) this.title = originalTitle;
         } catch {
-          this.className = 'menu_button fa-solid fa-cloud-arrow-down interactable has-update';
-          this.classList.remove('updating'); this.style.color = '#28a745'; this.title = '下載並安裝小白x的更新';
+          this.title = originalTitle;
+        } finally {
+          this.classList.remove('updating');
+          this.style.pointerEvents = '';
+          this.style.opacity = '';
         }
       });
     }
@@ -600,7 +602,7 @@
 	    const DEFAULTS_ON = ['templateEditor', 'tasks', 'variablesCore', 'storySummary', 'recorded'];
 	    const DEFAULTS_OFF = ['preview', 'scriptAssistant', 'immersive', 'variablesPanel', 'fourthWall', 'storyOutline', 'tts', 'enaPlanner'];
 	    const MODULE_KEYS = ['templateEditor', 'tasks', 'fourthWall', 'variablesCore', 'recorded', 'preview', 'scriptAssistant', 'immersive', 'variablesPanel', 'storySummary', 'storyOutline', 'tts', 'enaPlanner'];
-	    const DRAW_PROVIDER_VALUES = new Set(['disabled', 'novelai', 'sdwebui']);
+	    const DRAW_PROVIDER_VALUES = new Set(['disabled', 'novelai', 'sdwebui', 'comfyui']);
 	    function normalizeDrawProvider(provider) {
 	      return DRAW_PROVIDER_VALUES.has(provider) ? provider : 'disabled';
 	    }

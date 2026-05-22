@@ -2926,15 +2926,11 @@ async function sendInitData() {
     console.log('[NovelDraw] sendInitData called');
     const iframe = document.getElementById('xiaobaix-novel-draw-iframe');
     if (!iframe?.contentWindow) { console.warn('[NovelDraw] sendInitData: no iframe'); return; }
-    // 先读 settings，再做 IndexedDB 异步操作，避免 await 期间 settings 被其他 handler 修改导致发送旧值
+    // Send the usable settings first; cache/gallery IndexedDB work can be slow for upgraded installs.
     const settings = getSettings();
-    let stats = { count: 0, sizeMB: 0 };
-    let gallerySummary = {};
-    try { stats = await getCacheStats(); } catch (e) { console.warn('[NovelDraw] getCacheStats failed:', e); }
-    try { gallerySummary = await getGallerySummary(); } catch (e) { console.warn('[NovelDraw] getGallerySummary failed:', e); }
     console.log('[NovelDraw] sendInitData: autoLearn=%s, advancedMode=%s, promptPresets=%d',
         settings.autoLearnCharacters, settings.advancedMode, settings.promptPresets?.length);
-    postToIframe(iframe, {
+    const buildPayload = (stats = { count: 0, sizeMB: 0 }, gallerySummary = {}) => ({
         type: 'INIT_DATA',
         settings: {
             enabled: moduleInitialized,
@@ -2974,7 +2970,21 @@ async function sendInitData() {
         },
         cacheStats: stats,
         gallerySummary,
-    }, 'LittleWhiteBox-NovelDraw');
+    });
+    postToIframe(iframe, buildPayload(), 'LittleWhiteBox-NovelDraw');
+
+    let stats = { count: 0, sizeMB: 0 };
+    let gallerySummary = {};
+    try { stats = await getCacheStats(); } catch (e) { console.warn('[NovelDraw] getCacheStats failed:', e); }
+    try { gallerySummary = await getGallerySummary(); } catch (e) { console.warn('[NovelDraw] getGallerySummary failed:', e); }
+    const currentIframe = document.getElementById('xiaobaix-novel-draw-iframe');
+    if (currentIframe?.contentWindow === iframe.contentWindow) {
+        postToIframe(currentIframe, {
+            type: 'CACHE_DATA',
+            cacheStats: stats,
+            gallerySummary,
+        }, 'LittleWhiteBox-NovelDraw');
+    }
 }
 
 function postStatus(state, text, target = '') {
