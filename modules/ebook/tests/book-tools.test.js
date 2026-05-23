@@ -1476,6 +1476,75 @@ test('Book renderer folds the active tool turn after the final assistant message
     assert.doesNotMatch(html, /data-auto-open-tool-turn/);
 });
 
+test('Book renderer defers stored tool round details while keeping folded previews', async () => {
+    await resetDb();
+    const book = await createBook('折叠工具懒渲染测试');
+    const state = {
+        book,
+        books: [book],
+        files: await listBookFiles(book.id),
+        selectedPath: 'book/chapters/001.md',
+        readerPath: '',
+        viewMode: 'studio',
+        editorContent: '',
+        savedContent: '',
+        messages: [
+            { role: 'user', content: '检查章节。' },
+            {
+                role: 'assistant',
+                content: 'UNIQUE_LAZY_PREFACE',
+                thoughts: [{ label: 'thinking', text: 'UNIQUE_LAZY_THOUGHT' }],
+                toolCalls: [{
+                    id: 'call-lazy-tool',
+                    name: EBOOK_TOOL_NAMES.READ,
+                    arguments: '{"filePath":"book/chapters/001.md"}',
+                }],
+            },
+            {
+                role: 'tool',
+                toolCallId: 'call-lazy-tool',
+                toolName: EBOOK_TOOL_NAMES.READ,
+                content: '{"ok":true,"summary":"UNIQUE_LAZY_TOOL_DETAIL"}',
+            },
+            { role: 'assistant', content: '检查完成。' },
+        ],
+        toolTrace: [],
+        openToolTurnKeys: [],
+        activeTurnStartIndex: -1,
+        openThoughtKeys: [],
+        historySummary: '',
+        isBusy: false,
+        status: '就绪',
+        toast: '',
+    };
+
+    const foldedHtml = renderEbookShell({
+        state,
+        providerConfig: { provider: 'test', model: 'demo' },
+        providerLabel: '测试',
+        dirty: false,
+    });
+
+    assert.match(foldedHtml, /data-lazy-tool-turn="true"/);
+    assert.match(foldedHtml, /展开查看思考、说明和完整工具轮次/);
+    assert.match(foldedHtml, /UNIQUE_LAZY_TOOL_DETAIL/);
+    assert.match(foldedHtml, /UNIQUE_LAZY_PREFACE/);
+    assert.doesNotMatch(foldedHtml, /UNIQUE_LAZY_THOUGHT/);
+
+    state.openToolTurnKeys = ['tool-turn:call-lazy-tool'];
+    const openHtml = renderEbookShell({
+        state,
+        providerConfig: { provider: 'test', model: 'demo' },
+        providerLabel: '测试',
+        dirty: false,
+    });
+
+    assert.doesNotMatch(openHtml, /data-lazy-tool-turn="true"/);
+    assert.match(openHtml, /UNIQUE_LAZY_TOOL_DETAIL/);
+    assert.match(openHtml, /UNIQUE_LAZY_PREFACE/);
+    assert.match(openHtml, /UNIQUE_LAZY_THOUGHT/);
+});
+
 test('Book tool turn auto-open does not persist as a manual fold state', () => {
     const state = {
         isBusy: true,
@@ -1515,6 +1584,58 @@ test('Book tool turn auto-open does not persist as a manual fold state', () => {
     details.handler();
 
     assert.deepEqual(state.openToolTurnKeys, []);
+});
+
+test('Book lazy tool turns request rerender when opened or closed', () => {
+    const state = {
+        isBusy: false,
+        openToolTurnKeys: [],
+    };
+    let renderCount = 0;
+    const details = {
+        dataset: {
+            toolTurnKey: 'tool-turn:call-read-lazy',
+            lazyToolTurn: 'true',
+        },
+        open: true,
+        addEventListener(_eventName, handler) {
+            this.handler = handler;
+        },
+    };
+    const root = {
+        querySelectorAll(selector) {
+            return selector === '.xb-tool-turn[data-tool-turn-key]' ? [details] : [];
+        },
+        querySelector() {
+            return null;
+        },
+    };
+
+    bindEbookEvents({
+        root,
+        state,
+        render() {
+            renderCount += 1;
+        },
+        postToHost() {},
+        bookController: {},
+        agentRunner: {},
+        persistConversation() {},
+        clearConversation() {},
+        showToast() {},
+    });
+
+    details.handler();
+
+    assert.deepEqual(state.openToolTurnKeys, ['tool-turn:call-read-lazy']);
+    assert.equal(renderCount, 1);
+
+    details.dataset.lazyToolTurn = '';
+    details.open = false;
+    details.handler();
+
+    assert.deepEqual(state.openToolTurnKeys, []);
+    assert.equal(renderCount, 2);
 });
 
 test('Book thought auto-open does not persist as a manual fold state', () => {

@@ -349,6 +349,16 @@ function renderStoredToolMessage(toolMessage = {}) {
     });
 }
 
+function renderStoredToolPreview(toolMessage = {}) {
+    return renderStoredToolMessage(toolMessage);
+}
+
+function renderToolPrefacePreview(assistantMessage = {}) {
+    const content = trimInlineText(String(assistantMessage.content || '').trim(), 260);
+    if (!content) return '';
+    return `<div class="xb-tool-preface-preview">${escapeHtml(content)}</div>`;
+}
+
 function renderMessageMarkdownHtml(text = '') {
     return renderMarkdownToHtml(String(text || '').trim());
 }
@@ -608,10 +618,17 @@ function renderMessages(state = {}) {
         const isOpen = autoOpen
             || (Array.isArray(state.openToolTurnKeys) && state.openToolTurnKeys.includes(turnKey));
         const autoOpenAttr = autoOpen ? ' data-auto-open-tool-turn="true"' : '';
+        const lazyAttr = isOpen ? '' : ' data-lazy-tool-turn="true"';
         const openAttr = isOpen ? ' open' : '';
-        const html = `
-            <details class="xb-tool-trace xb-tool-turn" data-tool-turn-key="${escapeHtml(turnKey)}"${autoOpenAttr}${openAttr}>
-                <summary><span>已创作 ${batches.length || 1} 轮</span><span class="xb-tool-fold-indicator" aria-hidden="true"></span></summary>
+        const toolCount = batches.reduce((sum, batch) => (
+            sum + (batch.toolMessages.length || batch.assistantMessage.toolCalls.length || 0)
+        ), 0);
+        const previewHtml = batches.map((batch) => [
+            renderToolPrefacePreview(batch.assistantMessage),
+            batch.toolMessages.map((toolMessage) => renderStoredToolPreview(toolMessage)).join(''),
+        ].filter(Boolean).join('')).join('');
+        const bodyHtml = isOpen
+            ? `
                 <div class="xb-tool-trace-body">
                     ${batches.map((batch, batchIndex) => `
                         <div class="xb-tool-round">
@@ -625,6 +642,17 @@ function renderMessages(state = {}) {
                         </div>
                     `).join('')}
                 </div>
+            `
+            : `
+                <div class="xb-tool-trace-body xb-tool-trace-preview">
+                    ${previewHtml || `<div class="xb-tool-lazy-note">展开查看 ${toolCount || 0} 个工具结果</div>`}
+                    <div class="xb-tool-lazy-note">展开查看思考、说明和完整工具轮次</div>
+                </div>
+            `;
+        const html = `
+            <details class="xb-tool-trace xb-tool-turn" data-tool-turn-key="${escapeHtml(turnKey)}"${autoOpenAttr}${lazyAttr}${openAttr}>
+                <summary><span>已创作 ${batches.length || 1} 轮</span><span class="xb-tool-fold-indicator" aria-hidden="true"></span></summary>
+                ${bodyHtml}
             </details>
         `;
         return { html, nextIndex: index };

@@ -283,11 +283,15 @@ export function bindEbookEvents(options = {}) {
     root.querySelectorAll('.xb-tool-turn[data-tool-turn-key]').forEach((details) => {
         details.addEventListener('toggle', () => {
             if (state.isBusy && details.dataset.autoOpenToolTurn === 'true') return;
+            const wasLazy = details.dataset.lazyToolTurn === 'true';
             state.openToolTurnKeys = updateOpenKeyList(
                 state.openToolTurnKeys,
                 details.dataset.toolTurnKey || '',
                 details.open,
             );
+            if (wasLazy || !details.open) {
+                render();
+            }
         });
     });
     root.querySelectorAll('.xb-thought-details[data-thought-key]').forEach((details) => {
