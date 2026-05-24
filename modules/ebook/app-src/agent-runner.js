@@ -10,6 +10,7 @@ import {
     resolveResultToolCalls,
 } from '../../agent-core/runtime/protocol.js';
 import { createStreamingMessageController } from '../../agent-core/runtime/streaming-messages.js';
+import { createLightBrakeController } from '../../agent-core/runtime/light-brake.js';
 import { buildTavilySearchTracePayload, isTavilyConfigured } from '../../agent-core/tavily-search.js';
 import { resetMessageWindow } from '../../agent-core/ui/message-windowing.js';
 import { upsertBookFile } from '../shared/ebook-db.js';
@@ -205,6 +206,9 @@ export function createEbookAgentRunner(deps = {}) {
         persistConversation,
         getActiveProviderConfig,
         buildProviderMessages: () => buildMessagesForRun(''),
+        getToolDefinitions: () => getEbookToolDefinitions({
+            webSearchEnabled: isTavilyConfigured(getActiveProviderConfig()),
+        }),
     });
 
     const delegateRunner = createDelegateRunner({
@@ -268,6 +272,7 @@ export function createEbookAgentRunner(deps = {}) {
         state.status = 'AI 正在阅读作品...';
         state.agentAutoScroll = true;
         resetMessageWindow(state);
+        compactionController.resetCompactionState();
         state.toolTrace = [];
         state.liveToolTurn = null;
         state.editingMessageIndex = -1;
@@ -339,43 +344,14 @@ export function createEbookAgentRunner(deps = {}) {
             const providerMessageOptions = {
                 finalAnswerReminderText: '',
             };
-            const toolErrorLightBrake = {
-                key: '',
-                count: 0,
-                message: '',
-            };
-
-            function recordToolErrorForLightBrake(toolName = '', errorCode = '') {
-                const name = String(toolName || '').trim();
-                const code = String(errorCode || 'tool_failed').trim() || 'tool_failed';
-                if (!name) return;
-                const nextKey = `${name}::${code}`;
-                if (toolErrorLightBrake.key === nextKey) {
-                    toolErrorLightBrake.count += 1;
-                } else {
-                    toolErrorLightBrake.key = nextKey;
-                    toolErrorLightBrake.count = 1;
-                }
-                if (toolErrorLightBrake.count >= 3) {
-                    toolErrorLightBrake.message = [
-                        `[工具失败提示] ${name} 已连续 ${toolErrorLightBrake.count} 次因为 ${code} 失败。`,
-                        '不要继续原样重复同一个工具调用；先换路径、换参数、用 LS / Glob / Grep / Read 重新定位，或直接告诉用户当前阻塞点。',
-                    ].join('\n');
-                }
-            }
-
-            function resetToolErrorLightBrake() {
-                toolErrorLightBrake.key = '';
-                toolErrorLightBrake.count = 0;
-                toolErrorLightBrake.message = '';
-            }
+            const lightBrake = createLightBrakeController();
 
             function recordToolResultForLightBrake(toolCall = {}, toolResult = {}) {
                 if (toolResult && typeof toolResult === 'object' && toolResult.ok === false) {
-                    recordToolErrorForLightBrake(toolCall.name, toolResult.error || toolResult.message || 'tool_failed');
+                    lightBrake.record(toolCall.name, toolResult.error || toolResult.message || 'tool_failed');
                     return;
                 }
-                resetToolErrorLightBrake();
+                lightBrake.reset();
             }
 
             async function buildReplayMessages() {
@@ -387,7 +363,7 @@ export function createEbookAgentRunner(deps = {}) {
                 }
                 const messages = buildMessagesForRun(currentPlansText, {
                     book: runBook,
-                    lightBrakeText: toolErrorLightBrake.message,
+                    lightBrakeText: lightBrake.getMessage(),
                     finalAnswerReminderText: providerMessageOptions.finalAnswerReminderText,
                 });
                 providerMessageOptions.finalAnswerReminderText = '';

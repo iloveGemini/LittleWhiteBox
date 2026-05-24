@@ -1,3 +1,4 @@
+import { resolveConversationTokens } from '../../agent-core/runtime/context-tokens.js';
 import { EBOOK_SUMMARY_SYSTEM_PROMPT } from './prompts.js';
 import { resetMessageWindow } from '../../agent-core/ui/message-windowing.js';
 
@@ -25,20 +26,6 @@ export function splitEbookMessagesIntoTurns(messages = []) {
         turns.push(currentTurn);
     }
     return turns.filter((turn) => turn.length);
-}
-
-export function estimateEbookTokens(value = '') {
-    const text = typeof value === 'string' ? value : JSON.stringify(value || '');
-    let ascii = 0;
-    let nonAscii = 0;
-    for (const char of text) {
-        if (char.charCodeAt(0) <= 0x7f) {
-            ascii += 1;
-        } else {
-            nonAscii += 1;
-        }
-    }
-    return Math.ceil((ascii / 4) + nonAscii);
 }
 
 function trimForFallback(text = '', limit = 12000) {
@@ -128,13 +115,40 @@ export function createEbookHistoryCompactionController(deps = {}) {
         showToast = () => {},
         getActiveProviderConfig = () => ({}),
         buildProviderMessages = () => [],
+        getToolDefinitions = () => [],
         summaryTriggerTokens = EBOOK_SUMMARY_TRIGGER_TOKENS,
         defaultPreservedTurns = EBOOK_DEFAULT_PRESERVED_TURNS,
         minPreservedTurns = EBOOK_MIN_PRESERVED_TURNS,
     } = deps;
 
-    function estimateCurrentContextTokens() {
-        return estimateEbookTokens(buildProviderMessages());
+    async function estimateCurrentTokens() {
+        const providerConfig = getActiveProviderConfig();
+        const toolDefinitions = getToolDefinitions();
+        return await resolveConversationTokens({
+            messages: buildProviderMessages(),
+            tools: Array.isArray(toolDefinitions) ? toolDefinitions : [],
+            providerConfig,
+        });
+    }
+
+    function getActiveContextMessages() {
+        const turns = splitEbookMessagesIntoTurns(state.messages);
+        const archivedCount = Math.min(state.archivedTurnCount, turns.length);
+        return turns.slice(archivedCount).flat();
+    }
+
+    function pruneArchivedTurnsFromState() {
+        const turns = splitEbookMessagesIntoTurns(state.messages);
+        const archivedCount = Math.min(state.archivedTurnCount, turns.length);
+        if (archivedCount <= 0) return false;
+        state.messages = turns.slice(archivedCount).flat();
+        state.archivedTurnCount = 0;
+        resetMessageWindow(state);
+        return true;
+    }
+
+    function resetCompactionState() {
+        state.archivedTurnCount = 0;
     }
 
     async function summarizeTurns(adapter, turnsToArchive, signal) {
@@ -160,31 +174,33 @@ export function createEbookHistoryCompactionController(deps = {}) {
     }
 
     async function ensureContextBudget(adapter, signal) {
-        if (estimateCurrentContextTokens() <= summaryTriggerTokens) {
+        if (await estimateCurrentTokens() <= summaryTriggerTokens) {
             return;
         }
 
         for (const preservedTurns of [defaultPreservedTurns, minPreservedTurns]) {
             const turns = splitEbookMessagesIntoTurns(state.messages);
-            const archiveCount = Math.max(0, turns.length - Math.min(preservedTurns, turns.length));
-            if (archiveCount <= 0) continue;
-
-            const turnsToArchive = turns.slice(0, archiveCount);
-            const previousStatus = state.status;
-            state.status = '正在整理较早创作记录...';
-            render();
-            try {
-                await summarizeTurns(adapter, turnsToArchive, signal);
-            } finally {
-                state.status = previousStatus || '就绪';
+            const desiredArchivedTurnCount = Math.max(
+                state.archivedTurnCount,
+                turns.length - Math.min(preservedTurns, turns.length),
+            );
+            if (desiredArchivedTurnCount > state.archivedTurnCount) {
+                const turnsToArchive = turns.slice(state.archivedTurnCount, desiredArchivedTurnCount);
+                const previousStatus = state.status;
+                state.status = '正在整理较早创作记录...';
                 render();
+                try {
+                    await summarizeTurns(adapter, turnsToArchive, signal);
+                } finally {
+                    state.status = previousStatus || '就绪';
+                    render();
+                }
+                state.archivedTurnCount = desiredArchivedTurnCount;
+                pruneArchivedTurnsFromState();
+                await persistConversation();
             }
-            state.messages = turns.slice(archiveCount).flat();
-            state.archivedTurnCount = 0;
-            resetMessageWindow(state);
-            await persistConversation();
 
-            if (estimateCurrentContextTokens() <= summaryTriggerTokens) {
+            if (await estimateCurrentTokens() <= summaryTriggerTokens) {
                 showToast('已整理较早创作记录，保留最近创作上下文。');
                 render();
                 return;
@@ -197,6 +213,9 @@ export function createEbookHistoryCompactionController(deps = {}) {
 
     return {
         ensureContextBudget,
-        estimateCurrentContextTokens,
+        estimateCurrentTokens,
+        getActiveContextMessages,
+        pruneArchivedTurnsFromState,
+        resetCompactionState,
     };
 }

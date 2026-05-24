@@ -15,6 +15,7 @@ const ebookAppModule = await import('../app-src/ebook-app.js');
 const rendererModule = await import('../app-src/renderer.js');
 const uiBindingsModule = await import('../app-src/ui-bindings.js');
 const messageMarkdownModule = await import('../../agent-core/ui/message-markdown.js');
+const lightBrakeModule = await import('../../agent-core/runtime/light-brake.js');
 
 const {
     default: db,
@@ -59,6 +60,7 @@ const { captureScrollState, restoreScrollState } = ebookAppModule;
 const { countMessageWindowUnits, renderEbookShell } = rendererModule;
 const { bindEbookEvents } = uiBindingsModule;
 const { HTML_PREVIEW_SANDBOX, renderMarkdownToHtml } = messageMarkdownModule;
+const { createLightBrakeController } = lightBrakeModule;
 
 async function resetDb() {
     await db.delete();
@@ -3585,6 +3587,27 @@ test('Book agent injects a light brake after repeated tool failures', async () =
     assert.equal(state.messages.filter((message) => message.role === 'tool' && /book_file_not_found/.test(message.content)).length, 3);
 });
 
+test('Light brake can fire again for the same failure pattern after reset', () => {
+    const lightBrake = createLightBrakeController();
+
+    lightBrake.record('Read', 'book_file_not_found');
+    lightBrake.record('Read', 'book_file_not_found');
+    lightBrake.record('Read', 'book_file_not_found');
+    assert.match(lightBrake.getMessage(), /Read/);
+    assert.match(lightBrake.getMessage(), /book_file_not_found/);
+
+    lightBrake.reset();
+    assert.equal(lightBrake.getMessage(), '');
+
+    lightBrake.record('Read', 'book_file_not_found');
+    lightBrake.record('Read', 'book_file_not_found');
+    assert.equal(lightBrake.getMessage(), '');
+
+    lightBrake.record('Read', 'book_file_not_found');
+    assert.match(lightBrake.getMessage(), /Read/);
+    assert.match(lightBrake.getMessage(), /book_file_not_found/);
+});
+
 test('Book agent reroll trims to the previous user message without duplicating it', async () => {
     await resetDb();
     const book = await createBook('重生成测试');
@@ -3723,6 +3746,80 @@ test('Book history compaction writes creative record and releases archived turns
     assert.equal(state.messages.length, 2);
     assert.equal(state.messages[0].content, '继续写下一章。');
     assert.equal(state.uiMessageWindowLimit, 5);
+});
+
+test('Book history compaction counts real tool schemas through the shared tokenizer path', async () => {
+    const state = {
+        messages: [
+            { role: 'user', content: '继续写下一章。' },
+            { role: 'assistant', content: '先看下当前设定。' },
+        ],
+        historySummary: '',
+        status: '就绪',
+        archivedTurnCount: 0,
+        uiMessageWindowLimit: 100,
+    };
+    const tokenizerRequests = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, options = {}) => {
+        tokenizerRequests.push({
+            url: String(url),
+            body: JSON.parse(String(options.body || '{}')),
+        });
+        return {
+            ok: true,
+            async json() {
+                return { count: 4321 };
+            },
+        };
+    };
+
+    try {
+        const controller = createEbookHistoryCompactionController({
+            state,
+            render() {},
+            persistConversation() {},
+            showToast() {},
+            getActiveProviderConfig() {
+                return {
+                    provider: 'anthropic',
+                    model: 'claude-sonnet-4',
+                    temperature: 0.7,
+                    maxTokens: 12000,
+                };
+            },
+            buildProviderMessages() {
+                return [{ role: 'system', content: '作品上下文' }, ...state.messages];
+            },
+            getToolDefinitions() {
+                return [{
+                    type: 'function',
+                    function: {
+                        name: 'Read',
+                        description: 'Read a book file.',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                filePath: { type: 'string' },
+                            },
+                        },
+                    },
+                }];
+            },
+        });
+
+        const tokenCount = await controller.estimateCurrentTokens();
+
+        assert.equal(tokenCount, 4321);
+        assert.equal(tokenizerRequests.length, 1);
+        assert.equal(tokenizerRequests[0].url, '/api/tokenizers/claude/encode');
+        const tokenizerPayload = JSON.parse(tokenizerRequests[0].body.text);
+        const toolsMessage = tokenizerPayload.at(-1);
+        assert.match(String(toolsMessage?.content || ''), /TOOLS/);
+        assert.match(String(toolsMessage?.content || ''), /"name":"Read"/);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
 });
 
 test('Book prompt keeps assistant-style tool layers and recovery rules', () => {

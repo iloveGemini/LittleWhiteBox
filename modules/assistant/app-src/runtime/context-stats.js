@@ -1,5 +1,5 @@
-const TOKEN_ESTIMATE_BYTES_PER_TOKEN = 3.35;
-const OPENAI_TOKENIZER_PROVIDERS = new Set(['openai-compatible', 'openai-responses', 'sillytavern-openai-compatible']);
+import { estimateTokenCount, estimateConversationTokens, resolveConversationTokens } from '../../../agent-core/runtime/context-tokens.js';
+
 const textEncoder = new TextEncoder();
 const CONTEXT_DEBUG_PREVIEW_CHARS = 140;
 const CONTEXT_DEBUG_TOP_ENTRY_COUNT = 6;
@@ -49,14 +49,6 @@ function buildTokenCounterPayload(messages = [], tools = []) {
             content: tools.length ? `TOOLS\n${JSON.stringify(tools)}` : '',
         },
     ].filter((message) => message.content);
-}
-
-function estimateTokenCount(value) {
-    return Math.ceil(textEncoder.encode(String(value || '')).length / TOKEN_ESTIMATE_BYTES_PER_TOKEN);
-}
-
-function estimateConversationTokens({ messages = [], tools = [] } = {}) {
-    return estimateTokenCount(JSON.stringify(buildTokenCounterPayload(messages, tools)));
 }
 
 function createSignatureHasher() {
@@ -270,51 +262,6 @@ function logContextStats(reason, {
     console.info('[Assistant][ContextStats][TopEntries]', payloadSummary.topEntries);
 }
 
-function getTokenizerModelHint(providerConfig) {
-    const model = String(providerConfig?.model || '').trim();
-    if (model) return model;
-    if (providerConfig?.provider === 'anthropic') return 'claude';
-    return 'gpt-4o';
-}
-
-async function postJson(url, body) {
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-    });
-    if (!response.ok) {
-        throw new Error(`tokenizer_http_${response.status}`);
-    }
-    return await response.json();
-}
-
-async function countOpenAIContextTokens(messages = [], model = '') {
-    if (!messages.length) return 0;
-    const endpoint = `/api/tokenizers/openai/count?model=${encodeURIComponent(model || 'gpt-4o')}`;
-    let total = -1;
-    for (const message of messages) {
-        const data = await postJson(endpoint, [message]);
-        const tokenCount = Number(data?.token_count);
-        if (!Number.isFinite(tokenCount)) {
-            throw new Error('tokenizer_invalid_response');
-        }
-        total += tokenCount;
-    }
-    return Math.max(0, total);
-}
-
-async function countTextTokensWithEndpoint(endpoint, text) {
-    const data = await postJson(endpoint, { text });
-    const tokenCount = Number(data?.count);
-    if (!Number.isFinite(tokenCount)) {
-        throw new Error('tokenizer_invalid_response');
-    }
-    return tokenCount;
-}
-
 export function createContextStatsController(deps) {
     const {
         state,
@@ -352,25 +299,10 @@ export function createContextStatsController(deps) {
         return hasher.digest();
     }
 
-    async function resolveConversationTokens({ messages = [], tools = null } = {}) {
+    async function resolveContextTokens({ messages = [], tools = null } = {}) {
         const providerConfig = getActiveProviderConfig();
-        const provider = String(providerConfig?.provider || '');
         const resolvedTools = resolveToolDefinitions(tools);
-        const payload = buildTokenCounterPayload(messages, resolvedTools);
-        const flattenedText = JSON.stringify(payload);
-
-        try {
-            if (OPENAI_TOKENIZER_PROVIDERS.has(provider)) {
-                return await countOpenAIContextTokens(payload, getTokenizerModelHint(providerConfig));
-            }
-            if (provider === 'anthropic') {
-                return await countTextTokensWithEndpoint('/api/tokenizers/claude/encode', flattenedText);
-            }
-        } catch {
-            return estimateConversationTokens({ messages, tools: resolvedTools });
-        }
-
-        return estimateConversationTokens({ messages, tools: resolvedTools });
+        return await resolveConversationTokens({ messages, tools: resolvedTools, providerConfig });
     }
 
     async function forceUpdateContextStats(messages = [], tools = null) {
@@ -381,7 +313,7 @@ export function createContextStatsController(deps) {
         const cacheHit = latestResolvedContextStatsSignature === signature;
         let usedTokens = cacheHit
             ? latestResolvedContextTokens
-            : await resolveConversationTokens({ messages, tools: resolvedTools });
+            : await resolveContextTokens({ messages, tools: resolvedTools });
 
         if (!Number.isFinite(usedTokens)) {
             usedTokens = estimateConversationTokens({ messages, tools: resolvedTools });
@@ -446,7 +378,7 @@ export function createContextStatsController(deps) {
         }
 
         const requestSerial = ++contextStatsRequestSerial;
-        resolveConversationTokens({ messages, tools: resolvedTools }).then((usedTokens) => {
+        resolveContextTokens({ messages, tools: resolvedTools }).then((usedTokens) => {
             if (requestSerial !== contextStatsRequestSerial) return;
             if (latestContextStatsSignature !== signature) return;
             if (!Number.isFinite(usedTokens)) return;

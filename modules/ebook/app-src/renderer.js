@@ -3,7 +3,8 @@ import { renderMarkdownToHtml } from '../../agent-core/ui/message-markdown.js';
 import { buildAgentSettingsPanelMarkup } from '../../agent-core/ui/settings-markup.js';
 import { escapeHtml, trimInlineText } from './text-utils.js';
 import { formatDraftMetrics, formatTextMetrics } from './text-metrics.js';
-import { EBOOK_MAX_CONTEXT_TOKENS, estimateEbookTokens } from './history-compaction.js';
+import { estimateTokenCount } from '../../agent-core/runtime/context-tokens.js';
+import { EBOOK_MAX_CONTEXT_TOKENS } from './history-compaction.js';
 import { getMessageWindow } from '../../agent-core/ui/message-windowing.js';
 import { buildBookContextPrompt, EBOOK_SYSTEM_PROMPT } from './prompts.js';
 
@@ -184,7 +185,7 @@ function estimateConversationContextTokens(state = {}) {
             : '';
         lines.push(`${roleLabel}: ${[message.content || '', toolCalls].filter(Boolean).join('\n')}`);
     });
-    return estimateEbookTokens(lines.join('\n\n'));
+    return estimateTokenCount(lines.join('\n\n'));
 }
 
 function renderConversationContextMeterLabel(state = {}) {
