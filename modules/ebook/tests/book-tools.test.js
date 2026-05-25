@@ -2357,6 +2357,53 @@ test('Book bind events wires both desktop and mobile agent close buttons', () =>
     assert.deepEqual(postedTypes, ['xb-ebook:close', 'xb-ebook:close']);
 });
 
+test('Book settings panel closes only from its close button', () => {
+    const listeners = [];
+    const state = { isSettingsOpen: true };
+    const closeButton = {
+        addEventListener(eventName, handler) {
+            listeners.push({ target: 'close', eventName, handler });
+        },
+    };
+    const overlay = {
+        addEventListener(eventName, handler) {
+            listeners.push({ target: 'overlay', eventName, handler });
+        },
+    };
+    let renderCount = 0;
+    const root = {
+        querySelector(selector) {
+            if (selector === '#xb-agent-settings-close') return closeButton;
+            if (selector === '#xb-agent-settings-overlay') return overlay;
+            return null;
+        },
+        querySelectorAll() {
+            return [];
+        },
+    };
+
+    bindEbookEvents({
+        root,
+        state,
+        render() {
+            renderCount += 1;
+        },
+        postToHost() {},
+        bookController: {},
+        agentRunner: {},
+        persistConversation() {},
+        clearConversation() {},
+        showToast() {},
+    });
+
+    assert.deepEqual(listeners.map((item) => item.target), ['close']);
+
+    listeners[0].handler();
+
+    assert.equal(state.isSettingsOpen, false);
+    assert.equal(renderCount, 1);
+});
+
 test('Book agent composer keeps Enter as newline on mobile and send on desktop', () => {
     const previousMatchMedia = globalThis.matchMedia;
     const previousBowser = globalThis.Bowser;
@@ -2449,6 +2496,86 @@ test('Book agent composer keeps Enter as newline on mobile and send on desktop',
         globalThis.matchMedia = previousMatchMedia;
         globalThis.Bowser = previousBowser;
     }
+});
+
+test('Book agent composer preserves draft through renderer and submit clears it', () => {
+    const state = {
+        book: { id: 'book-compose-draft', title: '输入草稿测试' },
+        books: [],
+        files: [{ path: 'book/chapters/001.md', content: '# 第 1 章' }],
+        selectedPath: 'book/chapters/001.md',
+        readerPath: 'book/chapters/001.md',
+        viewMode: 'studio',
+        editorContent: '# 第 1 章',
+        savedContent: '# 第 1 章',
+        messages: [],
+        toolTrace: [],
+        openToolTurnKeys: [],
+        openThoughtKeys: [],
+        historySummary: '',
+        isBusy: false,
+        agentInputDraft: '先别丢这段草稿 <draft>',
+        drawStatus: { enabled: false, ready: false },
+        colorTheme: 'dark',
+        toast: '',
+    };
+    const html = renderEbookShell({
+        state,
+        providerConfig: { provider: 'test', model: 'demo' },
+        dirty: false,
+    });
+
+    assert.match(html, /先别丢这段草稿 &lt;draft&gt;/);
+
+    const listeners = {};
+    const input = {
+        value: '流式过程中输入的新指令',
+        addEventListener(eventName, handler) {
+            listeners[`input:${eventName}`] = handler;
+        },
+    };
+    const form = {
+        addEventListener(eventName, handler) {
+            listeners[`form:${eventName}`] = handler;
+        },
+    };
+    let runText = '';
+    const root = {
+        querySelector(selector) {
+            if (selector === '#xb-agent-input') return input;
+            if (selector === '#xb-agent-form') return form;
+            if (selector === '#xb-compose-hint') return { textContent: '' };
+            return null;
+        },
+        querySelectorAll() {
+            return [];
+        },
+    };
+
+    bindEbookEvents({
+        root,
+        state,
+        render() {},
+        postToHost() {},
+        bookController: {},
+        agentRunner: {
+            cancelActiveRun() {},
+            runAgent(text) {
+                runText = text;
+            },
+        },
+        persistConversation() {},
+        clearConversation() {},
+        showToast() {},
+    });
+
+    listeners['input:input']();
+    assert.equal(state.agentInputDraft, '流式过程中输入的新指令');
+
+    listeners['form:submit']({ preventDefault() {} });
+    assert.match(runText, /流式过程中输入的新指令/);
+    assert.equal(state.agentInputDraft, '');
+    assert.equal(input.value, '');
 });
 
 test('Book agent chat scroll toggles auto-scroll like assistant', () => {
@@ -2576,14 +2703,17 @@ test('Book agent chat disables streaming auto-scroll on manual upward intent', (
 
     listeners['main:wheel']({ deltaY: -24 });
     assert.equal(state.agentAutoScroll, false);
+    assert.equal(state.agentScrollLockTop, 616);
 
     agentMain.scrollTop = 656;
     listeners['main:scroll']();
     assert.equal(state.agentAutoScroll, false);
+    assert.equal(state.agentScrollLockTop, 616);
 
     agentMain.scrollTop = 700;
     listeners['main:scroll']();
     assert.equal(state.agentAutoScroll, true);
+    assert.equal(state.agentScrollLockTop, null);
 
     state.agentAutoScroll = true;
     listeners['main:wheel']({ deltaY: 24 });
@@ -2670,8 +2800,9 @@ test('Book app preserves manual agent scroll even when previous position was nea
     restoreScrollState(root, snapshot, '.xb-agent-main', {
         defaultToBottom: false,
         preserveScrollTop: true,
+        overrideScrollTop: 420,
     });
-    assert.equal(agentMain.scrollTop, 680);
+    assert.equal(agentMain.scrollTop, 420);
 
     restoreScrollState(root, snapshot, '.xb-agent-main', {
         forceBottom: true,

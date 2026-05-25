@@ -9,7 +9,6 @@ import {
     AGENT_PERMISSION_MODE_OPTIONS,
     DEFAULT_PRESET_NAME,
     buildDefaultPreset,
-    cloneDefaultModelConfigs,
     normalizeAgentConfig,
     normalizeJsApiPermission,
     normalizeModelConfigs,
@@ -378,11 +377,40 @@ export function createAgentSettingsPanel(deps = {}) {
         };
     }
 
+    function buildProviderDraftFields(provider = 'openai-compatible', modelConfigs = {}) {
+        const normalizedConfigs = normalizeModelConfigs(modelConfigs || {});
+        const providerConfig = normalizedConfigs[provider] || {};
+        return {
+            baseUrl: String(providerConfig.baseUrl || ''),
+            model: String(providerConfig.model || ''),
+            apiKey: String(providerConfig.apiKey || ''),
+            temperature: Number(providerConfig.temperature ?? 0.2),
+            reasoningEnabled: Boolean(providerConfig.reasoningEnabled),
+            reasoningEffort: normalizeReasoningEffort(providerConfig.reasoningEffort),
+            toolMode: providerConfig.toolMode || 'native',
+        };
+    }
+
+    function buildDelegateProviderDraftFields(provider = 'openai-compatible', modelConfigs = {}) {
+        const normalizedConfigs = normalizeModelConfigs(modelConfigs || {});
+        const providerConfig = normalizedConfigs[provider] || {};
+        return {
+            delegateBaseUrl: String(providerConfig.baseUrl || ''),
+            delegateModel: String(providerConfig.model || ''),
+            delegateApiKey: String(providerConfig.apiKey || ''),
+            delegateTemperature: Number(providerConfig.temperature ?? 0.2),
+            delegateReasoningEnabled: Boolean(providerConfig.reasoningEnabled),
+            delegateReasoningEffort: normalizeReasoningEffort(providerConfig.reasoningEffort),
+            delegateToolMode: providerConfig.toolMode || 'native',
+        };
+    }
+
     function buildDraftFromPreset(presetName, preset, sourceConfig = state.config) {
         const normalizedPresetName = normalizePresetName(presetName || DEFAULT_PRESET_NAME);
         const sourcePreset = preset && typeof preset === 'object' ? preset : buildDefaultPreset();
         const provider = sourcePreset.provider || 'openai-compatible';
-        const providerConfig = (sourcePreset.modelConfigs || cloneDefaultModelConfigs())[provider] || {};
+        const modelConfigs = normalizeModelConfigs(sourcePreset.modelConfigs || {});
+        const providerDraftFields = buildProviderDraftFields(provider, modelConfigs);
         const delegatePresetName = resolveExistingPresetName(sourceConfig?.delegatePresetName, normalizedPresetName);
         const delegateSource = sourceConfig?.delegateConfig && typeof sourceConfig.delegateConfig === 'object'
             ? sourceConfig.delegateConfig
@@ -392,13 +420,8 @@ export function createAgentSettingsPanel(deps = {}) {
             currentPresetName: normalizedPresetName,
             presetDraftName: normalizedPresetName,
             provider,
-            baseUrl: String(providerConfig.baseUrl || ''),
-            model: String(providerConfig.model || ''),
-            apiKey: String(providerConfig.apiKey || ''),
-            temperature: Number(providerConfig.temperature ?? 0.2),
-            reasoningEnabled: Boolean(providerConfig.reasoningEnabled),
-            reasoningEffort: normalizeReasoningEffort(providerConfig.reasoningEffort),
-            toolMode: providerConfig.toolMode || 'native',
+            modelConfigs,
+            ...providerDraftFields,
             tavilyApiKey: String(sourceConfig?.tavilyApiKey || ''),
             tavilyBaseUrl: normalizeTavilyBaseUrl(sourceConfig?.tavilyBaseUrl || DEFAULT_TAVILY_BASE_URL),
             permissionMode: normalizePermissionMode(sourcePreset.permissionMode),
@@ -417,31 +440,71 @@ export function createAgentSettingsPanel(deps = {}) {
 
     function readDraftFromForm(root) {
         const draft = ensureConfigDraft();
-        return {
-            ...draft,
-            currentPresetName: draft.currentPresetName,
-            presetDraftName: normalizePresetName(root.querySelector('#xb-assistant-preset-name')?.value),
-            provider: root.querySelector('#xb-assistant-provider')?.value || draft.provider || 'openai-compatible',
+        const provider = root.querySelector('#xb-assistant-provider')?.value || draft.provider || 'openai-compatible';
+        const delegateProvider = root.querySelector('#xb-assistant-delegate-provider')?.value || draft.delegateProvider || 'openai-compatible';
+        const providerConfig = {
             baseUrl: root.querySelector('#xb-assistant-base-url')?.value.trim() || '',
             model: root.querySelector('#xb-assistant-model')?.value.trim() || '',
             apiKey: root.querySelector('#xb-assistant-api-key')?.value.trim() || '',
             temperature: Number(draft.temperature ?? 0.2),
             reasoningEnabled: root.querySelector('#xb-assistant-reasoning-enabled')?.checked || false,
             reasoningEffort: normalizeReasoningEffort(root.querySelector('#xb-assistant-reasoning-effort')?.value),
-            toolMode: (root.querySelector('#xb-assistant-tool-mode')?.value || draft.toolMode || 'native'),
+            toolMode: isToolModeProvider(provider)
+                ? (root.querySelector('#xb-assistant-tool-mode')?.value || draft.toolMode || 'native')
+                : undefined,
+        };
+        const delegateProviderConfig = {
+            baseUrl: root.querySelector('#xb-assistant-delegate-base-url')?.value.trim() ?? draft.delegateBaseUrl ?? '',
+            model: root.querySelector('#xb-assistant-delegate-model')?.value.trim() ?? draft.delegateModel ?? '',
+            apiKey: root.querySelector('#xb-assistant-delegate-api-key')?.value.trim() ?? draft.delegateApiKey ?? '',
+            temperature: Number(draft.delegateTemperature ?? 0.2),
+            reasoningEnabled: root.querySelector('#xb-assistant-delegate-reasoning-enabled')?.checked ?? Boolean(draft.delegateReasoningEnabled),
+            reasoningEffort: normalizeReasoningEffort(root.querySelector('#xb-assistant-delegate-reasoning-effort')?.value || draft.delegateReasoningEffort),
+            toolMode: isToolModeProvider(delegateProvider)
+                ? (root.querySelector('#xb-assistant-delegate-tool-mode')?.value || draft.delegateToolMode || 'native')
+                : undefined,
+        };
+        const modelConfigs = {
+            ...normalizeModelConfigs(draft.modelConfigs || {}),
+            [provider]: {
+                ...(normalizeModelConfigs(draft.modelConfigs || {})[provider] || {}),
+                ...providerConfig,
+            },
+        };
+        const delegateModelConfigs = {
+            ...normalizeModelConfigs(draft.delegateModelConfigs || {}),
+            [delegateProvider]: {
+                ...(normalizeModelConfigs(draft.delegateModelConfigs || {})[delegateProvider] || {}),
+                ...delegateProviderConfig,
+            },
+        };
+        return {
+            ...draft,
+            currentPresetName: draft.currentPresetName,
+            presetDraftName: normalizePresetName(root.querySelector('#xb-assistant-preset-name')?.value),
+            provider,
+            modelConfigs,
+            baseUrl: providerConfig.baseUrl,
+            model: providerConfig.model,
+            apiKey: providerConfig.apiKey,
+            temperature: providerConfig.temperature,
+            reasoningEnabled: providerConfig.reasoningEnabled,
+            reasoningEffort: providerConfig.reasoningEffort,
+            toolMode: providerConfig.toolMode || draft.toolMode || 'native',
             tavilyApiKey: root.querySelector('#xb-assistant-tavily-api-key')?.value.trim() || '',
             tavilyBaseUrl: normalizeTavilyBaseUrl(draft.tavilyBaseUrl || DEFAULT_TAVILY_BASE_URL),
             permissionMode: normalizePermissionMode(root.querySelector('#xb-assistant-permission-mode')?.value || draft.permissionMode),
             jsApiPermission: normalizeJsApiPermission(root.querySelector('#xb-assistant-jsapi-permission')?.value || draft.jsApiPermission),
             delegatePresetName: resolveExistingPresetName(root.querySelector('#xb-assistant-delegate-preset-select')?.value || draft.delegatePresetName, draft.currentPresetName),
-            delegateProvider: root.querySelector('#xb-assistant-delegate-provider')?.value || draft.delegateProvider || 'openai-compatible',
-            delegateBaseUrl: root.querySelector('#xb-assistant-delegate-base-url')?.value.trim() ?? draft.delegateBaseUrl ?? '',
-            delegateModel: root.querySelector('#xb-assistant-delegate-model')?.value.trim() ?? draft.delegateModel ?? '',
-            delegateApiKey: root.querySelector('#xb-assistant-delegate-api-key')?.value.trim() ?? draft.delegateApiKey ?? '',
-            delegateTemperature: Number(draft.delegateTemperature ?? 0.2),
-            delegateReasoningEnabled: root.querySelector('#xb-assistant-delegate-reasoning-enabled')?.checked ?? Boolean(draft.delegateReasoningEnabled),
-            delegateReasoningEffort: normalizeReasoningEffort(root.querySelector('#xb-assistant-delegate-reasoning-effort')?.value || draft.delegateReasoningEffort),
-            delegateToolMode: root.querySelector('#xb-assistant-delegate-tool-mode')?.value || draft.delegateToolMode || 'native',
+            delegateProvider,
+            delegateModelConfigs,
+            delegateBaseUrl: delegateProviderConfig.baseUrl,
+            delegateModel: delegateProviderConfig.model,
+            delegateApiKey: delegateProviderConfig.apiKey,
+            delegateTemperature: delegateProviderConfig.temperature,
+            delegateReasoningEnabled: delegateProviderConfig.reasoningEnabled,
+            delegateReasoningEffort: delegateProviderConfig.reasoningEffort,
+            delegateToolMode: delegateProviderConfig.toolMode || draft.delegateToolMode || 'native',
         };
     }
 
@@ -719,14 +782,15 @@ export function createAgentSettingsPanel(deps = {}) {
         const nextPresetName = normalizePresetName(draft.presetDraftName);
         const currentPresetName = normalizePresetName(draft.currentPresetName || state.config?.currentPresetName || DEFAULT_PRESET_NAME);
         const currentPreset = (state.config?.presets || {})[currentPresetName] || buildDefaultPreset();
+        const draftModelConfigs = normalizeModelConfigs(draft.modelConfigs || currentPreset.modelConfigs || {});
         const nextPreset = {
             ...currentPreset,
             provider: draft.provider,
             permissionMode: normalizePermissionMode(draft.permissionMode),
             modelConfigs: {
-                ...(currentPreset.modelConfigs || cloneDefaultModelConfigs()),
+                ...draftModelConfigs,
                 [draft.provider]: {
-                    ...(((currentPreset.modelConfigs || cloneDefaultModelConfigs())[draft.provider]) || {}),
+                    ...(draftModelConfigs[draft.provider] || {}),
                     ...buildProviderConfigFromDraft(draft),
                 },
             },
@@ -811,10 +875,11 @@ export function createAgentSettingsPanel(deps = {}) {
 
         root.querySelector('#xb-assistant-provider').addEventListener('change', (event) => {
             const nextProvider = event.currentTarget.value;
-            ensureConfigDraft();
+            const draft = syncConfigDraft(root);
             state.configDraft = {
-                ...state.configDraft,
+                ...draft,
                 provider: nextProvider,
+                ...buildProviderDraftFields(nextProvider, draft.modelConfigs),
             };
             requestConfigFormSync();
             render?.();
@@ -867,10 +932,12 @@ export function createAgentSettingsPanel(deps = {}) {
         bindInputVisibilityToggle(root, '#xb-assistant-toggle-tavily-key', '#xb-assistant-tavily-api-key');
 
         root.querySelector('#xb-assistant-delegate-provider')?.addEventListener('change', (event) => {
-            ensureConfigDraft();
+            const draft = syncConfigDraft(root);
+            const nextProvider = event.currentTarget.value;
             state.configDraft = {
-                ...state.configDraft,
-                delegateProvider: event.currentTarget.value,
+                ...draft,
+                delegateProvider: nextProvider,
+                ...buildDelegateProviderDraftFields(nextProvider, draft.delegateModelConfigs),
             };
             requestConfigFormSync();
             render?.();

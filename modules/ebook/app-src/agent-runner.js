@@ -271,6 +271,7 @@ export function createEbookAgentRunner(deps = {}) {
         state.isBusy = true;
         state.status = 'AI 正在阅读作品...';
         state.agentAutoScroll = true;
+        state.agentScrollLockTop = null;
         resetMessageWindow(state);
         compactionController.resetCompactionState();
         state.toolTrace = [];

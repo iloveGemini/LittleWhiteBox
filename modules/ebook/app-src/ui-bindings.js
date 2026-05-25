@@ -240,11 +240,6 @@ export function bindEbookEvents(options = {}) {
         state.isSettingsOpen = false;
         render();
     });
-    root.querySelector('#xb-agent-settings-overlay')?.addEventListener('click', (event) => {
-        if (event.target !== event.currentTarget) return;
-        state.isSettingsOpen = false;
-        render();
-    });
     root.querySelector('#xb-agent-clear')?.addEventListener('click', async () => {
         if (state.isBusy) return;
         await clearConversation?.(state.book?.id);
@@ -476,7 +471,10 @@ export function bindEbookEvents(options = {}) {
     });
 
     const agentInput = root.querySelector('#xb-agent-input');
-    agentInput?.addEventListener('input', () => updateComposeHint(root));
+    agentInput?.addEventListener('input', () => {
+        state.agentInputDraft = agentInput.value;
+        updateComposeHint(root);
+    });
     agentInput?.addEventListener('keydown', (event) => {
         if (!isSendShortcut(event)) return;
         event.preventDefault();
@@ -491,9 +489,10 @@ export function bindEbookEvents(options = {}) {
             return;
         }
         const input = root.querySelector('#xb-agent-input');
-        const text = String(input?.value || '').trim();
+        const text = String(input?.value || state.agentInputDraft || '').trim();
         if (!text) return;
-        input.value = '';
+        state.agentInputDraft = '';
+        if (input) input.value = '';
         void agentRunner.runAgent(buildActionPrompt('custom', { text, selectedPath: state.selectedPath }));
     });
 
@@ -519,8 +518,10 @@ export function bindEbookEvents(options = {}) {
         return agentMain.scrollHeight - agentMain.scrollTop - agentMain.clientHeight <= threshold;
     }
 
-    function suspendAgentAutoScroll() {
+    function suspendAgentAutoScroll(scrollTop = null) {
         state.agentAutoScroll = false;
+        const lockedTop = Number.isFinite(scrollTop) ? scrollTop : agentMain?.scrollTop;
+        state.agentScrollLockTop = Number.isFinite(lockedTop) ? Math.max(0, lockedTop) : null;
     }
 
     function revealOlderAgentMessages() {
@@ -569,9 +570,11 @@ export function bindEbookEvents(options = {}) {
         if (nearBottom) {
             if (state.agentAutoScroll !== false || scrollingTowardBottom) {
                 state.agentAutoScroll = true;
+                state.agentScrollLockTop = null;
             }
         } else {
             state.agentAutoScroll = false;
+            state.agentScrollLockTop = currentScrollTop;
         }
         if (agentScrollTicking) return;
         agentScrollTicking = true;
@@ -588,7 +591,8 @@ export function bindEbookEvents(options = {}) {
     });
     agentMain?.addEventListener('wheel', (event) => {
         if (Number(event?.deltaY || 0) < 0) {
-            suspendAgentAutoScroll();
+            const intentTop = Number(agentMain.scrollTop || 0) - Math.max(64, Math.abs(Number(event.deltaY || 0)));
+            suspendAgentAutoScroll(intentTop);
         }
     }, { passive: true });
     agentMain?.addEventListener('touchstart', (event) => {
@@ -601,12 +605,13 @@ export function bindEbookEvents(options = {}) {
             return;
         }
         if (currentY > agentTouchStartY + 4 || !isAgentNearBottom()) {
-            suspendAgentAutoScroll();
+            suspendAgentAutoScroll(agentMain?.scrollTop);
         }
     }, { passive: true });
 
     scrollTopBtn?.addEventListener('click', () => {
         state.agentAutoScroll = false;
+        state.agentScrollLockTop = 0;
         agentMain?.scrollTo({ top: 0, behavior: 'smooth' });
         showScrollHelpers();
         updateAgentScrollButtonsVisibility();
@@ -615,6 +620,7 @@ export function bindEbookEvents(options = {}) {
 
     scrollBottomBtn?.addEventListener('click', () => {
         state.agentAutoScroll = true;
+        state.agentScrollLockTop = null;
         scrollAgentToBottom(agentMain);
         showScrollHelpers();
         updateAgentScrollButtonsVisibility();

@@ -43,7 +43,10 @@ export function restoreScrollState(root, snapshot, defaultSelector = null, optio
         return;
     }
     if (options.preserveScrollTop) {
-        node.scrollTop = Math.min(snapshot.scrollTop, node.scrollHeight);
+        const top = Number.isFinite(options.overrideScrollTop)
+            ? options.overrideScrollTop
+            : snapshot.scrollTop;
+        node.scrollTop = Math.min(Math.max(0, top), node.scrollHeight);
         return;
     }
     node.scrollTop = snapshot.nearBottom
@@ -258,6 +261,9 @@ export function createEbookApp(options = {}) {
             forceBottom: shouldAutoScrollAgent,
             defaultToBottom: shouldAutoScrollAgent,
             preserveScrollTop: !shouldAutoScrollAgent,
+            overrideScrollTop: !shouldAutoScrollAgent && Number.isFinite(state.agentScrollLockTop)
+                ? state.agentScrollLockTop
+                : undefined,
         });
         if (state.isSettingsOpen) {
             const settingsBody = root.querySelector('.xb-ebook-settings-body');

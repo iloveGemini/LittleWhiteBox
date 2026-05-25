@@ -819,6 +819,7 @@ function renderStudioShell(options = {}) {
     const agentActionAttr = (state.isBusy || !readiness.canRun) ? 'disabled' : '';
     const agentInputAttr = (!state.isBusy && !readiness.canRun) ? 'disabled' : '';
     const sendButtonAttr = (!state.isBusy && !readiness.canRun) ? 'disabled' : '';
+    const agentInputDraft = String(state.agentInputDraft || '');
     const canClearConversation = !!(state.messages?.length || state.historySummary?.trim());
     const layoutClass = ['focus-editor', 'focus-agent'].includes(state.studioLayout)
         ? state.studioLayout
@@ -941,7 +942,7 @@ function renderStudioShell(options = {}) {
                     <form id="xb-agent-form" class="xb-agent-form">
                         <div class="xb-agent-compose-row">
                             <div class="xb-agent-compose-main">
-                                <textarea id="xb-agent-input" placeholder="${readiness.canRun ? '写作指令，例如：把当前段落改得更克制一点，或者先列三种开场方案' : '先补好 API 和模型信息'}" ${agentInputAttr}></textarea>
+                                <textarea id="xb-agent-input" placeholder="${readiness.canRun ? '写作指令，例如：把当前段落改得更克制一点，或者先列三种开场方案' : '先补好 API 和模型信息'}" ${agentInputAttr}>${escapeHtml(agentInputDraft)}</textarea>
                                 <div class="xb-compose-hint" id="xb-compose-hint">Enter 发送 · Shift+Enter 换行</div>
                             </div>
                             <div class="xb-agent-compose-actions">
