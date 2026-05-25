@@ -6,7 +6,7 @@ import { formatDraftMetrics, formatTextMetrics } from './text-metrics.js';
 import { estimateTokenCount } from '../../agent-core/runtime/context-tokens.js';
 import { EBOOK_MAX_CONTEXT_TOKENS } from './history-compaction.js';
 import { getMessageWindow } from '../../agent-core/ui/message-windowing.js';
-import { buildBookContextPrompt, EBOOK_SYSTEM_PROMPT } from './prompts.js';
+import { buildBookContextPrompt, buildBookTurnContextPrompt, EBOOK_SYSTEM_PROMPT } from './prompts.js';
 
 const STUDIO_FILE_SECTIONS = [
     {
@@ -167,12 +167,17 @@ function estimateConversationContextTokens(state = {}) {
     const contextPrompt = buildBookContextPrompt({
         book: state.book,
         files: state.files,
+    });
+    const turnContextPrompt = buildBookTurnContextPrompt({
+        book: state.book,
+        files: state.files,
         selectedPath: state.selectedPath,
         historySummary: state.historySummary,
     });
     const lines = [];
     lines.push(`[System]\n${EBOOK_SYSTEM_PROMPT}`);
-    lines.push(`[Current context]\n${contextPrompt}`);
+    lines.push(`[Stable context]\n${contextPrompt}`);
+    lines.push(`[Turn context]\n${turnContextPrompt}`);
     (state.messages || []).forEach((message) => {
         if (!message || !['user', 'assistant', 'tool'].includes(message.role)) return;
         const roleLabel = message.role === 'user'

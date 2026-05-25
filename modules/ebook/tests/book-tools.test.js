@@ -54,6 +54,7 @@ const {
     EBOOK_SYSTEM_PROMPT,
     buildActionPrompt,
     buildBookContextPrompt,
+    buildBookTurnContextPrompt,
     buildDelegateBookContextPrompt,
 } = promptsModule;
 const { buildEbookProviderMessagesFromHistory, createEbookAgentRunner } = agentRunnerModule;
@@ -278,53 +279,71 @@ test('Default outline template pushes volume-level planning before chapter draft
     assert.match(outline, /章末位移/);
 });
 
-test('Book context prompt continuously injects core story files', () => {
-    const prompt = buildBookContextPrompt({
+test('Book context prompt keeps stable files separate from volatile turn context', () => {
+    const files = [
+        {
+            path: 'book/outline.md',
+            content: '# 大纲\n\n这是一个关于失忆侦探的悬疑故事。',
+        },
+        {
+            path: 'book/style.md',
+            content: '# 文风规则\n\n这里记录“怎么写”，供写作助手续写和修订时参考。\n\n- 叙事视角：\n- 语气节奏：\n- 句子长度：\n- 禁忌与边界：\n- 想保留的例句：\n',
+        },
+        {
+            path: 'book/characters.md',
+            content: '# 角色设定\n\n- 林栖：调查记者。\n- 沈照：前刑警。',
+        },
+        {
+            path: 'book/world.md',
+            content: '# 世界设定\n\n故事发生在海边旧城。',
+        },
+        {
+            path: 'book/review-rules.md',
+            content: '# 审稿规则\n\n- 检查伏笔是否兑现。',
+        },
+        {
+            path: 'book/state.md',
+            content: '# 状态追踪\n\n## 当前进度\n\n**已写到**：第一章末尾，林栖第一次看到旧信。',
+        },
+        {
+            path: 'book/chapters/001.md',
+            content: '# 第 1 章\n\n雨下了一整夜。',
+        },
+        {
+            path: 'book/sources/chat.md',
+            content: '这是导入的聊天资料。',
+        },
+    ];
+    const stablePrompt = buildBookContextPrompt({
         book: { id: 'book-test', title: '提示词书稿' },
-        files: [
-            {
-                path: 'book/outline.md',
-                content: '# 大纲\n\n这是一个关于失忆侦探的悬疑故事。',
-            },
-            {
-                path: 'book/style.md',
-                content: '# 文风规则\n\n这里记录“怎么写”，供写作助手续写和修订时参考。\n\n- 叙事视角：\n- 语气节奏：\n- 句子长度：\n- 禁忌与边界：\n- 想保留的例句：\n',
-            },
-            {
-                path: 'book/characters.md',
-                content: '# 角色设定\n\n- 林栖：调查记者。\n- 沈照：前刑警。',
-            },
-            {
-                path: 'book/world.md',
-                content: '# 世界设定\n\n故事发生在海边旧城。',
-            },
-            {
-                path: 'book/state.md',
-                content: '# 状态追踪\n\n## 当前进度\n\n**已写到**：第一章末尾，林栖第一次看到旧信。',
-            },
-            {
-                path: 'book/chapters/001.md',
-                content: '# 第 1 章\n\n雨下了一整夜。',
-            },
-            {
-                path: 'book/sources/chat.md',
-                content: '这是导入的聊天资料。',
-            },
-        ],
+        files,
+    });
+    const turnPrompt = buildBookTurnContextPrompt({
+        book: { id: 'book-test', title: '提示词书稿' },
+        files,
+        selectedPath: 'book/chapters/001.md',
+        historySummary: '第一章已经起草。',
     });
 
-    assert.match(prompt, /\[作品概况\]/);
-    assert.match(prompt, /已填写核心设定: 大纲、文风规则、角色设定、世界设定/);
-    assert.match(prompt, /正文章节: 1/);
-    assert.match(prompt, /已导入资料: chat.md/);
-    assert.match(prompt, /\[作品核心设定\]/);
-    assert.match(prompt, /## 大纲 \(book\/outline\.md\)/);
-    assert.match(prompt, /这是一个关于失忆侦探的悬疑故事/);
-    assert.match(prompt, /\[状态追踪\]/);
-    assert.match(prompt, /林栖第一次看到旧信/);
-    assert.match(prompt, /## 文风规则 \(book\/style\.md\)/);
-    assert.match(prompt, /这里记录“怎么写”/);
-    assert.doesNotMatch(prompt, /\[Book readiness\]|\[Core file digests\]/);
+    assert.doesNotMatch(stablePrompt, /\[作品概况\]|正文章节|已导入资料|chat\.md/);
+    assert.match(stablePrompt, /\[作品核心设定\]/);
+    assert.match(stablePrompt, /## 大纲 \(book\/outline\.md\)/);
+    assert.match(stablePrompt, /这是一个关于失忆侦探的悬疑故事/);
+    assert.match(stablePrompt, /## 文风规则 \(book\/style\.md\)/);
+    assert.match(stablePrompt, /这里记录“怎么写”/);
+    assert.match(stablePrompt, /\[审稿规则\]/);
+    assert.match(stablePrompt, /检查伏笔是否兑现/);
+    assert.doesNotMatch(stablePrompt, /\[状态追踪\]|林栖第一次看到旧信|\[Current file\]|\[创作记录\]/);
+
+    assert.match(turnPrompt, /\[本轮作品上下文\]/);
+    assert.match(turnPrompt, /title: 提示词书稿/);
+    assert.match(turnPrompt, /\[状态追踪\]/);
+    assert.match(turnPrompt, /林栖第一次看到旧信/);
+    assert.match(turnPrompt, /\[Current file\]\nbook\/chapters\/001\.md/);
+    assert.match(turnPrompt, /\[创作记录\]/);
+    assert.match(turnPrompt, /第一章已经起草/);
+    assert.doesNotMatch(turnPrompt, /\[作品概况\]|正文章节|已导入资料|chat\.md/);
+    assert.doesNotMatch(stablePrompt, /\[Book readiness\]|\[Core file digests\]/);
 });
 
 test('Delegate book context injects review rules and core story files', () => {
@@ -398,13 +417,13 @@ test('Delegate prompt gives the reviewer a stable book-specific tool model', () 
     assert.match(EBOOK_DELEGATE_PROMPT, /book\/chapters\//);
     assert.match(EBOOK_DELEGATE_PROMPT, /\[ebook-image:slotId\]/);
     assert.match(EBOOK_DELEGATE_PROMPT, /\[审稿分身自动上下文\]/);
-    assert.match(EBOOK_DELEGATE_PROMPT, /# 工具使用指导/);
-    assert.match(EBOOK_DELEGATE_PROMPT, /不知道文件在哪时先 LS \/ Glob/);
-    assert.match(EBOOK_DELEGATE_PROMPT, /审具体章节时，必须 Read/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /# Tool Use Guide/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /不要用 Read 重复读取 `book\/outline\.md`/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /When reviewing a specific chapter, you must Read/);
     assert.match(EBOOK_DELEGATE_PROMPT, /book\/review-rules\.md` 是本书的审稿标准/);
     assert.match(EBOOK_DELEGATE_PROMPT, /不要另起一套标准/);
     assert.match(EBOOK_DELEGATE_PROMPT, /审稿规则没有覆盖的地方/);
-    assert.match(EBOOK_DELEGATE_PROMPT, /不能写文件、不能管理计划、不能委派其他分身/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /You cannot write files, manage plans, or delegate to another agent/);
     assert.match(EBOOK_DELEGATE_PROMPT, /最终结果给主助手/);
     assert.doesNotMatch(EBOOK_DELEGATE_PROMPT, /web_search|Tavily|联网查资料/);
     assert.doesNotMatch(EBOOK_DELEGATE_PROMPT, /重点检查结构、人物动机、关系连续性、节奏、设定一致性、时间线、伏笔、视角和文风/);
@@ -3965,7 +3984,10 @@ test('Book agent reroll trims to the previous user message without duplicating i
     assert.deepEqual(state.messages.map((message) => message.role), ['user', 'assistant']);
     assert.equal(state.messages[0].content, '重写第一章。');
     assert.equal(state.messages[1].content, '新版本。');
-    assert.equal(requestMessages.filter((message) => message.role === 'user' && message.content === '重写第一章。').length, 1);
+    const userRequests = requestMessages.filter((message) => message.role === 'user');
+    assert.equal(userRequests.length, 1);
+    assert.match(userRequests[0].content, /\[本轮作品上下文\]/);
+    assert.match(userRequests[0].content, /\[用户本轮请求\]\n\n重写第一章。$/);
 });
 
 test('Book history compaction writes creative record and releases archived turns', async () => {
@@ -4113,16 +4135,19 @@ test('Book history compaction counts real tool schemas through the shared tokeni
 });
 
 test('Book prompt keeps assistant-style tool layers and recovery rules', () => {
-    assert.match(EBOOK_SYSTEM_PROMPT, /# 工具使用指导/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /## 工具层级/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /## 选择策略/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /工具返回错误时/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /小范围、句内、多处局部修订用 Edit/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /大段重写或整章重写用 Write/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /# Tool Use Guide/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /# 文件纪律/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /## Tool Layers/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /## Selection Strategy/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /If a tool returns an error/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /Use Edit for small in-sentence or multi-spot local revisions/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /whole-chapter rewrites/);
     assert.match(EBOOK_SYSTEM_PROMPT, /RenameBook/);
     assert.match(EBOOK_SYSTEM_PROMPT, /DelegateRun/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /先说结论或动作，再说理由/);
     assert.match(EBOOK_SYSTEM_PROMPT, /\[ebook-image:slotId\]/);
     assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /apply_patch|## 工具参数速记|## apply_patch 格式/);
+    assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /system-reminder/);
     assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /\*\*\* Update File: book\/example\.md/);
     assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /web_search|Tavily|联网查资料/);
     assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /不要尝试 `local/);
@@ -4130,8 +4155,8 @@ test('Book prompt keeps assistant-style tool layers and recovery rules', () => {
 
     const delegateDefinition = getEbookToolDefinitions()
         .find((definition) => definition.function?.name === EBOOK_TOOL_NAMES.DELEGATE_RUN);
-    assert.match(String(delegateDefinition.function.description), /任务、背景和交付要求/);
-    assert.doesNotMatch(String(delegateDefinition.function.description), /task\/context\/deliverable/i);
+    assert.match(String(delegateDefinition.function.description), /`task` is required/);
+    assert.match(String(delegateDefinition.function.description), /Do not use this as a writing or editing tool/);
 
     const planCreate = getEbookToolDefinitions()
         .find((definition) => definition.function?.name === EBOOK_TOOL_NAMES.PLAN_CREATE);
@@ -4139,7 +4164,7 @@ test('Book prompt keeps assistant-style tool layers and recovery rules', () => {
 
     const definitions = getEbookToolDefinitions();
     const edit = definitions.find((definition) => definition.function?.name === EBOOK_TOOL_NAMES.EDIT);
-    assert.match(String(edit.function.description), /句内、小段、多处局部修订/);
+    assert.match(String(edit.function.description), /in-sentence, small-paragraph, or multi-spot local revisions/);
     assert.match(String(edit.function.description), /replaceAll/);
     assert.equal(Object.hasOwn(edit.function.parameters.properties, 'filePath'), true);
     assert.equal(Object.hasOwn(edit.function.parameters.properties, 'edits'), true);
@@ -4150,8 +4175,8 @@ test('Book prompt keeps assistant-style tool layers and recovery rules', () => {
 
     const webSearchDefinitions = getEbookToolDefinitions({ webSearchEnabled: true });
     const webSearch = webSearchDefinitions.find((definition) => definition.function?.name === EBOOK_TOOL_NAMES.WEB_SEARCH);
-    assert.match(String(webSearch.function.description), /当前书稿和资料区无法提供/);
-    assert.match(String(webSearch.function.description), /优先用 LS \/ Glob \/ Grep \/ Read/);
+    assert.match(String(webSearch.function.description), /not available in the current book or imported sources/);
+    assert.match(String(webSearch.function.description), /prefer LS \/ Glob \/ Grep \/ Read/);
     assert.equal(
         getEbookToolDefinitions({ webSearchEnabled: false })
             .some((definition) => definition.function?.name === EBOOK_TOOL_NAMES.WEB_SEARCH),
@@ -4166,48 +4191,48 @@ test('Book tool definitions teach exact parameters like assistant tools', () => 
     );
 
     const ls = definitions.get(EBOOK_TOOL_NAMES.LS);
-    assert.match(String(ls.description), /目录路径必须写成 `book\/\.\.\.\/`/);
-    assert.match(String(ls.parameters.properties.path.description), /不要传 filePath/);
+    assert.match(String(ls.description), /Directory paths must be `book\/\.\.\.\/`/);
+    assert.match(String(ls.parameters.properties.path.description), /Do not pass filePath/);
 
     const glob = definitions.get(EBOOK_TOOL_NAMES.GLOB);
-    assert.match(String(glob.description), /`path` 只是可选目录范围，不能替代 pattern/);
+    assert.match(String(glob.description), /`path` is only an optional directory scope and does not replace pattern/);
 
     const grep = definitions.get(EBOOK_TOOL_NAMES.GREP);
     assert.match(String(grep.description), /useRegex: false/);
     assert.match(String(grep.parameters.properties.outputMode.description), /files_with_matches/);
 
     const read = definitions.get(EBOOK_TOOL_NAMES.READ);
-    assert.match(String(read.description), /参数名是 `filePath`，不是 `path`/);
-    assert.match(String(read.parameters.properties.filePath.description), /不要传 path/);
+    assert.match(String(read.description), /argument name is `filePath`, not `path`/);
+    assert.match(String(read.parameters.properties.filePath.description), /Do not pass path/);
 
     const write = definitions.get(EBOOK_TOOL_NAMES.WRITE);
-    assert.match(String(write.description), /参数名是 `filePath` 和 `content`/);
-    assert.match(String(write.description), /大段正文、整节、整章重写/);
-    assert.match(String(write.description), /保留原文时要把完整内容写回/);
+    assert.match(String(write.description), /argument names are `filePath` and `content`/);
+    assert.match(String(write.description), /large prose sections, whole sections, or whole-chapter rewrites/);
+    assert.match(String(write.description), /include all original content you want to keep/);
     assert.equal(Object.hasOwn(write.parameters.properties, 'path'), false);
-    assert.match(String(write.parameters.properties.filePath.description), /目标文件路径/);
+    assert.match(String(write.parameters.properties.filePath.description), /Target file path/);
 
     const edit = definitions.get(EBOOK_TOOL_NAMES.EDIT);
-    assert.match(String(edit.description), /一个调用只改一个文件/);
-    assert.match(String(edit.description), /edits 数组/);
+    assert.match(String(edit.description), /One call edits one file/);
+    assert.match(String(edit.description), /edits array/);
     assert.equal(Object.hasOwn(edit.parameters.properties, 'path'), false);
-    assert.match(String(edit.parameters.properties.filePath.description), /目标文件路径/);
+    assert.match(String(edit.parameters.properties.filePath.description), /Target file path/);
     assert.equal(edit.parameters.properties.edits.items.required.includes('oldString'), true);
     assert.equal(edit.parameters.properties.edits.items.required.includes('newString'), true);
 
     const deleteTool = definitions.get(EBOOK_TOOL_NAMES.DELETE);
-    assert.match(String(deleteTool.description), /删除目录时路径要以 `\/` 结尾/);
+    assert.match(String(deleteTool.description), /Directory paths should end with `\/`/);
 
     const move = definitions.get(EBOOK_TOOL_NAMES.MOVE);
-    assert.match(String(move.description), /参数名是 `fromPath` 和 `toPath`/);
+    assert.match(String(move.description), /argument names are `fromPath` and `toPath`/);
 
     const planUpdate = definitions.get(EBOOK_TOOL_NAMES.PLAN_UPDATE);
-    assert.match(String(planUpdate.description), /不要自己编一个看起来像 id 的值/);
+    assert.match(String(planUpdate.description), /Do not invent an id-like value/);
 
     const renameBook = definitions.get(EBOOK_TOOL_NAMES.RENAME_BOOK);
-    assert.match(String(renameBook.description), /参数只有 `title`/);
+    assert.match(String(renameBook.description), /only argument is `title`/);
 
     const delegateRun = definitions.get(EBOOK_TOOL_NAMES.DELEGATE_RUN);
-    assert.match(String(delegateRun.description), /`task` 必填/);
-    assert.match(String(delegateRun.description), /不要把它当成写作或修改工具/);
+    assert.match(String(delegateRun.description), /`task` is required/);
+    assert.match(String(delegateRun.description), /Do not use this as a writing or editing tool/);
 });

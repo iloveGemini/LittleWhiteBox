@@ -26,6 +26,7 @@ import {
 import { createEbookHistoryCompactionController, splitEbookMessagesIntoTurns } from './history-compaction.js';
 import {
     buildBookContextPrompt,
+    buildBookTurnContextPrompt,
     buildDelegateBookContextPrompt,
     EBOOK_DELEGATE_PROMPT,
     EBOOK_SYSTEM_PROMPT,
@@ -63,8 +64,27 @@ function buildToolResultMessage({ toolCallId = '', toolName = '', toolResult, to
     return message;
 }
 
-export function buildEbookProviderMessagesFromHistory(messages = []) {
-    return buildProviderMessagesFromHistory(messages);
+function prefixLatestUserMessage(messages = [], contextText = '') {
+    const context = String(contextText || '').trim();
+    if (!context) return Array.isArray(messages) ? messages : [];
+    const sourceMessages = Array.isArray(messages) ? messages : [];
+    const latestUserIndex = findLastUserMessageIndex(sourceMessages);
+    if (latestUserIndex < 0) return sourceMessages;
+    return sourceMessages.map((message, index) => {
+        if (index !== latestUserIndex || message?.role !== 'user') return message;
+        return {
+            ...message,
+            content: [
+                context,
+                '[用户本轮请求]',
+                String(message.content || ''),
+            ].filter(Boolean).join('\n\n'),
+        };
+    });
+}
+
+export function buildEbookProviderMessagesFromHistory(messages = [], options = {}) {
+    return buildProviderMessagesFromHistory(prefixLatestUserMessage(messages, options.latestUserContextText));
 }
 
 function buildToolTraceEntry(toolCall = {}, args = {}, result = {}) {
@@ -177,6 +197,9 @@ export function createEbookAgentRunner(deps = {}) {
     function buildMessagesForRun(currentPlansText = '', options = {}) {
         const book = options.book || state.book;
         const contextPrompt = buildBookContextPrompt({
+            files: state.files,
+        });
+        const turnContextPrompt = buildBookTurnContextPrompt({
             book,
             files: state.files,
             selectedPath: state.selectedPath,
@@ -190,7 +213,9 @@ export function createEbookAgentRunner(deps = {}) {
         ]
             .filter(Boolean)
             .map((content) => ({ role: 'system', content }));
-        const history = buildEbookProviderMessagesFromHistory(state.messages);
+        const history = buildEbookProviderMessagesFromHistory(state.messages, {
+            latestUserContextText: turnContextPrompt,
+        });
         return [
             { role: 'system', content: EBOOK_SYSTEM_PROMPT },
             { role: 'system', content: contextPrompt },
