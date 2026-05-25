@@ -448,9 +448,16 @@ test('Book action prompts rely on injected core story files', () => {
     assert.match(startBookPrompt, /只问最核心的 3 到 5 个问题/);
     assert.match(spinePrompt, /书脊/);
     assert.match(spinePrompt, /不要直接写完整大纲/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /# 创作流程/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /## 流程层级/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /## 开书阶段/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /## 卷规划阶段/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /## 章节起草阶段/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /## 卷完成后/);
     assert.match(EBOOK_SYSTEM_PROMPT, /长篇推进要有卷级心智/);
     assert.match(EBOOK_SYSTEM_PROMPT, /当前卷缺少可执行推进草图/);
     assert.match(EBOOK_SYSTEM_PROMPT, /不要每章都问用户/);
+    assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /章节功能表|章节目标|完成目标/);
     assert.match(outlinePrompt, /\[作品核心设定\]/);
     assert.match(outlinePrompt, /不要硬写完整大纲/);
     assert.match(outlinePrompt, /不要只写“下一章”/);
