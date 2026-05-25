@@ -1,6 +1,6 @@
 import { extension_settings, extensionTypes } from "../../../extensions.js";
 import { saveSettingsDebounced, eventSource, event_types, getRequestHeaders } from "../../../../script.js";
-import { EXT_ID, extensionFolderPath } from "./core/constants.js";
+import { EXT_FOLDER_ID, EXT_ID, extensionFolderPath } from "./core/constants.js";
 import { executeSlashCommand } from "./core/slash-command.js";
 import { EventCenter } from "./core/event-manager.js";
 import { initTasks } from "./modules/scheduled-tasks/scheduled-tasks.js";
@@ -268,7 +268,7 @@ function decodeBase64Utf8(value = '') {
 }
 
 async function detectLittleWhiteBoxGlobalFlag() {
-    const extensionKey = `third-party/${EXT_ID}`;
+    const extensionKey = `third-party/${EXT_FOLDER_ID}`;
 
     try {
         const response = await fetch('/api/extensions/discover', {
@@ -298,7 +298,7 @@ async function requestLittleWhiteBoxUpdate(globalFlag) {
     return fetch('/api/extensions/update', {
         method: 'POST',
         headers: getRequestHeaders(),
-        body: JSON.stringify({ extensionName: EXT_ID, global: globalFlag }),
+        body: JSON.stringify({ extensionName: EXT_FOLDER_ID, global: globalFlag }),
     });
 }
 
@@ -306,7 +306,7 @@ async function requestLittleWhiteBoxVersion(globalFlag) {
     return fetch('/api/extensions/version', {
         method: 'POST',
         headers: getRequestHeaders(),
-        body: JSON.stringify({ extensionName: EXT_ID, global: globalFlag }),
+        body: JSON.stringify({ extensionName: EXT_FOLDER_ID, global: globalFlag }),
     });
 }
 
