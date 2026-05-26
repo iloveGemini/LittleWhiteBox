@@ -274,15 +274,29 @@ test('Book context budget defaults stay aligned with assistant', () => {
 
 test('Default outline template pushes volume-level planning before chapter drafting', () => {
     const outline = DEFAULT_BOOK_FILES.find((file) => file.path === 'book/outline.md')?.content || '';
+    const volume = DEFAULT_BOOK_FILES.find((file) => file.path === 'book/volumes/001.md')?.content || '';
 
+    assert.match(outline, /第一轮：作品入口（三项收集）/);
+    assert.match(outline, /类型\/题材入口/);
+    assert.match(outline, /情绪\/读者体验入口/);
+    assert.match(outline, /关系\/设定张力入口/);
+    assert.match(outline, /文风、节奏、尺度、冲突密度、日常比例、性场景功能和审稿优先级/);
+    assert.match(outline, /## 作品入口/);
+    assert(
+        outline.indexOf('## 作品入口') < outline.indexOf('## 书脊'),
+        '作品入口 should appear before 书脊',
+    );
     assert.match(outline, /大纲推进原则/);
     assert.match(outline, /大概有几卷/);
     assert.match(outline, /当前卷必须有可执行的卷内细纲/);
-    assert.match(outline, /卷内推进草图制定好后，沿事件集团连续写作/);
-    assert.match(outline, /## 当前卷推进草图/);
-    assert.match(outline, /章节表是地图，不是工单/);
-    assert.match(outline, /章末位移是写完后回头看的结果/);
-    assert.match(outline, /第 1 章写到：主角第一次注意到女主那个下午/);
+    assert.match(outline, /book\/volumes\/001\.md/);
+    assert.match(outline, /## 卷细纲索引/);
+    assert.doesNotMatch(outline, /## 当前卷推进草图/);
+    assert.match(volume, /# 第一卷细纲/);
+    assert.match(volume, /卷内推进草图/);
+    assert.match(volume, /章节表是地图，不是工单/);
+    assert.match(volume, /章末位移是写完后回头看的结果/);
+    assert.match(volume, /第 1 章写到：主角第一次注意到女主那个下午/);
 });
 
 test('Book context prompt keeps stable files separate from volatile turn context', () => {
@@ -426,8 +440,16 @@ test('Delegate prompt gives the reviewer a stable book-specific tool model', () 
     assert.match(EBOOK_DELEGATE_PROMPT, /# Tool Use Guide/);
     assert.match(EBOOK_DELEGATE_PROMPT, /不要用 Read 重复读取 `book\/outline\.md`/);
     assert.match(EBOOK_DELEGATE_PROMPT, /When reviewing a specific chapter, you must Read/);
-    assert.match(EBOOK_DELEGATE_PROMPT, /book\/review-rules\.md` 是本书的审稿标准/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /book\/review-rules\.md` 是本书的固定审稿标准/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /不能覆盖或替代 `book\/review-rules\.md`/);
     assert.match(EBOOK_DELEGATE_PROMPT, /不要另起一套标准/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /# 节奏优先审稿观念/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /节奏、叙事单位和人物生活感优先级高于文笔润色、标点/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /事件集团是叙事单位，章节只是字数和呼吸点的自然切割/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /章节不是任务/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /章末位移是结果，不是目标/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /地图，不是工单/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /人物不能只是任务执行器/);
     assert.match(EBOOK_DELEGATE_PROMPT, /审稿规则没有覆盖的地方/);
     assert.match(EBOOK_DELEGATE_PROMPT, /You cannot write files, manage plans, or delegate to another agent/);
     assert.match(EBOOK_DELEGATE_PROMPT, /最终结果给主助手/);
@@ -446,23 +468,31 @@ test('Book action prompts rely on injected core story files', () => {
     assert.match(startBookPrompt, /我想试试写一本书/);
     assert.match(startBookPrompt, /不要立刻写正文/);
     assert.match(startBookPrompt, /只问最核心的 3 到 5 个问题/);
+    assert.match(startBookPrompt, /作品入口三项/);
+    assert.match(startBookPrompt, /文风、节奏、尺度、冲突密度、日常比例、性场景功能/);
     assert.match(spinePrompt, /书脊/);
     assert.match(spinePrompt, /不要直接写完整大纲/);
+    assert.match(spinePrompt, /入口不足时先补入口/);
     assert.match(EBOOK_SYSTEM_PROMPT, /# 创作流程/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /## 流程层级/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /## 开书阶段/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /## 卷规划阶段/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /## 章节起草阶段/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /## 卷完成后/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /长篇推进要有卷级心智/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /当前卷缺少可执行推进草图/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /## 流程纪律/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /book\/outline\.md` 顶部“新书建档引导”为准/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /开书顺序不可跳/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /卷内细纲只规划当前卷/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /章节表是地图和回头记录/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /一卷写完后先复盘/);
+    assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /作品入口三项是：类型\/题材入口、情绪\/读者体验入口、关系\/设定张力入口/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /book\/volumes\/NNN\.md/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /book\/volumes\/` is not stably injected/);
     assert.match(EBOOK_SYSTEM_PROMPT, /不要每章都问用户/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /按 `book\/review-rules\.md` 里的固定审稿规则/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /不要临时另写一套审稿标准/);
     assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /章节功能表|章节目标|完成目标/);
     assert.match(outlinePrompt, /\[作品核心设定\]/);
     assert.match(outlinePrompt, /不要硬写完整大纲/);
     assert.match(outlinePrompt, /不要只写“下一章”/);
     assert.match(outlinePrompt, /不一次性生成全书每章细纲/);
     assert.match(outlinePrompt, /当前卷要写出可执行的推进草图/);
+    assert.match(outlinePrompt, /book\/volumes\/NNN\.md/);
     assert.match(outlinePrompt, /推进草图是地图，不是工单/);
     assert.match(outlinePrompt, /按卷或事件集团推进/);
     assert.match(outlinePrompt, /少问多执行/);
@@ -470,6 +500,7 @@ test('Book action prompts rely on injected core story files', () => {
     assert.match(nextChapterPrompt, /\[作品核心设定\]/);
     assert.match(nextChapterPrompt, /不要直接硬写长正文/);
     assert.match(nextChapterPrompt, /当前卷没有可执行的卷内推进草图/);
+    assert.match(nextChapterPrompt, /book\/volumes\/NNN\.md/);
     assert.match(nextChapterPrompt, /不要变成写一章问一章/);
     assert.match(nextChapterPrompt, /沿事件集团和人物当前压力自然续写/);
     assert.match(nextChapterPrompt, /一章不需要完成任何固定事件/);
@@ -809,6 +840,28 @@ test('Book Edit persists partial successes and reports failed edits', async () =
     assert.equal(result.failedCount, 1);
     assert.equal(result.results[1].error, 'not_found');
     assert.equal((await getBookFile(book.id, 'book/chapters/001.md')).content, '甲甲乙丙');
+});
+
+test('Book Edit reports refresh warnings without hiding persisted edits', async () => {
+    await resetDb();
+    const book = await createBook('文本编辑刷新失败测试');
+    await upsertBookFile(book.id, 'book/chapters/001.md', '旧句子。');
+    const runtime = createBookToolRuntime({
+        bookId: book.id,
+        onFilesChanged() {
+            throw new Error('refresh exploded');
+        },
+    });
+
+    const result = await runtime.execute(EBOOK_TOOL_NAMES.EDIT, {
+        filePath: 'book/chapters/001.md',
+        edits: [{ oldString: '旧句子', newString: '新句子' }],
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.warning, 'files_refresh_failed');
+    assert.match(result.refreshError, /refresh exploded/);
+    assert.equal((await getBookFile(book.id, 'book/chapters/001.md')).content, '新句子。');
 });
 
 test('Book Delete removes a single file and returns a deleted count', async () => {
@@ -1325,6 +1378,9 @@ test('Studio file section models keep unchanged file signatures reusable', () =>
         { path: 'book/chapters/001.md', content: '第一章' },
         { path: 'book/chapters/002.md', content: '第二章' },
         { path: 'book/outline.md', content: '大纲' },
+        { path: 'book/notes/revision-plan.md', content: '修订计划' },
+        { path: 'book/volumes/001.md', content: '第一卷' },
+        { path: 'book/volumes/archive/old.md', content: '旧卷' },
     ];
     const firstModel = collectStudioFileSectionModels({
         files,
@@ -1336,17 +1392,28 @@ test('Studio file section models keep unchanged file signatures reusable', () =>
     });
     const firstChapters = firstModel.groups.find((group) => group.key === 'chapters');
     const nextChapters = nextModel.groups.find((group) => group.key === 'chapters');
-    const firstOutline = firstModel.groups.find((group) => group.key === 'settings').files[0];
+    const settingsGroup = firstModel.groups.find((group) => group.key === 'settings');
+    const firstOutline = settingsGroup.files[0];
     const nextOutline = nextModel.groups.find((group) => group.key === 'settings').files[0];
 
     assert.notEqual(firstChapters.files[0].signature, nextChapters.files[0].signature);
     assert.notEqual(firstChapters.files[1].signature, nextChapters.files[1].signature);
     assert.equal(firstOutline.signature, nextOutline.signature);
+    assert.equal(firstModel.groups.some((group) => group.key === 'volumes'), false);
     assert.match(firstChapters.scaffoldHtml, /data-file-group-key="chapters"/);
     assert.match(firstChapters.html, /data-file-group-key="chapters"/);
     assert.match(firstChapters.html, /data-file-static-signature="chapters:/);
     assert.match(firstChapters.html, /data-file-signature="book\/chapters\/001\.md:第 1 章:active"/);
     assert.match(firstChapters.html, /data-file-signature="book\/chapters\/002\.md:第 2 章:"/);
+    assert.match(settingsGroup.html, /第 1 卷细纲/);
+    assert.match(settingsGroup.html, /xb-file-directory/);
+    assert.match(settingsGroup.html, />volumes</);
+    assert.match(settingsGroup.html, />volumes\/archive</);
+    assert.match(settingsGroup.html, /old 细纲/);
+    assert(
+        settingsGroup.html.indexOf('修订计划') < settingsGroup.html.indexOf('第 1 卷细纲'),
+        'volume outlines should stay after notes inside settings drafts',
+    );
 
     const sourcesGroup = firstModel.groups.find((group) => group.key === 'sources');
     assert.match(sourcesGroup.html, /data-file-group-empty="true"/);
@@ -1934,6 +2001,38 @@ test('Reader renders ebook image markers as loadable image slots', () => {
     assert.doesNotMatch(html, /\[ebook-image:slot-reader\]/);
 });
 
+test('Reader renders chapter markdown while preserving image markers', () => {
+    const state = {
+        book: { id: 'book-reader-markdown', title: '阅读 Markdown 测试' },
+        books: [],
+        files: [{
+            path: 'book/chapters/001.md',
+            content: '# 目录\n\n*内心*\n\n“对话”\n\n[ebook-image:slot-md]',
+        }],
+        selectedPath: 'book/chapters/001.md',
+        readerPath: 'book/chapters/001.md',
+        viewMode: 'reader',
+        messages: [],
+        toolTrace: [],
+        isBusy: false,
+        colorTheme: 'dark',
+        toast: '',
+    };
+
+    const html = renderEbookShell({
+        state,
+        providerConfig: { provider: 'test', model: 'demo' },
+        dirty: false,
+    });
+
+    assert.match(html, /<h1[^>]*>目录<\/h1>/);
+    assert.match(html, /<em>内心<\/em>/);
+    assert.match(html, /“对话”/);
+    assert.match(html, /data-ebook-image-slot="slot-md"/);
+    assert.doesNotMatch(html, /\*内心\*/);
+    assert.doesNotMatch(html, /\[ebook-image:slot-md\]/);
+});
+
 test('Reader TTS plays the active chapter text and stops when switching chapters', async () => {
     await resetDb();
     const book = await createBook('朗读测试');
@@ -2235,6 +2334,10 @@ test('Book renderer shows thoughts while keeping tool batches folded', async () 
     assert.match(html, /<details class="xb-tool-trace xb-tool-turn" data-tool-turn-key="tool-turn:call-read" open>/);
     assert.match(html, /data-thought-key="tool-turn:call-read:thought:1" open/);
     assert.match(html, /data-thought-key="thought-message:3" open/);
+    assert.match(html, /data-message-action="copy" data-message-index="0"/);
+    assert.match(html, /data-message-action="edit" data-message-index="0"/);
+    assert.match(html, /data-message-action="reroll" data-message-index="0"/);
+    assert.match(html, /data-message-action="delete" data-message-index="0"/);
     assert.match(html, /data-message-action="copy" data-message-index="3"/);
     assert.match(html, /data-message-action="edit" data-message-index="3"/);
     assert.match(html, /data-message-action="reroll" data-message-index="3"/);
@@ -3756,6 +3859,132 @@ test('Book message actions handle error bubbles instead of dropping the click', 
     assert.equal(rerunIndex, 1);
 });
 
+test('Book message actions allow rerunning from a user message', async () => {
+    const state = {
+        book: { id: 'book-user-action' },
+        isBusy: false,
+        messages: [
+            { role: 'user', content: '继续写第一章' },
+            { role: 'assistant', content: '旧回复。' },
+        ],
+    };
+    const button = {
+        dataset: {
+            messageAction: 'reroll',
+            messageIndex: '0',
+        },
+        closest(selector) {
+            return selector === '[data-message-action][data-message-index]' ? this : null;
+        },
+    };
+    const listeners = {};
+    const root = {
+        querySelectorAll(selector) {
+            return selector === '[data-message-action][data-message-index]' ? [button] : [];
+        },
+        querySelector() {
+            return null;
+        },
+        addEventListener(eventName, handler) {
+            listeners[eventName] = handler;
+        },
+    };
+    let rerunIndex = -1;
+
+    bindEbookEvents({
+        root,
+        state,
+        render() {},
+        postToHost() {},
+        bookController: {},
+        agentRunner: {
+            async rerunFromMessageIndex(messageIndex) {
+                rerunIndex = messageIndex;
+                return { ok: true };
+            },
+            cancelActiveRun() {},
+            runAgent() {},
+        },
+        persistConversation() {},
+        clearConversation() {},
+        showToast() {},
+    });
+
+    listeners.click({
+        target: button,
+        preventDefault() {},
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(rerunIndex, 0);
+});
+
+test('Book message actions delete a user turn with its following assistant work', async () => {
+    const state = {
+        book: { id: 'book-user-delete' },
+        isBusy: false,
+        messages: [
+            { role: 'user', content: '第一轮用户' },
+            { role: 'assistant', content: '第一轮工具前言', toolCalls: [{ id: 'call-read', name: EBOOK_TOOL_NAMES.READ, arguments: '{}' }] },
+            { role: 'tool', toolCallId: 'call-read', toolName: EBOOK_TOOL_NAMES.READ, content: '{"ok":true}' },
+            { role: 'assistant', content: '第一轮回复。' },
+            { role: 'user', content: '第二轮用户' },
+            { role: 'assistant', content: '第二轮回复。' },
+        ],
+    };
+    const button = {
+        dataset: {
+            messageAction: 'delete',
+            messageIndex: '0',
+        },
+        closest(selector) {
+            return selector === '[data-message-action][data-message-index]' ? this : null;
+        },
+    };
+    const listeners = {};
+    const root = {
+        querySelectorAll(selector) {
+            return selector === '[data-message-action][data-message-index]' ? [button] : [];
+        },
+        querySelector() {
+            return null;
+        },
+        addEventListener(eventName, handler) {
+            listeners[eventName] = handler;
+        },
+    };
+    let persisted = false;
+
+    bindEbookEvents({
+        root,
+        state,
+        render() {},
+        postToHost() {},
+        bookController: {},
+        agentRunner: {
+            async rerunFromMessageIndex() {
+                return { ok: true };
+            },
+            cancelActiveRun() {},
+            runAgent() {},
+        },
+        persistConversation() {
+            persisted = true;
+        },
+        clearConversation() {},
+        showToast() {},
+    });
+
+    listeners.click({
+        target: button,
+        preventDefault() {},
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(persisted, true);
+    assert.deepEqual(state.messages.map((message) => message.content), ['第二轮用户', '第二轮回复。']);
+});
+
 test('Book renderer uses a compact agent toolbar with shared config actions', async () => {
     await resetDb();
     const book = await createBook('顶部工具条测试');
@@ -3808,6 +4037,96 @@ test('Book renderer uses a compact agent toolbar with shared config actions', as
     assert.match(html, /\/188k/);
     assert.doesNotMatch(html, /模型：/);
     assert.doesNotMatch(html, /创作对话：约/);
+});
+
+test('Book renderer shows context distillation overlay during history compaction', async () => {
+    await resetDb();
+    const book = await createBook('压缩动画测试');
+    const state = {
+        book,
+        books: [book],
+        files: await listBookFiles(book.id),
+        selectedPath: 'book/chapters/001.md',
+        readerPath: '',
+        viewMode: 'studio',
+        editorContent: '',
+        savedContent: '',
+        messages: [],
+        toolTrace: [],
+        openToolTurnKeys: [],
+        openThoughtKeys: [],
+        historySummary: '',
+        compactionOverlay: {
+            active: true,
+            resolved: true,
+            currentTokens: 158000,
+            yieldTokens: 9000,
+            status: '创作记忆已建立。',
+        },
+        isBusy: true,
+        status: '正在整理较早创作记录...',
+        toast: '',
+    };
+
+    const html = renderEbookShell({
+        state,
+        providerConfig: { provider: 'test', model: 'demo' },
+        dirty: false,
+    });
+
+    assert.match(html, /xb-distillation-layer resolved/);
+    assert.match(html, /CONTEXT DISTILLATION/);
+    assert.match(html, /创作记忆已建立。/);
+    assert.match(html, />158k<\/strong>/);
+    assert.match(html, />9k<\/strong>/);
+    const chatWrapStart = html.indexOf('class="xb-agent-chat-wrap"');
+    const overlayIndex = html.indexOf('class="xb-distillation-layer resolved"');
+    const formIndex = html.indexOf('id="xb-agent-form"');
+    assert(chatWrapStart >= 0, 'agent chat wrap should render');
+    assert(overlayIndex > chatWrapStart, 'distillation overlay should be inside the agent chat area');
+    assert(formIndex > overlayIndex, 'distillation overlay should not cover the compose form or other studio regions');
+});
+
+test('Book renderer shows transient protocol notice inside agent chat area', async () => {
+    await resetDb();
+    const book = await createBook('协议提示测试');
+    const state = {
+        book,
+        books: [book],
+        files: await listBookFiles(book.id),
+        selectedPath: 'book/chapters/001.md',
+        readerPath: '',
+        viewMode: 'studio',
+        editorContent: '',
+        savedContent: '',
+        messages: [],
+        toolTrace: [],
+        openToolTurnKeys: [],
+        openThoughtKeys: [],
+        historySummary: '',
+        compactionOverlay: null,
+        protocolNotice: {
+            message: '工具协议异常，正在切换兼容模式重试…',
+        },
+        isBusy: true,
+        status: 'AI 正在思考...',
+        toast: '',
+    };
+
+    const html = renderEbookShell({
+        state,
+        providerConfig: { provider: 'test', model: 'demo' },
+        dirty: false,
+    });
+
+    assert.match(html, /class="xb-protocol-notice"/);
+    assert.match(html, /工具协议异常，正在切换兼容模式重试/);
+    const chatWrapStart = html.indexOf('class="xb-agent-chat-wrap"');
+    const noticeIndex = html.indexOf('class="xb-protocol-notice"');
+    const formIndex = html.indexOf('id="xb-agent-form"');
+    assert(chatWrapStart >= 0, 'agent chat wrap should render');
+    assert(noticeIndex > chatWrapStart, 'protocol notice should render inside the agent chat area');
+    assert(formIndex > noticeIndex, 'protocol notice should not cover the compose form or other studio regions');
 });
 
 test('Ebook settings open as an in-app shared config panel instead of jumping to assistant window', async () => {
@@ -4397,6 +4716,105 @@ test('Book agent refreshes file surfaces for write tools without extra full rend
     assert.equal((await getBookFile(book.id, 'book/chapters/001.md')).content, '# 第 1 章\n\n新的正文。');
 });
 
+test('Book agent reports invalid tool arguments without executing Edit', async () => {
+    await resetDb();
+    const book = await createBook('工具参数坏 JSON 测试');
+    const originalOutline = (await getBookFile(book.id, 'book/outline.md')).content;
+    const state = {
+        config: {},
+        book,
+        books: [book],
+        files: await listBookFiles(book.id),
+        selectedPath: 'book/outline.md',
+        readerPath: '',
+        viewMode: 'studio',
+        editorContent: '',
+        savedContent: '',
+        messages: [],
+        toolTrace: [],
+        historySummary: '',
+        archivedTurnCount: 0,
+        isBusy: false,
+        activeController: null,
+        status: '就绪',
+        toast: '',
+    };
+    let round = 0;
+    let secondRoundMessages = [];
+    const malformedArguments = '{"filePath":"book/outline.md","edits":[{"oldString":"# 大纲","newString":"# 新大纲"}';
+    const runner = createEbookAgentRunner({
+        state,
+        async refreshBooksAndFiles() {
+            state.files = await listBookFiles(book.id);
+        },
+        render() {},
+        renderAgentSurface() {
+            return true;
+        },
+        renderToolTraceSurface() {
+            return true;
+        },
+        renderFilesSurface() {
+            return true;
+        },
+        renderEditorFileSurface() {
+            return true;
+        },
+        showToast() {},
+        persistConversation() {},
+        isEditorDirty() {
+            return false;
+        },
+        getActiveProviderConfig() {
+            return {
+                provider: 'test',
+                temperature: 0.2,
+                maxTokens: 1000,
+                reasoningEnabled: false,
+                reasoningEffort: 'medium',
+            };
+        },
+        createAdapter() {
+            return {
+                async chat(task) {
+                    round += 1;
+                    if (round === 1) {
+                        return {
+                            text: '',
+                            toolCalls: [{
+                                id: 'call-edit-malformed',
+                                name: EBOOK_TOOL_NAMES.EDIT,
+                                arguments: malformedArguments,
+                            }],
+                        };
+                    }
+                    secondRoundMessages = task.messages;
+                    return {
+                        text: 'Edit 参数不是合法 JSON，已经停止执行。',
+                        toolCalls: [],
+                    };
+                },
+            };
+        },
+    });
+
+    await runner.runAgent('尝试坏参数 Edit。');
+
+    const toolResult = JSON.parse(state.messages.find((message) => message.role === 'tool').content);
+    assert.equal(toolResult.ok, false);
+    assert.equal(toolResult.error, 'invalid_tool_arguments');
+    assert.equal(toolResult.path, 'book/outline.md');
+    assert.notEqual(toolResult.error, 'book_path_required');
+    assert.equal((await getBookFile(book.id, 'book/outline.md')).content, originalOutline);
+
+    const storedArguments = JSON.parse(state.messages[1].toolCalls[0].arguments);
+    assert.equal(storedArguments.invalidToolArguments, true);
+    assert.equal(storedArguments.argumentLength, malformedArguments.length);
+
+    const replayToolCall = secondRoundMessages.find((message) => message.role === 'assistant')?.tool_calls?.[0];
+    assert.equal(JSON.parse(replayToolCall.function.arguments).invalidToolArguments, true);
+});
+
 test('Book agent uses Google-style session tool loop without rebuilding replay history', async () => {
     await resetDb();
     const book = await createBook('Google 会话工具测试');
@@ -4831,6 +5249,78 @@ test('Book agent reroll trims to the previous user message without duplicating i
     assert.match(userRequests[0].content, /\[用户本轮请求\]\n\n重写第一章。$/);
 });
 
+test('Book agent reroll can start directly from an edited user message', async () => {
+    await resetDb();
+    const book = await createBook('用户消息重生成测试');
+    const state = {
+        config: {},
+        book,
+        books: [book],
+        files: await listBookFiles(book.id),
+        selectedPath: 'book/chapters/001.md',
+        readerPath: '',
+        viewMode: 'studio',
+        editorContent: '',
+        savedContent: '',
+        messages: [
+            { role: 'user', content: '修正后的第一章要求。' },
+            { role: 'assistant', content: '旧回复。' },
+        ],
+        toolTrace: [],
+        openToolTurnKeys: [],
+        openThoughtKeys: [],
+        historySummary: '',
+        archivedTurnCount: 0,
+        isBusy: false,
+        activeController: null,
+        status: '就绪',
+        toast: '',
+    };
+    let requestMessages = [];
+    const runner = createEbookAgentRunner({
+        state,
+        async refreshBooksAndFiles() {
+            state.files = await listBookFiles(book.id);
+        },
+        render() {},
+        showToast() {},
+        persistConversation() {},
+        isEditorDirty() {
+            return false;
+        },
+        getActiveProviderConfig() {
+            return {
+                provider: 'test',
+                temperature: 0.2,
+                maxTokens: 1000,
+                reasoningEnabled: false,
+                reasoningEffort: 'medium',
+            };
+        },
+        createAdapter() {
+            return {
+                async chat(task) {
+                    requestMessages = task.messages;
+                    return {
+                        text: '新回复。',
+                        toolCalls: [],
+                    };
+                },
+            };
+        },
+    });
+
+    const result = await runner.rerunFromMessageIndex(0);
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(state.messages.map((message) => message.role), ['user', 'assistant']);
+    assert.equal(state.messages[0].content, '修正后的第一章要求。');
+    assert.equal(state.messages[1].content, '新回复。');
+    const userRequests = requestMessages.filter((message) => message.role === 'user');
+    assert.equal(userRequests.length, 1);
+    assert.match(userRequests[0].content, /\[用户本轮请求\]\n\n修正后的第一章要求。$/);
+});
+
 test('Book history compaction writes creative record and releases archived turns', async () => {
     assert.match(EBOOK_SUMMARY_SYSTEM_PROMPT, /创作记录/);
     assert.match(EBOOK_SUMMARY_SYSTEM_PROMPT, /不超过 10000 tokens/);
@@ -4977,7 +5467,10 @@ test('Book history compaction counts real tool schemas through the shared tokeni
 
 test('Book prompt keeps assistant-style tool layers and recovery rules', () => {
     assert.match(EBOOK_SYSTEM_PROMPT, /# Tool Use Guide/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /# 文件纪律/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /# Role/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /# Current Book/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /# Injected Context/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /# File Discipline/);
     assert.match(EBOOK_SYSTEM_PROMPT, /## Tool Layers/);
     assert.match(EBOOK_SYSTEM_PROMPT, /## Selection Strategy/);
     assert.match(EBOOK_SYSTEM_PROMPT, /If a tool returns an error/);

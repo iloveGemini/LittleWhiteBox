@@ -148,6 +148,16 @@ function replaceFileGroupScaffold(groupNode, group = {}) {
 
 function syncFileGroupFiles(groupNode, group = {}) {
     if (!groupNode) return;
+    if (group.treeHtml) {
+        const nextTree = buildHtmlElement(group.treeHtml);
+        const currentTree = Array.from(groupNode.children || []).find((node) => node?.classList?.contains?.('xb-file-tree'));
+        if (!currentTree) {
+            groupNode.appendChild(nextTree);
+        } else if (currentTree.dataset.fileTreeSignature !== nextTree.dataset.fileTreeSignature) {
+            currentTree.replaceWith(nextTree);
+        }
+        return;
+    }
     const expectedPaths = new Set((group.files || []).map((file) => file.path));
     getDirectFileButtons(groupNode).forEach((button) => {
         if (!expectedPaths.has(button.dataset.path || '')) button.remove();
@@ -642,6 +652,23 @@ export function createEbookApp(options = {}) {
         return true;
     }
 
+    function renderProtocolNoticeSurface() {
+        const root = document.getElementById(rootId);
+        if (!root || state.viewMode !== 'studio') return false;
+        const host = root.querySelector('.xb-agent-chat-wrap');
+        if (!host) return false;
+        host.querySelectorAll('.xb-protocol-notice').forEach((node) => node.remove());
+        const message = String(state.protocolNotice?.message || '').trim();
+        if (!message) return true;
+        const notice = buildHtmlElement(`
+            <div class="xb-protocol-notice" role="status" aria-live="polite">
+                <span>${escapeHtml(message)}</span>
+            </div>
+        `);
+        host.appendChild(notice);
+        return true;
+    }
+
     function render() {
         const root = document.getElementById(rootId);
         if (!root) return;
@@ -730,6 +757,7 @@ export function createEbookApp(options = {}) {
         isEditorDirty: bookController.isEditorDirty,
         getActiveProviderConfig,
         createAdapter,
+        renderProtocolNoticeSurface,
     });
 
     function handleHostConfig(payload = {}) {

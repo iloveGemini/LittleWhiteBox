@@ -170,6 +170,14 @@ export class SillyTavernOpenAICompatibleAdapter {
             }
         }
 
+        if (typeof task.onToolProtocolFallback === 'function') {
+            task.onToolProtocolFallback({
+                provider: 'sillytavern-openai-compatible',
+                fromToolMode: 'native',
+                toToolMode: 'tagged-json',
+                reason: 'malformed_native_tool_host_error',
+            });
+        }
         const fallbackPayload = buildPayload(true);
         return await run(fallbackPayload);
     }

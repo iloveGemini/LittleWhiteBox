@@ -15,6 +15,7 @@ const STUDIO_FILE_SECTIONS = [
         description: '阅读器只读取这里的章节。',
         badge: '阅读器',
         empty: '还没有正文。',
+        basePath: 'book/chapters/',
         matches: (path) => path.startsWith('book/chapters/'),
     },
     {
@@ -23,10 +24,12 @@ const STUDIO_FILE_SECTIONS = [
         description: '它们是写作依据，不进阅读器。',
         badge: '草稿',
         empty: '还没有设定草稿。',
+        basePath: 'book/',
         matches: (path) => (
             ['book/outline.md', 'book/style.md', 'book/characters.md', 'book/world.md', 'book/state.md', 'book/review-rules.md'].includes(path)
             || path.startsWith('book/reviews/')
             || path.startsWith('book/notes/')
+            || path.startsWith('book/volumes/')
         ),
     },
     {
@@ -35,6 +38,7 @@ const STUDIO_FILE_SECTIONS = [
         description: '从酒馆导入当前聊天全部楼层、角色信息、小白X剧情总结和世界书。',
         badge: '素材',
         empty: '还没有导入资料。',
+        basePath: 'book/sources/',
         matches: (path) => path.startsWith('book/sources/'),
     },
 ];
@@ -49,6 +53,7 @@ const FILE_ORDER = [
     'book/review-rules.md',
     'book/reviews/',
     'book/notes/',
+    'book/volumes/',
     'book/sources/',
 ];
 
@@ -128,6 +133,14 @@ function formatChapterLabel(path = '') {
     return raw;
 }
 
+function formatVolumeLabel(path = '') {
+    const match = String(path || '').match(/^book\/volumes\/(.+)\.md$/);
+    if (!match) return '';
+    const raw = match[1].split('/').pop() || match[1];
+    if (/^\d+$/.test(raw)) return `第 ${Number(raw)} 卷细纲`;
+    return `${raw} 细纲`;
+}
+
 export function formatFileTitle(path = '') {
     const known = {
         'book/outline.md': '大纲',
@@ -145,8 +158,11 @@ export function formatFileTitle(path = '') {
     if (known[path]) return known[path];
     const chapterLabel = formatChapterLabel(path);
     if (chapterLabel) return chapterLabel;
-    if (path.startsWith('book/sources/')) return path.replace(/^book\/sources\//, '').replace(/\.md$/, '');
-    if (path.startsWith('book/reviews/')) return `审稿 ${path.replace(/^book\/reviews\//, '').replace(/\.md$/, '')}`;
+    const volumeLabel = formatVolumeLabel(path);
+    if (volumeLabel) return volumeLabel;
+    if (path.startsWith('book/sources/')) return path.replace(/^book\/sources\//, '').replace(/\.md$/, '').split('/').pop() || path;
+    if (path.startsWith('book/reviews/')) return `审稿 ${path.replace(/^book\/reviews\//, '').replace(/\.md$/, '').split('/').pop() || ''}`;
+    if (path.startsWith('book/notes/')) return path.replace(/^book\/notes\//, '').replace(/\.md$/, '').split('/').pop() || path;
     return path.replace(/^book\//, '');
 }
 
@@ -239,6 +255,47 @@ function renderConversationContextMeterTitle(state = {}) {
     return state.historySummary?.trim()
         ? '当前实际送模上下文 / 188k（已整理较早创作记录）'
         : '当前实际送模上下文 / 188k';
+}
+
+function renderCompactionOverlay(state = {}) {
+    const overlay = state.compactionOverlay || {};
+    if (!overlay.active) return '';
+    const current = formatContextMeterCount(overlay.currentTokens);
+    const target = Number(overlay.yieldTokens) > 0 ? formatContextMeterCount(overlay.yieldTokens) : '....';
+    const status = String(overlay.status || '').trim() || '正在整理较早创作记录...';
+    return `
+        <div class="xb-distillation-layer${overlay.resolved ? ' resolved' : ''}" role="status" aria-live="polite">
+            <div class="xb-distillation-backdrop"></div>
+            <div class="xb-distillation-aura"></div>
+            <section class="xb-distillation-plaque" aria-label="创作记忆整理">
+                <div class="xb-distillation-title">CONTEXT DISTILLATION</div>
+                <div class="xb-distillation-status">${escapeHtml(status)}</div>
+                <div class="xb-distillation-metrics">
+                    <div class="xb-distillation-metric">
+                        <strong>${escapeHtml(current)}</strong>
+                        <span>Current Load</span>
+                    </div>
+                    <div class="xb-distillation-divider" aria-hidden="true"></div>
+                    <div class="xb-distillation-metric">
+                        <strong class="xb-distillation-yield">${escapeHtml(target)}</strong>
+                        <span>Yield</span>
+                    </div>
+                </div>
+            </section>
+            <div class="xb-distillation-ripple" aria-hidden="true"></div>
+        </div>
+    `;
+}
+
+function renderProtocolNotice(state = {}) {
+    const notice = state.protocolNotice || {};
+    const message = String(notice.message || '').trim();
+    if (!message) return '';
+    return `
+        <div class="xb-protocol-notice" role="status" aria-live="polite">
+            <span>${escapeHtml(message)}</span>
+        </div>
+    `;
 }
 
 function renderThoughtDetails(message = {}, options = {}) {
@@ -488,10 +545,26 @@ function renderLiveToolPayload(item = {}) {
     `;
 }
 
+function renderLiveToolProgress(item = {}) {
+    const progress = Array.isArray(item.progress) ? item.progress : [];
+    if (!progress.length) return '';
+    return `
+        <div class="xb-tool-progress">
+            ${progress.map((entry) => `
+                <div class="xb-tool-progress-row">
+                    <span>${escapeHtml(entry.label || '')}</span>
+                    <p>${escapeHtml(trimInlineText(entry.text || '', 260))}</p>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
 function renderLiveToolTraceItem(item = {}) {
     const hasStatus = item.status === 'running' || item.status === 'resolved';
     const isRunning = item.status === 'running';
     const payloadHtml = renderLiveToolPayload(item);
+    const progressHtml = renderLiveToolProgress(item);
     const hasPayload = !!payloadHtml;
     const statusText = !hasStatus
         ? ''
@@ -521,8 +594,9 @@ function renderLiveToolTraceItem(item = {}) {
         <div class="${escapeHtml(classes)}">
             ${hasPayload ? `
                 ${payloadHtml}
+                ${progressHtml}
                 <div class="xb-tool-result">${resultHtml}</div>
-            ` : resultHtml}
+            ` : `${progressHtml}${resultHtml}`}
         </div>
     `;
 }
@@ -602,6 +676,37 @@ function renderToolPrefacePreview(assistantMessage = {}) {
 
 function renderMessageMarkdownHtml(text = '') {
     return renderMarkdownToHtml(String(text || '').trim());
+}
+
+function renderReaderInlineMarkdown(text = '') {
+    return escapeHtml(text)
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+}
+
+function renderReaderMarkdownFallback(text = '') {
+    const raw = String(text || '').trim();
+    if (!raw) return '';
+    const heading = raw.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+        const level = Math.min(3, heading[1].length);
+        return `<h${level}>${renderReaderInlineMarkdown(heading[2])}</h${level}>`;
+    }
+    if (/^>\s?/.test(raw)) {
+        const quoteText = raw.split('\n').map((line) => line.replace(/^>\s?/, '')).join('\n');
+        return `<blockquote>${renderReaderInlineMarkdown(quoteText).replace(/\n/g, '<br>')}</blockquote>`;
+    }
+    return `<p>${renderReaderInlineMarkdown(raw).replace(/\n/g, '<br>')}</p>`;
+}
+
+function renderReaderMarkdownBlock(text = '', paragraphIndex = 0) {
+    const raw = String(text || '').trim();
+    let html = renderMarkdownToHtml(raw);
+    if (html === escapeHtml(raw).replace(/\n/g, '<br>')) {
+        html = renderReaderMarkdownFallback(raw);
+    }
+    if (!html) return '';
+    return `<div class="xb-reader-md${paragraphIndex === 0 ? ' xb-reader-drop' : ''}">${html}</div>`;
 }
 
 function renderBookCards(state = {}) {
@@ -747,17 +852,28 @@ function getStudioFileSignature(file = {}, state = {}) {
 
 function renderSectionFiles(section = {}, files = [], state = {}) {
     if (!files.length) {
-        return `<div class="xb-section-empty" data-file-group-empty="true">${escapeHtml(section.empty || '这里还没有文件。')}</div>`;
+        return `<div class="xb-file-tree" data-file-tree-signature="empty"><div class="xb-section-empty" data-file-group-empty="true">${escapeHtml(section.empty || '这里还没有文件。')}</div></div>`;
     }
-    return files.map((file) => {
+    const base = section.basePath || '';
+    const rows = [];
+    let lastDirectory = '';
+    files.forEach((file) => {
+        const relativePath = base && file.path.startsWith(base) ? file.path.slice(base.length) : file.path.replace(/^book\//, '');
+        const directory = relativePath.includes('/') ? relativePath.split('/').slice(0, -1).join('/') : '';
+        if (directory && directory !== lastDirectory) {
+            rows.push(`<div class="xb-file-directory">${escapeHtml(directory)}</div>`);
+            lastDirectory = directory;
+        }
         const active = file.path === state.selectedPath ? ' is-active' : '';
         const signature = getStudioFileSignature(file, state);
-        return `
+        rows.push(`
             <button class="xb-file${active}" data-path="${escapeHtml(file.path)}" data-file-signature="${escapeHtml(signature)}">
                 <span class="xb-file-main">${escapeHtml(formatFileTitle(file.path))}</span>
             </button>
-        `;
-    }).join('');
+        `);
+    });
+    const treeSignature = files.map((file) => getStudioFileSignature(file, state)).join('|');
+    return `<div class="xb-file-tree" data-file-tree-signature="${escapeHtml(treeSignature)}">${rows.join('')}</div>`;
 }
 
 function renderImportActions(disabledAttr = '') {
@@ -789,6 +905,7 @@ export function collectStudioFileSectionModels(state = {}, options = {}) {
                 title: group.title,
                 description: group.description,
                 badge: group.badge,
+                basePath: group.basePath,
                 files: [],
             });
         }
@@ -848,6 +965,7 @@ export function collectStudioFileSectionModels(state = {}, options = {}) {
                     </div>
                 `,
                 emptyHtml: `<div class="xb-section-empty" data-file-group-empty="true">${escapeHtml(group.empty || '这里还没有文件。')}</div>`,
+                treeHtml: filesHtml,
                 files: fileModels,
                 html: `
                     <div class="xb-file-group" data-file-group-key="${escapeHtml(group.key)}" data-file-static-signature="${escapeHtml(staticSignature)}">
@@ -899,7 +1017,7 @@ function getThoughtsSignature(message = {}) {
 
 function getMessageRenderSignature(message = {}, messageIndex = 0, state = {}) {
     const content = String(message.content || '');
-    const isEditing = message.role === 'assistant' && state.editingMessageIndex === messageIndex;
+    const isEditing = ['user', 'assistant'].includes(message.role) && state.editingMessageIndex === messageIndex;
     const feedback = state.messageActionFeedback || {};
     const feedbackSignature = [
         feedback[`copy:${messageIndex}`] || '',
@@ -951,7 +1069,7 @@ export function collectAgentRenderUnits(state = {}) {
     const units = [];
 
     const renderMessageActions = (message = {}, messageIndex = 0) => {
-        const canAct = message.role === 'assistant'
+        const canAct = ['user', 'assistant'].includes(message.role)
             && !message.streaming
             && String(message.content || '').trim()
             && !(Array.isArray(message.toolCalls) && message.toolCalls.length);
@@ -987,7 +1105,7 @@ export function collectAgentRenderUnits(state = {}) {
     };
 
     const renderPlainMessage = (message = {}, messageIndex = 0) => {
-        const isEditing = message.role === 'assistant' && state.editingMessageIndex === messageIndex;
+        const isEditing = ['user', 'assistant'].includes(message.role) && state.editingMessageIndex === messageIndex;
         const content = String(message.content || '').trim();
         return `
             <div class="xb-msg xb-msg-${escapeHtml(message.role)}${message.error ? ' is-error' : ''}${message.streaming ? ' is-streaming' : ''}${isEditing ? ' is-editing' : ''}" data-message-index="${messageIndex}">
@@ -1357,6 +1475,8 @@ function renderStudioShell(options = {}) {
                             <button id="xb-agent-scroll-top" type="button" class="xb-agent-scroll-btn" title="回到顶部" aria-label="回到顶部">▲</button>
                             <button id="xb-agent-scroll-bottom" type="button" class="xb-agent-scroll-btn" title="回到底部" aria-label="回到底部">▼</button>
                         </div>
+                        ${renderProtocolNotice(state)}
+                        ${renderCompactionOverlay(state)}
                     </div>
                     <form id="xb-agent-form" class="xb-agent-form">
                         <div class="xb-agent-compose-row">
@@ -1401,7 +1521,7 @@ function renderReaderTextContent(content = '') {
             .map((block) => block.trim())
             .filter(Boolean)
             .forEach((block) => {
-                parts.push(`<p class="${paragraphIndex === 0 ? 'xb-reader-drop' : ''}">${escapeHtml(block)}</p>`);
+                parts.push(renderReaderMarkdownBlock(block, paragraphIndex));
                 paragraphIndex += 1;
             });
     };

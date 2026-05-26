@@ -164,6 +164,91 @@ function buildToolDisplayFromTrace(entry = {}) {
     };
 }
 
+function buildDelegateProgressLabel(event = {}) {
+    if (event.type === 'started') return '启动';
+    if (event.type === 'round_start') return `第 ${Number(event.round) || 1} 轮`;
+    if (event.type === 'model_result') return '模型';
+    if (event.type === 'tool_start') return '工具';
+    if (event.type === 'tool_result') return event.ok === false ? '失败' : '返回';
+    if (event.type === 'completed') return '完成';
+    return '进度';
+}
+
+function buildDelegateProgressText(event = {}) {
+    const summary = String(event.summary || '').trim();
+    if (event.type === 'tool_start') {
+        const toolName = String(event.toolName || '工具');
+        return summary || `${toolName} 已发起。`;
+    }
+    if (event.type === 'tool_result') {
+        const toolName = String(event.toolName || '工具');
+        const args = String(event.argsSummary || '').trim();
+        const result = summary || (event.ok === false ? String(event.error || '工具失败') : '已返回');
+        return args ? `${toolName} ${args}：${result}` : `${toolName}：${result}`;
+    }
+    return summary || '审稿分身工作中。';
+}
+
+function appendDelegateProgress(entry = {}, event = {}) {
+    if (!entry || typeof entry !== 'object') return;
+    entry.progress = [{
+        label: buildDelegateProgressLabel(event),
+        text: buildDelegateProgressText(event),
+    }];
+    entry.summary = buildDelegateProgressText(event);
+}
+
+function getToolArgumentSchemaHint(toolName = '') {
+    if (toolName === EBOOK_TOOL_NAMES.EDIT) {
+        return 'Expected Edit arguments: {"filePath":"book/...","edits":[{"oldString":"...","newString":"...","replaceAll":false}]}';
+    }
+    if (toolName === EBOOK_TOOL_NAMES.WRITE) {
+        return 'Expected Write arguments: {"filePath":"book/...","content":"..."}';
+    }
+    return 'Expected tool arguments must be a valid JSON object matching the tool schema.';
+}
+
+function extractPathFromRawArguments(rawArguments = '') {
+    const text = String(rawArguments || '');
+    const match = text.match(/"(?:filePath|path|fromPath)"\s*:\s*"([^"]*)"/);
+    return match ? match[1] : '';
+}
+
+function buildInvalidToolArgumentsResult(toolCall = {}, error) {
+    const rawArguments = String(toolCall?.arguments || '');
+    return {
+        ok: false,
+        toolName: String(toolCall?.name || ''),
+        path: extractPathFromRawArguments(rawArguments),
+        error: 'invalid_tool_arguments',
+        message: 'Tool arguments are not valid JSON. The tool was not executed. Rebuild the call with valid JSON arguments.',
+        raw: error instanceof Error ? error.message : String(error || 'invalid_tool_arguments'),
+        argumentLength: rawArguments.length,
+        argumentPreview: rawArguments.slice(0, 500),
+        schemaHint: getToolArgumentSchemaHint(toolCall?.name),
+    };
+}
+
+function parseToolArguments(toolCall = {}) {
+    try {
+        const rawArguments = typeof toolCall.arguments === 'string' ? toolCall.arguments : '';
+        const parsed = JSON.parse(rawArguments.trim() || '{}');
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new Error('tool_arguments_must_be_json_object');
+        }
+        return {
+            ok: true,
+            args: parsed,
+        };
+    } catch (error) {
+        return {
+            ok: false,
+            args: {},
+            result: buildInvalidToolArgumentsResult(toolCall, error),
+        };
+    }
+}
+
 function toolChangesBookFiles(toolName = '') {
     return [
         EBOOK_TOOL_NAMES.WRITE,
@@ -199,6 +284,7 @@ export function createEbookAgentRunner(deps = {}) {
         isEditorDirty,
         getActiveProviderConfig,
         createAdapter,
+        renderProtocolNoticeSurface,
     } = deps;
     const renderStreamingSurface = typeof renderAgentSurface === 'function'
         ? () => {
@@ -259,6 +345,67 @@ export function createEbookAgentRunner(deps = {}) {
         ];
     }
 
+    let compactionOverlayHideTimer = null;
+    let protocolNoticeHideTimer = null;
+
+    function clearCompactionOverlayHideTimer() {
+        if (compactionOverlayHideTimer) {
+            globalThis.clearTimeout(compactionOverlayHideTimer);
+            compactionOverlayHideTimer = null;
+        }
+    }
+
+    function updateCompactionOverlay(patch = {}) {
+        state.compactionOverlay = {
+            active: true,
+            resolved: false,
+            currentTokens: 0,
+            yieldTokens: 0,
+            triggerTokens: 0,
+            status: '正在整理较早创作记录...',
+            ...(state.compactionOverlay || {}),
+            ...patch,
+        };
+    }
+
+    function scheduleCompactionOverlayHide(delayMs = 2500) {
+        const overlayId = state.compactionOverlay?.id || '';
+        clearCompactionOverlayHideTimer();
+        compactionOverlayHideTimer = globalThis.setTimeout(() => {
+            compactionOverlayHideTimer = null;
+            if (!overlayId || state.compactionOverlay?.id !== overlayId) return;
+            state.compactionOverlay = null;
+            render();
+        }, delayMs);
+    }
+
+    function clearProtocolNoticeHideTimer() {
+        if (protocolNoticeHideTimer) {
+            globalThis.clearTimeout(protocolNoticeHideTimer);
+            protocolNoticeHideTimer = null;
+        }
+    }
+
+    function showProtocolNotice(message = '工具协议异常，正在切换兼容模式重试…') {
+        clearProtocolNoticeHideTimer();
+        state.protocolNotice = {
+            id: `protocol-notice-${Date.now()}`,
+            message,
+        };
+        if (typeof renderProtocolNoticeSurface !== 'function' || !renderProtocolNoticeSurface()) {
+            renderStreamingSurface();
+        }
+        const noticeId = state.protocolNotice.id;
+        protocolNoticeHideTimer = globalThis.setTimeout(() => {
+            protocolNoticeHideTimer = null;
+            if (state.protocolNotice?.id !== noticeId) return;
+            state.protocolNotice = null;
+            if (typeof renderProtocolNoticeSurface !== 'function' || !renderProtocolNoticeSurface()) {
+                renderStreamingSurface();
+            }
+        }, 1300);
+    }
+
     const compactionController = createEbookHistoryCompactionController({
         state,
         render,
@@ -269,6 +416,27 @@ export function createEbookAgentRunner(deps = {}) {
         getToolDefinitions: () => getEbookToolDefinitions({
             webSearchEnabled: isTavilyConfigured(getActiveProviderConfig()),
         }),
+        onCompactionStart: (event = {}) => {
+            clearCompactionOverlayHideTimer();
+            updateCompactionOverlay({
+                id: `compaction-${Date.now()}`,
+                ...event,
+            });
+        },
+        onCompactionProgress: (event = {}) => {
+            updateCompactionOverlay(event);
+        },
+        onCompactionComplete: (event = {}) => {
+            updateCompactionOverlay({
+                ...event,
+                resolved: true,
+            });
+            scheduleCompactionOverlayHide();
+        },
+        onCompactionUnable: (event = {}) => {
+            updateCompactionOverlay(event);
+            scheduleCompactionOverlayHide(1600);
+        },
     });
 
     const delegateRunner = createDelegateRunner({
@@ -334,6 +502,8 @@ export function createEbookAgentRunner(deps = {}) {
         state.agentScrollLockTop = null;
         resetMessageWindow(state);
         compactionController.resetCompactionState();
+        clearCompactionOverlayHideTimer();
+        state.compactionOverlay = null;
         state.toolTrace = [];
         state.liveToolTurn = null;
         state.editingMessageIndex = -1;
@@ -467,6 +637,9 @@ export function createEbookAgentRunner(deps = {}) {
                         },
                         signal: controller.signal,
                         onStreamProgress: updateStreamingAssistantMessage,
+                        onToolProtocolFallback: () => {
+                            showProtocolNotice();
+                        },
                     };
 
                     if (Array.isArray(pendingToolResponses) && pendingToolResponses.length && adapter?.supportsSessionToolLoop) {
@@ -519,6 +692,22 @@ export function createEbookAgentRunner(deps = {}) {
                 if (toolCalls.length) {
                     pendingToolResponses = null;
                     sawToolExecution = true;
+                    const parsedToolCalls = toolCalls.map((toolCall) => ({
+                        toolCall,
+                        parsedArguments: parseToolArguments(toolCall),
+                    }));
+                    const storedToolCalls = parsedToolCalls.map(({ toolCall, parsedArguments }) => {
+                        if (parsedArguments.ok) return toolCall;
+                        const rawArguments = String(toolCall.arguments || '');
+                        return {
+                            ...toolCall,
+                            arguments: safeJsonStringify({
+                                invalidToolArguments: true,
+                                argumentLength: rawArguments.length,
+                                argumentPreview: rawArguments.slice(0, 500),
+                            }),
+                        };
+                    });
                     const visibleText = String(result.text || streamingAssistantMessage?.content || '');
                     const visibleThoughts = filterThoughtsForCurrentTurn(
                         mergeThoughtBlocks(streamingAssistantMessage?.thoughts, result.thoughts),
@@ -529,14 +718,14 @@ export function createEbookAgentRunner(deps = {}) {
                         ...result,
                         text: visibleText,
                         thoughts: visibleThoughts,
-                    }, toolCalls);
+                    }, storedToolCalls);
                     state.liveToolTurn = storedAssistantToolMessage;
                     renderToolSurface();
                     const storedToolMessages = [];
                     const toolResponses = [];
-                    for (const toolCall of toolCalls) {
+                    for (const { toolCall, parsedArguments } of parsedToolCalls) {
                         if (controller.signal.aborted) throw new Error('assistant_aborted');
-                        const args = safeJsonParse(toolCall.arguments, {});
+                        const args = parsedArguments.args;
                         const isDelegateTool = toolCall.name === EBOOK_TOOL_NAMES.DELEGATE_RUN;
                         const liveTraceEntry = isDelegateTool ? buildRunningToolTraceEntry(toolCall, args, round) : null;
                         if (liveTraceEntry) {
@@ -550,9 +739,23 @@ export function createEbookAgentRunner(deps = {}) {
                                 error: 'ebook_tool_not_available',
                                 message: `${toolCall.name} 不在电纸书工具表中。`,
                             };
+                        } else if (!parsedArguments.ok) {
+                            toolResult = parsedArguments.result;
                         } else {
                             try {
-                                toolResult = await runtime.execute(toolCall.name, args);
+                                if (isDelegateTool) {
+                                    toolResult = await runDelegate(args, {
+                                        controller,
+                                        bookId: runBookId,
+                                        book: runBook,
+                                        onDelegateProgress: (event) => {
+                                            appendDelegateProgress(liveTraceEntry, event);
+                                            renderToolSurface();
+                                        },
+                                    });
+                                } else {
+                                    toolResult = await runtime.execute(toolCall.name, args);
+                                }
                             } catch (error) {
                                 if (isAbortError(error)) throw error;
                                 toolResult = buildEbookToolFailureResult(toolCall.name, args, error);
@@ -668,7 +871,10 @@ export function createEbookAgentRunner(deps = {}) {
             ok: false,
             error: 'message_index_invalid',
         };
-        const turnUserIndex = findTurnUserMessageIndex(state.messages, index - 1);
+        const targetMessage = state.messages[index];
+        const turnUserIndex = targetMessage?.role === 'user'
+            ? index
+            : findTurnUserMessageIndex(state.messages, index - 1);
         const latestUserMessage = turnUserIndex >= 0 ? state.messages[turnUserIndex] : null;
         const taskText = String(latestUserMessage?.content || '').trim();
         if (!taskText) return {

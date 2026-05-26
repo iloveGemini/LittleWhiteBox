@@ -170,12 +170,23 @@ async function copyText(text = '') {
     }
 }
 
-function isEditableAssistantTextMessage(message = {}) {
+function isEditableConversationTextMessage(message = {}) {
     return message
-        && message.role === 'assistant'
+        && ['user', 'assistant'].includes(message.role)
         && !message.streaming
         && String(message.content || '').trim()
         && !(Array.isArray(message.toolCalls) && message.toolCalls.length);
+}
+
+function findUserTurnEndIndex(messages = [], userIndex = -1) {
+    if (!Array.isArray(messages) || userIndex < 0 || messages[userIndex]?.role !== 'user') {
+        return userIndex + 1;
+    }
+    let endIndex = userIndex + 1;
+    while (endIndex < messages.length && messages[endIndex]?.role !== 'user') {
+        endIndex += 1;
+    }
+    return endIndex;
 }
 
 function canDrawSelectedChapter(state = {}) {
@@ -421,7 +432,7 @@ export function bindEbookEvents(options = {}) {
         if (!Number.isInteger(messageIndex) || messageIndex < 0 || !action) return;
         if (state.isBusy && action !== 'cancel-edit') return;
         const message = state.messages[messageIndex];
-        if (!isEditableAssistantTextMessage(message)) return;
+        if (!isEditableConversationTextMessage(message)) return;
 
         if (action === 'copy') {
             const copied = await copyText(message.content);
@@ -467,7 +478,11 @@ export function bindEbookEvents(options = {}) {
 
         if (action === 'delete') {
             if (state.isBusy) return;
-            state.messages.splice(messageIndex, 1);
+            if (message.role === 'user') {
+                state.messages.splice(messageIndex, findUserTurnEndIndex(state.messages, messageIndex) - messageIndex);
+            } else {
+                state.messages.splice(messageIndex, 1);
+            }
             state.editingMessageIndex = -1;
             await persistConversation?.(state.book?.id);
             showToast?.('消息已删除');

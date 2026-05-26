@@ -116,6 +116,10 @@ export function createEbookHistoryCompactionController(deps = {}) {
         getActiveProviderConfig = () => ({}),
         buildProviderMessages = () => [],
         getToolDefinitions = () => [],
+        onCompactionStart = () => {},
+        onCompactionProgress = () => {},
+        onCompactionComplete = () => {},
+        onCompactionUnable = () => {},
         summaryTriggerTokens = EBOOK_SUMMARY_TRIGGER_TOKENS,
         defaultPreservedTurns = EBOOK_DEFAULT_PRESERVED_TURNS,
         minPreservedTurns = EBOOK_MIN_PRESERVED_TURNS,
@@ -174,9 +178,15 @@ export function createEbookHistoryCompactionController(deps = {}) {
     }
 
     async function ensureContextBudget(adapter, signal) {
-        if (await estimateCurrentTokens() <= summaryTriggerTokens) {
+        const initialTokens = await estimateCurrentTokens();
+        if (initialTokens <= summaryTriggerTokens) {
             return;
         }
+        onCompactionStart({
+            currentTokens: initialTokens,
+            triggerTokens: summaryTriggerTokens,
+            status: '正在整理较早创作记录...',
+        });
 
         for (const preservedTurns of [defaultPreservedTurns, minPreservedTurns]) {
             const turns = splitEbookMessagesIntoTurns(state.messages);
@@ -188,6 +198,11 @@ export function createEbookHistoryCompactionController(deps = {}) {
                 const turnsToArchive = turns.slice(state.archivedTurnCount, desiredArchivedTurnCount);
                 const previousStatus = state.status;
                 state.status = '正在整理较早创作记录...';
+                onCompactionProgress({
+                    currentTokens: initialTokens,
+                    triggerTokens: summaryTriggerTokens,
+                    status: '正在压缩重复创作脉络...',
+                });
                 render();
                 try {
                     await summarizeTurns(adapter, turnsToArchive, signal);
@@ -200,14 +215,34 @@ export function createEbookHistoryCompactionController(deps = {}) {
                 await persistConversation();
             }
 
-            if (await estimateCurrentTokens() <= summaryTriggerTokens) {
+            const currentTokens = await estimateCurrentTokens();
+            onCompactionProgress({
+                currentTokens: initialTokens,
+                yieldTokens: currentTokens,
+                triggerTokens: summaryTriggerTokens,
+                status: currentTokens <= summaryTriggerTokens
+                    ? '创作记忆已建立。'
+                    : '继续整理较早创作记录...',
+            });
+            if (currentTokens <= summaryTriggerTokens) {
                 showToast('已整理较早创作记录，保留最近创作上下文。');
+                onCompactionComplete({
+                    currentTokens: initialTokens,
+                    yieldTokens: currentTokens,
+                    triggerTokens: summaryTriggerTokens,
+                    status: '创作记忆已建立。',
+                });
                 render();
                 return;
             }
         }
 
         showToast('最近几轮创作记录本身已经很长，建议把任务拆小一点。');
+        onCompactionUnable({
+            currentTokens: initialTokens,
+            triggerTokens: summaryTriggerTokens,
+            status: '最近创作记录仍然过长。',
+        });
         render();
     }
 

@@ -249,6 +249,60 @@ test('DelegateRun feeds tool results back into the child conversation', async ()
     assert.equal(Object.hasOwn(result, 'task'), false);
 });
 
+test('DelegateRun emits UI-only progress events while using tools', async () => {
+    let round = 0;
+    const progressEvents = [];
+    const adapter = {
+        chat: async () => {
+            round += 1;
+            if (round === 1) {
+                return {
+                    text: '',
+                    toolCalls: [{
+                        id: 'call-read-progress',
+                        name: TOOL_NAMES.READ,
+                        arguments: JSON.stringify({ filePath: 'local/progress.txt', scope: 'local' }),
+                    }],
+                };
+            }
+            return {
+                text: 'progress done',
+                toolCalls: [],
+            };
+        },
+    };
+    const runner = makeRunner(adapter, {
+        executeToolCall: async () => ({
+            ok: true,
+            summary: '读取完成。',
+        }),
+    });
+
+    const result = await runner.runDelegate({
+        task: '验证进度事件',
+    }, {
+        controller: new AbortController(),
+        onDelegateProgress: (event) => {
+            progressEvents.push(event);
+        },
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(progressEvents.map((event) => event.type), [
+        'started',
+        'round_start',
+        'model_result',
+        'tool_start',
+        'tool_result',
+        'round_start',
+        'model_result',
+        'completed',
+    ]);
+    assert.equal(progressEvents.find((event) => event.type === 'tool_start').toolName, TOOL_NAMES.READ);
+    assert.match(progressEvents.find((event) => event.type === 'tool_start').argsSummary, /local\/progress\.txt/);
+    assert.match(progressEvents.find((event) => event.type === 'tool_result').summary, /读取完成/);
+});
+
 test('DelegateRun uses session tool responses when the adapter supports them', async () => {
     let round = 0;
     const seenTasks = [];

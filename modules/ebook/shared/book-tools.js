@@ -61,6 +61,21 @@ export function createBookToolRuntime(options = {}) {
         if (readOnly) throw new Error('book_tool_read_only');
     }
 
+    async function attachRefreshWarning(result = {}) {
+        if (!onFilesChanged) return result;
+        try {
+            await onFilesChanged();
+            return result;
+        } catch (error) {
+            return {
+                ...result,
+                warning: 'files_refresh_failed',
+                refreshError: String(error?.message || error || 'files_refresh_failed'),
+                summary: `${result.summary || '文件已变更。'}（文件变更已保存，但界面刷新失败；请刷新电纸书界面。）`,
+            };
+        }
+    }
+
     const fileTools = createBookFileToolHandlers({
         currentBookId,
         getFiles,
@@ -101,13 +116,12 @@ export function createBookToolRuntime(options = {}) {
             case EBOOK_TOOL_NAMES.RENAME_BOOK: {
                 assertWritable();
                 const book = await renameBook(bookId, args.title);
-                await onFilesChanged?.();
-                return {
+                return await attachRefreshWarning({
                     ok: true,
                     book,
                     title: book.title,
                     summary: `书名已改为《${book.title}》。`,
-                };
+                });
             }
             case EBOOK_TOOL_NAMES.DELEGATE_RUN:
                 assertWritable();

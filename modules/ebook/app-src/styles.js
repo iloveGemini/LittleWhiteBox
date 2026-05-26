@@ -10,15 +10,15 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
             --xb-bg-agent: #20232d;
             --xb-bg-card: #242834;
             --xb-bg-glass: rgba(255, 255, 255, 0.045);
-            --xb-text-main: #ebe7dd;
-            --xb-text-body: #ddd7ca;
-            --xb-text-muted: #b9b4ab;
-            --xb-text-dim: #928f89;
-            --xb-line: rgba(235, 231, 221, 0.13);
-            --xb-line-strong: rgba(235, 231, 221, 0.22);
+            --xb-text-main: #b8b2a6;
+            --xb-text-body: #a19b90;
+            --xb-text-muted: #8f8a80;
+            --xb-text-dim: #706d68;
+            --xb-line: rgba(184, 178, 166, 0.12);
+            --xb-line-strong: rgba(184, 178, 166, 0.20);
             --xb-cyan: #8fb4bd;
             --xb-indigo: #b3adca;
-            --xb-gold: #ebe7dd;
+            --xb-gold: #b8b2a6;
             --xb-danger: #d88490;
             --xb-ok: #96b8b2;
             --xb-shadow: 0 16px 34px rgba(0, 0, 0, 0.26);
@@ -522,6 +522,7 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
 
         /* Studio */
         .xb-ebook-shell {
+            position: relative;
             width: 100%;
             height: 100%;
             min-height: 0;
@@ -641,6 +642,23 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
             font-size: 12px;
             font-weight: 700;
             letter-spacing: 0.04em;
+        }
+        .xb-file-tree {
+            display: grid;
+            gap: 6px;
+        }
+        .xb-file-directory {
+            margin-top: 4px;
+            padding: 2px 2px 0 8px;
+            border-left: 1px solid rgba(143, 183, 202, 0.18);
+            color: var(--xb-text-muted);
+            font-family: var(--xb-font-ui);
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+        .xb-file-directory + .xb-file {
+            margin-top: -1px;
         }
         .xb-file,
         .xb-imports button,
@@ -1063,7 +1081,7 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
             padding: 0.12em 0.36em;
             border-radius: 7px;
             background: rgba(148, 163, 184, 0.12);
-            color: #d8dde2;
+            color: var(--xb-text-main);
             font-family: var(--xb-font-mono);
             font-size: 0.94em;
         }
@@ -1156,7 +1174,7 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
         .xb-assistant-markdown blockquote {
             padding-left: 14px;
             border-left: 2px solid rgba(233, 231, 227, 0.22);
-            color: #c4bda9;
+            color: var(--xb-text-muted);
         }
         .xb-assistant-markdown table {
             width: 100%;
@@ -1355,6 +1373,32 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
             overflow-wrap: anywhere;
             line-height: 1.55;
         }
+        .xb-tool-progress {
+            display: grid;
+            gap: 6px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.055);
+            color: var(--xb-text-muted);
+        }
+        .xb-tool-progress-row {
+            display: grid;
+            grid-template-columns: 46px minmax(0, 1fr);
+            gap: 8px;
+            align-items: start;
+            font-size: 11px;
+            line-height: 1.45;
+        }
+        .xb-tool-progress-row span {
+            color: var(--xb-cyan);
+            font-family: var(--xb-font-mono);
+            font-size: 10px;
+        }
+        .xb-tool-progress-row p {
+            margin: 0;
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
         .xb-tool small,
         .xb-meta {
             color: var(--xb-text-muted);
@@ -1517,6 +1561,195 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
         }
         .xb-agent-form button[type="submit"].is-busy {
             color: var(--xb-danger);
+        }
+
+        .xb-distillation-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 70;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 28px;
+            color: var(--xb-text-main);
+            animation: xb-distillation-enter 0.56s var(--xb-fluid) both;
+        }
+        .xb-protocol-notice {
+            position: absolute;
+            left: 50%;
+            top: 48%;
+            z-index: 68;
+            width: min(420px, calc(100% - 42px));
+            transform: translate(-50%, -50%);
+            display: flex;
+            justify-content: center;
+            pointer-events: none;
+            animation: xb-protocol-notice-float 1.28s var(--xb-fluid) both;
+        }
+        .xb-protocol-notice span {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            max-width: 100%;
+            padding: 10px 16px;
+            border: 1px solid rgba(184, 178, 166, 0.16);
+            border-radius: 999px;
+            background: rgba(28, 31, 40, 0.78);
+            box-shadow: 0 18px 38px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(18px) saturate(116%);
+            color: var(--xb-text-main);
+            font-size: 12px;
+            line-height: 1.45;
+            text-align: center;
+        }
+        @keyframes xb-protocol-notice-float {
+            0% { opacity: 0; transform: translate(-50%, calc(-50% + 10px)) scale(0.98); }
+            18% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            72% { opacity: 1; transform: translate(-50%, calc(-50% - 4px)) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, calc(-50% - 12px)) scale(0.98); }
+        }
+        .xb-distillation-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(10, 12, 18, 0.52);
+            backdrop-filter: blur(22px) saturate(112%);
+        }
+        .xb-distillation-aura {
+            position: absolute;
+            width: min(260px, 52vw);
+            aspect-ratio: 1;
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(184, 178, 166, 0.14), transparent 70%);
+            filter: blur(42px);
+            animation: xb-distillation-breathe 3.8s infinite alternate ease-in-out;
+        }
+        .xb-distillation-plaque {
+            position: relative;
+            z-index: 1;
+            width: min(520px, 88vw);
+            padding: 38px 34px;
+            border-top: 1px solid rgba(184, 178, 166, 0.13);
+            border-bottom: 1px solid rgba(184, 178, 166, 0.045);
+            border-radius: 22px;
+            background: rgba(32, 35, 45, 0.58);
+            box-shadow: 0 20px 42px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(184, 178, 166, 0.06);
+            text-align: center;
+            transform: translateY(16px);
+            animation: xb-distillation-plaque-enter 0.7s var(--xb-fluid) both;
+        }
+        .xb-distillation-title {
+            margin-bottom: 8px;
+            color: var(--xb-text-main);
+            font-family: var(--xb-font-serif);
+            font-size: 20px;
+            font-weight: 400;
+            letter-spacing: 0.18em;
+        }
+        .xb-distillation-status {
+            margin-bottom: 28px;
+            color: var(--xb-text-muted);
+            font-size: 13px;
+            letter-spacing: 0.06em;
+        }
+        .xb-distillation-metrics {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 28px;
+            font-family: var(--xb-font-mono);
+        }
+        .xb-distillation-metric {
+            display: grid;
+            gap: 8px;
+            min-width: 104px;
+        }
+        .xb-distillation-metric strong {
+            color: var(--xb-text-body);
+            font-size: 26px;
+            font-weight: 300;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+        .xb-distillation-metric span {
+            color: var(--xb-text-dim);
+            font-size: 10px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+        }
+        .xb-distillation-divider {
+            position: relative;
+            width: 42px;
+            height: 1px;
+            background: rgba(184, 178, 166, 0.13);
+            overflow: hidden;
+        }
+        .xb-distillation-divider::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 12px;
+            height: 1px;
+            background: rgba(184, 178, 166, 0.55);
+            box-shadow: 0 0 10px rgba(184, 178, 166, 0.30);
+            animation: xb-distillation-flow 1.45s infinite ease-out;
+        }
+        .xb-distillation-ripple {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            border: 1px solid var(--xb-gold);
+            border-radius: 999px;
+            opacity: 0;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .xb-distillation-layer.resolved .xb-distillation-aura {
+            background: radial-gradient(circle, rgba(206, 179, 122, 0.18), transparent 70%);
+            animation: xb-distillation-resolve-aura 1.1s ease-out both;
+        }
+        .xb-distillation-layer.resolved .xb-distillation-plaque {
+            border-top-color: rgba(206, 179, 122, 0.28);
+            box-shadow: 0 20px 42px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(206, 179, 122, 0.14);
+        }
+        .xb-distillation-layer.resolved .xb-distillation-title,
+        .xb-distillation-layer.resolved .xb-distillation-yield {
+            color: var(--xb-gold);
+            text-shadow: 0 0 18px rgba(206, 179, 122, 0.22);
+        }
+        .xb-distillation-layer.resolved .xb-distillation-divider::after {
+            opacity: 0;
+            animation: none;
+        }
+        .xb-distillation-layer.resolved .xb-distillation-ripple {
+            animation: xb-distillation-ripple 1.15s var(--xb-fluid) both;
+        }
+        @keyframes xb-distillation-enter {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes xb-distillation-plaque-enter {
+            from { opacity: 0; transform: translateY(18px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes xb-distillation-breathe {
+            0% { opacity: 0.55; transform: scale(0.9); }
+            100% { opacity: 0.95; transform: scale(1.18); }
+        }
+        @keyframes xb-distillation-flow {
+            0% { left: -12px; opacity: 0; }
+            22% { opacity: 1; }
+            100% { left: 42px; opacity: 0; }
+        }
+        @keyframes xb-distillation-resolve-aura {
+            from { opacity: 0.9; transform: scale(1); }
+            to { opacity: 0; transform: scale(2); }
+        }
+        @keyframes xb-distillation-ripple {
+            0% { width: 0; height: 0; opacity: 0.72; border-width: 2px; }
+            100% { width: min(320px, 72vw); height: min(320px, 72vw); opacity: 0; border-width: 1px; }
         }
 
         /* Settings and delete dialogs */
@@ -1934,7 +2167,7 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
             margin: 0 auto;
             background: transparent;
         }
-        .xb-reader-content p {
+        .xb-reader-md {
             margin: 0 0 2rem;
             background: transparent;
             box-shadow: none;
@@ -1942,11 +2175,72 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
             font: 20px/2.05 var(--xb-font-serif);
             font-weight: 400;
             text-shadow: none;
+            mix-blend-mode: normal;
+        }
+        .xb-reader-md > :first-child {
+            margin-top: 0;
+        }
+        .xb-reader-md > :last-child {
+            margin-bottom: 0;
+        }
+        .xb-reader-md p,
+        .xb-reader-md li,
+        .xb-reader-md blockquote {
+            margin: 0 0 2rem;
+            background: transparent;
+            box-shadow: none;
+            filter: none;
+            color: var(--xb-text-body);
+            font: inherit;
+            font-weight: 400;
+            text-shadow: none;
             text-align: justify;
             mix-blend-mode: normal;
             white-space: pre-wrap;
         }
-        .xb-reader-content p.xb-reader-drop::first-letter {
+        .xb-reader-md h1,
+        .xb-reader-md h2,
+        .xb-reader-md h3 {
+            margin: 0 0 1.35rem;
+            color: var(--xb-text-main);
+            font-family: var(--xb-font-serif);
+            font-weight: 700;
+            letter-spacing: 0;
+            line-height: 1.45;
+            text-shadow: none;
+        }
+        .xb-reader-md h1 { font-size: 2rem; }
+        .xb-reader-md h2 { font-size: 1.65rem; }
+        .xb-reader-md h3 { font-size: 1.32rem; }
+        .xb-reader-md em {
+            color: var(--xb-text-main);
+            font-style: italic;
+            text-shadow: none;
+        }
+        .xb-reader-md strong {
+            color: var(--xb-text-main);
+            font-weight: 700;
+            text-shadow: none;
+        }
+        .xb-reader-md blockquote {
+            padding: 0 0 0 1.1rem;
+            border-left: 2px solid rgba(143, 183, 202, 0.35);
+            color: var(--xb-text-muted);
+        }
+        .xb-reader-md ul,
+        .xb-reader-md ol {
+            margin: 0 0 2rem;
+            padding-left: 1.6rem;
+        }
+        .xb-reader-md code {
+            color: var(--xb-text-main);
+            background: rgba(143, 183, 202, 0.10);
+            border-radius: 4px;
+            padding: 0.05rem 0.28rem;
+            font-family: var(--xb-font-mono);
+            font-size: 0.85em;
+        }
+        .xb-reader-md.xb-reader-drop p:first-of-type::first-letter {
             float: left;
             padding-top: 5px;
             padding-right: 12px;
@@ -2033,7 +2327,7 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
         }
         .theme-dark .xb-sidebar {
             background: #171922;
-            border-right-color: rgba(235, 231, 221, 0.08);
+            border-right-color: rgba(184, 178, 166, 0.08);
         }
         .theme-dark .xb-studio-workbench,
         .theme-dark .xb-editor {
@@ -2041,7 +2335,7 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
         }
         .theme-dark .xb-agent {
             background: #20232d;
-            border-left-color: rgba(235, 231, 221, 0.09);
+            border-left-color: rgba(184, 178, 166, 0.09);
         }
         .theme-dark.xb-studio-shell.focus-editor .xb-agent {
             opacity: 1;
@@ -2054,19 +2348,19 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
         }
         .theme-dark .xb-workspace-controller {
             background: #222631;
-            border-color: rgba(235, 231, 221, 0.12);
+            border-color: rgba(184, 178, 166, 0.12);
             box-shadow: none;
         }
         .theme-dark .xb-editor-head {
             background: #1c1f2a;
-            border-bottom: 1px solid rgba(235, 231, 221, 0.08);
+            border-bottom: 1px solid rgba(184, 178, 166, 0.08);
         }
         .theme-dark .xb-agent-head,
         .theme-dark .xb-agent-form,
         .theme-dark .xb-agent-memory,
         .theme-dark .xb-reader-nav,
         .theme-dark .xb-reader-foot {
-            border-color: rgba(235, 231, 221, 0.09);
+            border-color: rgba(184, 178, 166, 0.09);
         }
         .theme-dark .xb-agent-form {
             background: #20232d;
@@ -2081,12 +2375,12 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
         .theme-dark .xb-thought-block,
         .theme-dark .xb-tool-preface,
         .theme-dark .xb-tool {
-            border-color: rgba(235, 231, 221, 0.11);
+            border-color: rgba(184, 178, 166, 0.11);
             background: #282c38;
             color: var(--xb-text-main);
         }
         .theme-dark .xb-tool-payload {
-            border-top-color: rgba(235, 231, 221, 0.10);
+            border-top-color: rgba(184, 178, 166, 0.10);
         }
         .theme-dark .xb-agent-compose-row:focus-within {
             border-color: rgba(143, 180, 189, 0.40);
@@ -2102,7 +2396,7 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
         }
         .theme-dark .xb-assistant-markdown pre,
         .theme-dark .xb-markdown-html-code {
-            border-color: rgba(235, 231, 221, 0.10);
+            border-color: rgba(184, 178, 166, 0.10);
             background: #191c25;
             color: var(--xb-text-body);
         }
@@ -2112,29 +2406,29 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
         .theme-dark .xb-assistant-markdown h2,
         .theme-dark .xb-assistant-markdown h3,
         .theme-dark .xb-assistant-markdown h4 {
-            color: #d7d0c2;
+            color: var(--xb-text-main);
             font-weight: 700;
             text-shadow: none !important;
             filter: none !important;
         }
         .theme-dark .xb-assistant-markdown code {
             background: rgba(255, 255, 255, 0.075);
-            color: #e0dacd;
+            color: var(--xb-text-main);
         }
         .theme-dark .xb-file.is-active {
-            border-color: rgba(235, 231, 221, 0.12);
+            border-color: rgba(184, 178, 166, 0.12);
             background: #242834;
         }
         .theme-dark .xb-library-book {
-            border-color: rgba(235, 231, 221, 0.08);
+            border-color: rgba(184, 178, 166, 0.08);
             background: #242834;
         }
         .theme-dark .xb-entry-action {
-            border-color: rgba(235, 231, 221, 0.08);
+            border-color: rgba(184, 178, 166, 0.08);
             background: transparent;
         }
         .theme-dark .xb-library-book:hover:not(:disabled) {
-            border-color: rgba(235, 231, 221, 0.16);
+            border-color: rgba(184, 178, 166, 0.16);
             box-shadow: none;
         }
         .theme-dark .xb-portal-theme {
@@ -2163,8 +2457,29 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
         .theme-dark .xb-reader-paper {
             background: transparent;
         }
+        .theme-dark .xb-reader-md,
+        .theme-dark .xb-reader-md p,
+        .theme-dark .xb-reader-md li {
+            color: #a19b90;
+        }
+        .theme-dark .xb-reader-head h2,
+        .theme-dark .xb-reader-md h1,
+        .theme-dark .xb-reader-md h2,
+        .theme-dark .xb-reader-md h3,
+        .theme-dark .xb-reader-md em,
+        .theme-dark .xb-reader-md strong,
+        .theme-dark .xb-reader-md code,
+        .theme-dark .xb-reader-md.xb-reader-drop p:first-of-type::first-letter {
+            color: #b8b2a6;
+        }
+        .theme-dark .xb-reader-md blockquote {
+            color: #928f89;
+            border-left-color: rgba(184, 178, 166, 0.26);
+        }
         .theme-dark .xb-reader-content,
-        .theme-dark .xb-reader-content p {
+        .theme-dark .xb-reader-content p,
+        .theme-dark .xb-reader-md,
+        .theme-dark .xb-reader-md * {
             background: transparent !important;
             box-shadow: none !important;
             filter: none !important;
@@ -2281,6 +2596,15 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
         .theme-light .xb-agent-form {
             background: linear-gradient(0deg, var(--xb-bg-agent) 74%, transparent);
         }
+        .theme-light .xb-distillation-backdrop {
+            background: rgba(255, 250, 240, 0.58);
+        }
+        .theme-light .xb-distillation-plaque {
+            border-top-color: rgba(87, 70, 48, 0.12);
+            border-bottom-color: rgba(87, 70, 48, 0.05);
+            background: rgba(255, 253, 248, 0.72);
+            box-shadow: 0 20px 42px rgba(87, 70, 48, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.64);
+        }
         .theme-light .xb-agent-compose-row,
         .theme-light .xb-msg,
         .theme-light .xb-msg-user,
@@ -2396,7 +2720,9 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
             background: transparent;
         }
         .theme-light .xb-reader-content,
-        .theme-light .xb-reader-content p {
+        .theme-light .xb-reader-content p,
+        .theme-light .xb-reader-md,
+        .theme-light .xb-reader-md * {
             background: transparent !important;
             box-shadow: none !important;
             filter: none !important;

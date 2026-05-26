@@ -146,6 +146,15 @@ function buildToolTraceEntry(toolCall = {}, args = {}, result = {}) {
     };
 }
 
+function emitDelegateProgress(parentRun = {}, event = {}) {
+    if (typeof parentRun.onDelegateProgress !== 'function') return;
+    try {
+        parentRun.onDelegateProgress(event);
+    } catch {
+        // Progress is UI-only; never let it affect delegate execution.
+    }
+}
+
 function summarizeResult(text = '') {
     return normalizeInlineText(text, RESULT_SUMMARY_LIMIT);
 }
@@ -220,6 +229,10 @@ export function createDelegateRunner(deps = {}) {
         let pendingToolResponses = null;
         let pendingFinalAnswerReminderText = '';
         const absorbStreamProgress = () => {};
+        emitDelegateProgress(parentRun, {
+            type: 'started',
+            summary: '审稿分身已启动。',
+        });
 
         while (rounds < maxRounds) {
             if (parentRun?.controller?.signal?.aborted) {
@@ -227,6 +240,12 @@ export function createDelegateRunner(deps = {}) {
             }
 
             rounds += 1;
+            emitDelegateProgress(parentRun, {
+                type: 'round_start',
+                round: rounds,
+                maxRounds,
+                summary: `第 ${rounds} 轮思考中。`,
+            });
             const requestTask = {
                 systemPrompt,
                 tools,
@@ -273,6 +292,15 @@ export function createDelegateRunner(deps = {}) {
             const toolCalls = resolveResultToolCalls(result, providerConfig, {
                 fallbackPrefix: 'delegate-tool',
             });
+            emitDelegateProgress(parentRun, {
+                type: 'model_result',
+                round: rounds,
+                toolCallCount: toolCalls.length,
+                textLength: String(result?.text || '').length,
+                summary: toolCalls.length
+                    ? `第 ${rounds} 轮返回 ${toolCalls.length} 个工具调用。`
+                    : `第 ${rounds} 轮正在形成审稿结论。`,
+            });
             if (toolCalls.length) {
                 pendingToolResponses = null;
                 sawToolExecution = true;
@@ -291,6 +319,14 @@ export function createDelegateRunner(deps = {}) {
                     if (!allowedToolNames.has(toolCall.name)) {
                         toolResult = buildUnavailableToolResult(toolCall.name);
                     } else {
+                        emitDelegateProgress(parentRun, {
+                            type: 'tool_start',
+                            round: rounds,
+                            toolName: toolCall.name,
+                            args: parsedArguments,
+                            argsSummary: summarizeToolArguments(parsedArguments),
+                            summary: `${toolCall.name} ${summarizeToolArguments(parsedArguments) || ''}`.trim(),
+                        });
                         toolResult = await executeToolCall(toolCall, parsedArguments, parentRun);
                     }
                     messages.push({
@@ -298,7 +334,17 @@ export function createDelegateRunner(deps = {}) {
                         tool_call_id: toolCall.id,
                         content: safeJsonStringify(toolResult),
                     });
-                    toolTrace.push(buildToolTraceEntry(toolCall, parsedArguments, toolResult));
+                    const traceEntry = buildToolTraceEntry(toolCall, parsedArguments, toolResult);
+                    toolTrace.push(traceEntry);
+                    emitDelegateProgress(parentRun, {
+                        type: 'tool_result',
+                        round: rounds,
+                        toolName: toolCall.name,
+                        ok: traceEntry.ok,
+                        argsSummary: traceEntry.args,
+                        summary: traceEntry.summary || `${toolCall.name} 已返回。`,
+                        error: traceEntry.error,
+                    });
                     toolResponses.push({
                         id: toolCall.id,
                         name: toolCall.name,
@@ -340,6 +386,11 @@ export function createDelegateRunner(deps = {}) {
             }
 
             const resultText = String(result.text).trim();
+            emitDelegateProgress(parentRun, {
+                type: 'completed',
+                round: rounds,
+                summary: '审稿分身已完成，正在交回结果。',
+            });
             return {
                 ok: true,
                 status: 'completed',

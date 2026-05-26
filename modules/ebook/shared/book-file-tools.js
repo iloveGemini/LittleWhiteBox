@@ -16,7 +16,7 @@ import {
 const DEFAULT_READ_LIMIT = 1200;
 const MAX_READ_LIMIT = 2000;
 const MAX_GREP_RESULTS = 100;
-const DEFAULT_BOOK_DIRECTORIES = ['book/sources/', 'book/chapters/', 'book/reviews/', 'book/notes/'];
+const DEFAULT_BOOK_DIRECTORIES = ['book/sources/', 'book/chapters/', 'book/volumes/', 'book/reviews/', 'book/notes/'];
 
 function normalizeText(value = '', limit = 4000) {
     const text = String(value || '').trim();
@@ -128,6 +128,21 @@ export function createBookFileToolHandlers(options = {}) {
 
     function assertWritable() {
         if (readOnly) throw new Error('book_tool_read_only');
+    }
+
+    async function attachRefreshWarning(result = {}) {
+        if (!onFilesChanged) return result;
+        try {
+            await onFilesChanged();
+            return result;
+        } catch (error) {
+            return {
+                ...result,
+                warning: 'files_refresh_failed',
+                refreshError: String(error?.message || error || 'files_refresh_failed'),
+                summary: `${result.summary || '文件已变更。'}（文件变更已保存，但界面刷新失败；请刷新电纸书界面。）`,
+            };
+        }
     }
 
     async function executeLs(args = {}) {
@@ -253,13 +268,12 @@ export function createBookFileToolHandlers(options = {}) {
         assertWritable();
         const path = assertBookFilePath(args.path || args.filePath);
         const file = await upsertBookFile(await currentBookId(), path, typeof args.content === 'string' ? args.content : String(args.content ?? ''));
-        await onFilesChanged?.();
-        return {
+        return await attachRefreshWarning({
             ok: true,
             path: file.path,
             bytes: new TextEncoder().encode(file.content).length,
             summary: `已写入 ${file.path}。`,
-        };
+        });
     }
 
     async function executeEdit(args = {}) {
@@ -290,9 +304,8 @@ export function createBookFileToolHandlers(options = {}) {
         const failedCount = result.results.length - appliedCount;
         if (appliedCount > 0) {
             await upsertBookFile(await currentBookId(), path, result.content || '');
-            await onFilesChanged?.();
         }
-        return {
+        const toolResult = {
             ok: result.ok,
             partial: result.partial,
             path,
@@ -308,6 +321,7 @@ export function createBookFileToolHandlers(options = {}) {
                     ? `已部分修改 ${path}：成功 ${appliedCount} 项，失败 ${failedCount} 项。`
                     : `未修改 ${path}：${result.results[0]?.message || result.results[0]?.error || 'Edit failed'}。`,
         };
+        return appliedCount > 0 ? await attachRefreshWarning(toolResult) : toolResult;
     }
 
     async function executeDelete(args = {}) {
@@ -317,13 +331,12 @@ export function createBookFileToolHandlers(options = {}) {
             ? assertBookDirectoryPath(rawPath)
             : assertBookFilePath(rawPath);
         const deleted = await deleteBookPath(await currentBookId(), path);
-        await onFilesChanged?.();
-        return {
+        return await attachRefreshWarning({
             ok: true,
             path: deleted.path,
             deletedCount: deleted.deletedCount,
             summary: `已删除 ${deleted.deletedCount} 个文件。`,
-        };
+        });
     }
 
     async function executeMove(args = {}) {
@@ -357,14 +370,13 @@ export function createBookFileToolHandlers(options = {}) {
                 path: destinationPaths[index],
             })));
         await replaceBookFiles(await currentBookId(), nextFiles);
-        await onFilesChanged?.();
-        return {
+        return await attachRefreshWarning({
             ok: true,
             fromPath,
             toPath,
             movedCount: targets.length,
             summary: `已移动 ${targets.length} 个文件。`,
-        };
+        });
     }
 
     return {

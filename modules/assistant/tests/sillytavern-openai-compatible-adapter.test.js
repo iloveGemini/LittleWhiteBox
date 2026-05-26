@@ -951,6 +951,7 @@ test('sillytavern OpenAI-compatible retries malformed native tool host failures 
 
     const originalFetch = globalThis.fetch;
     const requests = [];
+    const fallbackEvents = [];
     globalThis.fetch = async (url, options = {}) => {
         const body = JSON.parse(String(options.body || '{}'));
         requests.push({
@@ -994,9 +995,18 @@ test('sillytavern OpenAI-compatible retries malformed native tool host failures 
                     },
                 },
             }],
+            onToolProtocolFallback: (event) => {
+                fallbackEvents.push(event);
+            },
         });
 
         assert.equal(requests.length, 2);
+        assert.deepEqual(fallbackEvents, [{
+            provider: 'sillytavern-openai-compatible',
+            fromToolMode: 'native',
+            toToolMode: 'tagged-json',
+            reason: 'malformed_native_tool_host_error',
+        }]);
         assert.equal(requests[0].body.tools.length, 1);
         assert.equal(Object.hasOwn(requests[1].body, 'tools'), false);
         assert.equal(Object.hasOwn(requests[1].body, 'tool_choice'), false);
