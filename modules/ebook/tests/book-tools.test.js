@@ -219,6 +219,20 @@ test('Shared applyTextEdits accepts JSON-stringified edits with a warning and re
     assert.match(missingValue.results[0].message, /it was missing/);
 });
 
+test('Shared applyTextEdits repairs malformed JSON-like stringified line edits', () => {
+    const content = ['一', '二', '三', '四'].join('\n');
+    const malformed = '[{"startLine":2,"endLine":3,"newString":"她说："回来。"\n三也留下"}]';
+    const result = applyTextEdits(content, malformed);
+
+    assert.equal(result.ok, true);
+    assert.match(result.warning, /malformed JSON-like string/);
+    assert.equal(result.content, ['一', '她说："回来。"', '三也留下', '四'].join('\n'));
+
+    const multi = applyTextEdits(content, '[{"startLine":2,"endLine":2,"newString":"二："改""},{"insertAtLine":4,"newString":"四之前"}]');
+    assert.equal(multi.ok, true);
+    assert.equal(multi.content, ['一', '二："改"', '三', '四之前', '四'].join('\n'));
+});
+
 test('Shared applyTextEdits inserts text before, inside, and after line-numbered content', () => {
     const content = ['一', '二', '三'].join('\n');
     const result = applyTextEdits(content, [

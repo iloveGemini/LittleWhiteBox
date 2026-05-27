@@ -183,6 +183,90 @@ function buildEditFailure(error = '', message = '', suggestion = '', extra = {})
     return buildFailure(error, message, suggestion ? { suggestion, ...extra } : extra);
 }
 
+const EDIT_ITEM_KEYS = new Set(['oldString', 'newString', 'startLine', 'endLine', 'insertAtLine', 'replaceAll']);
+
+function stripLooseValueQuotes(value = '') {
+    let text = String(value ?? '').trim();
+    if (text.endsWith(',')) text = text.slice(0, -1).trimEnd();
+    if (text.startsWith('"')) text = text.slice(1);
+    if (text.endsWith('"')) text = text.slice(0, -1);
+    return text
+        .replace(/\\r/g, '\r')
+        .replace(/\\n/g, '\n')
+        .replace(/\\t/g, '\t')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\');
+}
+
+function parseLooseEditItem(itemText = '') {
+    const source = String(itemText || '').trim().replace(/^\{/, '').replace(/\}$/, '');
+    const matches = [...source.matchAll(/"?([A-Za-z][A-Za-z0-9_]*)"?\s*:/g)]
+        .filter((match) => EDIT_ITEM_KEYS.has(match[1]));
+    if (!matches.length) return null;
+
+    const item = {};
+    matches.forEach((match, index) => {
+        const key = match[1];
+        const valueStart = match.index + match[0].length;
+        const nextMatch = matches[index + 1];
+        let valueEnd = nextMatch ? nextMatch.index : source.length;
+        if (nextMatch) {
+            const commaBeforeNextKey = source.lastIndexOf(',', nextMatch.index);
+            if (commaBeforeNextKey >= valueStart) valueEnd = commaBeforeNextKey;
+        }
+        const rawValue = source.slice(valueStart, valueEnd).trim();
+        if (key === 'startLine' || key === 'endLine' || key === 'insertAtLine') {
+            const numberMatch = rawValue.match(/-?\d+/);
+            if (numberMatch) item[key] = Number(numberMatch[0]);
+            return;
+        }
+        if (key === 'replaceAll') {
+            item[key] = /^true\b/i.test(rawValue);
+            return;
+        }
+        item[key] = stripLooseValueQuotes(rawValue);
+    });
+
+    const hasMode = hasOldStringMode(item) || hasLineRange(item) || hasInsertLine(item);
+    return hasMode && Object.hasOwn(item, 'newString') ? item : null;
+}
+
+function isRecoverableEditItem(item) {
+    return item
+        && typeof item === 'object'
+        && !Array.isArray(item)
+        && Object.hasOwn(item, 'newString')
+        && (hasOldStringMode(item) || hasLineRange(item) || hasInsertLine(item));
+}
+
+function splitLooseEditItems(raw = '') {
+    const text = String(raw || '').trim();
+    if (!text.startsWith('[') || !text.endsWith(']')) return [];
+    const body = text.slice(1, -1).trim();
+    if (!body) return [];
+    return body
+        .split(/\}\s*,\s*\{(?=\s*"?(?:oldString|newString|startLine|endLine|insertAtLine|replaceAll)"?\s*:)/)
+        .map((chunk, index, list) => {
+            const prefix = index === 0 && chunk.trim().startsWith('{') ? '' : '{';
+            const suffix = index === list.length - 1 && chunk.trim().endsWith('}') ? '' : '}';
+            return `${prefix}${chunk}${suffix}`;
+        });
+}
+
+function parseLooseEditsString(raw = '') {
+    const chunks = splitLooseEditItems(raw);
+    if (!chunks.length) return null;
+    const edits = chunks.map((chunk) => {
+        try {
+            const parsed = JSON.parse(chunk);
+            return isRecoverableEditItem(parsed) ? parsed : null;
+        } catch {
+            return parseLooseEditItem(chunk);
+        }
+    });
+    return edits.every((item) => item && typeof item === 'object') ? edits : null;
+}
+
 function hasActiveModeField(edit = {}, key = '') {
     if (!Object.hasOwn(edit, key)) return false;
     const value = edit[key];
@@ -628,6 +712,15 @@ function normalizeEditsInput(edits) {
                 suggestion: 'Pass edits directly as an array. Correct: "edits":[{"startLine":10,"endLine":50,"newString":"..."}]. Wrong: "edits":"[{\\"startLine\\":10,...}]".',
             };
         } catch (error) {
+            const looseParsed = parseLooseEditsString(raw);
+            if (looseParsed) {
+                return {
+                    ok: true,
+                    edits: looseParsed,
+                    parsedFromString: true,
+                    warning: 'edits was provided as a malformed JSON-like string and was repaired for compatibility. Pass edits as an array value, not a quoted string.',
+                };
+            }
             return {
                 ok: false,
                 error: 'invalid_edits_json_string',

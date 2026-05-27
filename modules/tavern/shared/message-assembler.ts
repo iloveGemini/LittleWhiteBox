@@ -128,6 +128,7 @@ export interface XbTavernPresetSection {
     id?: string;
     label?: string;
     locked?: boolean;
+    enabled?: boolean;
     role?: XbTavernRole | XBTavernPromptRole | number | string;
     content?: string;
     placement?: XbTavernPresetPlacement;
@@ -208,6 +209,10 @@ export interface XbTavernWorldEntryCandidate {
     depth: number;
     status: string;
     activationReason: string;
+    budgetUsedBefore?: number;
+    budgetRemainingBefore?: number;
+    budgetShortfall?: number;
+    insertionTarget: string;
 }
 
 export interface XbTavernMessageLayer {
@@ -215,6 +220,7 @@ export interface XbTavernMessageLayer {
     role: XbTavernRole;
     layer: string;
     label: string;
+    sourceId?: string;
     chars: number;
     tokenEstimate: number;
 }
@@ -227,9 +233,19 @@ export interface XbTavernMessageBuildResult {
     outlets: Record<string, string>;
     meta: {
         scanText: string;
+        scanTextChars: number;
         historyMode: 'raw' | 'squash';
         squashedHistory: boolean;
         rawMessagesJson: string;
+        worldBudget: {
+            enabled: boolean;
+            limit: number;
+            used: number;
+            remaining: number;
+            activatedChars: number;
+            skippedChars: number;
+        };
+        worldPositionCounts: Record<string, number>;
     };
 }
 
@@ -279,6 +295,7 @@ interface NormalizedPresetSection {
     id?: string;
     label?: string;
     locked: boolean;
+    enabled: boolean;
     role: XbTavernRole;
     content: string;
     placement: XbTavernPresetPlacement;
@@ -324,6 +341,7 @@ interface XbTavernMessageUnit {
     message: XbTavernMessage | null;
     layer: string;
     label: string;
+    sourceId?: string;
 }
 
 function makeMessageUnit(
@@ -332,11 +350,13 @@ function makeMessageUnit(
     layer = 'unknown',
     label = '',
     extra: Partial<XbTavernMessage> = {},
+    sourceId = '',
 ): XbTavernMessageUnit {
     return {
         message: makeMessage(role, content, extra),
         layer,
         label: label || layer,
+        sourceId: normalizeText(sourceId),
     };
 }
 
@@ -353,6 +373,7 @@ function compactMessageUnits(units: XbTavernMessageUnit[] = []): { messages: XbT
             role: unit.message.role,
             layer: unit.layer,
             label: unit.label,
+            sourceId: unit.sourceId || undefined,
             chars,
             tokenEstimate: Math.max(1, Math.ceil(chars / 4)),
         });
@@ -530,19 +551,63 @@ function sortWorldEntries(left: ActivatedWorldEntry, right: ActivatedWorldEntry)
     return right.order - left.order || left.activationKey.localeCompare(right.activationKey, 'en');
 }
 
-function applyWorldBudget(entries: ActivatedWorldEntry[], settings: XbTavernWorldSettings): ActivatedWorldEntry[] {
+function getWorldBudgetLimit(settings: XbTavernWorldSettings): number {
     const budget = Number(settings.budgetChars);
-    if (!Number.isFinite(budget) || budget <= 0) {return entries;}
+    return Number.isFinite(budget) && budget > 0 ? budget : 0;
+}
+
+function buildWorldBudgetDebug(sortedEntries: ActivatedWorldEntry[] = [], settings: XbTavernWorldSettings = {}): {
+    includedKeys: Set<string>;
+    byKey: Map<string, Pick<XbTavernWorldEntryCandidate, 'budgetUsedBefore' | 'budgetRemainingBefore' | 'budgetShortfall'>>;
+    enabled: boolean;
+    limit: number;
+    used: number;
+    remaining: number;
+    activatedChars: number;
+    skippedChars: number;
+} {
+    const limit = getWorldBudgetLimit(settings);
+    const enabled = limit > 0;
+    const includedKeys = new Set<string>();
+    const byKey = new Map<string, Pick<XbTavernWorldEntryCandidate, 'budgetUsedBefore' | 'budgetRemainingBefore' | 'budgetShortfall'>>();
     const result: ActivatedWorldEntry[] = [];
     let used = 0;
-    entries.forEach((entry) => {
+    let skippedChars = 0;
+
+    sortedEntries.forEach((entry) => {
         const size = entry.content.length;
         if (!size) {return;}
-        if (used + size > budget) {return;}
+        const remaining = enabled ? Math.max(0, limit - used) : Number.POSITIVE_INFINITY;
+        byKey.set(entry.activationKey, {
+            budgetUsedBefore: used,
+            budgetRemainingBefore: enabled ? remaining : undefined,
+            budgetShortfall: enabled && used + size > limit ? used + size - limit : undefined,
+        });
+        if (enabled && used + size > limit) {
+            skippedChars += size;
+            return;
+        }
         result.push(entry);
+        includedKeys.add(entry.activationKey);
         used += size;
     });
-    return result;
+
+    return {
+        includedKeys,
+        byKey,
+        enabled,
+        limit,
+        used,
+        remaining: enabled ? Math.max(0, limit - used) : 0,
+        activatedChars: used,
+        skippedChars,
+    };
+}
+
+function applyWorldBudget(entries: ActivatedWorldEntry[], settings: XbTavernWorldSettings): ActivatedWorldEntry[] {
+    const debug = buildWorldBudgetDebug(entries, settings);
+    if (!debug.enabled) {return entries;}
+    return entries.filter((entry) => debug.includedKeys.has(entry.activationKey));
 }
 
 export function activateWorldEntries(
@@ -584,17 +649,20 @@ function buildWorldEntryCandidates(
     entries: XbTavernWorldEntry[] = [],
     activatedEntries: ActivatedWorldEntry[] = [],
     settings: XbTavernWorldSettings = {},
+    budgetDebug = buildWorldBudgetDebug(activatedEntries, settings),
 ): XbTavernWorldEntryCandidate[] {
     const activatedByKey = new Map(activatedEntries.map((entry) => [entry.activationKey, entry]));
+    const budgetIncluded = budgetDebug.includedKeys;
     return (Array.isArray(entries) ? entries : []).map((entry, index) => {
         const normalized = normalizeEntry(entry, index);
         const activated = activatedByKey.get(normalized.activationKey);
+        const budgetInfo = budgetDebug.byKey.get(normalized.activationKey) || {};
         const explanation = activated
             ? { status: 'activated', activationReason: activated.activationReason }
             : explainEntryStatus(normalized, settings);
         const status = activated
-            ? 'activated'
-            : (explanation.status === 'activated' ? 'budget_skipped' : explanation.status);
+            ? (budgetDebug.enabled && !budgetIncluded.has(normalized.activationKey) ? 'budget_skipped' : 'activated')
+            : (explanation.status === 'activated' ? 'probability_failed' : explanation.status);
         return {
             uid: normalized.uid,
             activationKey: normalized.activationKey,
@@ -612,8 +680,33 @@ function buildWorldEntryCandidates(
             depth: normalized.depth,
             status,
             activationReason: activated?.activationReason || explanation.activationReason,
+            insertionTarget: insertionTargetForEntry(normalized),
+            ...budgetInfo,
         };
     });
+}
+
+function insertionTargetForEntry(entry: Pick<ActivatedWorldEntry, 'position' | 'depth' | 'outletName' | 'outlet'>): string {
+    switch (entry.position) {
+        case XBTavernWorldPosition.before:
+            return 'before character card';
+        case XBTavernWorldPosition.after:
+            return 'after character card';
+        case XBTavernWorldPosition.atDepth:
+            return `history depth ${Math.max(0, Number(entry.depth) || 0)}`;
+        case XBTavernWorldPosition.ANTop:
+            return 'author note top';
+        case XBTavernWorldPosition.ANBottom:
+            return 'author note bottom';
+        case XBTavernWorldPosition.EMTop:
+            return 'example messages top';
+        case XBTavernWorldPosition.EMBottom:
+            return 'example messages bottom';
+        case XBTavernWorldPosition.outlet:
+            return `outlet:${normalizeText(entry.outletName || entry.outlet || 'default')}`;
+        default:
+            return describeWorldPosition(entry.position);
+    }
 }
 
 interface WorldBuckets {
@@ -676,6 +769,15 @@ function groupWorldEntries(entries: ActivatedWorldEntry[] = []): WorldBuckets {
     return buckets;
 }
 
+function countWorldPositions(entries: ActivatedWorldEntry[] = []): Record<string, number> {
+    const counts: Record<string, number> = {};
+    entries.forEach((entry) => {
+        const target = insertionTargetForEntry(entry);
+        counts[target] = (counts[target] || 0) + 1;
+    });
+    return counts;
+}
+
 function renderEntryBlock(title: string, entries: ActivatedWorldEntry[] = []): string {
     const content = entries.map((entry) => entry.content).filter(Boolean).join('\n\n');
     return content ? `<${title}>\n${content}\n</${title}>` : '';
@@ -709,10 +811,11 @@ function normalizePresetSections(preset: XbTavernPreset = {}): NormalizedPresetS
         id: normalizeText(section.id),
         label: normalizeText(section.label),
         locked: section.locked !== false,
+        enabled: section.enabled !== false,
         role: normalizeRole(section.role, 'system'),
         content: normalizeText(section.content),
         placement: PLACEMENT_ORDER.includes(section.placement as never) ? section.placement! : 'beforeHistory',
-    })).filter((section) => section.content) as NormalizedPresetSection[];
+    })).filter((section) => section.enabled && section.content) as NormalizedPresetSection[];
 
     [
         ['stylePrompt', 'beforeHistory', 'system', 'Style prompt'],
@@ -725,6 +828,7 @@ function normalizePresetSections(preset: XbTavernPreset = {}): NormalizedPresetS
                 id: normalizeText(key),
                 label: normalizeText(key),
                 locked: true,
+                enabled: true,
                 role: normalizeRole(role),
                 content,
                 placement: placement as NormalizedPresetSection['placement'],
@@ -748,6 +852,7 @@ function presetSectionUnits(
         message: makeMessage(section.role, section.content),
         layer,
         label: section.label || `preset ${placementLabel} ${index + 1}`,
+        sourceId: section.id || undefined,
     }));
 }
 
@@ -880,10 +985,13 @@ export function buildXbTavernMessages(
         entryStates: runtimeState.entryStates ?? runtimeState.worldSettings?.entryStates,
     };
     const worldEntries = collectContextWorldEntries(context);
-    const activatedWorldEntries = activateWorldEntries(worldEntries, {
+    const activatedBeforeBudget = activateWorldEntries(worldEntries, {
         ...worldSettings,
+        budgetChars: 0,
     });
-    const worldEntryCandidates = buildWorldEntryCandidates(worldEntries, activatedWorldEntries, worldSettings);
+    const budgetDebug = buildWorldBudgetDebug(activatedBeforeBudget, worldSettings);
+    const worldEntryCandidates = buildWorldEntryCandidates(worldEntries, activatedBeforeBudget, worldSettings, budgetDebug);
+    const activatedWorldEntries = activatedBeforeBudget.filter((entry) => !budgetDebug.enabled || budgetDebug.includedKeys.has(entry.activationKey));
     const worldBuckets = groupWorldEntries(activatedWorldEntries);
     const historyMessages = buildHistoryMessages(history, {
         mode: historyMode,
@@ -911,8 +1019,8 @@ export function buildXbTavernMessages(
         label: message.role === 'user' && message.content === currentUserMessage ? 'current user message' : `history ${index + 1}`,
     }));
     const compacted = compactMessageUnits([
-        makeMessageUnit('system', preset.systemPrompt, 'lwb-system', 'LittleWhiteBox top system'),
-        makeMessageUnit('system', preset.toolPrompt, 'lwb-tool', 'LittleWhiteBox tool rules'),
+        makeMessageUnit('system', preset.systemPrompt, 'lwb-system', 'LittleWhiteBox top system', {}, 'lwb-system'),
+        makeMessageUnit('system', preset.toolPrompt, 'lwb-tool', 'LittleWhiteBox tool rules', {}, 'lwb-tool'),
         ...topSections,
         makeMessageUnit('system', renderEntryBlock('world_info_before_character', worldBuckets.before), 'world-before', 'world info before character'),
         ...beforeCharacterSections,
@@ -941,9 +1049,19 @@ export function buildXbTavernMessages(
         ])),
         meta: {
             scanText,
+            scanTextChars: scanText.length,
             historyMode,
             squashedHistory: historyMode !== 'raw',
             rawMessagesJson: JSON.stringify(messages, null, 2),
+            worldBudget: {
+                enabled: budgetDebug.enabled,
+                limit: budgetDebug.limit,
+                used: budgetDebug.used,
+                remaining: budgetDebug.remaining,
+                activatedChars: budgetDebug.activatedChars,
+                skippedChars: budgetDebug.skippedChars,
+            },
+            worldPositionCounts: countWorldPositions(activatedWorldEntries),
         },
     };
 }

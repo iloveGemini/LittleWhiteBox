@@ -56,7 +56,10 @@ const preset = ref(createDefaultXbTavernPreset());
 const userPresets = ref<TavernPresetRecord[]>([]);
 const activePresetId = ref(DEFAULT_XB_TAVERN_PRESET_ID);
 const presetStatus = ref('');
+const savedPresetJson = ref('');
+const selectedPresetSourceId = ref('');
 const presetIsBuiltIn = computed(() => activePresetId.value === DEFAULT_XB_TAVERN_PRESET_ID);
+const presetDirty = computed(() => !presetIsBuiltIn.value && snapshotPreset(preset.value) !== savedPresetJson.value);
 
 const effectiveContext = computed<XbTavernContext>(() => ({
     ...context.value,
@@ -123,13 +126,25 @@ const messageRows = computed(() => messagePreview.value.map((message, index) => 
         message,
         layer: layer?.layer || 'unknown',
         label: layer?.label || 'unknown',
+        sourceId: layer?.sourceId || '',
         chars: layer?.chars || message.content.length,
         tokenEstimate: layer?.tokenEstimate || Math.max(1, Math.ceil(message.content.length / 4)),
     };
 }));
 
 const activeCandidateKeys = computed(() => new Set(buildResult.value.activatedWorldEntries.map((entry) => entry.activationKey)));
+const activatedOrder = computed(() => new Map(buildResult.value.activatedWorldEntries.map((entry, index) => [entry.activationKey, index])));
 const candidateRows = computed(() => buildResult.value.worldEntryCandidates);
+const scanTextPreview = computed(() => buildResult.value.meta.scanText || '');
+const worldBudget = computed(() => buildResult.value.meta.worldBudget);
+const worldPositionRows = computed(() => Object.entries(buildResult.value.meta.worldPositionCounts || {})
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], 'zh-Hans-CN')));
+const activatedCandidateRows = computed(() => candidateRows.value
+    .filter((entry) => entry.status === 'activated')
+    .sort((left, right) => (activatedOrder.value.get(left.activationKey) ?? 999999) - (activatedOrder.value.get(right.activationKey) ?? 999999)));
+const skippedCandidateRows = computed(() => candidateRows.value
+    .filter((entry) => entry.status !== 'activated')
+    .sort((left, right) => right.order - left.order || left.activationKey.localeCompare(right.activationKey, 'zh-Hans-CN')));
 const placementLabels: Record<string, string> = {
     top: '顶部预设',
     beforeCharacter: '角色卡之前',
@@ -147,6 +162,7 @@ const presetRows = computed(() => {
             previewPlacement: '顶层固定',
             role: 'system',
             locked: true,
+            enabled: true,
             content: preset.value.systemPrompt,
         },
         {
@@ -155,6 +171,7 @@ const presetRows = computed(() => {
             previewPlacement: '顶层固定',
             role: 'system',
             locked: true,
+            enabled: true,
             content: preset.value.toolPrompt,
         },
         ...sections.map((section, index) => ({
@@ -162,6 +179,7 @@ const presetRows = computed(() => {
             previewId: section.id || `preset-section-${index}`,
             previewLabel: section.label || section.id || `预设段 ${index + 1}`,
             previewPlacement: placementLabels[section.placement || 'beforeHistory'] || section.placement || '历史之前',
+            enabled: section.enabled !== false,
         })),
     ];
     return rows
@@ -170,8 +188,12 @@ const presetRows = computed(() => {
             content: String(row.content || ''),
             chars: String(row.content || '').length,
         }))
-        .filter((row) => row.content);
+        .filter((row) => row.content || row.enabled === false);
 });
+
+function snapshotPreset(value = preset.value) {
+    return JSON.stringify(value || {});
+}
 
 async function refreshPresets() {
     userPresets.value = await listUserTavernPresets();
@@ -179,6 +201,7 @@ async function refreshPresets() {
     const loaded = await loadActiveTavernPreset();
     preset.value = loaded;
     activePresetId.value = loaded.id || activeId || DEFAULT_XB_TAVERN_PRESET_ID;
+    savedPresetJson.value = snapshotPreset(loaded);
     if (activeId !== activePresetId.value) {
         await setActiveTavernPresetId(activePresetId.value);
     }
@@ -196,6 +219,7 @@ async function selectPreset(presetId: string) {
     await setActiveTavernPresetId(presetId);
     activePresetId.value = presetId || DEFAULT_XB_TAVERN_PRESET_ID;
     preset.value = await loadActiveTavernPreset();
+    savedPresetJson.value = snapshotPreset(preset.value);
     presetStatus.value = presetIsBuiltIn.value ? '当前使用内置只读预设。' : '已切换到用户预设。';
 }
 
@@ -208,6 +232,7 @@ async function saveCurrentPreset() {
     await setActiveTavernPresetId(record.id);
     activePresetId.value = record.id;
     preset.value = record.preset;
+    savedPresetJson.value = snapshotPreset(record.preset);
     await refreshPresets();
     presetStatus.value = '预设已保存。';
 }
@@ -216,6 +241,7 @@ async function resetToBuiltInPreset() {
     await setActiveTavernPresetId(DEFAULT_XB_TAVERN_PRESET_ID);
     activePresetId.value = DEFAULT_XB_TAVERN_PRESET_ID;
     preset.value = createDefaultXbTavernPreset();
+    savedPresetJson.value = snapshotPreset(preset.value);
     presetStatus.value = '已切回内置默认预设。';
 }
 
@@ -243,14 +269,30 @@ function updatePresetMeta(patch: Partial<typeof preset.value>) {
 function addPresetSection() {
     if (presetIsBuiltIn.value) {return;}
     const sections = [...(preset.value.sections || [])];
+    const id = `custom-section-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     sections.push({
-        id: `custom-section-${Date.now().toString(36)}`,
+        id,
         label: '自定义规则',
         locked: false,
+        enabled: true,
         placement: 'beforeHistory',
         role: 'system',
         content: '',
     });
+    preset.value = {
+        ...preset.value,
+        sections,
+    };
+    selectedPresetSourceId.value = id;
+}
+
+function movePresetSection(index: number, direction: -1 | 1) {
+    if (presetIsBuiltIn.value) {return;}
+    const sections = [...(preset.value.sections || [])];
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= sections.length) {return;}
+    const [section] = sections.splice(index, 1);
+    sections.splice(nextIndex, 0, section);
     preset.value = {
         ...preset.value,
         sections,
@@ -260,11 +302,22 @@ function addPresetSection() {
 function removePresetSection(index: number) {
     if (presetIsBuiltIn.value) {return;}
     const sections = [...(preset.value.sections || [])];
+    const removedId = sections[index]?.id || '';
     sections.splice(index, 1);
     preset.value = {
         ...preset.value,
         sections,
     };
+    if (selectedPresetSourceId.value === removedId) {
+        selectedPresetSourceId.value = '';
+    }
+}
+
+async function discardPresetChanges() {
+    if (presetIsBuiltIn.value || !presetDirty.value) {return;}
+    preset.value = await loadActiveTavernPreset();
+    savedPresetJson.value = snapshotPreset(preset.value);
+    presetStatus.value = '已放弃未保存改动。';
 }
 
 function postToHost(type: string, payload: Record<string, unknown> = {}) {
@@ -349,8 +402,20 @@ function statusLabel(status = '') {
         suppressed_by_decorator: '装饰器抑制',
         cooldown: '冷却中',
         delay: '延迟中',
+        probability_failed: '概率未通过',
     };
     return labels[status] || status || '未知';
+}
+
+function candidateReason(entry: { status?: string; activationReason?: string; budgetShortfall?: number; budgetRemainingBefore?: number }) {
+    if (entry.status === 'activated') {
+        return entry.activationReason ? `命中：${entry.activationReason}` : '已激活';
+    }
+    if (entry.status === 'budget_skipped') {
+        const shortfall = Number(entry.budgetShortfall) || 0;
+        return shortfall > 0 ? `预算不足，差 ${shortfall} 字` : '预算跳过';
+    }
+    return statusLabel(entry.status || '');
 }
 
 async function runOnce() {
@@ -547,7 +612,13 @@ onUnmounted(() => {
                 {{ preset.name }} · {{ preset.version }} · {{ preset.id }}
               </p>
             </div>
-            <span class="pill">{{ presetRows.length }} 段</span>
+            <div class="panel-pills">
+              <span
+                v-if="presetDirty"
+                class="pill warning"
+              >未保存</span>
+              <span class="pill">{{ presetRows.length }} 段</span>
+            </div>
           </div>
           <div class="preset-toolbar">
             <select
@@ -577,6 +648,13 @@ onUnmounted(() => {
               @click="saveCurrentPreset"
             >
               保存预设
+            </button>
+            <button
+              type="button"
+              :disabled="!presetDirty"
+              @click="discardPresetChanges"
+            >
+              放弃改动
             </button>
             <button
               type="button"
@@ -646,7 +724,42 @@ onUnmounted(() => {
               v-for="(section, index) in preset.sections || []"
               :key="section.id || index"
               class="preset-edit-card"
+              :class="{
+                disabled: section.enabled === false,
+                selected: selectedPresetSourceId === section.id,
+              }"
+              @click="selectedPresetSourceId = section.id || ''"
             >
+              <div class="preset-card-head">
+                <label class="inline-check">
+                  <input
+                    type="checkbox"
+                    :checked="section.enabled !== false"
+                    :disabled="presetIsBuiltIn"
+                    @change="updatePresetSection(index, { enabled: ($event.target as HTMLInputElement).checked })"
+                  >
+                  启用
+                </label>
+                <span class="muted compact">
+                  {{ section.locked === false ? '可变段' : '锁定段' }}
+                </span>
+                <div class="row-actions">
+                  <button
+                    type="button"
+                    :disabled="presetIsBuiltIn || index === 0"
+                    @click.stop="movePresetSection(index, -1)"
+                  >
+                    上移
+                  </button>
+                  <button
+                    type="button"
+                    :disabled="presetIsBuiltIn || index === (preset.sections || []).length - 1"
+                    @click.stop="movePresetSection(index, 1)"
+                  >
+                    下移
+                  </button>
+                </div>
+              </div>
               <div class="preset-edit-grid">
                 <label>
                   标签
@@ -704,7 +817,7 @@ onUnmounted(() => {
                 <button
                   type="button"
                   :disabled="presetIsBuiltIn"
-                  @click="removePresetSection(index)"
+                  @click.stop="removePresetSection(index)"
                 >
                   删除
                 </button>
@@ -722,10 +835,15 @@ onUnmounted(() => {
               v-for="row in presetRows"
               :key="row.previewId"
               class="preset-section"
+              :class="{
+                disabled: row.enabled === false,
+                selected: selectedPresetSourceId === row.previewId,
+              }"
+              @click="selectedPresetSourceId = row.previewId"
             >
               <summary>
                 <span>{{ row.previewPlacement }} · {{ row.role || 'system' }} · {{ row.previewLabel }}</span>
-                <small>{{ row.locked === false ? '可变' : '锁定' }} · {{ row.chars }} 字</small>
+                <small>{{ row.enabled === false ? '停用' : '启用' }} · {{ row.locked === false ? '可变' : '锁定' }} · {{ row.chars }} 字</small>
               </summary>
               <pre>{{ row.content }}</pre>
             </details>
@@ -735,11 +853,32 @@ onUnmounted(() => {
         <div class="panel">
           <div class="panel-head">
             <h2>世界书激活解释</h2>
-            <span class="pill">{{ activatedCount }} / {{ worldEntryCount }}</span>
+            <div class="panel-pills">
+              <span class="pill">{{ activatedCount }} / {{ worldEntryCount }}</span>
+              <span class="pill">{{ worldBudget.enabled ? `${worldBudget.used}/${worldBudget.limit} 字` : '无预算限制' }}</span>
+            </div>
+          </div>
+          <div class="world-debug-grid">
+            <details class="debug-box">
+              <summary>扫描文本 · {{ buildResult.meta.scanTextChars }} 字</summary>
+              <pre>{{ shortText(scanTextPreview, 2400) }}</pre>
+            </details>
+            <div class="debug-box">
+              <strong>插入位置</strong>
+              <div class="position-list">
+                <span
+                  v-for="row in worldPositionRows"
+                  :key="row[0]"
+                >
+                  {{ row[0] }} · {{ row[1] }}
+                </span>
+                <span v-if="!worldPositionRows.length">无已激活条目</span>
+              </div>
+            </div>
           </div>
           <div class="world-list">
             <article
-              v-for="entry in candidateRows"
+              v-for="entry in [...activatedCandidateRows, ...skippedCandidateRows]"
               :key="entry.activationKey"
               class="world-entry"
               :class="{ active: activeCandidateKeys.has(entry.activationKey) }"
@@ -749,16 +888,16 @@ onUnmounted(() => {
                 <span>{{ statusLabel(entry.status) }}</span>
               </div>
               <small>
-                {{ entry.sourceWorldBook || '未归属' }} · {{ entry.positionLabel }} · order {{ entry.order }} · depth {{ entry.depth }} · {{ entry.contentChars }} 字
+                {{ entry.sourceWorldBook || '未归属' }} · {{ entry.insertionTarget }} · order {{ entry.order }} · depth {{ entry.depth }} · {{ entry.contentChars }} 字
               </small>
               <p class="entry-meta">
                 key: {{ entry.key.join(', ') || '无' }} / secondary: {{ entry.keysecondary.join(', ') || '无' }}
               </p>
-              <p
-                v-if="entry.activationReason"
-                class="entry-meta"
-              >
-                reason: {{ entry.activationReason }}
+              <p class="entry-meta">
+                {{ candidateReason(entry) }}
+                <template v-if="entry.status === 'budget_skipped' && typeof entry.budgetRemainingBefore === 'number'">
+                  · 当时剩余 {{ entry.budgetRemainingBefore }} 字
+                </template>
               </p>
               <p>{{ shortText(entry.content, 360) }}</p>
             </article>
@@ -793,6 +932,7 @@ onUnmounted(() => {
               v-for="row in messageRows"
               :key="`${row.index}-${row.message.role}-${row.layer}`"
               class="message"
+              :class="{ linked: row.sourceId && selectedPresetSourceId === row.sourceId }"
               open
             >
               <summary>

@@ -76,8 +76,41 @@ test('xb tavern preset labels are debug metadata only', () => {
     });
 
     assert.equal(result.messageLayers.some((layer) => layer.label === 'Debug Label'), true);
+    assert.equal(result.messageLayers.some((layer) => layer.sourceId === 'debug-label-test'), true);
     assert.equal(result.messages.some((message) => message.content.includes('Debug Label')), false);
     assert.deepEqual(JSON.parse(result.meta.rawMessagesJson), result.messages);
+});
+
+test('xb tavern disabled preset sections stay out of model messages', () => {
+    const result = buildXbTavernMessages({}, {
+        systemPrompt: 'Top',
+        toolPrompt: 'Tools',
+        sections: [
+            {
+                id: 'enabled-section',
+                label: 'Enabled',
+                enabled: true,
+                placement: 'beforeHistory',
+                role: 'system',
+                content: 'Enabled content.',
+            },
+            {
+                id: 'disabled-section',
+                label: 'Disabled',
+                enabled: false,
+                placement: 'beforeHistory',
+                role: 'system',
+                content: 'Disabled content.',
+            },
+        ],
+    }, {
+        currentUserMessage: 'Hello.',
+    });
+
+    assert.equal(result.messages.some((message) => message.content === 'Enabled content.'), true);
+    assert.equal(result.messages.some((message) => message.content === 'Disabled content.'), false);
+    assert.equal(result.messageLayers.some((layer) => layer.sourceId === 'enabled-section'), true);
+    assert.equal(result.messageLayers.some((layer) => layer.sourceId === 'disabled-section'), false);
 });
 
 test('xb tavern world activation supports constant, keyword, and selective logic', () => {
@@ -216,6 +249,84 @@ test('xb tavern assembler exposes world candidate explanations', () => {
     assert.equal(hit?.positionLabel, 'after character');
     assert.equal(miss?.status, 'not_matched');
     assert.equal(result.activatedWorldEntries[0].sourceWorldBook, 'DebugWorld');
+});
+
+test('xb tavern assembler exposes world budget and insertion debug metadata', () => {
+    const result = buildXbTavernMessages({
+        worldBooks: [{
+            name: 'BudgetWorld',
+            entries: [
+                {
+                    uid: 'large',
+                    comment: 'large lore',
+                    content: 'Large lore costs many chars.',
+                    constant: true,
+                    order: 20,
+                    position: XBTavernWorldPosition.before,
+                },
+                {
+                    uid: 'small',
+                    comment: 'small lore',
+                    content: 'Small.',
+                    constant: true,
+                    order: 10,
+                    position: XBTavernWorldPosition.atDepth,
+                    depth: 1,
+                },
+            ],
+        }],
+    }, {
+        systemPrompt: 'Top',
+        toolPrompt: 'Tools',
+    }, {
+        currentUserMessage: 'Hello.',
+        worldSettings: {
+            budgetChars: 12,
+        },
+    });
+
+    const large = result.worldEntryCandidates.find((entry) => entry.uid === 'large');
+    const small = result.worldEntryCandidates.find((entry) => entry.uid === 'small');
+    assert.equal(large?.status, 'budget_skipped');
+    assert.equal(large?.budgetShortfall, 'Large lore costs many chars.'.length - 12);
+    assert.equal(large?.insertionTarget, 'before character card');
+    assert.equal(small?.status, 'activated');
+    assert.equal(small?.insertionTarget, 'history depth 1');
+    assert.equal(result.meta.worldBudget.enabled, true);
+    assert.equal(result.meta.worldBudget.limit, 12);
+    assert.equal(result.meta.worldBudget.used, 'Small.'.length);
+    assert.equal(result.meta.worldPositionCounts['history depth 1'], 1);
+    assert.equal(result.activatedWorldEntries.map((entry) => entry.uid).includes('large'), false);
+});
+
+test('xb tavern assembler distinguishes probability failures from budget skips', () => {
+    const result = buildXbTavernMessages({
+        worldBooks: [{
+            name: 'ProbabilityWorld',
+            entries: [
+                {
+                    uid: 'blocked',
+                    comment: 'blocked probability',
+                    content: 'Blocked by probability.',
+                    constant: true,
+                    probability: 0,
+                    order: 10,
+                },
+            ],
+        }],
+    }, {
+        systemPrompt: 'Top',
+        toolPrompt: 'Tools',
+    }, {
+        currentUserMessage: 'Hello.',
+        worldSettings: {
+            budgetChars: 100,
+        },
+    });
+
+    assert.equal(result.activatedWorldEntries.length, 0);
+    assert.equal(result.worldEntryCandidates[0]?.status, 'probability_failed');
+    assert.equal(result.worldEntryCandidates[0]?.activationReason, 'constant');
 });
 
 test('xb tavern assembler does not double count flattened world entries when world books exist', () => {
