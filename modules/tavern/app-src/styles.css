@@ -126,6 +126,80 @@ textarea:disabled {
     font-weight: 650;
 }
 
+.workspace-panel {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    border-color: rgba(230, 190, 125, 0.18);
+    background:
+        linear-gradient(180deg, rgba(54, 47, 32, 0.94), rgba(28, 25, 20, 0.92)),
+        rgba(35, 32, 27, 0.9);
+}
+
+.workspace-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.workspace-tab {
+    display: grid;
+    gap: 4px;
+    min-height: 76px;
+    align-content: start;
+    text-align: left;
+    border: 1px solid rgba(231, 225, 214, 0.12);
+    border-radius: 10px;
+    background: rgba(20, 18, 15, 0.62);
+    padding: 12px;
+}
+
+.workspace-tab strong {
+    color: #efe4d4;
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.workspace-tab small {
+    color: #a99f90;
+    line-height: 1.4;
+}
+
+.workspace-tab.active {
+    border-color: rgba(230, 190, 125, 0.58);
+    background: linear-gradient(180deg, rgba(64, 50, 28, 0.92), rgba(34, 27, 18, 0.9));
+    box-shadow: 0 0 0 1px rgba(230, 190, 125, 0.12) inset;
+}
+
+.overview-panel {
+    border-color: rgba(231, 225, 214, 0.16);
+}
+
+.overview-steps {
+    display: grid;
+    gap: 10px;
+}
+
+.overview-steps button {
+    display: grid;
+    grid-template-columns: 160px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    text-align: left;
+    border-color: rgba(231, 225, 214, 0.12);
+    background: rgba(20, 18, 15, 0.58);
+}
+
+.overview-steps strong {
+    color: #efe4d4;
+}
+
+.overview-steps span {
+    min-width: 0;
+    color: #aaa090;
+    overflow-wrap: anywhere;
+}
+
 .panel-head {
     display: flex;
     align-items: center;
@@ -636,6 +710,14 @@ pre {
         grid-template-columns: 1fr;
     }
 
+    .workspace-tabs {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .overview-steps button {
+        grid-template-columns: 1fr;
+    }
+
     .world-debug-grid {
         grid-template-columns: 1fr;
     }
@@ -654,6 +736,10 @@ pre {
     .preset-toolbar,
     .preset-edit-grid {
         grid-template-columns: 1fr;
+    }
+
+    .workspace-tab {
+        min-height: 68px;
     }
 
     .preset-card-head {

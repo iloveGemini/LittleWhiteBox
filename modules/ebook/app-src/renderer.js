@@ -6,6 +6,8 @@ import { formatDraftMetrics, formatTextMetrics } from './text-metrics.js';
 import { estimateTokenCount } from '../../agent-core/runtime/context-tokens.js';
 import { EBOOK_MAX_CONTEXT_TOKENS } from './history-compaction.js';
 import { getMessageWindow } from '../../agent-core/ui/message-windowing.js';
+import { isTavilyConfigured } from '../../agent-core/tavily-search.js';
+import { getEbookToolDefinitions } from '../shared/tool-definitions.js';
 import { buildBookContextPrompt, buildBookTurnContextPrompt, EBOOK_SYSTEM_PROMPT } from './prompts.js';
 
 const STUDIO_FILE_SECTIONS = [
@@ -216,7 +218,7 @@ function formatContextMeterCount(tokens = 0) {
     return `${Math.max(0, Math.round((Number(tokens) || 0) / 1000))}k`;
 }
 
-function estimateConversationContextTokens(state = {}) {
+function estimateConversationContextTokens(state = {}, providerConfig = {}) {
     const contextPrompt = buildBookContextPrompt({
         book: state.book,
         files: state.files,
@@ -231,6 +233,9 @@ function estimateConversationContextTokens(state = {}) {
     lines.push(`[System]\n${EBOOK_SYSTEM_PROMPT}`);
     lines.push(`[Stable context]\n${contextPrompt}`);
     lines.push(`[Turn context]\n${turnContextPrompt}`);
+    lines.push(`[Tools]\n${JSON.stringify(getEbookToolDefinitions({
+        webSearchEnabled: isTavilyConfigured(providerConfig),
+    }))}`);
     (state.messages || []).forEach((message) => {
         if (!message || !['user', 'assistant', 'tool'].includes(message.role)) return;
         const roleLabel = message.role === 'user'
@@ -246,8 +251,8 @@ function estimateConversationContextTokens(state = {}) {
     return estimateTokenCount(lines.join('\n\n'));
 }
 
-function renderConversationContextMeterLabel(state = {}) {
-    const used = estimateConversationContextTokens(state);
+function renderConversationContextMeterLabel(state = {}, providerConfig = {}) {
+    const used = estimateConversationContextTokens(state, providerConfig);
     return `${formatContextMeterCount(used)}/${formatContextMeterCount(EBOOK_MAX_CONTEXT_TOKENS)}`;
 }
 
@@ -1473,7 +1478,7 @@ function renderStudioShell(options = {}) {
                             </div>
                         </div>
                         <div class="xb-agent-toolbar">
-                            <div class="xb-agent-context-meter" title="${escapeHtml(renderConversationContextMeterTitle(state))}">${escapeHtml(renderConversationContextMeterLabel(state))}</div>
+                            <div class="xb-agent-context-meter" title="${escapeHtml(renderConversationContextMeterTitle(state))}">${escapeHtml(renderConversationContextMeterLabel(state, providerConfig))}</div>
                             <button id="xb-agent-clear" type="button" ${state.isBusy || !canClearConversation ? 'disabled' : ''}>清空对话</button>
                             <button id="xb-agent-open-settings" type="button">API配置</button>
                         </div>

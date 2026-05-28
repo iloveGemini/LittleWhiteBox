@@ -43,7 +43,7 @@ const diagnostics = ref<TavernDiagnostics>({});
 const agentConfig = ref<Record<string, unknown>>({});
 const availableCharacters = ref<Array<{ id: string; name: string; avatar?: string }>>([]);
 const selectedCharacterId = ref('');
-const statusText = ref('等待宿主资料');
+const statusText = ref('等待读取资料');
 const currentUserMessage = ref('测试一句角色回复。');
 const historyMode = ref<'raw' | 'squash'>('squash');
 const runtimeText = ref('');
@@ -65,6 +65,16 @@ const presetIsBuiltIn = computed(() => activePresetId.value === DEFAULT_XB_TAVER
 const presetDirty = computed(() => !presetIsBuiltIn.value && snapshotPreset(preset.value) !== savedPresetJson.value);
 const selectedSession = computed(() => sessions.value.find((item) => item.id === selectedSessionId.value) || null);
 const sessionRuntimeState = computed(() => normalizeTavernSessionState(selectedSession.value?.state || {}));
+const activeWorkspace = ref<'overview' | 'snapshot' | 'preset' | 'world' | 'messages' | 'runtime'>('overview');
+const workspaceTabs = [
+    { key: 'overview', label: '总览', hint: '现在选了谁，准备到哪一步' },
+    { key: 'snapshot', label: '资料来源', hint: '这次会用哪些角色和世界资料' },
+    { key: 'preset', label: '说话规则', hint: '小白会怎样约束 AI 扮演' },
+    { key: 'world', label: '世界书命中', hint: '哪些世界书会被带上' },
+    { key: 'messages', label: '发送内容', hint: '真正发给 AI 的内容' },
+    { key: 'runtime', label: '试一句', hint: '用当前配置试跑一轮' },
+] as const;
+const activeWorkspaceItem = computed(() => workspaceTabs.find((item) => item.key === activeWorkspace.value) || workspaceTabs[0]);
 
 const effectiveContext = computed<XbTavernContext>(() => ({
     ...(selectedSession.value?.contextSnapshot || context.value),
@@ -121,8 +131,8 @@ const diagnosticRows = computed(() => {
     const rows = [
         diagnostics.value.message || statusText.value,
         characterName.value ? '' : '当前没有可用角色卡。',
-        (context.value.history || []).length ? '' : '当前资料快照没有聊天历史。',
-        worldBookCount.value ? '' : '当前角色/全局没有可读取的世界书。',
+        (context.value.history || []).length ? '' : '这次准备资料里没有聊天历史。',
+        worldBookCount.value ? '' : '这次准备资料里没有可用世界书。',
         ...(diagnostics.value.worldbookErrors || []).map((item) => `${item.name}: ${item.error}`),
     ];
     return rows.map((item) => String(item || '').trim()).filter(Boolean);
@@ -145,20 +155,20 @@ type MessagePreviewRow = (typeof messageRows.value)[number];
 
 const messageGroups = computed(() => {
     const labels: Record<string, string> = {
-        'lwb-system': '小白顶层 system',
-        'lwb-tool': '小白工具/行为规则',
-        top: '顶部预设',
-        preset: '预设段',
-        'world-before': '世界书 · 角色卡前',
+        'lwb-system': '最高优先级规则',
+        'lwb-tool': '工具和行为边界',
+        top: '开场规则',
+        preset: '补充规则',
+        'world-before': '先放入的世界书',
         'character-card': '角色卡',
-        'world-after': '世界书 · 角色卡后',
+        'world-after': '角色卡后的世界书',
         'world-author-note': '世界书 · 作者备注',
         'world-examples': '世界书 · 示例消息',
-        history: '历史',
-        'current-user/history': '历史/当前用户消息',
-        'current-user': '当前用户消息',
-        'world-depth': '世界书 · 深度插入',
-        'assistant-prefill': '助手预填',
+        history: '会话历史',
+        'current-user/history': '历史和本次输入',
+        'current-user': '本次输入',
+        'world-depth': '插入到历史里的世界书',
+        'assistant-prefill': '回复开头',
     };
     const groups: Array<{ key: string; label: string; rows: MessagePreviewRow[]; chars: number; tokenEstimate: number }> = [];
     messageRows.value.forEach((row) => {
@@ -195,20 +205,20 @@ const skippedCandidateRows = computed(() => candidateRows.value
     .filter((entry) => entry.status !== 'activated')
     .sort((left, right) => right.order - left.order || left.activationKey.localeCompare(right.activationKey, 'zh-Hans-CN')));
 const placementLabels: Record<string, string> = {
-    top: '顶部预设',
-    beforeCharacter: '角色卡之前',
-    afterCharacter: '角色卡之后',
-    beforeHistory: '历史之前',
-    afterHistory: '历史之后',
-    assistantPrefill: '助手预填',
+    top: '最前面',
+    beforeCharacter: '角色卡前',
+    afterCharacter: '角色卡后',
+    beforeHistory: '历史前',
+    afterHistory: '历史后',
+    assistantPrefill: '回复开头',
 };
 const presetRows = computed(() => {
     const sections = Array.isArray(preset.value.sections) ? preset.value.sections : [];
     const rows: Array<XbTavernPresetSection & { previewId: string; previewLabel: string; previewPlacement: string }> = [
         {
             previewId: 'lwb-system',
-            previewLabel: '小白顶层 system',
-            previewPlacement: '顶层固定',
+            previewLabel: '最高优先级规则',
+            previewPlacement: '固定在最前面',
             role: 'system',
             locked: true,
             enabled: true,
@@ -216,8 +226,8 @@ const presetRows = computed(() => {
         },
         {
             previewId: 'lwb-tool',
-            previewLabel: '小白工具规则',
-            previewPlacement: '顶层固定',
+            previewLabel: '工具和行为边界',
+            previewPlacement: '固定在最前面',
             role: 'system',
             locked: true,
             enabled: true,
@@ -226,8 +236,8 @@ const presetRows = computed(() => {
         ...sections.map((section, index) => ({
             ...section,
             previewId: section.id || `preset-section-${index}`,
-            previewLabel: section.label || section.id || `预设段 ${index + 1}`,
-            previewPlacement: placementLabels[section.placement || 'beforeHistory'] || section.placement || '历史之前',
+            previewLabel: section.label || section.id || `规则段 ${index + 1}`,
+            previewPlacement: placementLabels[section.placement || 'beforeHistory'] || section.placement || '历史前',
             enabled: section.enabled !== false,
         })),
     ];
@@ -261,7 +271,7 @@ async function deriveDefaultPreset() {
     activePresetId.value = record.id;
     preset.value = record.preset;
     await refreshPresets();
-    presetStatus.value = '已从内置默认预设派生可编辑副本。';
+    presetStatus.value = '已复制一份默认规则，可以开始修改。';
 }
 
 async function selectPreset(presetId: string) {
@@ -270,12 +280,12 @@ async function selectPreset(presetId: string) {
     preset.value = await loadActiveTavernPreset();
     savedPresetJson.value = snapshotPreset(preset.value);
     selectedPresetSourceId.value = '';
-    presetStatus.value = presetIsBuiltIn.value ? '当前使用内置只读预设。' : '已切换到用户预设。';
+    presetStatus.value = presetIsBuiltIn.value ? '当前使用默认规则，不能直接修改。' : '已切换到你的规则。';
 }
 
 async function saveCurrentPreset() {
     if (presetIsBuiltIn.value) {
-        presetStatus.value = '内置预设只读，请先派生副本。';
+        presetStatus.value = '默认规则不能直接改，请先复制一份。';
         return;
     }
     const record = await saveTavernPreset(preset.value);
@@ -284,7 +294,7 @@ async function saveCurrentPreset() {
     preset.value = record.preset;
     savedPresetJson.value = snapshotPreset(record.preset);
     await refreshPresets();
-    presetStatus.value = '预设已保存。';
+    presetStatus.value = '规则已保存。';
 }
 
 async function resetToBuiltInPreset() {
@@ -293,7 +303,7 @@ async function resetToBuiltInPreset() {
     preset.value = createDefaultXbTavernPreset();
     savedPresetJson.value = snapshotPreset(preset.value);
     selectedPresetSourceId.value = '';
-    presetStatus.value = '已切回内置默认预设。';
+    presetStatus.value = '已切回默认规则。';
 }
 
 function updatePresetSection(index: number, patch: Partial<XbTavernPresetSection>) {
@@ -323,7 +333,7 @@ function addPresetSection() {
     const id = `custom-section-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     sections.push({
         id,
-        label: '自定义规则',
+        label: '新的补充规则',
         locked: false,
         enabled: true,
         placement: 'beforeHistory',
@@ -369,7 +379,7 @@ async function discardPresetChanges() {
     preset.value = await loadActiveTavernPreset();
     savedPresetJson.value = snapshotPreset(preset.value);
     selectedPresetSourceId.value = '';
-    presetStatus.value = '已放弃未保存改动。';
+    presetStatus.value = '已放弃未保存的改动。';
 }
 
 function postToHost(type: string, payload: Record<string, unknown> = {}) {
@@ -399,7 +409,7 @@ function onHostMessage(event: MessageEvent) {
 }
 
 function refreshSelectedCharacter() {
-    statusText.value = '正在刷新资料快照';
+    statusText.value = '正在重新读取这张角色卡';
     postToHost('xb-tavern:refresh-context', {
         characterId: selectedCharacterId.value,
     });
@@ -510,6 +520,36 @@ function candidateReason(entry: { status?: string; activationReason?: string; bu
     return statusLabel(entry.status || '');
 }
 
+function roleLabel(role = '') {
+    const labels: Record<string, string> = {
+        system: '规则',
+        user: '用户',
+        assistant: 'AI',
+        tool: '工具结果',
+    };
+    return labels[role] || role || '未知';
+}
+
+function insertionTargetLabel(target = '') {
+    const text = String(target || '');
+    const exact: Record<string, string> = {
+        'before character card': '角色卡前',
+        'after character card': '角色卡后',
+        'author note top': '作者备注前段',
+        'author note bottom': '作者备注后段',
+        'example messages top': '示例对话前段',
+        'example messages bottom': '示例对话后段',
+    };
+    if (exact[text]) {return exact[text];}
+    if (text.startsWith('history depth ')) {
+        return `插入历史第 ${text.replace('history depth ', '')} 层`;
+    }
+    if (text.startsWith('outlet:')) {
+        return `自定义出口：${text.replace('outlet:', '')}`;
+    }
+    return text || '未指定位置';
+}
+
 async function runOnce() {
     const requestContext = effectiveContext.value;
     const requestPresetId = String(preset.value.id || activePresetId.value || '');
@@ -616,7 +656,7 @@ onUnmounted(() => {
         <p class="eyebrow">
           LittleWhiteBox Tavern
         </p>
-        <h1>小白酒馆结构调试台</h1>
+        <h1>小白酒馆准备页</h1>
       </div>
       <button
         class="icon-button"
@@ -631,7 +671,7 @@ onUnmounted(() => {
     <section class="xb-layout">
       <aside class="xb-sidebar">
         <div class="panel">
-          <h2>资料选择</h2>
+          <h2>选择资料</h2>
           <dl class="kv">
             <dt>角色</dt>
             <dd>{{ characterName }}</dd>
@@ -639,7 +679,7 @@ onUnmounted(() => {
             <dd>{{ userName }}</dd>
             <dt>世界书</dt>
             <dd>{{ worldBookCount }} 本 / {{ worldEntryCount }} 条</dd>
-            <dt>激活</dt>
+            <dt>会带上</dt>
             <dd>{{ activatedCount }} 条</dd>
           </dl>
           <label
@@ -663,12 +703,12 @@ onUnmounted(() => {
             type="button"
             @click="refreshSelectedCharacter"
           >
-            刷新资料快照
+            重新读取资料
           </button>
         </div>
 
         <div class="panel">
-          <h2>读取诊断</h2>
+          <h2>准备状态</h2>
           <ul class="diagnostics">
             <li
               v-for="row in diagnosticRows"
@@ -680,7 +720,7 @@ onUnmounted(() => {
         </div>
 
         <div class="panel">
-          <h2>独立会话</h2>
+          <h2>会话</h2>
           <p class="muted">
             {{ selectedSessionTitle }}
           </p>
@@ -688,7 +728,7 @@ onUnmounted(() => {
             type="button"
             @click="createSessionFromContext"
           >
-            新建会话快照
+            用当前资料开始新会话
           </button>
           <div class="session-list">
             <button
@@ -705,10 +745,91 @@ onUnmounted(() => {
       </aside>
 
       <section class="xb-main">
-        <div class="panel">
+        <div class="panel workspace-panel">
           <div class="panel-head">
-            <h2>资料快照</h2>
-            <span class="pill">{{ context.history?.length || 0 }} 条历史</span>
+            <div>
+              <h2>先看这里</h2>
+              <p class="muted compact">
+                按顺序确认资料、规则、世界书和发送内容，最后试跑一句。
+              </p>
+            </div>
+            <span class="pill">
+              正在看：{{ activeWorkspaceItem.label }}
+            </span>
+          </div>
+          <div class="workspace-tabs">
+            <button
+              v-for="tab in workspaceTabs"
+              :key="tab.key"
+              type="button"
+              class="workspace-tab"
+              :class="{ active: activeWorkspace === tab.key }"
+              @click="activeWorkspace = tab.key"
+            >
+              <strong>{{ tab.label }}</strong>
+              <small>{{ tab.hint }}</small>
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-show="activeWorkspace === 'overview'"
+          class="panel overview-panel"
+        >
+          <div class="panel-head">
+            <div>
+              <h2>现在这套配置会怎么工作</h2>
+              <p class="muted compact">
+                小白会用左侧选中的角色和会话，按自己的规则组装一份内容发给 AI。
+              </p>
+            </div>
+          </div>
+          <div class="overview-steps">
+            <button
+              type="button"
+              @click="activeWorkspace = 'snapshot'"
+            >
+              <strong>1. 看资料</strong>
+              <span>{{ characterName }} · 世界书 {{ worldBookCount }} 本 · 历史 {{ context.history?.length || 0 }} 条</span>
+            </button>
+            <button
+              type="button"
+              @click="activeWorkspace = 'preset'"
+            >
+              <strong>2. 看规则</strong>
+              <span>{{ preset.name || '默认规则' }} · {{ presetRows.length }} 段</span>
+            </button>
+            <button
+              type="button"
+              @click="activeWorkspace = 'world'"
+            >
+              <strong>3. 看世界书</strong>
+              <span>本轮会带上 {{ activatedCount }} 条，可检查 {{ worldEntryCount }} 条</span>
+            </button>
+            <button
+              type="button"
+              @click="activeWorkspace = 'messages'"
+            >
+              <strong>4. 看发送内容</strong>
+              <span>{{ messagePreview.length }} 条内容 · {{ buildSnapshot.messageChars }} 字</span>
+            </button>
+            <button
+              type="button"
+              @click="activeWorkspace = 'runtime'"
+            >
+              <strong>5. 试一句</strong>
+              <span>{{ selectedSessionTitle }}</span>
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-show="activeWorkspace === 'snapshot'"
+          class="panel"
+        >
+          <div class="panel-head">
+            <h2>本次会用的资料</h2>
+            <span class="pill">历史 {{ context.history?.length || 0 }} 条</span>
           </div>
           <div class="snapshot-grid">
             <article class="snapshot-card">
@@ -738,17 +859,20 @@ onUnmounted(() => {
                   v-if="!worldBooks.length"
                   class="muted"
                 >
-                  当前资料快照没有世界书。
+                  这次准备资料里没有世界书。
                 </p>
               </div>
             </article>
           </div>
         </div>
 
-        <div class="panel">
+        <div
+          v-show="activeWorkspace === 'preset'"
+          class="panel"
+        >
           <div class="panel-head">
             <div>
-              <h2>预设结构</h2>
+              <h2>小白自己的说话规则</h2>
               <p class="muted compact">
                 {{ preset.name }} · {{ preset.version }} · {{ preset.id }}
               </p>
@@ -767,7 +891,7 @@ onUnmounted(() => {
               @change="selectPreset(activePresetId)"
             >
               <option :value="DEFAULT_XB_TAVERN_PRESET_ID">
-                内置默认预设（只读）
+                默认规则（不能直接改）
               </option>
               <option
                 v-for="item in userPresets"
@@ -781,14 +905,14 @@ onUnmounted(() => {
               type="button"
               @click="deriveDefaultPreset"
             >
-              派生副本
+              复制一份来改
             </button>
             <button
               type="button"
               :disabled="presetIsBuiltIn"
               @click="saveCurrentPreset"
             >
-              保存预设
+              保存规则
             </button>
             <button
               type="button"
@@ -801,7 +925,7 @@ onUnmounted(() => {
               type="button"
               @click="resetToBuiltInPreset"
             >
-              切回内置
+              用回默认
             </button>
           </div>
           <p
@@ -832,7 +956,7 @@ onUnmounted(() => {
               />
             </label>
             <label>
-              顶层 system
+              最高优先级规则
               <textarea
                 :value="preset.systemPrompt"
                 :disabled="presetIsBuiltIn"
@@ -841,7 +965,7 @@ onUnmounted(() => {
               />
             </label>
             <label>
-              工具规则
+              工具和行为边界
               <textarea
                 :value="preset.toolPrompt"
                 :disabled="presetIsBuiltIn"
@@ -851,13 +975,13 @@ onUnmounted(() => {
             </label>
           </div>
           <div class="preset-editor-head">
-            <strong>预设段落</strong>
+            <strong>可插入的补充规则</strong>
             <button
               type="button"
               :disabled="presetIsBuiltIn"
               @click="addPresetSection"
             >
-              新增段落
+              新增规则段
             </button>
           </div>
           <div class="preset-section-editor">
@@ -911,32 +1035,32 @@ onUnmounted(() => {
                   >
                 </label>
                 <label>
-                  Role
+                  消息身份
                   <select
                     :value="section.role || 'system'"
                     :disabled="presetIsBuiltIn"
                     @change="updatePresetSection(index, { role: ($event.target as HTMLSelectElement).value })"
                   >
                     <option value="system">
-                      system
+                      规则消息
                     </option>
                     <option value="user">
-                      user
+                      用户消息
                     </option>
                     <option value="assistant">
-                      assistant
+                      AI 消息
                     </option>
                   </select>
                 </label>
                 <label>
-                  位置
+                  放入位置
                   <select
                     :value="section.placement || 'beforeHistory'"
                     :disabled="presetIsBuiltIn"
                     @change="updatePresetSection(index, { placement: ($event.target as HTMLSelectElement).value as XbTavernPresetSection['placement'] })"
                   >
                     <option value="top">
-                      顶部预设
+                      最前面
                     </option>
                     <option value="beforeCharacter">
                       角色卡之前
@@ -951,7 +1075,7 @@ onUnmounted(() => {
                       历史之后
                     </option>
                     <option value="assistantPrefill">
-                      助手预填
+                      回复开头
                     </option>
                   </select>
                 </label>
@@ -983,7 +1107,7 @@ onUnmounted(() => {
               @click="selectedPresetSourceId = row.previewId"
             >
               <summary>
-                <span>{{ row.previewPlacement }} · {{ row.role || 'system' }} · {{ row.previewLabel }}</span>
+                <span>{{ row.previewPlacement }} · {{ row.previewLabel }}</span>
                 <small>{{ row.enabled === false ? '停用' : '启用' }} · {{ row.locked === false ? '可变' : '锁定' }} · {{ row.chars }} 字</small>
               </summary>
               <pre>{{ row.content }}</pre>
@@ -991,9 +1115,12 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div class="panel">
+        <div
+          v-show="activeWorkspace === 'world'"
+          class="panel"
+        >
           <div class="panel-head">
-            <h2>世界书激活解释</h2>
+            <h2>这次会带上的世界书</h2>
             <div class="panel-pills">
               <span class="pill">{{ activatedCount }} / {{ worldEntryCount }}</span>
               <span class="pill">{{ worldBudget.enabled ? `${worldBudget.used}/${worldBudget.limit} 字` : '无预算限制' }}</span>
@@ -1001,19 +1128,19 @@ onUnmounted(() => {
           </div>
           <div class="world-debug-grid">
             <details class="debug-box">
-              <summary>扫描文本 · {{ buildResult.meta.scanTextChars }} 字</summary>
+              <summary>用于匹配世界书的文本 · {{ buildResult.meta.scanTextChars }} 字</summary>
               <pre>{{ shortText(scanTextPreview, 2400) }}</pre>
             </details>
             <div class="debug-box">
-              <strong>插入位置</strong>
+              <strong>会放到哪里</strong>
               <div class="position-list">
                 <span
                   v-for="row in worldPositionRows"
                   :key="row[0]"
                 >
-                  {{ row[0] }} · {{ row[1] }}
+                  {{ insertionTargetLabel(row[0]) }} · {{ row[1] }}
                 </span>
-                <span v-if="!worldPositionRows.length">无已激活条目</span>
+                <span v-if="!worldPositionRows.length">这次没有带上世界书</span>
               </div>
             </div>
           </div>
@@ -1029,10 +1156,10 @@ onUnmounted(() => {
                 <span>{{ statusLabel(entry.status) }}</span>
               </div>
               <small>
-                {{ entry.sourceWorldBook || '未归属' }} · {{ entry.insertionTarget }} · order {{ entry.order }} · depth {{ entry.depth }} · {{ entry.contentChars }} 字
+                来自 {{ entry.sourceWorldBook || '未归属' }} · 放到 {{ insertionTargetLabel(entry.insertionTarget) }} · {{ entry.contentChars }} 字
               </small>
               <p class="entry-meta">
-                key: {{ entry.key.join(', ') || '无' }} / secondary: {{ entry.keysecondary.join(', ') || '无' }}
+                关键词：{{ entry.key.join(', ') || '无' }} / 二级关键词：{{ entry.keysecondary.join(', ') || '无' }}
               </p>
               <p class="entry-meta">
                 {{ candidateReason(entry) }}
@@ -1046,20 +1173,23 @@ onUnmounted(() => {
               v-if="!candidateRows.length"
               class="muted"
             >
-              当前没有候选世界书条目。
+              当前没有可检查的世界书条目。
             </p>
           </div>
         </div>
 
-        <div class="panel">
+        <div
+          v-show="activeWorkspace === 'messages'"
+          class="panel"
+        >
           <div class="panel-head">
-            <h2>最终 messages</h2>
+            <h2>真正发给 AI 的内容</h2>
             <select v-model="historyMode">
               <option value="squash">
-                squash history
+                压缩历史
               </option>
               <option value="raw">
-                raw history
+                逐条历史
               </option>
             </select>
           </div>
@@ -1086,7 +1216,7 @@ onUnmounted(() => {
                 open
               >
                 <summary>
-                  <span>{{ row.index + 1 }} · {{ row.message.role }} · {{ row.label }}</span>
+                  <span>{{ row.index + 1 }} · {{ roleLabel(row.message.role) }} · {{ row.label }}</span>
                   <small>{{ row.chars }} 字 · ~{{ row.tokenEstimate }} tokens</small>
                 </summary>
                 <pre>{{ row.message.content }}</pre>
@@ -1094,20 +1224,23 @@ onUnmounted(() => {
             </section>
           </div>
           <details class="raw-json">
-            <summary>Raw messages JSON</summary>
+            <summary>技术明细：原始发送内容</summary>
             <pre>{{ rawMessagesJson }}</pre>
           </details>
         </div>
 
-        <div class="panel">
+        <div
+          v-show="activeWorkspace === 'runtime'"
+          class="panel"
+        >
           <div class="panel-head">
-            <h2>一次发模测试</h2>
+            <h2>试跑一轮</h2>
             <button
               type="button"
               :disabled="isRunning"
               @click="runOnce"
             >
-              {{ isRunning ? '运行中' : '发送测试' }}
+              {{ isRunning ? '运行中' : '试发给 AI' }}
             </button>
           </div>
           <p
@@ -1120,25 +1253,25 @@ onUnmounted(() => {
             v-if="runtimeProvider || runtimeModel"
             class="muted"
           >
-            {{ runtimeProvider || 'provider' }} / {{ runtimeModel || 'model' }}
+            模型通道：{{ runtimeProvider || '未知通道' }} / {{ runtimeModel || '未知模型' }}
           </p>
-          <pre class="runtime">{{ runtimeText || '这里显示本次模型返回。' }}</pre>
+          <pre class="runtime">{{ runtimeText || '这里显示 AI 的试跑回复。' }}</pre>
           <details
             v-if="runtimeSnapshotJson"
             class="raw-json"
           >
-            <summary>本次发送快照</summary>
+            <summary>技术明细：本次发送记录</summary>
             <pre>{{ runtimeSnapshotJson }}</pre>
           </details>
           <p class="muted">
-            会话消息写入 LittleWhiteBox_Tavern IndexedDB，不写回原酒馆聊天记录。
+            这里只写入小白酒馆自己的会话，不会改动原酒馆聊天。
           </p>
           <div class="session-messages">
             <span
               v-for="message in sessionMessages"
               :key="`${message.sessionId}-${message.order}`"
             >
-              {{ message.order + 1 }}. {{ message.role }}
+              {{ message.order + 1 }}. {{ roleLabel(message.role) }}
             </span>
           </div>
         </div>

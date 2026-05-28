@@ -1,12 +1,24 @@
 import { resolveConversationTokens } from '../../agent-core/runtime/context-tokens.js';
 import { EBOOK_SUMMARY_SYSTEM_PROMPT } from './prompts.js';
 import { resetMessageWindow } from '../../agent-core/ui/message-windowing.js';
+import { EBOOK_TOOL_NAMES } from '../shared/tool-definitions.js';
 
 export const EBOOK_MAX_CONTEXT_TOKENS = 188000;
 export const EBOOK_SUMMARY_TRIGGER_TOKENS = 158000;
 export const EBOOK_HISTORY_SUMMARY_MAX_TOKENS = 10000;
 export const EBOOK_DEFAULT_PRESERVED_TURNS = 2;
 export const EBOOK_MIN_PRESERVED_TURNS = 1;
+const SUMMARY_TEXT_INLINE_LIMIT = 3000;
+const SUMMARY_TEXT_SNIPPET_LIMIT = 600;
+const SUMMARY_LARGE_TEXT_FIELDS = new Set([
+    'content',
+    'newString',
+    'oldString',
+    'text',
+    'details',
+    'result',
+    'results',
+]);
 
 export function splitEbookMessagesIntoTurns(messages = []) {
     const turns = [];
@@ -38,22 +50,117 @@ function normalizeSummarySourceText(text = '') {
     return String(text || '').replace(/\r\n/g, '\n').trim();
 }
 
+function safeJsonParse(value) {
+    try {
+        return JSON.parse(String(value || ''));
+    } catch {
+        return null;
+    }
+}
+
+function summarizeLargeText(value = '') {
+    const text = normalizeSummarySourceText(value);
+    const lineCount = text ? text.split('\n').length : 0;
+    return `[长文本已省略：${text.length} 字，${lineCount} 行。创作记录只保留工作结论，不保存正文原文。]`;
+}
+
+function summarizeTextForRecord(value = '', limit = SUMMARY_TEXT_INLINE_LIMIT) {
+    const text = normalizeSummarySourceText(value);
+    if (!text) return '';
+    if (text.length <= limit) return text;
+    return summarizeLargeText(text);
+}
+
+function summarizeJsonValueForRecord(value, path = '') {
+    if (typeof value === 'string') {
+        if (SUMMARY_LARGE_TEXT_FIELDS.has(path) || value.length > SUMMARY_TEXT_INLINE_LIMIT) {
+            return summarizeLargeText(value);
+        }
+        return value;
+    }
+    if (Array.isArray(value)) {
+        return value.map((item, index) => summarizeJsonValueForRecord(item, `${path}[${index}]`));
+    }
+    if (value && typeof value === 'object') {
+        const result = {};
+        Object.entries(value).forEach(([key, entryValue]) => {
+            result[key] = summarizeJsonValueForRecord(entryValue, key);
+        });
+        return result;
+    }
+    return value;
+}
+
+function summarizeToolArgumentsForRecord(toolName = '', rawArguments = '') {
+    const args = safeJsonParse(rawArguments);
+    if (!args || typeof args !== 'object') {
+        return summarizeTextForRecord(rawArguments, SUMMARY_TEXT_SNIPPET_LIMIT);
+    }
+    const name = String(toolName || '').trim();
+    if (name === EBOOK_TOOL_NAMES.WRITE) {
+        const content = typeof args.content === 'string' ? args.content : String(args.content ?? '');
+        return JSON.stringify({
+            filePath: args.filePath || args.path || '',
+            content: summarizeLargeText(content),
+        });
+    }
+    if (name === EBOOK_TOOL_NAMES.EDIT) {
+        const edits = Array.isArray(args.edits) ? args.edits : [];
+        return JSON.stringify({
+            filePath: args.filePath || '',
+            edits: edits.map((edit = {}) => ({
+                startLine: edit.startLine,
+                endLine: edit.endLine,
+                insertAtLine: edit.insertAtLine,
+                oldString: typeof edit.oldString === 'string' ? summarizeLargeText(edit.oldString) : undefined,
+                newString: typeof edit.newString === 'string' ? summarizeLargeText(edit.newString) : undefined,
+            })),
+        });
+    }
+    return JSON.stringify(summarizeJsonValueForRecord(args));
+}
+
+function summarizeToolResultForRecord(message = {}) {
+    const parsed = safeJsonParse(message.content);
+    const toolName = String(message.toolName || message.toolCallId || 'unknown');
+    if (!parsed || typeof parsed !== 'object') {
+        return [
+            `工具结果: ${toolName}`,
+            summarizeTextForRecord(message.content, SUMMARY_TEXT_SNIPPET_LIMIT),
+        ].filter(Boolean).join('\n');
+    }
+    const summary = String(parsed.summary || parsed.message || parsed.error || '').trim();
+    const compact = {
+        ok: parsed.ok,
+        path: parsed.path || parsed.filePath,
+        summary: summary || undefined,
+        lineStart: parsed.lineStart,
+        lineEnd: parsed.lineEnd,
+        totalLines: parsed.totalLines,
+        editCount: parsed.editCount,
+        appliedCount: parsed.appliedCount,
+        failedCount: parsed.failedCount,
+        bytes: parsed.bytes,
+    };
+    return [
+        `工具结果: ${toolName}`,
+        JSON.stringify(compact),
+    ].join('\n');
+}
+
 function getMessageTextForSummary(message = {}) {
     if (message.role === 'assistant' && Array.isArray(message.toolCalls) && message.toolCalls.length) {
         const toolLines = message.toolCalls.map((toolCall) => {
             const name = String(toolCall?.name || '').trim();
-            const args = String(toolCall?.arguments || '{}').trim();
+            const args = summarizeToolArgumentsForRecord(name, toolCall?.arguments || '{}');
             return `工具调用: ${name} ${args}`.trim();
         });
-        return normalizeSummarySourceText([message.content || '', ...toolLines].filter(Boolean).join('\n'));
+        return normalizeSummarySourceText([summarizeTextForRecord(message.content || ''), ...toolLines].filter(Boolean).join('\n'));
     }
     if (message.role === 'tool') {
-        return normalizeSummarySourceText([
-            `工具结果: ${message.toolName || message.toolCallId || 'unknown'}`,
-            message.content || '',
-        ].join('\n'));
+        return normalizeSummarySourceText(summarizeToolResultForRecord(message));
     }
-    return normalizeSummarySourceText(message.content || '');
+    return normalizeSummarySourceText(summarizeTextForRecord(message.content || ''));
 }
 
 function buildSummarySource(turns = [], existingSummary = '') {
@@ -164,7 +271,10 @@ export function createEbookHistoryCompactionController(deps = {}) {
         try {
             const result = await adapter.chat({
                 systemPrompt: EBOOK_SUMMARY_SYSTEM_PROMPT,
-                messages: [{ role: 'user', content: summarySource }],
+                messages: [
+                    { role: 'system', content: EBOOK_SUMMARY_SYSTEM_PROMPT },
+                    { role: 'user', content: summarySource },
+                ],
                 tools: [],
                 toolChoice: 'none',
                 temperature: Math.min(Number(providerConfig.temperature ?? 0.2), 0.2),

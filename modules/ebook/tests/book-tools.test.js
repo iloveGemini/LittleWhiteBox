@@ -5757,7 +5757,13 @@ test('Book history compaction writes creative record and releases archived turns
 
     await controller.ensureContextBudget({
         async chat(request) {
-            summarySource = request.messages[0].content;
+            assert.equal(request.systemPrompt, EBOOK_SUMMARY_SYSTEM_PROMPT);
+            assert.equal(request.toolChoice, 'none');
+            assert.deepEqual(request.tools, []);
+            assert.equal(request.messages[0].role, 'system');
+            assert.equal(request.messages[0].content, EBOOK_SUMMARY_SYSTEM_PROMPT);
+            assert.equal(request.messages[1].role, 'user');
+            summarySource = request.messages[1].content;
             assert.equal(request.maxTokens, 10000);
             assert.match(summarySource, /工具调用: Read/);
             assert.match(summarySource, /工具结果: Read/);
@@ -5772,6 +5778,212 @@ test('Book history compaction writes creative record and releases archived turns
     assert.equal(state.messages.length, 2);
     assert.equal(state.messages[0].content, '继续写下一章。');
     assert.equal(state.uiMessageWindowLimit, 5);
+});
+
+test('Book agent compaction sends the summary prompt and injects returned creative record into replay', async () => {
+    await resetDb();
+    const book = await createBook('创作记录链路测试');
+    const longOldDraft = `夜里，棚屋里只点了一盏灯。\n${'OLD_CHAPTER_29_TEXT '.repeat(140000)}`;
+    const state = {
+        config: {},
+        book,
+        books: [book],
+        files: await listBookFiles(book.id),
+        selectedPath: 'book/chapters/001.md',
+        readerPath: '',
+        viewMode: 'studio',
+        editorContent: '',
+        savedContent: '',
+        messages: [
+            { role: 'user', content: '写第29章旧版。' },
+            { role: 'assistant', content: longOldDraft },
+            { role: 'user', content: '先停一下。' },
+            { role: 'assistant', content: '收到。' },
+        ],
+        toolTrace: [],
+        historySummary: '',
+        archivedTurnCount: 0,
+        isBusy: false,
+        activeController: null,
+        status: '就绪',
+        toast: '',
+    };
+    const summaryText = '创作记录：第29章旧版已经废弃，后续不能照抄旧稿。';
+    let sawSummaryRequest = false;
+    let replayMessages = [];
+    const runner = createEbookAgentRunner({
+        state,
+        async refreshBooksAndFiles() {
+            state.files = await listBookFiles(book.id);
+        },
+        render() {},
+        showToast() {},
+        persistConversation() {},
+        isEditorDirty() {
+            return false;
+        },
+        getActiveProviderConfig() {
+            return {
+                provider: 'test',
+                temperature: 0.7,
+                maxTokens: 12000,
+                reasoningEnabled: false,
+                reasoningEffort: 'medium',
+            };
+        },
+        createAdapter() {
+            return {
+                async chat(task) {
+                    if (Array.isArray(task.tools) && task.tools.length === 0) {
+                        sawSummaryRequest = true;
+                        assert.equal(task.systemPrompt, EBOOK_SUMMARY_SYSTEM_PROMPT);
+                        assert.equal(task.toolChoice, 'none');
+                        assert.equal(task.messages[0].role, 'system');
+                        assert.equal(task.messages[0].content, EBOOK_SUMMARY_SYSTEM_PROMPT);
+                        assert.equal(task.messages[1].role, 'user');
+                        assert.match(task.messages[1].content, /第 1 段创作对话/);
+                        return { text: summaryText };
+                    }
+                    replayMessages = task.messages;
+                    return {
+                        text: '我会按新的创作记录继续，不照抄旧稿。',
+                        toolCalls: [],
+                    };
+                },
+            };
+        },
+    });
+
+    await runner.runAgent('继续写，但不要沿用旧版问题。');
+
+    assert.equal(sawSummaryRequest, true);
+    assert.equal(state.historySummary, summaryText);
+    const latestUserMessage = replayMessages.filter((message) => message.role === 'user').at(-1);
+    assert.match(latestUserMessage?.content || '', /\[创作记录\]/);
+    assert.match(latestUserMessage?.content || '', /第29章旧版已经废弃/);
+    assert.doesNotMatch(latestUserMessage?.content || '', /OLD_CHAPTER_29_TEXT OLD_CHAPTER_29_TEXT/);
+});
+
+test('Book history compaction redacts full prose and write payloads before summarizing', async () => {
+    const leakedChapterText = `夜里，棚屋里只点了一盏灯。\n${'旧版正文。'.repeat(1200)}\nUNIQUE_OLD_CHAPTER_SHOULD_NOT_APPEAR`;
+    const state = {
+        messages: [
+            { role: 'user', content: '写第29章。' },
+            { role: 'assistant', content: leakedChapterText },
+            {
+                role: 'assistant',
+                content: '',
+                toolCalls: [{
+                    id: 'call-write-chapter',
+                    name: EBOOK_TOOL_NAMES.WRITE,
+                    arguments: JSON.stringify({
+                        filePath: 'book/chapters/029.md',
+                        content: leakedChapterText,
+                    }),
+                }],
+            },
+            {
+                role: 'tool',
+                toolCallId: 'call-write-chapter',
+                toolName: EBOOK_TOOL_NAMES.WRITE,
+                content: JSON.stringify({
+                    ok: true,
+                    path: 'book/chapters/029.md',
+                    bytes: leakedChapterText.length,
+                    content: leakedChapterText,
+                    summary: '已写入 book/chapters/029.md。',
+                }),
+            },
+            { role: 'user', content: '下一步继续。' },
+            { role: 'assistant', content: '准备继续。' },
+        ],
+        historySummary: '',
+        status: '就绪',
+        archivedTurnCount: 0,
+        uiMessageWindowLimit: 100,
+    };
+    let summarySource = '';
+    const controller = createEbookHistoryCompactionController({
+        state,
+        render() {},
+        showToast() {},
+        persistConversation() {},
+        getActiveProviderConfig() {
+            return { temperature: 0.7, maxTokens: 12000 };
+        },
+        buildProviderMessages() {
+            return state.messages;
+        },
+        summaryTriggerTokens: 1,
+        defaultPreservedTurns: 1,
+        minPreservedTurns: 1,
+    });
+
+    await controller.ensureContextBudget({
+        async chat(request) {
+            assert.equal(request.messages[0].role, 'system');
+            assert.equal(request.messages[0].content, EBOOK_SUMMARY_SYSTEM_PROMPT);
+            assert.equal(request.messages[1].role, 'user');
+            summarySource = request.messages[1].content;
+            return { text: '第29章旧版已写入 book/chapters/029.md，后续需按用户要求修订。' };
+        },
+    }, new AbortController().signal);
+
+    assert.doesNotMatch(summarySource, /UNIQUE_OLD_CHAPTER_SHOULD_NOT_APPEAR/);
+    assert.doesNotMatch(summarySource, /旧版正文。旧版正文。旧版正文。/);
+    assert.match(summarySource, /长文本已省略/);
+    assert.match(summarySource, /book\/chapters\/029\.md/);
+});
+
+test('Book history compaction fallback also redacts full prose when summary model fails', async () => {
+    const leakedChapterText = `${'泥地旧稿。'.repeat(1200)}\nUNIQUE_FALLBACK_OLD_CHAPTER_SHOULD_NOT_APPEAR`;
+    const state = {
+        messages: [
+            { role: 'user', content: '保存第29章旧稿。' },
+            {
+                role: 'assistant',
+                content: '',
+                toolCalls: [{
+                    id: 'call-write-fallback',
+                    name: EBOOK_TOOL_NAMES.WRITE,
+                    arguments: JSON.stringify({
+                        filePath: 'book/chapters/029.md',
+                        content: leakedChapterText,
+                    }),
+                }],
+            },
+            { role: 'tool', toolCallId: 'call-write-fallback', toolName: EBOOK_TOOL_NAMES.WRITE, content: '{"ok":true,"path":"book/chapters/029.md","summary":"已写入 book/chapters/029.md。"}' },
+            { role: 'user', content: '保留最近一轮。' },
+            { role: 'assistant', content: '好的。' },
+        ],
+        historySummary: '',
+        status: '就绪',
+        archivedTurnCount: 0,
+        uiMessageWindowLimit: 100,
+    };
+    const controller = createEbookHistoryCompactionController({
+        state,
+        render() {},
+        showToast() {},
+        persistConversation() {},
+        buildProviderMessages() {
+            return state.messages;
+        },
+        summaryTriggerTokens: 1,
+        defaultPreservedTurns: 1,
+        minPreservedTurns: 1,
+    });
+
+    await controller.ensureContextBudget({
+        async chat() {
+            throw new Error('summary_model_failed');
+        },
+    }, new AbortController().signal);
+
+    assert.doesNotMatch(state.historySummary, /UNIQUE_FALLBACK_OLD_CHAPTER_SHOULD_NOT_APPEAR/);
+    assert.doesNotMatch(state.historySummary, /泥地旧稿。泥地旧稿。泥地旧稿。/);
+    assert.match(state.historySummary, /长文本已省略/);
+    assert.match(state.historySummary, /book\/chapters\/029\.md/);
 });
 
 test('Book history compaction counts real tool schemas through the shared tokenizer path', async () => {
