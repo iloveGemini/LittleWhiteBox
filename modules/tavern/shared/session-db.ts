@@ -33,7 +33,11 @@ export interface TavernMessageRecord {
     role: string;
     content: string;
     name?: string;
+    error?: boolean;
     createdAt: number;
+    provider?: string;
+    model?: string;
+    finishReason?: string;
     providerPayload?: unknown;
     contextSnapshot?: XbTavernContext;
     buildSnapshot?: XbTavernBuildSnapshot;
@@ -43,6 +47,10 @@ export interface TavernMessageRecord {
 }
 
 export type TavernAppendMessageInput = XbTavernMessage & {
+    error?: boolean;
+    provider?: string;
+    model?: string;
+    finishReason?: string;
     providerPayload?: unknown;
     contextSnapshot?: XbTavernContext;
     buildSnapshot?: XbTavernBuildSnapshot;
@@ -228,6 +236,33 @@ export async function updateTavernSessionState(sessionId = '', patch: Partial<Ta
     return await getTavernSession(id);
 }
 
+export async function updateTavernSessionSnapshot(sessionId = '', patch: {
+    contextSnapshot?: XbTavernContext;
+    buildSnapshot?: XbTavernBuildSnapshot;
+    presetId?: string;
+    presetName?: string;
+    characterId?: string;
+    characterName?: string;
+} = {}): Promise<TavernSessionRecord | null> {
+    const id = String(sessionId || '').trim();
+    if (!id) {return null;}
+    const existing = await getTavernSession(id);
+    if (!existing) {return null;}
+    const contextSnapshot = 'contextSnapshot' in patch ? patch.contextSnapshot : existing.contextSnapshot;
+    const character = contextSnapshot?.character || {};
+    const update: Partial<TavernSessionRecord> = {
+        updatedAt: now(),
+        contextSnapshot,
+        buildSnapshot: 'buildSnapshot' in patch ? patch.buildSnapshot : existing.buildSnapshot,
+        presetId: 'presetId' in patch ? String(patch.presetId || '') : existing.presetId,
+        presetName: 'presetName' in patch ? String(patch.presetName || '') : existing.presetName,
+        characterId: 'characterId' in patch ? String(patch.characterId || '') : String(character.id || existing.characterId || ''),
+        characterName: 'characterName' in patch ? String(patch.characterName || '') : String(character.name || existing.characterName || ''),
+    };
+    await tavernSessionsTable.update(id, update);
+    return await getTavernSession(id);
+}
+
 export async function appendTavernMessage(sessionId: string, message: TavernAppendMessageInput): Promise<TavernMessageRecord> {
     const id = String(sessionId || '').trim();
     if (!id) {throw new Error('session_required');}
@@ -240,7 +275,11 @@ export async function appendTavernMessage(sessionId: string, message: TavernAppe
         role: String(message.role || ''),
         content: String(message.content || ''),
         name: message.name ? String(message.name) : undefined,
+        error: message.error === true,
         createdAt: timestamp,
+        provider: 'provider' in message ? String(message.provider || '') : undefined,
+        model: 'model' in message ? String(message.model || '') : undefined,
+        finishReason: 'finishReason' in message ? String(message.finishReason || '') : undefined,
         providerPayload: 'providerPayload' in message ? message.providerPayload : undefined,
         contextSnapshot: 'contextSnapshot' in message ? message.contextSnapshot : undefined,
         buildSnapshot: 'buildSnapshot' in message ? message.buildSnapshot : undefined,

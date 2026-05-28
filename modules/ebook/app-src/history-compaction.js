@@ -139,7 +139,11 @@ function summarizeToolResultForRecord(message = {}) {
         totalLines: parsed.totalLines,
         editCount: parsed.editCount,
         appliedCount: parsed.appliedCount,
+        satisfiedCount: parsed.satisfiedCount,
         failedCount: parsed.failedCount,
+        definiteFailedCount: parsed.definiteFailedCount,
+        uncertainCount: parsed.uncertainCount,
+        changed: parsed.changed,
         bytes: parsed.bytes,
     };
     return [

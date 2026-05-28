@@ -499,6 +499,7 @@ function buildMatcher(settings: XbTavernWorldSettings = {}, entry?: XbTavernWorl
 }
 
 function secondaryMatches(entry: ActivatedWorldEntry, matchesKeyword: (keyword: string) => boolean): boolean {
+    if (entry.selective === false) {return true;}
     if (!entry.keysecondary.length) {return true;}
     const matches = entry.keysecondary.map((keyword) => matchesKeyword(keyword));
     const hasAny = matches.some(Boolean);
@@ -522,8 +523,15 @@ function getEntryState(settings: XbTavernWorldSettings, entry: ActivatedWorldEnt
     return settings.entryStates?.[entry.activationKey] || settings.entryStates?.[String(entry.uid)] || {};
 }
 
+function isStickyActive(entry: ActivatedWorldEntry, settings: XbTavernWorldSettings): boolean {
+    const turn = Number(settings.turn) || 0;
+    const state = getEntryState(settings, entry);
+    return Number(state.stickyUntilTurn) >= turn;
+}
+
 function shouldPassProbability(entry: ActivatedWorldEntry, settings: XbTavernWorldSettings): boolean {
     if (entry.useProbability === false || entry.useProbabilityGlobal === false) {return true;}
+    if (isStickyActive(entry, settings)) {return true;}
     const raw = Number(entry.probability);
     if (!Number.isFinite(raw) || raw <= 0) {return raw !== 0;}
     const probability = raw > 1 ? raw / 100 : raw;
@@ -534,16 +542,17 @@ function shouldPassProbability(entry: ActivatedWorldEntry, settings: XbTavernWor
 
 function activationReasonForEntry(entry: ActivatedWorldEntry, settings: XbTavernWorldSettings): string {
     if (entry.disable === true || entry.disabled === true) {return '';}
-    if (entry.decorators.includes('@@dont_activate')) {return '';}
 
     const turn = Number(settings.turn) || 0;
     const state = getEntryState(settings, entry);
-    if (Number(state.cooldownUntilTurn) > turn) {return '';}
+    const stickyActive = isStickyActive(entry, settings);
     if (Number(state.delayUntilTurn) > turn) {return '';}
     if (Number(entry.delay) > 0 && turn < Number(entry.delay)) {return '';}
-    if (Number(state.stickyUntilTurn) >= turn) {return 'sticky';}
+    if (Number(state.cooldownUntilTurn) > turn && !stickyActive) {return '';}
     if (entry.decorators.includes('@@activate')) {return 'decorator';}
+    if (entry.decorators.includes('@@dont_activate')) {return '';}
     if (entry.constant === true) {return 'constant';}
+    if (stickyActive) {return 'sticky';}
 
     const matchesKeyword = buildMatcher(settings, entry);
     const hasPrimary = entry.key.some((keyword) => matchesKeyword(keyword));
@@ -554,17 +563,18 @@ function activationReasonForEntry(entry: ActivatedWorldEntry, settings: XbTavern
 
 function explainEntryStatus(entry: ActivatedWorldEntry, settings: XbTavernWorldSettings): { status: string; activationReason: string } {
     if (entry.disable === true || entry.disabled === true) {return { status: 'disabled', activationReason: '' };}
-    if (entry.decorators.includes('@@dont_activate')) {return { status: 'suppressed_by_decorator', activationReason: '' };}
 
     const turn = Number(settings.turn) || 0;
     const state = getEntryState(settings, entry);
-    if (Number(state.cooldownUntilTurn) > turn) {return { status: 'cooldown', activationReason: '' };}
+    const stickyActive = isStickyActive(entry, settings);
     if (Number(state.delayUntilTurn) > turn || (Number(entry.delay) > 0 && turn < Number(entry.delay))) {
         return { status: 'delay', activationReason: '' };
     }
-    if (Number(state.stickyUntilTurn) >= turn) {return { status: 'activated', activationReason: 'sticky' };}
+    if (Number(state.cooldownUntilTurn) > turn && !stickyActive) {return { status: 'cooldown', activationReason: '' };}
     if (entry.decorators.includes('@@activate')) {return { status: 'activated', activationReason: 'decorator' };}
+    if (entry.decorators.includes('@@dont_activate')) {return { status: 'suppressed_by_decorator', activationReason: '' };}
     if (entry.constant === true) {return { status: 'activated', activationReason: 'constant' };}
+    if (stickyActive) {return { status: 'activated', activationReason: 'sticky' };}
 
     const matchesKeyword = buildMatcher(settings, entry);
     const hasPrimary = entry.key.some((keyword) => matchesKeyword(keyword));

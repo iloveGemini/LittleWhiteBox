@@ -7,7 +7,7 @@ import { initTasks } from "./modules/scheduled-tasks/scheduled-tasks.js";
 import { initMessagePreview, addHistoryButtonsDebounced } from "./modules/message-preview.js";
 import { initImmersiveMode } from "./modules/immersive-mode.js";
 import { initTemplateEditor } from "./modules/template-editor/template-editor.js";
-import { initFourthWall, fourthWallCleanup, openFourthWall } from "./modules/fourth-wall/fourth-wall.js";
+import { initFourthWall, initFourthWallFloorTools, refreshFourthWallFloorTools, closeFourthWall, openFourthWall } from "./modules/fourth-wall/fourth-wall.js";
 import { initButtonCollapse } from "./widgets/button-collapse.js";
 import { initVariablesPanel, cleanupVariablesPanel } from "./modules/variables/variables-panel.js";
 import { initStreamingGeneration } from "./modules/streaming-generation.js";
@@ -632,7 +632,6 @@ async function toggleAllFeatures(enabled) {
         const moduleInits = [
             { condition: extension_settings[EXT_ID].immersive?.enabled, init: initImmersiveMode },
             { condition: extension_settings[EXT_ID].templateEditor?.enabled, init: initTemplateEditor },
-            { condition: extension_settings[EXT_ID].fourthWall?.enabled, init: initFourthWall },
             { condition: true, init: initControlAudio },
             { condition: extension_settings[EXT_ID].variablesPanel?.enabled, init: initVariablesPanel },
             { condition: extension_settings[EXT_ID].variablesCore?.enabled, init: initVariablesCore },
@@ -650,6 +649,10 @@ async function toggleAllFeatures(enabled) {
             await initActiveDrawProvider();
         } catch (e) {
             console.error('[LittleWhiteBox] 初始化画图 provider 失败:', e);
+        }
+        try { initFourthWallFloorTools(); } catch (e) { }
+        if (extension_settings[EXT_ID].fourthWall?.enabled) {
+            try { initFourthWall(); } catch (e) { }
         }
         if (extension_settings[EXT_ID].preview?.enabled || extension_settings[EXT_ID].recorded?.enabled) {
             setTimeout(initMessagePreview, 200);
@@ -755,6 +758,9 @@ async function setupSettings() {
                     moduleCleanupFunctions.delete(key);
                 }
                 if (enabled && init) await init();
+                if (enabled && key === 'tts') {
+                    try { refreshFourthWallFloorTools(); } catch { }
+                }
                 if (key === 'storySummary') {
                     $(document).trigger('xiaobaix:storySummary:toggle', [enabled]);
                 }
@@ -780,6 +786,7 @@ async function setupSettings() {
                 saveSettingsDebounced();
 
                 await initActiveDrawProvider();
+                try { refreshFourthWallFloorTools(); } catch { }
                 syncFeatureActionButtons();
             });
         syncFeatureActionButtons();
@@ -938,7 +945,7 @@ async function setupSettings() {
             settings.fourthWall ||= {};
             settings.fourthWall.enabled = false;
             extension_settings[EXT_ID].fourthWall = settings.fourthWall;
-            try { fourthWallCleanup(); } catch { }
+            try { closeFourthWall(); } catch { }
             await cleanupDrawProvider(settings.drawProvider);
             settings.drawProvider = 'disabled';
             extension_settings[EXT_ID].drawProvider = 'disabled';
@@ -1066,7 +1073,6 @@ jQuery(async () => {
             const moduleInits = [
                 { condition: settings.immersive?.enabled, init: initImmersiveMode },
                 { condition: settings.templateEditor?.enabled, init: initTemplateEditor },
-                { condition: settings.fourthWall?.enabled, init: initFourthWall },
                 { condition: settings.variablesPanel?.enabled, init: initVariablesPanel },
                 { condition: settings.variablesCore?.enabled, init: initVariablesCore },
                 { condition: settings.tts?.enabled, init: initTts },
@@ -1081,6 +1087,10 @@ jQuery(async () => {
                 await initActiveDrawProvider();
             } catch (e) {
                 console.error('[LittleWhiteBox] 初始化画图 provider 失败:', e);
+            }
+            try { initFourthWallFloorTools(); } catch (e) { }
+            if (settings.fourthWall?.enabled) {
+                try { initFourthWall(); } catch (e) { }
             }
 
             if (settings.preview?.enabled || settings.recorded?.enabled) {

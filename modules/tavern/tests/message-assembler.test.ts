@@ -330,6 +330,192 @@ test('xb tavern assembler distinguishes probability failures from budget skips',
     assert.equal(result.worldEntryCandidates[0]?.activationReason, 'constant');
 });
 
+test('xb tavern world candidate matrix explains every activation and skip gate', () => {
+    const result = buildXbTavernMessages({
+        worldBooks: [{
+            name: 'MatrixWorld',
+            entries: [
+                {
+                    uid: 'forced-budget',
+                    comment: 'forced but too large',
+                    content: '@@activate\nThis forced entry is intentionally too long for the tiny test budget.',
+                    order: 100,
+                    position: XBTavernWorldPosition.before,
+                },
+                {
+                    uid: 'active',
+                    comment: 'active keyword',
+                    content: 'Active.',
+                    key: ['station'],
+                    order: 90,
+                    position: XBTavernWorldPosition.after,
+                },
+                {
+                    uid: 'disabled',
+                    content: 'Disabled.',
+                    constant: true,
+                    disable: true,
+                },
+                {
+                    uid: 'suppressed',
+                    content: '@@dont_activate\nSuppressed.',
+                    constant: true,
+                },
+                {
+                    uid: 'cooldown',
+                    content: 'Cooling.',
+                    constant: true,
+                },
+                {
+                    uid: 'delay',
+                    content: 'Delayed.',
+                    constant: true,
+                },
+                {
+                    uid: 'miss',
+                    content: 'Miss.',
+                    key: ['moon'],
+                },
+                {
+                    uid: 'secondary',
+                    content: 'Secondary miss.',
+                    key: ['station'],
+                    keysecondary: ['rain'],
+                    selective: true,
+                    selectiveLogic: XBTavernSelectiveLogic.AND_ALL,
+                },
+                {
+                    uid: 'probability',
+                    content: 'Probability miss.',
+                    constant: true,
+                    probability: 50,
+                    useProbability: true,
+                },
+            ],
+        }],
+    }, {
+        systemPrompt: 'Top',
+        toolPrompt: 'Tools',
+    }, {
+        currentUserMessage: 'The station opens.',
+        worldSettings: {
+            turn: 5,
+            budgetChars: 20,
+            random: () => 1,
+            entryStates: {
+                'MatrixWorld\u0000cooldown': { cooldownUntilTurn: 9 },
+                'MatrixWorld\u0000delay': { delayUntilTurn: 9 },
+            },
+        },
+    });
+
+    const byUid = Object.fromEntries(result.worldEntryCandidates.map((entry) => [entry.uid, entry]));
+    assert.equal(byUid['forced-budget']?.status, 'budget_skipped');
+    assert.equal(byUid['forced-budget']?.activationReason, 'decorator');
+    assert.equal(byUid['forced-budget']?.budgetUsedBefore, 0);
+    assert.equal(typeof byUid['forced-budget']?.budgetShortfall, 'number');
+    assert.equal(byUid['forced-budget']?.insertionTarget, 'before character card');
+    assert.equal(byUid.active?.status, 'activated');
+    assert.equal(byUid.active?.activationReason, 'keyword');
+    assert.equal(byUid.active?.sourceWorldBook, 'MatrixWorld');
+    assert.equal(byUid.active?.positionLabel, 'after character');
+    assert.equal(byUid.disabled?.status, 'disabled');
+    assert.equal(byUid.suppressed?.status, 'suppressed_by_decorator');
+    assert.equal(byUid.cooldown?.status, 'cooldown');
+    assert.equal(byUid.delay?.status, 'delay');
+    assert.equal(byUid.miss?.status, 'not_matched');
+    assert.equal(byUid.secondary?.status, 'secondary_not_matched');
+    assert.equal(byUid.probability?.status, 'probability_failed');
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), ['active']);
+    assert.equal(result.meta.worldBudget.skippedChars, byUid['forced-budget']?.contentChars);
+});
+
+test('xb tavern world activation follows SillyTavern sticky, selective and decorator precedence', () => {
+    const result = buildXbTavernMessages({
+        worldBooks: [{
+            name: 'SemanticsWorld',
+            entries: [
+                {
+                    uid: 'selective-off',
+                    content: 'Secondary keys ignored when selective is false.',
+                    key: ['station'],
+                    keysecondary: ['rain'],
+                    selective: false,
+                    order: 30,
+                },
+                {
+                    uid: 'sticky-over-cooldown',
+                    content: 'Sticky survives cooldown and probability.',
+                    key: ['missing'],
+                    probability: 0,
+                    order: 20,
+                },
+                {
+                    uid: 'decorator-duel',
+                    content: '@@activate\n@@dont_activate\nActivate wins if both decorators exist.',
+                    order: 10,
+                },
+            ],
+        }],
+    }, {
+        systemPrompt: 'Top',
+        toolPrompt: 'Tools',
+    }, {
+        currentUserMessage: 'The station opens.',
+        worldSettings: {
+            turn: 4,
+            entryStates: {
+                'SemanticsWorld\u0000sticky-over-cooldown': {
+                    stickyUntilTurn: 8,
+                    cooldownUntilTurn: 8,
+                },
+            },
+        },
+    });
+
+    const byUid = Object.fromEntries(result.worldEntryCandidates.map((entry) => [entry.uid, entry]));
+    assert.equal(byUid['selective-off']?.status, 'activated');
+    assert.equal(byUid['selective-off']?.activationReason, 'keyword');
+    assert.equal(byUid['sticky-over-cooldown']?.status, 'activated');
+    assert.equal(byUid['sticky-over-cooldown']?.activationReason, 'sticky');
+    assert.equal(byUid['decorator-duel']?.status, 'activated');
+    assert.equal(byUid['decorator-duel']?.activationReason, 'decorator');
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), [
+        'selective-off',
+        'sticky-over-cooldown',
+        'decorator-duel',
+    ]);
+});
+
+test('xb tavern world recursion respects the configured recursion limit', () => {
+    const entries = activateWorldEntries([
+        {
+            uid: 'first',
+            content: 'relay',
+            key: ['station'],
+            order: 30,
+        },
+        {
+            uid: 'second',
+            content: 'beacon',
+            key: ['relay'],
+            order: 20,
+        },
+        {
+            uid: 'third',
+            content: 'final',
+            key: ['beacon'],
+            order: 10,
+        },
+    ], {
+        scanText: 'station',
+        recursion: true,
+        recursionLimit: 2,
+    });
+
+    assert.deepEqual(entries.map((entry) => entry.uid), ['first', 'second']);
+});
+
 test('xb tavern world activation honors case, whole-word, cooldown, delay, and state updates', () => {
     const entries = activateWorldEntries([
         {
@@ -590,4 +776,36 @@ test('xb tavern assembler supports preset placements around history', () => {
     assert.equal(contents.includes('After history rule.'), true);
     assert.equal(result.messages[result.messages.length - 1].role, 'assistant');
     assert.equal(result.messages[result.messages.length - 1].content, 'Aster whispers:');
+});
+
+test('xb tavern preset sections preserve placement order without leaking debug metadata', () => {
+    const result = buildXbTavernMessages({
+        character: { name: 'Aster', description: 'Pilot.' },
+        history: [{ role: 'assistant', content: 'Earlier.' }],
+    }, {
+        systemPrompt: 'Top',
+        toolPrompt: 'Tools',
+        sections: [
+            { id: 'top-a', label: 'Top A', placement: 'top', role: 'system', content: 'Top A content.' },
+            { id: 'top-b', label: 'Top B', placement: 'top', role: 'system', content: 'Top B content.' },
+            { id: 'before-char', label: 'Before Character', placement: 'beforeCharacter', role: 'system', content: 'Before character content.' },
+            { id: 'after-char', label: 'After Character', placement: 'afterCharacter', role: 'system', content: 'After character content.' },
+            { id: 'before-history', label: 'Before History', placement: 'beforeHistory', role: 'system', content: 'Before history content.' },
+            { id: 'after-history', label: 'After History', placement: 'afterHistory', role: 'system', content: 'After history content.' },
+            { id: 'prefill', label: 'Prefill', placement: 'assistantPrefill', role: 'assistant', content: 'Aster:' },
+        ],
+    }, {
+        currentUserMessage: 'Now.',
+    });
+
+    const contents = result.messages.map((message) => message.content);
+    assert.deepEqual(contents.slice(0, 4), ['Top', 'Tools', 'Top A content.', 'Top B content.']);
+    assert.equal(contents.indexOf('Before character content.') < contents.findIndex((content) => content.includes('<character_card>')), true);
+    assert.equal(contents.indexOf('After character content.') > contents.findIndex((content) => content.includes('<character_card>')), true);
+    assert.equal(contents.indexOf('Before history content.') < contents.indexOf('Now.'), true);
+    assert.equal(contents.indexOf('After history content.') > contents.indexOf('Now.'), true);
+    assert.equal(contents[contents.length - 1], 'Aster:');
+    assert.deepEqual(JSON.parse(result.meta.rawMessagesJson), result.messages);
+    assert.equal(result.messages.some((message) => message.content.includes('Before Character')), false);
+    assert.equal(result.messageLayers.some((layer) => layer.label === 'Before Character'), true);
 });

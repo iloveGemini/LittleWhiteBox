@@ -175,6 +175,70 @@ textarea:disabled {
     border-color: rgba(231, 225, 214, 0.16);
 }
 
+.brain-checks {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.brain-check {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    min-height: 84px;
+    text-align: left;
+    border-color: rgba(231, 225, 214, 0.14);
+    background: rgba(20, 18, 15, 0.64);
+}
+
+.brain-check.ok {
+    border-color: rgba(119, 185, 141, 0.42);
+    background: rgba(28, 48, 34, 0.42);
+}
+
+.brain-check.warn {
+    border-color: rgba(255, 196, 116, 0.46);
+    background: rgba(62, 45, 22, 0.48);
+}
+
+.check-mark {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    color: #171512;
+    background: #d8c49e;
+    font-weight: 750;
+}
+
+.brain-check.ok .check-mark {
+    background: #9bcf9f;
+}
+
+.brain-check.warn .check-mark {
+    background: #f4c47f;
+}
+
+.brain-check strong,
+.brain-check small {
+    display: block;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.brain-check strong {
+    color: #efe4d4;
+}
+
+.brain-check small {
+    color: #b9ad9b;
+    margin-top: 4px;
+    line-height: 1.35;
+}
+
 .overview-steps {
     display: grid;
     gap: 10px;
@@ -712,6 +776,10 @@ pre {
 
     .workspace-tabs {
         grid-template-columns: 1fr 1fr;
+    }
+
+    .brain-checks {
+        grid-template-columns: 1fr;
     }
 
     .overview-steps button {

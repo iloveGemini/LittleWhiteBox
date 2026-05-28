@@ -25,7 +25,7 @@ import {
     DEFAULT_BOTTOM,
     DEFAULT_META_PROTOCOL
 } from "./fw-prompt.js";
-import { initMessageEnhancer, cleanupMessageEnhancer, setMessageEnhancerRuntimeActive } from "./fw-message-enhancer.js";
+import { initMessageEnhancer, refreshMessageEnhancer, cleanupMessageEnhancer, setMessageEnhancerRuntimeActive } from "./fw-message-enhancer.js";
 import { postToIframe, isTrustedMessage, getTrustedOrigin } from "../../core/iframe-messaging.js";
 
 // ════════════════════════════════════════════
@@ -1212,14 +1212,47 @@ function removeFloatingButton() {
 // Init & Cleanup
 // ════════════════════════════════════════════
 
+function initFourthWallFloorTools() {
+    try { xbLog.info('fourthWall', 'initFourthWallFloorTools'); } catch { }
+    getSettings();
+    setMessageEnhancerRuntimeActive(true);
+    clearExpiredCache();
+    initMessageEnhancer();
+}
+
+function refreshFourthWallFloorTools() {
+    refreshMessageEnhancer();
+}
+
+function cleanupFourthWallRuntime() {
+    runtimeActive = false;
+    events.cleanup();
+    cleanupCommentary();
+    removeFloatingButton();
+    hideOverlay();
+    cancelGeneration();
+    currentVoiceRequestId = null;
+    frameReady = false;
+    pendingFrameMessages = [];
+    overlayCreated = false;
+    currentLoadedChatId = null;
+    pendingPingId = null;
+
+    if (visibilityHandler) {
+        document.removeEventListener('visibilitychange', visibilityHandler);
+        visibilityHandler = null;
+    }
+
+    $('#xiaobaix-fourth-wall-overlay').remove();
+    window.removeEventListener('message', handleFrameMessage);
+}
+
 function activateFourthWall() {
     if (runtimeActive) return;
     runtimeActive = true;
-    setMessageEnhancerRuntimeActive(true);
+    initFourthWallFloorTools();
     createFloatingButton();
     initCommentary();
-    clearExpiredCache();
-    initMessageEnhancer();
 
     events.on(event_types.CHAT_CHANGED, () => {
         cancelGeneration();
@@ -1247,37 +1280,18 @@ function closeFourthWall() {
     settings.fourthWall ||= {};
     settings.fourthWall.enabled = false;
     saveSettingsDebounced();
-    fourthWallCleanup();
+    cleanupFourthWallRuntime();
 }
 
 function fourthWallCleanup() {
     try { xbLog.info('fourthWall', 'fourthWallCleanup'); } catch { }
-    runtimeActive = false;
+    cleanupFourthWallRuntime();
     setMessageEnhancerRuntimeActive(false);
-    events.cleanup();
-    cleanupCommentary();
-    removeFloatingButton();
-    hideOverlay();
-    cancelGeneration();
     cleanupMessageEnhancer();
     stopCurrentVoice();
-    currentVoiceRequestId = null;
-    frameReady = false;
-    pendingFrameMessages = [];
-    overlayCreated = false;
-    currentLoadedChatId = null;
-    pendingPingId = null;
-
-    if (visibilityHandler) {
-        document.removeEventListener('visibilitychange', visibilityHandler);
-        visibilityHandler = null;
-    }
-
-    $('#xiaobaix-fourth-wall-overlay').remove();
-    window.removeEventListener('message', handleFrameMessage);
 }
 
-export { initFourthWall, fourthWallCleanup, openFourthWall, openFourthWall as showFourthWallPopup };
+export { initFourthWall, initFourthWallFloorTools, refreshFourthWallFloorTools, closeFourthWall, fourthWallCleanup, openFourthWall, openFourthWall as showFourthWallPopup };
 
 if (typeof window !== 'undefined') {
     window.fourthWallCleanup = fourthWallCleanup;

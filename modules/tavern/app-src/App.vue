@@ -1,15 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import {
-    buildXbTavernMessages,
-    createXbTavernBuildSnapshot,
     type XbTavernContext,
-    type XbTavernMessage,
     type XbTavernPresetSection,
 } from '../shared/message-assembler';
+import { buildXbTavernBrain } from '../shared/brain';
 import { createDefaultXbTavernPreset, DEFAULT_XB_TAVERN_PRESET_ID } from '../shared/presets';
 import {
-    appendTavernMessage,
     createTavernSession,
     deriveAndActivateDefaultTavernPreset,
     getActiveTavernPresetId,
@@ -22,17 +19,25 @@ import {
     saveTavernPreset,
     setActiveTavernPresetId,
     setSelectedTavernSessionId,
-    updateTavernSessionState,
+    updateTavernSessionSnapshot,
     type TavernMessageRecord,
     type TavernPresetRecord,
     type TavernSessionRecord,
 } from '../shared/session-db';
-import { runTavernOnce } from './runtime/run-once';
+import { buildContextHistory, runXbTavernTurn } from './runtime/run-once';
 
 interface TavernDiagnostics {
     ok?: boolean;
     message?: string;
     worldbookErrors?: Array<{ name: string; error: string }>;
+}
+
+interface RequestAuditSnapshot {
+    rawMessagesJson?: string;
+    messageCount?: number;
+    messageChars?: number;
+    provider?: string;
+    model?: string;
 }
 
 const SOURCE_APP = 'xb-tavern-app';
@@ -61,58 +66,113 @@ const activePresetId = ref(DEFAULT_XB_TAVERN_PRESET_ID);
 const presetStatus = ref('');
 const savedPresetJson = ref('');
 const selectedPresetSourceId = ref('');
+type WorkspaceKey = 'overview' | 'snapshot' | 'preset' | 'world' | 'messages' | 'runtime';
+interface BrainCheck {
+    key: WorkspaceKey;
+    label: string;
+    ok: boolean;
+    detail: string;
+}
 const presetIsBuiltIn = computed(() => activePresetId.value === DEFAULT_XB_TAVERN_PRESET_ID);
 const presetDirty = computed(() => !presetIsBuiltIn.value && snapshotPreset(preset.value) !== savedPresetJson.value);
 const selectedSession = computed(() => sessions.value.find((item) => item.id === selectedSessionId.value) || null);
 const sessionRuntimeState = computed(() => normalizeTavernSessionState(selectedSession.value?.state || {}));
-const activeWorkspace = ref<'overview' | 'snapshot' | 'preset' | 'world' | 'messages' | 'runtime'>('overview');
+const activeWorkspace = ref<WorkspaceKey>('overview');
 const workspaceTabs = [
-    { key: 'overview', label: '总览', hint: '现在选了谁，准备到哪一步' },
-    { key: 'snapshot', label: '资料来源', hint: '这次会用哪些角色和世界资料' },
-    { key: 'preset', label: '说话规则', hint: '小白会怎样约束 AI 扮演' },
-    { key: 'world', label: '世界书命中', hint: '哪些世界书会被带上' },
-    { key: 'messages', label: '发送内容', hint: '真正发给 AI 的内容' },
-    { key: 'runtime', label: '试一句', hint: '用当前配置试跑一轮' },
+    { key: 'overview', label: '脑子总览', hint: '先看关键结论是否成立' },
+    { key: 'snapshot', label: '资料快照', hint: '角色、用户、世界书来源' },
+    { key: 'preset', label: '小白预设', hint: '固定规则和可调规则段' },
+    { key: 'world', label: '世界书命中', hint: '命中、跳过和插入位置' },
+    { key: 'messages', label: 'AI 实际收到', hint: '最终 messages 分层预览' },
+    { key: 'runtime', label: '试跑记录', hint: '跑一轮并保存诊断' },
 ] as const;
 const activeWorkspaceItem = computed(() => workspaceTabs.find((item) => item.key === activeWorkspace.value) || workspaceTabs[0]);
 
 const effectiveContext = computed<XbTavernContext>(() => ({
     ...(selectedSession.value?.contextSnapshot || context.value),
     history: selectedSessionId.value
-        ? sessionMessages.value.map((message) => ({
-            role: ['system', 'user', 'assistant', 'tool'].includes(message.role) ? message.role as XbTavernMessage['role'] : 'assistant',
-            content: message.content,
-            name: message.name,
-        }))
+        ? buildContextHistory(sessionMessages.value)
         : context.value.history,
 }));
 
-const buildResult = computed(() => buildXbTavernMessages(effectiveContext.value, preset.value, {
+const brainBuild = computed(() => buildXbTavernBrain({
+    context: effectiveContext.value,
+    preset: preset.value,
     currentUserMessage: currentUserMessage.value,
     historyMode: historyMode.value,
-    worldSettings: {
-        recursion: true,
-        recursionLimit: 4,
-        budgetChars: 24000,
-        turn: sessionRuntimeState.value.turn,
-        entryStates: sessionRuntimeState.value.worldEntryStates,
-    },
+    turn: sessionRuntimeState.value.turn,
+    entryStates: sessionRuntimeState.value.worldEntryStates,
+    diagnostics: diagnostics.value,
 }));
+const buildResult = computed(() => brainBuild.value.buildResult);
 
-const characterName = computed(() => context.value.character?.name || '未选择角色');
-const userName = computed(() => context.value.user?.name || 'User');
-const worldBooks = computed(() => context.value.worldBooks || []);
+const effectiveCharacter = computed(() => effectiveContext.value.character || {});
+const effectiveUser = computed(() => effectiveContext.value.user || {});
+const characterName = computed(() => effectiveCharacter.value.name || '未选择角色');
+const userName = computed(() => effectiveUser.value.name || 'User');
+const worldBooks = computed(() => effectiveContext.value.worldBooks || []);
 const worldBookCount = computed(() => worldBooks.value.length);
 const worldEntryCount = computed(() => buildResult.value.worldEntryCandidates.length);
 const activatedCount = computed(() => buildResult.value.activatedWorldEntries.length);
 const messagePreview = computed(() => buildResult.value.messages);
 const selectedSessionTitle = computed(() => selectedSession.value?.title || '未创建会话');
 const rawMessagesJson = computed(() => buildResult.value.meta.rawMessagesJson);
-const buildSnapshot = computed(() => createXbTavernBuildSnapshot(effectiveContext.value, preset.value, buildResult.value, diagnostics.value));
+const buildSnapshot = computed(() => brainBuild.value.buildSnapshot);
+const effectiveHistoryCount = computed(() => effectiveContext.value.history?.length || 0);
+const lastRequestSnapshot = computed(() => selectedSession.value?.state?.lastRequestSnapshot as RequestAuditSnapshot | undefined);
+const lastRequestMatchesPreview = computed(() => !!lastRequestSnapshot.value?.rawMessagesJson
+    && lastRequestSnapshot.value.rawMessagesJson === rawMessagesJson.value);
+const brainChecks = computed<BrainCheck[]>(() => {
+    const layers = buildResult.value.messageLayers;
+    const topRulesLocked = layers[0]?.layer === 'lwb-system'
+        && layers[1]?.layer === 'lwb-tool'
+        && messagePreview.value[0]?.role === 'system'
+        && messagePreview.value[1]?.role === 'system';
+    const worldExplainable = candidateRows.value.every((entry) => entry.status && entry.insertionTarget);
+    const hasRequestAudit = !!lastRequestSnapshot.value?.rawMessagesJson;
+    return [
+        {
+            key: 'snapshot',
+            label: '资料快照',
+            ok: !!effectiveContext.value.character?.name,
+            detail: effectiveContext.value.character?.name
+                ? `${effectiveContext.value.character.name} / 世界书 ${worldBookCount.value} 本 / 历史 ${effectiveHistoryCount.value} 条`
+                : '还没有读到角色卡',
+        },
+        {
+            key: 'preset',
+            label: '顶层规则',
+            ok: topRulesLocked,
+            detail: topRulesLocked ? '小白 system 和工具边界固定在最前两条' : '最前两条规则异常',
+        },
+        {
+            key: 'world',
+            label: '世界书解释',
+            ok: worldExplainable,
+            detail: `候选 ${worldEntryCount.value} 条，激活 ${activatedCount.value} 条，跳过原因可检查`,
+        },
+        {
+            key: 'messages',
+            label: '发送内容',
+            ok: lastRequestMatchesPreview.value,
+            detail: hasRequestAudit
+                ? (lastRequestMatchesPreview.value
+                    ? `上次试跑和当前预览一致：${lastRequestSnapshot.value?.messageCount || messagePreview.value.length} 条`
+                    : '当前预览已经不同于上次实际发送，需要重新试跑')
+                : `待试跑：当前预览 ${messagePreview.value.length} 条 / ${buildSnapshot.value.messageChars} 字`,
+        },
+        {
+            key: 'runtime',
+            label: '独立会话',
+            ok: !!selectedSessionId.value,
+            detail: selectedSessionId.value ? '试跑会写入小白酒馆会话' : '还没创建小白酒馆会话',
+        },
+    ];
+});
 
 const characterFields = computed(() => {
-    const character = context.value.character || {};
-    const user = context.value.user || {};
+    const character = effectiveContext.value.character || {};
+    const user = effectiveContext.value.user || {};
     return [
         ['角色', character.name],
         ['头像', character.avatar],
@@ -131,7 +191,7 @@ const diagnosticRows = computed(() => {
     const rows = [
         diagnostics.value.message || statusText.value,
         characterName.value ? '' : '当前没有可用角色卡。',
-        (context.value.history || []).length ? '' : '这次准备资料里没有聊天历史。',
+        effectiveHistoryCount.value ? '' : '这次准备资料里没有聊天历史。',
         worldBookCount.value ? '' : '这次准备资料里没有可用世界书。',
         ...(diagnostics.value.worldbookErrors || []).map((item) => `${item.name}: ${item.error}`),
     ];
@@ -427,24 +487,21 @@ async function refreshSessions() {
 
 async function createSessionFromContext() {
     const snapshotContext = context.value;
-    const snapshotBuildResult = buildXbTavernMessages(snapshotContext, preset.value, {
+    const snapshotBrain = buildXbTavernBrain({
+        context: snapshotContext,
+        preset: preset.value,
         currentUserMessage: currentUserMessage.value,
         historyMode: historyMode.value,
-        worldSettings: {
-            recursion: true,
-            recursionLimit: 4,
-            budgetChars: 24000,
-            turn: 0,
-            entryStates: {},
-        },
+        turn: 0,
+        entryStates: {},
+        diagnostics: diagnostics.value,
     });
-    const snapshotBuild = createXbTavernBuildSnapshot(snapshotContext, preset.value, snapshotBuildResult, diagnostics.value);
     const session = await createTavernSession({
         title: `${snapshotContext.character?.name || '未选择角色'} · 小白酒馆`,
         characterId: String(snapshotContext.character?.id || ''),
         characterName: String(snapshotContext.character?.name || '未选择角色'),
         contextSnapshot: snapshotContext,
-        buildSnapshot: snapshotBuild,
+        buildSnapshot: snapshotBrain.buildSnapshot,
         presetId: String(preset.value.id || activePresetId.value || ''),
         presetName: String(preset.value.name || ''),
         state: {
@@ -456,37 +513,31 @@ async function createSessionFromContext() {
     await refreshSessions();
 }
 
+async function refreshSelectedSessionSnapshot() {
+    if (!selectedSessionId.value) {return;}
+    const snapshotContext = context.value;
+    const snapshotBrain = buildXbTavernBrain({
+        context: snapshotContext,
+        preset: preset.value,
+        currentUserMessage: currentUserMessage.value,
+        historyMode: historyMode.value,
+        turn: sessionRuntimeState.value.turn,
+        entryStates: sessionRuntimeState.value.worldEntryStates,
+        diagnostics: diagnostics.value,
+    });
+    await updateTavernSessionSnapshot(selectedSessionId.value, {
+        contextSnapshot: snapshotContext,
+        buildSnapshot: snapshotBrain.buildSnapshot,
+        presetId: String(preset.value.id || activePresetId.value || ''),
+        presetName: String(preset.value.name || ''),
+    });
+    await refreshSessions();
+}
+
 async function selectSession(sessionId: string) {
     selectedSessionId.value = sessionId;
     await setSelectedTavernSessionId(sessionId);
     sessionMessages.value = await listTavernMessages(sessionId);
-}
-
-async function ensureSession(snapshot?: {
-    context: XbTavernContext;
-    buildSnapshot: ReturnType<typeof createXbTavernBuildSnapshot>;
-    presetId: string;
-    presetName: string;
-}): Promise<string> {
-    if (!selectedSessionId.value) {
-        const snapshotContext = snapshot?.context || context.value;
-        const session = await createTavernSession({
-            title: `${snapshotContext.character?.name || '未选择角色'} · 小白酒馆`,
-            characterId: String(snapshotContext.character?.id || ''),
-            characterName: String(snapshotContext.character?.name || '未选择角色'),
-            contextSnapshot: snapshotContext,
-            buildSnapshot: snapshot?.buildSnapshot,
-            presetId: snapshot?.presetId || String(preset.value.id || activePresetId.value || ''),
-            presetName: snapshot?.presetName || String(preset.value.name || ''),
-            state: {
-                turn: 0,
-                worldEntryStates: {},
-            },
-        });
-        selectedSessionId.value = session.id;
-        await refreshSessions();
-    }
-    return selectedSessionId.value;
 }
 
 function shortText(value = '', limit = 180) {
@@ -551,81 +602,41 @@ function insertionTargetLabel(target = '') {
 }
 
 async function runOnce() {
-    const requestContext = effectiveContext.value;
-    const requestPresetId = String(preset.value.id || activePresetId.value || '');
-    const requestPresetName = String(preset.value.name || '');
-    const requestRuntimeState = normalizeTavernSessionState(selectedSession.value?.state || {});
-    const requestBuildResult = buildXbTavernMessages(requestContext, preset.value, {
-        currentUserMessage: currentUserMessage.value,
-        historyMode: historyMode.value,
-        worldSettings: {
-            recursion: true,
-            recursionLimit: 4,
-            budgetChars: 24000,
-            turn: requestRuntimeState.turn,
-            entryStates: requestRuntimeState.worldEntryStates,
-        },
-    });
-    const requestBuildSnapshot = createXbTavernBuildSnapshot(requestContext, preset.value, requestBuildResult, diagnostics.value);
-    const requestRawMessagesJson = requestBuildResult.meta.rawMessagesJson;
     runtimeError.value = '';
     runtimeText.value = '';
     runtimeProvider.value = '';
     runtimeModel.value = '';
     runtimeSnapshotJson.value = JSON.stringify({
-        buildSnapshot: requestBuildSnapshot,
+        status: 'running',
     }, null, 2);
     isRunning.value = true;
     try {
-        const sessionId = await ensureSession({
-            context: requestContext,
-            buildSnapshot: requestBuildSnapshot,
-            presetId: requestPresetId,
-            presetName: requestPresetName,
-        });
-        await appendTavernMessage(sessionId, {
-            role: 'user',
-            content: currentUserMessage.value,
-            contextSnapshot: requestContext,
-            buildSnapshot: requestBuildSnapshot,
-            presetId: requestPresetId,
-            presetName: requestPresetName,
-        });
-        const result = await runTavernOnce({
+        const result = await runXbTavernTurn({
+            sessionId: selectedSessionId.value,
             agentConfig: agentConfig.value,
-            messages: requestBuildResult.messages,
+            contextSnapshot: context.value,
+            preset: preset.value,
+            currentUserMessage: currentUserMessage.value,
+            runtimeState: normalizeTavernSessionState(selectedSession.value?.state || {}),
+            diagnostics: diagnostics.value,
+            historyMode: historyMode.value,
             onStreamProgress: (snapshot) => {
                 if (typeof snapshot.text === 'string') {runtimeText.value = snapshot.text;}
             },
         });
-        runtimeText.value = result.text;
+        selectedSessionId.value = result.sessionId;
+        runtimeText.value = result.assistantMessage?.content || result.errorMessage?.content || '';
+        runtimeError.value = result.error || '';
         runtimeProvider.value = result.provider || '';
         runtimeModel.value = result.model || '';
-        await appendTavernMessage(sessionId, {
-            role: 'assistant',
-            content: result.text,
-            providerPayload: result.providerPayload,
-            contextSnapshot: requestContext,
-            buildSnapshot: requestBuildSnapshot,
-            presetId: requestPresetId,
-            presetName: requestPresetName,
-            requestSnapshot: result.requestSnapshot,
-        });
-        await updateTavernSessionState(sessionId, {
-            turn: Number(requestRuntimeState.turn || 0) + 1,
-            worldEntryStates: requestBuildResult.meta.worldEntryStateUpdates,
-            lastBuildSnapshot: requestBuildSnapshot,
-            lastRequestSnapshot: result.requestSnapshot,
-            lastProvider: result.provider || '',
-            lastModel: result.model || '',
-        });
         runtimeSnapshotJson.value = JSON.stringify({
             provider: result.provider || '',
             model: result.model || '',
-            previewMatchesRequest: requestRawMessagesJson === result.requestSnapshot.rawMessagesJson,
-            nextTurn: Number(requestRuntimeState.turn || 0) + 1,
-            buildSnapshot: requestBuildSnapshot,
+            previewMatchesRequest: result.previewMatchesRequest,
+            nextTurn: result.nextTurn,
+            buildSnapshot: result.buildSnapshot,
             requestSnapshot: result.requestSnapshot,
+            error: result.error || '',
         }, null, 2);
         await refreshSessions();
     } catch (error) {
@@ -656,7 +667,7 @@ onUnmounted(() => {
         <p class="eyebrow">
           LittleWhiteBox Tavern
         </p>
-        <h1>小白酒馆准备页</h1>
+        <h1>小白酒馆脑子验收台</h1>
       </div>
       <button
         class="icon-button"
@@ -730,6 +741,13 @@ onUnmounted(() => {
           >
             用当前资料开始新会话
           </button>
+          <button
+            type="button"
+            :disabled="!selectedSessionId"
+            @click="refreshSelectedSessionSnapshot"
+          >
+            用当前资料刷新会话快照
+          </button>
           <div class="session-list">
             <button
               v-for="session in sessions"
@@ -748,9 +766,9 @@ onUnmounted(() => {
         <div class="panel workspace-panel">
           <div class="panel-head">
             <div>
-              <h2>先看这里</h2>
+              <h2>阶段 A 验收</h2>
               <p class="muted compact">
-                按顺序确认资料、规则、世界书和发送内容，最后试跑一句。
+                先确认脑子链路正确，再考虑正式聊天页。
               </p>
             </div>
             <span class="pill">
@@ -778,46 +796,62 @@ onUnmounted(() => {
         >
           <div class="panel-head">
             <div>
-              <h2>现在这套配置会怎么工作</h2>
+              <h2>当前脑子结论</h2>
               <p class="muted compact">
-                小白会用左侧选中的角色和会话，按自己的规则组装一份内容发给 AI。
+                这里看不通过，就不应该进入正式聊天页。
               </p>
             </div>
+          </div>
+          <div class="brain-checks">
+            <button
+              v-for="check in brainChecks"
+              :key="check.key"
+              type="button"
+              class="brain-check"
+              :class="{ ok: check.ok, warn: !check.ok }"
+              @click="activeWorkspace = check.key"
+            >
+              <span class="check-mark">{{ check.ok ? '✓' : '!' }}</span>
+              <span>
+                <strong>{{ check.label }}</strong>
+                <small>{{ check.detail }}</small>
+              </span>
+            </button>
           </div>
           <div class="overview-steps">
             <button
               type="button"
               @click="activeWorkspace = 'snapshot'"
             >
-              <strong>1. 看资料</strong>
-              <span>{{ characterName }} · 世界书 {{ worldBookCount }} 本 · 历史 {{ context.history?.length || 0 }} 条</span>
+              <strong>1. 资料快照</strong>
+              <span>{{ characterName }} · 世界书 {{ worldBookCount }} 本 · 历史 {{ effectiveHistoryCount }} 条</span>
             </button>
             <button
               type="button"
               @click="activeWorkspace = 'preset'"
             >
-              <strong>2. 看规则</strong>
+              <strong>2. 小白预设</strong>
               <span>{{ preset.name || '默认规则' }} · {{ presetRows.length }} 段</span>
             </button>
             <button
               type="button"
               @click="activeWorkspace = 'world'"
             >
-              <strong>3. 看世界书</strong>
+              <strong>3. 世界书命中</strong>
               <span>本轮会带上 {{ activatedCount }} 条，可检查 {{ worldEntryCount }} 条</span>
             </button>
             <button
               type="button"
               @click="activeWorkspace = 'messages'"
             >
-              <strong>4. 看发送内容</strong>
+              <strong>4. AI 实际收到</strong>
               <span>{{ messagePreview.length }} 条内容 · {{ buildSnapshot.messageChars }} 字</span>
             </button>
             <button
               type="button"
               @click="activeWorkspace = 'runtime'"
             >
-              <strong>5. 试一句</strong>
+              <strong>5. 试跑记录</strong>
               <span>{{ selectedSessionTitle }}</span>
             </button>
           </div>
@@ -829,7 +863,7 @@ onUnmounted(() => {
         >
           <div class="panel-head">
             <h2>本次会用的资料</h2>
-            <span class="pill">历史 {{ context.history?.length || 0 }} 条</span>
+            <span class="pill">历史 {{ effectiveHistoryCount }} 条</span>
           </div>
           <div class="snapshot-grid">
             <article class="snapshot-card">
@@ -1183,7 +1217,7 @@ onUnmounted(() => {
           class="panel"
         >
           <div class="panel-head">
-            <h2>真正发给 AI 的内容</h2>
+            <h2>AI 实际收到的 messages</h2>
             <select v-model="historyMode">
               <option value="squash">
                 压缩历史

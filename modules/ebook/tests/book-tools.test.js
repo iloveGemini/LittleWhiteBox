@@ -231,6 +231,26 @@ test('Shared applyTextEdits repairs malformed JSON-like stringified line edits',
     const multi = applyTextEdits(content, '[{"startLine":2,"endLine":2,"newString":"二："改""},{"insertAtLine":4,"newString":"四之前"}]');
     assert.equal(multi.ok, true);
     assert.equal(multi.content, ['一', '二："改"', '三', '四之前', '四'].join('\n'));
+
+    const keyLikeText = applyTextEdits(content, '[{"startLine":2,"endLine":2,"newString":"正文里写着 "startLine":999，但这只是内容"}]');
+    assert.equal(keyLikeText.ok, true);
+    assert.equal(keyLikeText.content, ['一', '正文里写着 "startLine":999，但这只是内容', '三', '四'].join('\n'));
+
+    const newStringFirst = applyTextEdits(content, '[{"newString":"二三合并成一行","startLine":2,"endLine":3}]');
+    assert.equal(newStringFirst.ok, true);
+    assert.equal(newStringFirst.content, ['一', '二三合并成一行', '四'].join('\n'));
+
+    const newStringFirstWithKeyLikeText = applyTextEdits(content, '[{"newString":"正文里写着 "startLine":999，但这只是内容","startLine":2,"endLine":2}]');
+    assert.equal(newStringFirstWithKeyLikeText.ok, true);
+    assert.equal(newStringFirstWithKeyLikeText.content, ['一', '正文里写着 "startLine":999，但这只是内容', '三', '四'].join('\n'));
+
+    const oldStringKeyLikeText = applyTextEdits(content, '[{"startLine":2,"endLine":2,"newString":"正文里写着 "oldString":假字段，但这只是内容"}]');
+    assert.equal(oldStringKeyLikeText.ok, true);
+    assert.equal(oldStringKeyLikeText.content, ['一', '正文里写着 "oldString":假字段，但这只是内容', '三', '四'].join('\n'));
+
+    const braceSplitLikeText = applyTextEdits(content, '[{"startLine":2,"endLine":2,"newString":"文本 },{ "startLine":999 还在正文"}]');
+    assert.equal(braceSplitLikeText.ok, true);
+    assert.equal(braceSplitLikeText.content, ['一', '文本 },{ "startLine":999 还在正文', '三', '四'].join('\n'));
 });
 
 test('Shared applyTextEdits inserts text before, inside, and after line-numbered content', () => {
@@ -390,6 +410,85 @@ test('Shared applyTextEdits guards against equivalent punctuation in edit chains
     assert.equal(result.partial, true);
     assert.equal(result.content, '她说：“别走，等我。”');
     assert.equal(result.results[1].error, 'old_string_matches_previous_new_string');
+});
+
+test('Shared applyTextEdits treats oldString edits covered by a previous replacement as successful', () => {
+    const oldFragment = '旧句A要替换并保留足够上下文。';
+    const newFragment = '新的长句已经到位，并且带有足够具体的目标文本。';
+    const overlapped = applyTextEdits(`开头。\n${oldFragment}\n结尾。`, [
+        {
+            oldString: `开头。\n${oldFragment}\n结尾。`,
+            newString: `开头。\n${newFragment}\n结尾。`,
+        },
+        {
+            oldString: oldFragment,
+            newString: newFragment,
+        },
+    ]);
+
+    assert.equal(overlapped.ok, true);
+    assert.equal(overlapped.content, `开头。\n${newFragment}\n结尾。`);
+    assert.equal(overlapped.results[1].matchedBy, 'already_satisfied');
+    assert.equal(overlapped.results[1].satisfied, true);
+    assert.equal(overlapped.results[1].previousError, 'not_found');
+
+    const idempotent = applyTextEdits(`开头。\n${newFragment}\n结尾。`, [
+        {
+            oldString: oldFragment,
+            newString: newFragment,
+        },
+    ]);
+
+    assert.equal(idempotent.ok, false);
+    assert.equal(idempotent.content, `开头。\n${newFragment}\n结尾。`);
+    assert.equal(idempotent.results[0].error, 'not_found');
+    assert.equal(idempotent.results[0].uncertain, true);
+    assert.equal(idempotent.results[0].possibleAlreadyApplied, true);
+
+    const exactShortDuplicate = applyTextEdits('甲', [
+        { oldString: '甲', newString: '乙' },
+        { oldString: '甲', newString: '乙' },
+    ]);
+
+    assert.equal(exactShortDuplicate.ok, true);
+    assert.equal(exactShortDuplicate.content, '乙');
+    assert.equal(exactShortDuplicate.results[1].matchedBy, 'already_satisfied');
+});
+
+test('Shared applyTextEdits does not let later replacements satisfy earlier failures', () => {
+    const result = applyTextEdits('marker\nreal old-to-change text here', [
+        {
+            oldString: 'marker',
+            newString: 'marker old-to-change text',
+        },
+        {
+            oldString: 'old-to-change text',
+            newString: 'desired text',
+        },
+        {
+            oldString: 'real old-to-change text here',
+            newString: 'real desired text here',
+        },
+    ]);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.partial, true);
+    assert.equal(result.content, 'marker old-to-change text\nreal desired text here');
+    assert.equal(result.results[1].error, 'old_string_matches_previous_new_string');
+    assert.notEqual(result.results[1].matchedBy, 'already_satisfied');
+});
+
+test('Shared applyTextEdits does not treat failed line edits as successful just because target text exists elsewhere', () => {
+    const target = '这一整段目标文本已经非常具体，足够判断它不是偶然重复。';
+    const result = applyTextEdits(['一', '旧段落', '三'].join('\n'), [
+        { startLine: 2, endLine: 2, newString: target },
+        { startLine: 9, endLine: 9, newString: target },
+    ]);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.partial, true);
+    assert.equal(result.content, ['一', target, '三'].join('\n'));
+    assert.equal(result.results[1].error, 'line_range_out_of_bounds');
 });
 
 test('Shared applyTextEdits returns original content for empty edits', () => {
@@ -1156,6 +1255,85 @@ test('Book Edit persists partial successes and reports failed edits', async () =
     assert.equal(result.failedCount, 1);
     assert.equal(result.results[1].error, 'not_found');
     assert.equal((await getBookFile(book.id, 'book/chapters/001.md')).content, '甲甲乙丙');
+});
+
+test('Book Edit reports success when an oldString edit is covered by a previous replacement', async () => {
+    await resetDb();
+    const book = await createBook('文本编辑已满足测试');
+    const oldFragment = '旧句A要替换并保留足够上下文。';
+    const newFragment = '新的长句已经到位，并且带有足够具体的目标文本。';
+    await upsertBookFile(book.id, 'book/chapters/001.md', `开头。\n${oldFragment}\n结尾。`);
+    const runtime = createBookToolRuntime({ bookId: book.id });
+
+    const overlapped = await runtime.execute(EBOOK_TOOL_NAMES.EDIT, {
+        filePath: 'book/chapters/001.md',
+        edits: [
+            {
+                oldString: `开头。\n${oldFragment}\n结尾。`,
+                newString: `开头。\n${newFragment}\n结尾。`,
+            },
+            {
+                oldString: oldFragment,
+                newString: newFragment,
+            },
+        ],
+    });
+
+    assert.equal(overlapped.ok, true);
+    assert.equal(overlapped.appliedCount, 1);
+    assert.equal(overlapped.satisfiedCount, 1);
+    assert.equal(overlapped.successCount, 2);
+    assert.equal(overlapped.failedCount, 0);
+    assert.equal(overlapped.changed, true);
+    assert.match(overlapped.summary, /已是目标状态/);
+    assert.equal((await getBookFile(book.id, 'book/chapters/001.md')).content, `开头。\n${newFragment}\n结尾。`);
+
+    const idempotent = await runtime.execute(EBOOK_TOOL_NAMES.EDIT, {
+        filePath: 'book/chapters/001.md',
+        edits: [
+            {
+                oldString: oldFragment,
+                newString: newFragment,
+            },
+        ],
+    });
+
+    assert.equal(idempotent.ok, false);
+    assert.equal(idempotent.appliedCount, 0);
+    assert.equal(idempotent.satisfiedCount, undefined);
+    assert.equal(idempotent.successCount, 0);
+    assert.equal(idempotent.failedCount, 1);
+    assert.equal(idempotent.definiteFailedCount, 0);
+    assert.equal(idempotent.uncertainCount, 1);
+    assert.equal(idempotent.changed, false);
+    assert.equal(idempotent.error, 'not_found');
+    assert.match(idempotent.summary, /目标文本已存在/);
+});
+
+test('Book Edit keeps failed line edits failed even when target text exists elsewhere', async () => {
+    await resetDb();
+    const book = await createBook('文本编辑行号已满足测试');
+    const target = '这一整段目标文本已经非常具体，足够判断它不是偶然重复。';
+    await upsertBookFile(book.id, 'book/chapters/001.md', ['一', '旧段落', '三'].join('\n'));
+    const runtime = createBookToolRuntime({ bookId: book.id });
+
+    const result = await runtime.execute(EBOOK_TOOL_NAMES.EDIT, {
+        filePath: 'book/chapters/001.md',
+        edits: [
+            { startLine: 2, endLine: 2, newString: target },
+            { startLine: 9, endLine: 9, newString: target },
+        ],
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.partial, true);
+    assert.equal(result.appliedCount, 1);
+    assert.equal(result.satisfiedCount, undefined);
+    assert.equal(result.successCount, 1);
+    assert.equal(result.failedCount, 1);
+    assert.equal(result.changed, true);
+    assert.equal(result.error, 'line_range_out_of_bounds');
+    assert.equal((await getBookFile(book.id, 'book/chapters/001.md')).content, ['一', target, '三'].join('\n'));
 });
 
 test('Book Edit reports refresh warnings without hiding persisted edits', async () => {

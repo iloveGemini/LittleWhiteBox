@@ -280,7 +280,8 @@ export function createBookFileToolHandlers(options = {}) {
         assertWritable();
         const path = assertBookFilePath(args.filePath);
         const edits = args.edits;
-        const file = await getBookFile(await currentBookId(), path);
+        const bookId = await currentBookId();
+        const file = await getBookFile(bookId, path);
         if (!file) {
             return {
                 ok: false,
@@ -296,11 +297,40 @@ export function createBookFileToolHandlers(options = {}) {
             };
         }
 
-        const result = applyTextEdits(file?.content || '', edits);
-        const appliedCount = result.results.filter((item) => item.ok).length;
-        const failedCount = result.results.length - appliedCount;
-        if (appliedCount > 0) {
-            await upsertBookFile(await currentBookId(), path, result.content || '');
+        const originalContent = file?.content || '';
+        const result = applyTextEdits(originalContent, edits);
+        const appliedCount = result.results.filter((item) => item.ok && !item.satisfied).length;
+        const satisfiedCount = result.results.filter((item) => item.ok && item.satisfied).length;
+        const successCount = appliedCount + satisfiedCount;
+        const uncertainCount = result.results.filter((item) => !item.ok && item.uncertain).length;
+        const failedCount = result.results.length - successCount;
+        const definiteFailedCount = failedCount - uncertainCount;
+        const changed = result.content !== originalContent;
+        if (changed) {
+            await upsertBookFile(bookId, path, result.content || '');
+            const savedFile = await getBookFile(bookId, path);
+            if (!savedFile || savedFile.content !== result.content) {
+                return {
+                    ok: false,
+                    partial: true,
+                    path,
+                    error: 'edit_persistence_verification_failed',
+                    message: 'Edit result was produced, but the saved file did not match the expected content after write verification.',
+                    editCount: result.results.length,
+                    appliedCount,
+                    satisfiedCount: satisfiedCount || undefined,
+                    successCount,
+                    failedCount,
+                    definiteFailedCount,
+                    uncertainCount: uncertainCount || undefined,
+                    changed: false,
+                    expectedBytes: new TextEncoder().encode(result.content || '').length,
+                    savedBytes: new TextEncoder().encode(savedFile?.content || '').length,
+                    results: result.results,
+                    warning: result.warning,
+                    summary: `已生成 ${path} 的修改结果，但落盘校验未通过；请重新读取文件确认当前内容。`,
+                };
+            }
         }
         const toolResult = {
             ok: result.ok,
@@ -310,16 +340,33 @@ export function createBookFileToolHandlers(options = {}) {
             message: result.ok ? undefined : result.results.find((item) => !item.ok)?.message,
             editCount: result.results.length,
             appliedCount,
+            satisfiedCount: satisfiedCount || undefined,
+            successCount,
             failedCount,
+            definiteFailedCount,
+            uncertainCount: uncertainCount || undefined,
+            changed,
             results: result.results,
             warning: result.warning,
             summary: result.ok
-                ? `已修改 ${path}，应用 ${appliedCount} 项。`
+                ? changed
+                    ? satisfiedCount > 0
+                        ? `已修改 ${path}，应用 ${appliedCount} 项，另有 ${satisfiedCount} 项已是目标状态。`
+                        : `已修改 ${path}，应用 ${appliedCount} 项。`
+                    : `已确认 ${path} 的 ${satisfiedCount || appliedCount} 项修改已是目标状态，无需重复写入。`
                 : result.partial
-                    ? `已部分修改 ${path}：成功 ${appliedCount} 项，失败 ${failedCount} 项。`
-                    : `未修改 ${path}：${result.results[0]?.message || result.results[0]?.error || 'Edit failed'}。`,
+                    ? satisfiedCount > 0
+                        ? uncertainCount > 0
+                            ? `已部分修改 ${path}：成功 ${successCount} 项（应用 ${appliedCount} 项，另有 ${satisfiedCount} 项已是目标状态），需确认 ${uncertainCount} 项，明确失败 ${definiteFailedCount} 项。`
+                            : `已部分修改 ${path}：成功 ${successCount} 项（应用 ${appliedCount} 项，另有 ${satisfiedCount} 项已是目标状态），明确失败 ${definiteFailedCount} 项。`
+                        : uncertainCount > 0
+                            ? `已部分修改 ${path}：成功 ${appliedCount} 项，需确认 ${uncertainCount} 项，明确失败 ${definiteFailedCount} 项；需确认项的目标文本已存在但无法证明目标位置，请重新 Read 确认。`
+                            : `已部分修改 ${path}：成功 ${appliedCount} 项，明确失败 ${definiteFailedCount} 项。`
+                    : uncertainCount > 0
+                        ? `未应用新的修改到 ${path}：${uncertainCount} 项的目标文本已存在但 oldString 未找到，无法证明目标位置已正确；请重新 Read 确认。`
+                        : `未修改 ${path}：${result.results[0]?.message || result.results[0]?.error || 'Edit failed'}。`,
         };
-        return appliedCount > 0 ? await attachRefreshWarning(toolResult) : toolResult;
+        return changed ? await attachRefreshWarning(toolResult) : toolResult;
     }
 
     async function executeDelete(args = {}) {

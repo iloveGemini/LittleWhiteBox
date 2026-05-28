@@ -147,9 +147,51 @@ function findReplacementRanges(content = '', oldString = '') {
     return findFlexibleWhitespaceRanges(content, oldString);
 }
 
+function compactComparableLength(text = '') {
+    return buildCompactWhitespaceIndex(text).compact.length;
+}
+
+function isSpecificEnoughForAlreadySatisfied(text = '', minimumLength = 8) {
+    return compactComparableLength(text) >= minimumLength;
+}
+
+function containsEquivalentText(haystack = '', needle = '') {
+    if (!needle) return false;
+    return findReplacementRanges(haystack, needle).length > 0;
+}
+
+function isOldStringEditCoveredByPreviousReplacement(edit = {}, replacements = []) {
+    const oldString = typeof edit.oldString === 'string' ? edit.oldString : String(edit.oldString ?? '');
+    const newString = typeof edit.newString === 'string' ? edit.newString : String(edit.newString ?? '');
+
+    return replacements.some((replacement = {}) => {
+        const matchedText = String(replacement.matchedText ?? '');
+        const replacementText = String(replacement.replacement ?? '');
+        if (matchedText === oldString && replacementText === newString) return true;
+        if (!isSpecificEnoughForAlreadySatisfied(oldString, 8)) return false;
+        if (newString !== '' && !isSpecificEnoughForAlreadySatisfied(newString, 8)) return false;
+        if (!containsEquivalentText(matchedText, oldString)) return false;
+        if (containsEquivalentText(replacementText, oldString)) return false;
+        return newString === '' || containsEquivalentText(replacementText, newString);
+    });
+}
+
+function buildPossibleAlreadyAppliedDiagnostic(content = '', oldString = '', newString = '') {
+    if (!newString || !isSpecificEnoughForAlreadySatisfied(newString, 16)) return {};
+    const oldMatches = oldString ? findReplacementRanges(content, oldString).length : 0;
+    const newMatches = findReplacementRanges(content, newString).length;
+    if (oldMatches !== 0 || newMatches <= 0) return {};
+    return {
+        uncertain: true,
+        possibleAlreadyApplied: true,
+        newStringMatches: newMatches,
+    };
+}
+
 function applyRanges(content = '', ranges = [], newString = '') {
     let nextContent = content;
     const replacements = [];
+    const replacementDetails = [];
     ranges
         .slice()
         .sort((left, right) => right.start - left.start)
@@ -157,11 +199,13 @@ function applyRanges(content = '', ranges = [], newString = '') {
             const matchedText = content.slice(range.start, range.end);
             const replacement = range.equivalent ? adaptReplacementStyle(newString, matchedText) : newString;
             replacements.push(replacement);
+            replacementDetails.push({ matchedText, replacement });
             nextContent = `${nextContent.slice(0, range.start)}${replacement}${nextContent.slice(range.end)}`;
         });
     return {
         content: nextContent,
         replacements,
+        replacementDetails,
         matchedBy: ranges.some((range) => range.flexibleWhitespace)
             ? 'flexible_whitespace'
             : ranges.some((range) => range.equivalent)
@@ -185,6 +229,27 @@ function buildEditFailure(error = '', message = '', suggestion = '', extra = {})
 
 const EDIT_ITEM_KEYS = new Set(['oldString', 'newString', 'startLine', 'endLine', 'insertAtLine', 'replaceAll']);
 
+function lastMatchForKey(matches = [], key = '') {
+    for (let index = matches.length - 1; index >= 0; index -= 1) {
+        if (matches[index]?.[1] === key) return matches[index];
+    }
+    return null;
+}
+
+function firstLikelyModeMatchAfter(matches = [], position = 0) {
+    const startLine = lastMatchForKey(matches, 'startLine');
+    const endLine = lastMatchForKey(matches, 'endLine');
+    const insertAtLine = lastMatchForKey(matches, 'insertAtLine');
+    const oldString = lastMatchForKey(matches, 'oldString');
+    const anchors = [];
+    if (startLine && endLine) anchors.push(startLine, endLine);
+    else if (insertAtLine) anchors.push(insertAtLine);
+    else if (oldString) anchors.push(oldString);
+    return anchors
+        .filter((match) => match.index > position)
+        .sort((left, right) => left.index - right.index)[0] || null;
+}
+
 function stripLooseValueQuotes(value = '') {
     let text = String(value ?? '').trim();
     if (text.endsWith(',')) text = text.slice(0, -1).trimEnd();
@@ -203,12 +268,18 @@ function parseLooseEditItem(itemText = '') {
     const matches = [...source.matchAll(/"?([A-Za-z][A-Za-z0-9_]*)"?\s*:/g)]
         .filter((match) => EDIT_ITEM_KEYS.has(match[1]));
     if (!matches.length) return null;
+    const knownModeMatches = matches.filter((match) => match[1] !== 'newString');
+    const lastKnownModeMatch = knownModeMatches[knownModeMatches.length - 1] || null;
 
     const item = {};
-    matches.forEach((match, index) => {
+    for (let index = 0; index < matches.length; index += 1) {
+        const match = matches[index];
         const key = match[1];
         const valueStart = match.index + match[0].length;
-        const nextMatch = matches[index + 1];
+        const alreadyHasMode = hasOldStringMode(item) || hasLineRange(item) || hasInsertLine(item);
+        const nextMatch = key === 'newString'
+            ? (!alreadyHasMode && lastKnownModeMatch && lastKnownModeMatch.index > match.index ? firstLikelyModeMatchAfter(matches, match.index) : null)
+            : matches[index + 1];
         let valueEnd = nextMatch ? nextMatch.index : source.length;
         if (nextMatch) {
             const commaBeforeNextKey = source.lastIndexOf(',', nextMatch.index);
@@ -218,14 +289,15 @@ function parseLooseEditItem(itemText = '') {
         if (key === 'startLine' || key === 'endLine' || key === 'insertAtLine') {
             const numberMatch = rawValue.match(/-?\d+/);
             if (numberMatch) item[key] = Number(numberMatch[0]);
-            return;
+            continue;
         }
         if (key === 'replaceAll') {
             item[key] = /^true\b/i.test(rawValue);
-            return;
+            continue;
         }
         item[key] = stripLooseValueQuotes(rawValue);
-    });
+        if (key === 'newString' && !nextMatch) break;
+    }
 
     const hasMode = hasOldStringMode(item) || hasLineRange(item) || hasInsertLine(item);
     return hasMode && Object.hasOwn(item, 'newString') ? item : null;
@@ -239,18 +311,34 @@ function isRecoverableEditItem(item) {
         && (hasOldStringMode(item) || hasLineRange(item) || hasInsertLine(item));
 }
 
+function looksLikeLooseEditSegment(text = '') {
+    return /"?newString"?\s*:/i.test(text)
+        && /"?(?:oldString|startLine|endLine|insertAtLine)"?\s*:/i.test(text);
+}
+
 function splitLooseEditItems(raw = '') {
     const text = String(raw || '').trim();
     if (!text.startsWith('[') || !text.endsWith(']')) return [];
     const body = text.slice(1, -1).trim();
     if (!body) return [];
-    return body
-        .split(/\}\s*,\s*\{(?=\s*"?(?:oldString|newString|startLine|endLine|insertAtLine|replaceAll)"?\s*:)/)
-        .map((chunk, index, list) => {
-            const prefix = index === 0 && chunk.trim().startsWith('{') ? '' : '{';
-            const suffix = index === list.length - 1 && chunk.trim().endsWith('}') ? '' : '}';
-            return `${prefix}${chunk}${suffix}`;
-        });
+    const delimiters = [...body.matchAll(/\}\s*,\s*\{(?=\s*"?(?:oldString|newString|startLine|endLine|insertAtLine|replaceAll)"?\s*:)/g)]
+        .map((match) => ({
+            index: match.index,
+            splitEnd: match.index + 1,
+            nextStart: match.index + match[0].lastIndexOf('{'),
+        }));
+    const chunks = [];
+    let start = 0;
+    delimiters.forEach((delimiter, index) => {
+        const nextDelimiter = delimiters[index + 1];
+        const left = body.slice(start, delimiter.splitEnd);
+        const right = body.slice(delimiter.nextStart, nextDelimiter?.splitEnd ?? body.length);
+        if (!looksLikeLooseEditSegment(left) || !looksLikeLooseEditSegment(right)) return;
+        chunks.push(left);
+        start = delimiter.nextStart;
+    });
+    chunks.push(body.slice(start));
+    return chunks.map((chunk) => chunk.trim()).filter(Boolean);
 }
 
 function parseLooseEditsString(raw = '') {
@@ -762,6 +850,8 @@ export function applyTextEdits(content = '', edits) {
     const editList = normalizedInput.edits;
     const results = [];
     const previousNewStrings = [];
+    const previousReplacementDetails = [];
+    const replacementDetailsBeforeEdit = [];
     let appliedCount = 0;
 
     if (!editList.length) {
@@ -812,7 +902,9 @@ export function applyTextEdits(content = '', edits) {
         return result;
     }
 
-    editList.map((edit, index) => normalizeEditForMode(edit, modeList[index])).forEach((edit = {}, index) => {
+    const normalizedOldStringEdits = editList.map((edit, index) => normalizeEditForMode(edit, modeList[index]));
+    normalizedOldStringEdits.forEach((edit = {}, index) => {
+        replacementDetailsBeforeEdit[index] = previousReplacementDetails.slice();
         const oldString = typeof edit.oldString === 'string' ? edit.oldString : String(edit.oldString ?? '');
         const newString = typeof edit.newString === 'string' ? edit.newString : String(edit.newString ?? '');
         const replaceAll = !!edit.replaceAll;
@@ -850,10 +942,16 @@ export function applyTextEdits(content = '', edits) {
 
         const ranges = findReplacementRanges(nextContent, oldString);
         if (!ranges.length) {
+            const diagnostic = buildPossibleAlreadyAppliedDiagnostic(nextContent, oldString, newString);
             results.push(buildEditFailure(
                 'not_found',
-                'String to replace not found in file',
-                'Edit already retries long oldString values with common punctuation and whitespace differences ignored. If it still fails, Read the current file and copy the exact current text into oldString. If this overlaps another same-file edit, merge them into one larger replacement; for very large rewrites, use Write.',
+                diagnostic.possibleAlreadyApplied
+                    ? 'String to replace not found, but the requested newString already exists in the file'
+                    : 'String to replace not found in file',
+                diagnostic.possibleAlreadyApplied
+                    ? 'Read the current file and verify whether the intended location is already correct. Edit will not mark this as successful without a same-call replacement proof.'
+                    : 'Edit already retries long oldString values with common punctuation and whitespace differences ignored. If it still fails, Read the current file and copy the exact current text into oldString. If this overlaps another same-file edit, merge them into one larger replacement; for very large rewrites, use Write.',
+                diagnostic,
             ));
             return;
         }
@@ -872,6 +970,7 @@ export function applyTextEdits(content = '', edits) {
         const applied = applyRanges(nextContent, selectedRanges, newString);
         nextContent = applied.content;
         previousNewStrings.push(...applied.replacements);
+        previousReplacementDetails.push(...applied.replacementDetails);
         appliedCount += 1;
         results.push({
             ok: true,
@@ -881,10 +980,26 @@ export function applyTextEdits(content = '', edits) {
         });
     });
 
+    results.forEach((result, index) => {
+        if (!result || result.ok) return;
+        if (!['not_found', 'old_string_matches_previous_new_string'].includes(result.error)) return;
+        if (!isOldStringEditCoveredByPreviousReplacement(normalizedOldStringEdits[index], replacementDetailsBeforeEdit[index] || [])) return;
+        results[index] = {
+            ok: true,
+            index,
+            replacements: 0,
+            matchedBy: 'already_satisfied',
+            satisfied: true,
+            previousError: result.error,
+            message: 'Desired edit is already present in the file',
+        };
+    });
+
     const failedCount = results.filter((result) => !result.ok).length;
+    const satisfiedCount = results.filter((result) => result?.satisfied).length;
     return {
         ok: failedCount === 0,
-        partial: appliedCount > 0 && failedCount > 0 ? true : undefined,
+        partial: (appliedCount > 0 || satisfiedCount > 0) && failedCount > 0 ? true : undefined,
         content: nextContent,
         results,
         warning: normalizedInput.warning,
