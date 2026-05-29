@@ -686,33 +686,54 @@ test('Default outline template pushes volume-level planning before chapter draft
     assert.match(outline, /文风、节奏、尺度、冲突密度、日常比例、性场景功能和审稿优先级/);
     assert.match(outline, /## 开书定位/);
     assert.match(outline, /## 故事脊柱/);
+    assert.match(outline, /## 欲望链 \/ 目标层级/);
     assert(
         outline.indexOf('## 开书定位') < outline.indexOf('## 故事脊柱'),
         '开书定位 should appear before 故事脊柱',
     );
     assert.match(outline, /怎么写好这本书（执行方案确认）/);
     assert.match(outline, /必须先向用户说明“我准备怎样写好这本书”/);
-    assert.match(outline, /这一步是卷细纲的前置条件/);
+    assert.match(outline, /这一步是卷结构、事件集团和情节轮章纲的前置条件/);
+    assert.match(outline, /终极欲望牵引全书/);
+    assert.match(outline, /长期欲望牵引卷/);
+    assert.match(outline, /中期欲望牵引事件集团/);
+    assert.match(outline, /短期欲望分布在章节和场景/);
     assert.match(outline, /大纲推进原则/);
     assert.match(outline, /大概有几卷/);
-    assert.match(outline, /当前卷必须有可执行的卷内细纲/);
+    assert.match(outline, /情节轮清单/);
+    assert.match(outline, /当前轮 3-5 章章纲/);
     assert.match(outline, /book\/volumes\/001\.md/);
-    assert.match(outline, /## 卷细纲索引/);
+    assert.match(outline, /## 卷规划索引/);
     assert.doesNotMatch(outline, /## 当前卷推进草图/);
-    assert.match(volume, /# 第一卷细纲/);
+    assert.match(volume, /# 第一卷规划/);
     assert.match(volume, /先确认 style\.md 里已经有“怎么写好这本书”的执行方案/);
-    assert.match(volume, /卷内推进草图/);
-    assert.match(volume, /章节表是地图，不是工单/);
+    assert.match(volume, /卷内事件集团骨架/);
+    assert.match(volume, /中期欲望/);
+    assert.match(volume, /本卷情节轮清单/);
+    assert.match(volume, /短期欲望簇/);
+    assert.match(volume, /当前情节轮/);
+    assert.match(volume, /本轮 3-5 章章纲/);
+    assert.match(volume, /主角渴望 -> 主角障碍 -> 主角行动 -> 行动结果/);
+    assert.match(volume, /副情节 \/ 下一章铺垫/);
+    assert.match(volume, /正负倾向/);
+    assert.match(volume, /积极约 3/);
     assert.match(volume, /章末位移是写完后回头看的结果/);
     assert.match(volume, /第 1 章写到：主角第一次注意到女主那个下午/);
     const style = DEFAULT_BOOK_FILES.find((file) => file.path === 'book/style.md')?.content || '';
     assert.match(style, /## 怎么写好这本书/);
     assert.match(style, /执行方案确认/);
-    assert.match(style, /卷细纲要在这一步之后形成/);
+    assert.match(style, /情节轮清单和本轮章纲都要在这一步之后形成/);
     assert.match(style, /慢写不是把一场戏写长/);
     assert.match(style, /章节是连续流里的呼吸点/);
     assert.match(style, /章节不是任务/);
     assert.match(style, /一章里不需要“完成”任何事/);
+
+    const reviewRules = DEFAULT_BOOK_FILES.find((file) => file.path === 'book/review-rules.md')?.content || '';
+    assert.match(reviewRules, /## 情节轮审稿/);
+    assert.match(reviewRules, /欲望链是否在引领结构/);
+    assert.match(reviewRules, /短期欲望 -> 障碍 -> 行动 -> 结果/);
+    assert.match(reviewRules, /每 5 章内是否有 1-3 个实质进展/);
+    assert.match(reviewRules, /积极约 3、阻碍\/落空\/误解\/代价约 7/);
 });
 
 test('Book context prompt keeps stable files separate from volatile turn context', () => {
@@ -894,6 +915,7 @@ test('Book action prompts rely on injected core story files', () => {
     assert.match(startBookPrompt, /尺度与边界/);
     assert.match(startBookPrompt, /文风、节奏、尺度、冲突密度、日常比例、性场景功能/);
     assert.match(spinePrompt, /故事脊柱/);
+    assert.match(spinePrompt, /欲望链/);
     assert.match(spinePrompt, /不要直接写完整大纲/);
     assert.match(spinePrompt, /定位不足时先补定位/);
     assert.match(spinePrompt, /我准备怎样写好这本书/);
@@ -906,16 +928,26 @@ test('Book action prompts rely on injected core story files', () => {
     assert.match(EBOOK_SYSTEM_PROMPT, /book\/outline\.md` 顶部“新书建档引导”为准/);
     assert.match(EBOOK_SYSTEM_PROMPT, /开书时按这个顺序做，不要跳步/);
     assert.match(EBOOK_SYSTEM_PROMPT, /向用户说明“我准备怎样写好这本书”/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /是卷细纲的前置条件/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /卷内细纲写入 `book\/volumes\/NNN\.md`/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /不要把当前卷推进草图塞回 `book\/outline\.md`/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /是欲望链、卷结构、事件集团和情节轮章纲的前置条件/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /终极欲望牵引全书/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /长期欲望牵引卷/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /中期欲望牵引事件集团/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /短期欲望分布到章节和场景/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /卷结构要说明大概几卷、每卷主题、对应长期欲望/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /当前卷规划写入 `book\/volumes\/NNN\.md`/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /本卷情节轮清单/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /只展开当前情节轮的 3-5 章章纲/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /正负倾向/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /积极约 3、阻碍\/落空\/误解\/代价约 7/);
     assert.match(EBOOK_SYSTEM_PROMPT, /章节表是地图和回头记录/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /一卷写完后先复盘/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /每个情节轮写完后先审稿、修订、复盘实际变化/);
     assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /作品入口三项是：类型\/题材入口、情绪\/读者体验入口、关系\/设定张力入口/);
     assert.match(EBOOK_SYSTEM_PROMPT, /慢写不是多加几百字/);
     assert.match(EBOOK_SYSTEM_PROMPT, /book\/volumes\/NNN\.md/);
     assert.match(EBOOK_SYSTEM_PROMPT, /book\/volumes\/` is not stably injected/);
     assert.match(EBOOK_SYSTEM_PROMPT, /不要每章都问用户/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /欲望链必须引领结构/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /短期欲望 -> 障碍 -> 行动 -> 结果/);
     assert.match(EBOOK_SYSTEM_PROMPT, /按 `book\/review-rules\.md` 里的固定审稿规则/);
     assert.match(EBOOK_SYSTEM_PROMPT, /为了保持分身独立性/);
     assert.match(EBOOK_SYSTEM_PROMPT, /只给审稿范围、文件路径、必要事实背景和输出形式/);
@@ -926,24 +958,31 @@ test('Book action prompts rely on injected core story files', () => {
     assert.match(outlinePrompt, /\[作品核心设定\]/);
     assert.match(outlinePrompt, /不要硬写完整大纲/);
     assert.match(outlinePrompt, /不要只写“下一章”/);
+    assert.match(outlinePrompt, /先用欲望链引领结构/);
+    assert.match(outlinePrompt, /不要让卷和事件集团凭空冒出来/);
     assert.match(outlinePrompt, /不一次性生成全书每章细纲/);
-    assert.match(outlinePrompt, /当前卷要写出可执行的推进草图/);
+    assert.match(outlinePrompt, /不要提前展开整卷每章章纲/);
+    assert.match(outlinePrompt, /本卷情节轮清单/);
+    assert.match(outlinePrompt, /先拆出本卷有多少个中期欲望\/事件集团/);
     assert.match(outlinePrompt, /book\/volumes\/NNN\.md/);
-    assert.match(outlinePrompt, /推进草图是地图，不是工单/);
-    assert.match(outlinePrompt, /按卷或事件集团推进/);
-    assert.match(outlinePrompt, /少问多执行/);
+    assert.match(outlinePrompt, /卷规划和章纲是地图，不是工单/);
+    assert.match(outlinePrompt, /按情节轮推进/);
+    assert.match(outlinePrompt, /写完一轮复盘一轮/);
     assert.match(outlinePrompt, /我准备怎样写好这本书”：阅读体验落地、叙事视角、场景推进/);
-    assert.match(outlinePrompt, /不要急着拆当前卷细纲/);
+    assert.match(outlinePrompt, /不要急着拆当前卷规划或情节轮章纲/);
     assert.match(outlinePrompt, /按需读取对应资料/);
     assert.match(nextChapterPrompt, /\[作品核心设定\]/);
     assert.match(nextChapterPrompt, /不要直接硬写长正文/);
-    assert.match(nextChapterPrompt, /当前卷没有可执行的卷内推进草图/);
+    assert.match(nextChapterPrompt, /本卷长期欲望、中期欲望\/事件集团/);
     assert.match(nextChapterPrompt, /book\/volumes\/NNN\.md/);
     assert.match(nextChapterPrompt, /不要变成写一章问一章/);
-    assert.match(nextChapterPrompt, /沿事件集团和人物当前压力自然续写/);
+    assert.match(nextChapterPrompt, /当前情节轮还没有本轮 3-5 章章纲/);
+    assert.match(nextChapterPrompt, /短期欲望/);
+    assert.match(nextChapterPrompt, /连续起草本轮 3-5 章/);
     assert.match(nextChapterPrompt, /一章不需要完成任何固定事件/);
     assert.match(nextChapterPrompt, /慢写不是多写几百字/);
     assert.match(nextChapterPrompt, /只读取目标章节或相邻章节/);
+    assert.match(nextChapterPrompt, /写完本轮后停下/);
     assert.match(openingOptionsPrompt, /不要直接写入文件/);
     assert.match(openingOptionsPrompt, /给 2 到 3 个不同开场方案/);
     assert.match(organizePrompt, /材料太少/);
@@ -2225,13 +2264,13 @@ test('Studio file section models keep unchanged file signatures reusable', () =>
     assert.match(firstChapters.html, /data-file-static-signature="chapters:/);
     assert.match(firstChapters.html, /data-file-signature="book\/chapters\/001\.md:第 1 章:active"/);
     assert.match(firstChapters.html, /data-file-signature="book\/chapters\/002\.md:第 2 章:"/);
-    assert.match(settingsGroup.html, /第 1 卷细纲/);
+    assert.match(settingsGroup.html, /第 1 卷规划/);
     assert.match(settingsGroup.html, /xb-file-directory/);
     assert.match(settingsGroup.html, />volumes</);
     assert.match(settingsGroup.html, />volumes\/archive</);
-    assert.match(settingsGroup.html, /old 细纲/);
+    assert.match(settingsGroup.html, /old 规划/);
     assert(
-        settingsGroup.html.indexOf('修订计划') < settingsGroup.html.indexOf('第 1 卷细纲'),
+        settingsGroup.html.indexOf('修订计划') < settingsGroup.html.indexOf('第 1 卷规划'),
         'volume outlines should stay after notes inside settings drafts',
     );
 

@@ -139,8 +139,8 @@ function formatVolumeLabel(path = '') {
     const match = String(path || '').match(/^book\/volumes\/(.+)\.md$/);
     if (!match) return '';
     const raw = match[1].split('/').pop() || match[1];
-    if (/^\d+$/.test(raw)) return `第 ${Number(raw)} 卷细纲`;
-    return `${raw} 细纲`;
+    if (/^\d+$/.test(raw)) return `第 ${Number(raw)} 卷规划`;
+    return `${raw} 规划`;
 }
 
 export function formatFileTitle(path = '') {
