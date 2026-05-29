@@ -1576,8 +1576,11 @@ function renderStudioShell(options = {}) {
                                 <div class="xb-actions">
                                     <button data-action="start-book" ${agentActionAttr}>聊新书</button>
                                     <button data-action="spine" ${agentActionAttr}>建书脊</button>
+                                    <button data-action="style-plan" ${agentActionAttr}>定写法</button>
                                     <button data-action="organize" ${agentActionAttr}>整理资料</button>
                                     <button data-action="outline" ${agentActionAttr}>搭大纲</button>
+                                    <button data-action="volume-plan" ${agentActionAttr}>定当前卷</button>
+                                    <button data-action="next-chapter" ${agentActionAttr}>推当前轮</button>
                                     <button data-action="opening-options" ${agentActionAttr}>试写开场</button>
                                 </div>
                             </details>
