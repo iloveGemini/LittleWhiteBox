@@ -1,3 +1,4 @@
+import { getRequestHeaders } from '../../../../../../script.js';
 import { extensionFolderPath } from '../../core/constants.js';
 import { isTrustedMessage, postToIframe } from '../../core/iframe-messaging.js';
 import { buildEbookFrameConfig, saveEbookAgentConfig } from './host/assistant-config.js';
@@ -249,6 +250,13 @@ function replyHostResult(requestId = '', payload = {}) {
     postToFrame('xb-ebook:host-result', {
         requestId,
         ...payload,
+    });
+}
+
+function handleHostRequestHeaders(payload = {}) {
+    replyHostResult(String(payload.requestId || ''), {
+        ok: true,
+        hostRequestHeaders: getRequestHeaders?.() || {},
     });
 }
 
@@ -516,6 +524,9 @@ function handleFrameMessage(event) {
             break;
         case 'xb-ebook:save-config':
             void handleSaveConfig(payload);
+            break;
+        case 'xb-ebook:get-host-request-headers':
+            handleHostRequestHeaders(payload);
             break;
         case 'xb-ebook:draw-status':
             void handleDrawStatus(payload);

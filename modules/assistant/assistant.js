@@ -3545,6 +3545,19 @@ async function pushAssistantConfigToIframe() {
     return true;
 }
 
+function replyAssistantHostResult(requestId = '', payload = {}) {
+    const iframe = getAssistantHostWindow().getIframe();
+    if (!iframe?.contentWindow) return false;
+    postToIframe(iframe, {
+        type: 'xb-assistant:host-result',
+        payload: {
+            requestId,
+            ...payload,
+        },
+    });
+    return true;
+}
+
 function revealAssistantSettings() {
     if (!assistantFrameReady) return false;
     const iframe = getAssistantHostWindow().getIframe();
@@ -3638,6 +3651,12 @@ async function handleIframeMessage(event) {
             }
             break;
         }
+        case 'xb-assistant:get-host-request-headers':
+            replyAssistantHostResult(String(payload?.requestId || ''), {
+                ok: true,
+                hostRequestHeaders: getRequestHeaders(),
+            });
+            break;
         case WORKSPACE_MESSAGE_TYPES.HYDRATE:
             console.info('[Assistant][HostBridge] workspace-hydrate:received', summarizeLocalSourcesForDebug(payload?.localSources));
             await getLocalSourcesToolRuntime().hydrateLocalSources(payload?.localSources);

@@ -1043,6 +1043,43 @@ test('host OpenAI-compatible requests include injected SillyTavern CSRF headers'
     }
 });
 
+test('host OpenAI-compatible requests resolve fresh async SillyTavern headers per request', async () => {
+    const originalFetch = globalThis.fetch;
+    const requests = [];
+    let csrfIndex = 0;
+    setHostChatCompletionsRequestHeadersProvider(async () => ({
+        'X-CSRF-Token': `csrf-live-${++csrfIndex}`,
+    }));
+    globalThis.fetch = async (url, options = {}) => {
+        requests.push({
+            url: String(url),
+            headers: options.headers,
+        });
+        return createJsonResponse({ data: [{ id: 'chat-model' }] });
+    };
+
+    try {
+        await fetchHostOpenAICompatibleModels({});
+        await fetchHostOpenAICompatibleModels({});
+
+        assert.deepEqual(requests.map((request) => request.headers), [
+            {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': 'csrf-live-1',
+                Accept: 'application/json',
+            },
+            {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': 'csrf-live-2',
+                Accept: 'application/json',
+            },
+        ]);
+    } finally {
+        setHostChatCompletionsRequestHeadersProvider(null);
+        globalThis.fetch = originalFetch;
+    }
+});
+
 test('host OpenAI-compatible model pull maps CSRF and HTML failures to refresh guidance', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => ({

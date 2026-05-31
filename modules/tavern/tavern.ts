@@ -1,3 +1,4 @@
+import { getRequestHeaders } from '../../../../../../script.js';
 import { extensionFolderPath } from '../../core/constants.js';
 import { createFirstPartyIframeOverlay, loadFirstPartyIframeCacheKey } from '../../core/first-party-iframe-app.js';
 import { isTrustedMessage, postToIframe } from '../../core/iframe-messaging.js';
@@ -89,6 +90,20 @@ async function saveConfigFromFrame(payload: Record<string, unknown> = {}): Promi
     }
 }
 
+function replyHostResult(requestId = '', payload: Record<string, unknown> = {}): void {
+    postToFrame('xb-tavern:host-result', {
+        requestId,
+        ...payload,
+    });
+}
+
+function handleHostRequestHeaders(payload: Record<string, unknown> = {}): void {
+    replyHostResult(String(payload.requestId || ''), {
+        ok: true,
+        hostRequestHeaders: getRequestHeaders?.() || {},
+    });
+}
+
 async function createOverlay(): Promise<HTMLElement> {
     return createFirstPartyIframeOverlay({
         overlayId: OVERLAY_ID,
@@ -130,6 +145,9 @@ function handleFrameMessage(event: MessageEvent): void {
             break;
         case 'xb-tavern:save-config':
             void saveConfigFromFrame(data.payload || {});
+            break;
+        case 'xb-tavern:get-host-request-headers':
+            handleHostRequestHeaders(data.payload || {});
             break;
         default:
             break;

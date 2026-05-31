@@ -4,6 +4,7 @@ import { enhanceMarkdownContent, renderMarkdownToHtml } from '../../agent-core/u
 import { createAgentSettingsPanel } from '../../agent-core/ui/settings-panel.js';
 import { buildAgentSettingsPanelMarkup } from '../../agent-core/ui/settings-markup.js';
 import { normalizeAgentConfig } from '../../agent-core/config.js';
+import { setHostChatCompletionsRequestHeadersProvider } from '../../../shared/host-llm/chat-completions/client.js';
 import {
     type XbTavernContext,
     type XbTavernPresetSection,
@@ -66,10 +67,12 @@ interface RequestAuditSnapshot {
 
 const SOURCE_APP = 'xb-tavern-app';
 const SOURCE_HOST = 'xb-tavern-host';
+const HOST_REQUEST_TIMEOUT_MS = 5000;
 
 const context = ref<XbTavernContext>({});
 const diagnostics = ref<TavernDiagnostics>({});
 const agentConfig = ref<Record<string, unknown>>({});
+const hostRequestHeaders = ref<Record<string, unknown>>({});
 const apiSettingsRootRef = ref<HTMLElement | null>(null);
 const apiConfigSave = ref({ status: 'idle', requestId: '', error: '' });
 const apiConfigStatus = ref('');
@@ -107,7 +110,13 @@ interface BrainCheck {
     ok: boolean;
     detail: string;
 }
+interface PendingHostRequest {
+    resolve: (value: Record<string, unknown>) => void;
+    reject: (error: Error) => void;
+    timer: number;
+}
 const presetIsBuiltIn = computed(() => activePresetId.value === DEFAULT_XB_TAVERN_PRESET_ID);
+const pendingHostRequests = new Map<string, PendingHostRequest>();
 const presetDirty = computed(() => !presetIsBuiltIn.value && snapshotPreset(preset.value) !== savedPresetJson.value);
 const selectedSession = computed(() => sessions.value.find((item) => item.id === selectedSessionId.value) || null);
 const sessionRuntimeState = computed(() => normalizeTavernSessionState(selectedSession.value?.state || {}));
@@ -600,6 +609,52 @@ function postToHost(type: string, payload: Record<string, unknown> = {}) {
     window.parent?.postMessage({ source: SOURCE_APP, type, payload }, window.location.origin);
 }
 
+function createHostRequestId(prefix = 'host') {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function requestHost(type: string, payload: Record<string, unknown> = {}, options: { timeoutMs?: number } = {}) {
+    const requestId = createHostRequestId();
+    postToHost(type, { ...payload, requestId });
+    return new Promise<Record<string, unknown>>((resolve, reject) => {
+        const timer = window.setTimeout(() => {
+            pendingHostRequests.delete(requestId);
+            reject(new Error('host_request_timeout'));
+        }, Number(options.timeoutMs) || HOST_REQUEST_TIMEOUT_MS);
+        pendingHostRequests.set(requestId, { resolve, reject, timer });
+    });
+}
+
+function resolveHostRequest(payload: Record<string, unknown> = {}) {
+    const requestId = String(payload.requestId || '');
+    const pending = pendingHostRequests.get(requestId);
+    if (!pending) {return;}
+    window.clearTimeout(pending.timer);
+    pendingHostRequests.delete(requestId);
+    if (payload.ok === false) {
+        pending.reject(new Error(String(payload.error || 'host_request_failed')));
+        return;
+    }
+    pending.resolve(payload);
+}
+
+function installHostRequestHeadersProvider(payload: Record<string, unknown> = {}) {
+    const fallbackHeaders = payload.hostRequestHeaders && typeof payload.hostRequestHeaders === 'object'
+        ? payload.hostRequestHeaders as Record<string, unknown>
+        : hostRequestHeaders.value;
+    hostRequestHeaders.value = fallbackHeaders || {};
+    setHostChatCompletionsRequestHeadersProvider(async () => {
+        try {
+            const result = await requestHost('xb-tavern:get-host-request-headers');
+            return result.hostRequestHeaders && typeof result.hostRequestHeaders === 'object'
+                ? result.hostRequestHeaders as Record<string, unknown>
+                : hostRequestHeaders.value;
+        } catch {
+            return hostRequestHeaders.value;
+        }
+    });
+}
+
 function syncApiSettingsConfigFromAgentConfig() {
     apiSettingsPanelState.config = normalizeAgentConfig(agentConfig.value || {});
     apiSettingsPanelState.configDraft = null;
@@ -690,6 +745,7 @@ function handleApiConfigSaved(payload: Record<string, unknown>) {
 }
 
 function applyHostPayload(payload: Record<string, unknown>) {
+    installHostRequestHeadersProvider(payload);
     context.value = payload.context as XbTavernContext || {};
     diagnostics.value = payload.diagnostics as TavernDiagnostics || {};
     if ('agentConfig' in payload) {
@@ -708,6 +764,10 @@ function onHostMessage(event: MessageEvent) {
     if (event.origin !== window.location.origin) {return;}
     const data = event.data || {};
     if (data.source !== SOURCE_HOST) {return;}
+    if (data.type === 'xb-tavern:host-result') {
+        resolveHostRequest(data.payload || {});
+        return;
+    }
     if (data.type === 'xb-tavern:config') {
         applyHostPayload(data.payload || {});
         return;
@@ -1461,6 +1521,12 @@ onMounted(async () => {
 
 onUnmounted(() => {
     window.removeEventListener('message', onHostMessage);
+    setHostChatCompletionsRequestHeadersProvider(null);
+    pendingHostRequests.forEach((request) => {
+        window.clearTimeout(request.timer);
+        request.reject(new Error('tavern_unmounted'));
+    });
+    pendingHostRequests.clear();
     activeRunController.value?.abort();
     if (chatScrollHideTimer) {
         window.clearTimeout(chatScrollHideTimer);

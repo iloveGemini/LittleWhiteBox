@@ -1,4 +1,5 @@
 /* eslint-disable -- generated from TypeScript source; run npm run build:tavern */
+import { getRequestHeaders } from "../../../../../../script.js";
 import { extensionFolderPath } from "../../core/constants.js";
 import { createFirstPartyIframeOverlay, loadFirstPartyIframeCacheKey } from "../../core/first-party-iframe-app.js";
 import { isTrustedMessage, postToIframe } from "../../core/iframe-messaging.js";
@@ -69,6 +70,18 @@ async function saveConfigFromFrame(payload = {}) {
     await sendConfigToFrame();
   }
 }
+function replyHostResult(requestId = "", payload = {}) {
+  postToFrame("xb-tavern:host-result", {
+    requestId,
+    ...payload
+  });
+}
+function handleHostRequestHeaders(payload = {}) {
+  replyHostResult(String(payload.requestId || ""), {
+    ok: true,
+    hostRequestHeaders: getRequestHeaders?.() || {}
+  });
+}
 async function createOverlay() {
   return createFirstPartyIframeOverlay({
     overlayId: OVERLAY_ID,
@@ -113,6 +126,9 @@ function handleFrameMessage(event) {
       break;
     case "xb-tavern:save-config":
       void saveConfigFromFrame(data.payload || {});
+      break;
+    case "xb-tavern:get-host-request-headers":
+      handleHostRequestHeaders(data.payload || {});
       break;
     default:
       break;

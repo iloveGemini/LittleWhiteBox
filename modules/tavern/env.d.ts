@@ -48,6 +48,9 @@ declare module '*.js' {
         config: Record<string, unknown>,
         options?: Record<string, unknown>,
     ): { chat(options: TavernAgentAdapterChatOptions): Promise<TavernAgentAdapterChatResult> };
+    export function setHostChatCompletionsRequestHeadersProvider(
+        provider: null | (() => Record<string, unknown> | Promise<Record<string, unknown>>),
+    ): void;
     export function resolveActiveProviderConfig(
         config: Record<string, unknown>,
         options?: Record<string, unknown>,
