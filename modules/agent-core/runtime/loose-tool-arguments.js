@@ -133,7 +133,7 @@ const LOOSE_ARGUMENT_KEYS_BY_TOOL = {
     RenameBook: ['title', 'name'],
     ImportMaterial: ['title', 'content', 'source'],
     Glob: ['pattern', 'path', 'scope'],
-    Grep: ['pattern', 'path', 'scope', 'outputMode'],
+    Grep: ['pattern', 'query', 'path', 'scope', 'include', 'outputMode', 'limit', 'offset', 'contextLines', 'useRegex'],
     WebSearch: ['query', 'maxResults'],
     DelegateRun: ['task'],
     PlanCreate: ['title', 'details', 'priority', 'owner', 'blockedBy'],
@@ -156,6 +156,7 @@ const GENERIC_LOOSE_ARGUMENT_KEYS = [
     'details',
     'pattern',
     'scope',
+    'include',
     'status',
     'priority',
     'owner',
@@ -166,6 +167,10 @@ const GENERIC_LOOSE_ARGUMENT_KEYS = [
     'maxResults',
     'outputMode',
     'contentFormat',
+    'limit',
+    'offset',
+    'contextLines',
+    'useRegex',
 ];
 
 function extractFirstLooseField(source = '', keys = [], nextKeys = []) {
@@ -192,6 +197,23 @@ function parseKnownLooseArgumentsObject(source = '', toolName = '') {
         const edits = extractLooseField(source, 'edits', []);
         if (filePath !== undefined) args.filePath = parseLoosePrimitive(filePath);
         if (edits !== undefined) args.edits = parseLoosePrimitive(edits);
+        return Object.keys(args).length ? args : null;
+    }
+
+    if (toolName === 'Grep') {
+        const keys = LOOSE_ARGUMENT_KEYS_BY_TOOL.Grep;
+        const args = {};
+        keys.forEach((key, index) => {
+            const value = extractLooseField(source, key, keys.slice(index + 1));
+            if (value === undefined) return;
+            args[key] = parseLoosePrimitive(value);
+        });
+        if (args.pattern === undefined && args.query !== undefined) {
+            args.pattern = args.query;
+        }
+        if (args.path === undefined && args.scope !== undefined) {
+            args.path = args.scope;
+        }
         return Object.keys(args).length ? args : null;
     }
 

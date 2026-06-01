@@ -348,6 +348,7 @@ export function createEbookAgentRunner(deps = {}) {
         ];
     }
 
+    const COMPACTION_OVERLAY_MIN_VISIBLE_MS = 3000;
     let compactionOverlayHideTimer = null;
     let protocolNoticeHideTimer = null;
 
@@ -359,6 +360,11 @@ export function createEbookAgentRunner(deps = {}) {
     }
 
     function updateCompactionOverlay(patch = {}) {
+        const previous = state.compactionOverlay || {};
+        const nextId = patch.id || previous.id || `compaction-${Date.now()}`;
+        const visibleSince = Number(patch.visibleSince)
+            || (previous.id === nextId ? Number(previous.visibleSince) : 0)
+            || Date.now();
         state.compactionOverlay = {
             active: true,
             resolved: false,
@@ -366,20 +372,25 @@ export function createEbookAgentRunner(deps = {}) {
             yieldTokens: 0,
             triggerTokens: 0,
             status: '正在释放较早对话...',
-            ...(state.compactionOverlay || {}),
+            ...previous,
             ...patch,
+            id: nextId,
+            visibleSince,
         };
     }
 
-    function scheduleCompactionOverlayHide(delayMs = 3000) {
+    function scheduleCompactionOverlayHide(delayMs = COMPACTION_OVERLAY_MIN_VISIBLE_MS) {
         const overlayId = state.compactionOverlay?.id || '';
+        const visibleSince = Number(state.compactionOverlay?.visibleSince) || Date.now();
+        const elapsedMs = Math.max(0, Date.now() - visibleSince);
+        const waitMs = Math.max(0, delayMs - elapsedMs);
         clearCompactionOverlayHideTimer();
         compactionOverlayHideTimer = globalThis.setTimeout(() => {
             compactionOverlayHideTimer = null;
             if (!overlayId || state.compactionOverlay?.id !== overlayId) return;
             state.compactionOverlay = null;
             render();
-        }, delayMs);
+        }, waitMs);
     }
 
     function clearProtocolNoticeHideTimer() {
@@ -626,7 +637,6 @@ export function createEbookAgentRunner(deps = {}) {
 
             async function updateContextMeterFromRequest(messages = []) {
                 if (!Array.isArray(messages) || !messages.length) return;
-                const stateKey = buildConversationContextMeterStateKey(state, providerConfig);
                 const updateSerial = (Number(state.contextStatsRequestSerial) || 0) + 1;
                 state.contextStatsRequestSerial = updateSerial;
                 try {
@@ -638,7 +648,6 @@ export function createEbookAgentRunner(deps = {}) {
                     const currentStateKey = buildConversationContextMeterStateKey(state, providerConfig);
                     if (
                         updateSerial !== state.contextStatsRequestSerial
-                        || stateKey !== currentStateKey
                         || !Number.isFinite(usedTokens)
                         || controller.signal.aborted
                     ) return;
@@ -647,7 +656,7 @@ export function createEbookAgentRunner(deps = {}) {
                         budgetTokens: EBOOK_MAX_CONTEXT_TOKENS,
                         summaryActive: false,
                         source: 'resolved',
-                        stateKey,
+                        stateKey: currentStateKey,
                         updatedAt: Date.now(),
                     };
                     renderStreamingSurface();

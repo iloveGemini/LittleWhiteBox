@@ -296,7 +296,7 @@ function resolveContextStatsForState(state = {}, providerConfig = {}) {
     const stats = state.contextStats && typeof state.contextStats === 'object' ? state.contextStats : null;
     if (!stats) return null;
     const stateKey = buildConversationContextMeterStateKey(state, providerConfig);
-    if (stats.stateKey !== stateKey) return null;
+    if (stats.stateKey !== stateKey && !(state.isBusy && stats.source === 'resolved')) return null;
     const usedTokens = Number(stats.usedTokens);
     if (!Number.isFinite(usedTokens)) return null;
     return {

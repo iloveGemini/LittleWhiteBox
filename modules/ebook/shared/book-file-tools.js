@@ -183,8 +183,13 @@ export function createBookFileToolHandlers(options = {}) {
     }
 
     async function executeGrep(args = {}) {
-        const regexp = buildSearchRegExp(args.pattern, args.useRegex === true);
-        const directory = args.path ? assertBookDirectoryPath(args.path) : '';
+        const pattern = args.pattern ?? args.query ?? '';
+        const regexp = buildSearchRegExp(pattern, args.useRegex === true);
+        const directory = args.path
+            ? assertBookDirectoryPath(args.path)
+            : args.scope
+                ? assertBookDirectoryPath(args.scope)
+                : '';
         const include = buildIncludePredicate(args.include || '');
         const outputMode = ['content', 'files_with_matches', 'count'].includes(args.outputMode) ? args.outputMode : 'content';
         const limit = Math.min(MAX_GREP_RESULTS, Math.max(1, Math.floor(Number(args.limit) || MAX_GREP_RESULTS)));
@@ -219,7 +224,7 @@ export function createBookFileToolHandlers(options = {}) {
         const page = rows.slice(offset, offset + limit);
         return {
             ok: true,
-            pattern: String(args.pattern || ''),
+            pattern: String(pattern || ''),
             outputMode,
             count: rows.length,
             results: page,

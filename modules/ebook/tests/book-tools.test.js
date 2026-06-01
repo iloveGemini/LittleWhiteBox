@@ -81,7 +81,7 @@ const { bindEbookEvents } = uiBindingsModule;
 const { HTML_PREVIEW_SANDBOX, renderMarkdownToHtml } = messageMarkdownModule;
 const { createLightBrakeController } = lightBrakeModule;
 const { applyTextEdits } = textEditModule;
-const { buildTaggedMessages } = openAICompatibleAdapterModule;
+const { buildTaggedMessages, extractTaggedToolCalls } = openAICompatibleAdapterModule;
 const { repairLooseToolArguments } = looseToolArgumentsModule;
 
 async function resetDb() {
@@ -669,6 +669,68 @@ test('Book Grep works after loose JSON argument repair decodes unicode escapes',
     const nextStepResult = await runtime.execute(EBOOK_TOOL_NAMES.GREP, nextStepArgs);
     assert.equal(nextStepResult.count, 1);
     assert.equal(nextStepResult.results[0].lineNumber, 3);
+});
+
+test('Book Grep keeps optional fields after loose JSON compatibility repair', async () => {
+    await resetDb();
+    const book = await createBook('Grep 兼容参数测试');
+    await upsertBookFile(book.id, 'book/state.md', [
+        '# 状态追踪',
+        '第99章：当前进度已经写到这里。',
+        '**下一步应写**：第二三场结构。',
+    ].join('\n'));
+    await upsertBookFile(book.id, 'book/chapters/099.md', '第99章 正文不应该被 include 命中。');
+    const runtime = createBookToolRuntime({ bookId: book.id });
+
+    const repaired = repairLooseToolArguments(
+        '{pattern:"第99章", path:"book/", include:"state.md", outputMode:"content", limit:2, offset:0, contextLines:1, useRegex:false}',
+        EBOOK_TOOL_NAMES.GREP,
+    );
+    const args = JSON.parse(repaired);
+    assert.equal(args.pattern, '第99章');
+    assert.equal(args.path, 'book/');
+    assert.equal(args.include, 'state.md');
+    assert.equal(args.outputMode, 'content');
+    assert.equal(args.limit, 2);
+    assert.equal(args.offset, 0);
+    assert.equal(args.contextLines, 1);
+    assert.equal(args.useRegex, false);
+
+    const result = await runtime.execute(EBOOK_TOOL_NAMES.GREP, args);
+    assert.equal(result.ok, true);
+    assert.equal(result.count, 1);
+    assert.equal(result.results[0].path, 'book/state.md');
+    assert.match(result.results[0].context, /下一步应写/);
+});
+
+test('Book Grep accepts query and scope aliases from JSON compatibility protocol', async () => {
+    await resetDb();
+    const book = await createBook('Grep 别名兼容测试');
+    await upsertBookFile(book.id, 'book/state.md', '下一步应写：继续第二三场结构。');
+    const runtime = createBookToolRuntime({ bookId: book.id });
+    const result = await runtime.execute(EBOOK_TOOL_NAMES.GREP, {
+        query: '下一步',
+        scope: 'book/',
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.count, 1);
+    assert.equal(result.pattern, '下一步');
+    assert.equal(result.results[0].path, 'book/state.md');
+});
+
+test('Tagged loose Grep tool calls preserve repaired optional fields', () => {
+    const calls = extractTaggedToolCalls(
+        '<tool_call>{name:"Grep", arguments:{pattern:"第99章", path:"book/", include:"state.md", limit:3, contextLines:1, useRegex:false}}</tool_call>',
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].name, 'Grep');
+    const args = JSON.parse(calls[0].arguments);
+    assert.equal(args.pattern, '第99章');
+    assert.equal(args.path, 'book/');
+    assert.equal(args.include, 'state.md');
+    assert.equal(args.limit, 3);
+    assert.equal(args.contextLines, 1);
+    assert.equal(args.useRegex, false);
 });
 
 test('Loose JSON repair keeps deliberately escaped unicode literals', () => {
@@ -5222,6 +5284,35 @@ test('Book context meter ignores resolved token stats when conversation state ch
 
     assert.notEqual(renderConversationContextMeterLabel(state, providerConfig), '777k/188k');
     assert.equal(renderConversationContextMeterTitle(state, providerConfig), '当前估算送模上下文 / 188k');
+});
+
+test('Book context meter keeps last resolved request count while agent is busy', async () => {
+    await resetDb();
+    const book = await createBook('计数运行中稳定测试');
+    const providerConfig = { provider: 'anthropic', model: 'claude-sonnet-4' };
+    const state = {
+        book,
+        books: [book],
+        files: await listBookFiles(book.id),
+        messages: [{ role: 'user', content: '继续写第一章。' }],
+        isBusy: true,
+        status: 'AI 正在思考...',
+        toast: '',
+    };
+    state.contextStats = {
+        usedTokens: 150000,
+        budgetTokens: EBOOK_MAX_CONTEXT_TOKENS,
+        source: 'resolved',
+        stateKey: buildConversationContextMeterStateKey(state, providerConfig),
+        updatedAt: Date.now(),
+    };
+    state.messages.push({ role: 'assistant', content: '流式回复正在变化。', streaming: true });
+
+    assert.equal(renderConversationContextMeterLabel(state, providerConfig), '150k/188k');
+    assert.equal(renderConversationContextMeterTitle(state, providerConfig), '最近一次发模上下文 / 188k');
+
+    state.isBusy = false;
+    assert.notEqual(renderConversationContextMeterLabel(state, providerConfig), '150k/188k');
 });
 
 test('Book renderer shows context distillation overlay during history compaction', async () => {
