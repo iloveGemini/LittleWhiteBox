@@ -4,6 +4,7 @@ import {
     assertBookFilePath,
     getBookPathError,
     normalizeBookDirectoryPath,
+    normalizeBookFilePath,
     normalizeBookPath,
 } from './book-paths.js';
 import {
@@ -106,9 +107,29 @@ function globToRegExp(pattern = '') {
 function buildIncludePredicate(include = '') {
     const text = String(include || '').trim();
     if (!text) return () => true;
+    if (!/[/*?[\]{}]/.test(text)) {
+        const normalizedFile = normalizeBookFilePath(text);
+        return (path) => path === normalizedFile || path.endsWith(`/${text.replace(/^\/+/, '')}`);
+    }
     const pattern = text.startsWith('book/') ? text : `book/${text.replace(/^\/+/, '')}`;
     const regexp = globToRegExp(pattern);
     return (path) => regexp.test(path);
+}
+
+function normalizeGrepOutputMode(value = '') {
+    const text = String(value || 'content').trim();
+    const key = text.replace(/[\s-]/g, '_').replace(/[A-Z]/g, (char) => `_${char.toLowerCase()}`).replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+    if (key === 'files_with_matches' || key === 'fileswithmatches') return 'files_with_matches';
+    if (key === 'count') return 'count';
+    return 'content';
+}
+
+function resolveGrepPathScope(rawPath = '') {
+    const text = String(rawPath || '').trim();
+    if (!text) return { directory: '', filePath: '' };
+    const filePath = normalizeBookFilePath(text);
+    if (filePath) return { directory: '', filePath };
+    return { directory: assertBookDirectoryPath(text), filePath: '' };
 }
 
 function buildSearchRegExp(pattern = '', useRegex = false) {
@@ -185,17 +206,16 @@ export function createBookFileToolHandlers(options = {}) {
     async function executeGrep(args = {}) {
         const pattern = args.pattern ?? args.query ?? '';
         const regexp = buildSearchRegExp(pattern, args.useRegex === true);
-        const directory = args.path
-            ? assertBookDirectoryPath(args.path)
-            : args.scope
-                ? assertBookDirectoryPath(args.scope)
-                : '';
+        const scope = resolveGrepPathScope(args.path || args.scope || '');
         const include = buildIncludePredicate(args.include || '');
-        const outputMode = ['content', 'files_with_matches', 'count'].includes(args.outputMode) ? args.outputMode : 'content';
+        const outputMode = normalizeGrepOutputMode(args.outputMode);
         const limit = Math.min(MAX_GREP_RESULTS, Math.max(1, Math.floor(Number(args.limit) || MAX_GREP_RESULTS)));
         const offset = Math.max(0, Math.floor(Number(args.offset) || 0));
         const contextLines = Math.min(5, Math.max(0, Math.floor(Number(args.contextLines) || 0)));
-        const files = (await getFiles()).filter((file) => (!directory || file.path.startsWith(directory)) && include(file.path));
+        const files = (await getFiles()).filter((file) => {
+            if (scope.filePath) return file.path === scope.filePath;
+            return (!scope.directory || file.path.startsWith(scope.directory)) && include(file.path);
+        });
         const rows = [];
         files.forEach((file) => {
             const lines = splitLines(file.content);
@@ -225,7 +245,9 @@ export function createBookFileToolHandlers(options = {}) {
         return {
             ok: true,
             pattern: String(pattern || ''),
+            path: scope.filePath || scope.directory,
             outputMode,
+            searchedFileCount: files.length,
             count: rows.length,
             results: page,
             truncated: offset + limit < rows.length,

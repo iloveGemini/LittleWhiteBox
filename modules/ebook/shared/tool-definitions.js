@@ -47,40 +47,19 @@ export function getEbookToolDefinitions(options = {}) {
         {
             type: 'function',
             function: {
-                name: EBOOK_TOOL_NAMES.GLOB,
-                description: [
-                    'Match current-book file paths by glob pattern.',
-                    'Matches paths only. Does not inspect file contents.',
-                    'Use to narrow candidates by directory, extension, chapter number, or source type.',
-                    'pattern uses `book/...` path patterns. `path` is only an optional directory scope and does not replace pattern.',
-                ].join('\n'),
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        pattern: { type: 'string', description: 'Required glob path pattern, for example `book/**/*.md`, `book/chapters/*.md`, or `book/sources/**/*.md`.' },
-                        path: { type: 'string', description: 'Optional directory scope. Must be `book/.../`, for example `book/chapters/`.' },
-                    },
-                    required: ['pattern'],
-                    additionalProperties: false,
-                },
-            },
-        },
-        {
-            type: 'function',
-            function: {
                 name: EBOOK_TOOL_NAMES.GREP,
                 description: [
                     'Search text inside current-book files.',
                     'Uses literal text search by default and returns matching files plus line-level snippets.',
                     'Use before reading many files to locate character names, dialogue, settings, foreshadowing, plot points, or review notes.',
-                    '`path` limits the search directory; `include` limits the file glob. For regex search, explicitly pass `useRegex: true`.',
+                    '`path` can be a search directory or one exact file; `include` limits the file glob/name. For regex search, explicitly pass `useRegex: true`.',
                 ].join('\n'),
                 parameters: {
                     type: 'object',
                     properties: {
                         pattern: { type: 'string', description: 'Search pattern. Treated as literal text by default; use `useRegex: true` only when you intentionally need regex.' },
-                        path: { type: 'string', description: 'Optional search directory. Must be `book/.../`, for example `book/chapters/`.' },
-                        include: { type: 'string', description: 'Optional file glob filter, for example `book/chapters/*.md`.' },
+                        path: { type: 'string', description: 'Optional search scope. Can be a directory like `book/chapters/` or one file like `book/chapters/101.md`.' },
+                        include: { type: 'string', description: 'Optional file glob/name filter, for example `book/chapters/*.md` or `101.md`.' },
                         outputMode: { type: 'string', enum: ['content', 'files_with_matches', 'count'], description: '`content` returns matched lines, `files_with_matches` returns files only, and `count` returns match counts. Default `content`.' },
                         limit: { type: 'number', description: 'Maximum number of results to return. Default 100, max 100.' },
                         offset: { type: 'number', description: 'Skip this many results before returning matches. Default 0.' },
@@ -124,7 +103,7 @@ export function getEbookToolDefinitions(options = {}) {
                 name: EBOOK_TOOL_NAMES.WEB_SEARCH,
                 description: [
                     'Use Tavily to search real-world facts, public documents, or time-sensitive information not available in the current book or imported sources.',
-                    'Use for real locations, historical background, institutions, professional details, daily-life facts, period facts, public references, or outside research. For book text, imported sources, and setting continuity, prefer LS / Glob / Grep / Read.',
+                    'Use for real locations, historical background, institutions, professional details, daily-life facts, period facts, public references, or outside research. For book text, imported sources, and setting continuity, prefer LS / Grep / Read.',
                     'Use focused queries. Verify facts first, then convert results into writing, setting, or review judgments. Do not treat web results as imported book sources.',
                     'Only available when this tool appears in the tool list. If absent, do not claim to have searched the web.',
                 ].join('\n'),

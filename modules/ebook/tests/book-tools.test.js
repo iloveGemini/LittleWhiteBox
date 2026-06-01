@@ -718,6 +718,57 @@ test('Book Grep accepts query and scope aliases from JSON compatibility protocol
     assert.equal(result.results[0].path, 'book/state.md');
 });
 
+test('Book Grep can search one exact file path after files_with_matches discovery', async () => {
+    await resetDb();
+    const book = await createBook('Grep 文件路径测试');
+    await upsertBookFile(book.id, 'book/chapters/100.md', '小满在这一章只是被提到。');
+    await upsertBookFile(book.id, 'book/chapters/101.md', [
+        '# 第一百零一章',
+        '小满把话说得很轻，像怕惊动岁月。',
+        '她停了停，又把那句没说完的话咽回去。',
+    ].join('\n'));
+    const runtime = createBookToolRuntime({ bookId: book.id });
+
+    const files = await runtime.execute(EBOOK_TOOL_NAMES.GREP, {
+        pattern: '小满',
+        path: 'book/chapters/',
+        outputMode: 'files_with_matches',
+    });
+    assert.equal(files.ok, true);
+    assert.equal(files.count, 2);
+
+    const content = await runtime.execute(EBOOK_TOOL_NAMES.GREP, {
+        pattern: '小满',
+        path: 'book/chapters/101.md',
+        outputMode: 'content',
+        contextLines: 1,
+    });
+    assert.equal(content.ok, true);
+    assert.equal(content.count, 1);
+    assert.equal(content.searchedFileCount, 1);
+    assert.equal(content.results[0].path, 'book/chapters/101.md');
+    assert.match(content.results[0].context, /岁月/);
+});
+
+test('Book Grep normalizes common outputMode spellings and bare include filenames', async () => {
+    await resetDb();
+    const book = await createBook('Grep 输出模式测试');
+    await upsertBookFile(book.id, 'book/chapters/101.md', '小满在这里出现。');
+    await upsertBookFile(book.id, 'book/chapters/102.md', '小满在这里也出现。');
+    const runtime = createBookToolRuntime({ bookId: book.id });
+
+    const files = await runtime.execute(EBOOK_TOOL_NAMES.GREP, {
+        pattern: '小满',
+        path: 'book/chapters/',
+        include: '101.md',
+        outputMode: 'filesWithMatches',
+    });
+    assert.equal(files.ok, true);
+    assert.equal(files.outputMode, 'files_with_matches');
+    assert.equal(files.count, 1);
+    assert.equal(files.results[0].path, 'book/chapters/101.md');
+});
+
 test('Tagged loose Grep tool calls preserve repaired optional fields', () => {
     const calls = extractTaggedToolCalls(
         '<tool_call>{name:"Grep", arguments:{pattern:"第99章", path:"book/", include:"state.md", limit:3, contextLines:1, useRegex:false}}</tool_call>',
@@ -1031,7 +1082,7 @@ test('Delegate prompt gives the reviewer a stable book-specific tool model', () 
     assert.match(EBOOK_DELEGATE_PROMPT, /When reviewing a specific chapter, you must Read that chapter body/);
     assert.match(EBOOK_DELEGATE_PROMPT, /## Tool Use Guide/);
     assert.match(EBOOK_DELEGATE_PROMPT, /You are a read-only reviewer delegate/);
-    assert.match(EBOOK_DELEGATE_PROMPT, /LS \/ Glob inspect paths and directory entries only/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /LS inspects directory entries only/);
     assert.match(EBOOK_DELEGATE_PROMPT, /When reviewing a specific chapter, you must Read that chapter body/);
     assert.match(EBOOK_DELEGATE_PROMPT, /Grep keywords first, then Read the matching chapters or sources/);
     assert.match(EBOOK_DELEGATE_PROMPT, /Read may return only part of a large file/);
@@ -6709,6 +6760,8 @@ test('Light brake can fire again for the same failure pattern after reset', () =
     lightBrake.record('Read', 'book_file_not_found');
     assert.match(lightBrake.getMessage(), /Read/);
     assert.match(lightBrake.getMessage(), /book_file_not_found/);
+    assert.match(lightBrake.getMessage(), /LS \/ Grep \/ Read/);
+    assert.doesNotMatch(lightBrake.getMessage(), /Glob/);
 });
 
 test('Book agent reroll trims to the previous user message without duplicating it', async () => {
@@ -7298,7 +7351,7 @@ test('Book prompt keeps assistant-style tool layers and recovery rules', () => {
     const webSearchDefinitions = getEbookToolDefinitions({ webSearchEnabled: true });
     const webSearch = webSearchDefinitions.find((definition) => definition.function?.name === EBOOK_TOOL_NAMES.WEB_SEARCH);
     assert.match(String(webSearch.function.description), /not available in the current book or imported sources/);
-    assert.match(String(webSearch.function.description), /prefer LS \/ Glob \/ Grep \/ Read/);
+    assert.match(String(webSearch.function.description), /prefer LS \/ Grep \/ Read/);
     assert.equal(
         getEbookToolDefinitions({ webSearchEnabled: false })
             .some((definition) => definition.function?.name === EBOOK_TOOL_NAMES.WEB_SEARCH),
@@ -7316,8 +7369,7 @@ test('Book tool definitions teach exact parameters like assistant tools', () => 
     assert.match(String(ls.description), /Directory paths must be `book\/\.\.\.\/`/);
     assert.match(String(ls.parameters.properties.path.description), /Do not pass filePath/);
 
-    const glob = definitions.get(EBOOK_TOOL_NAMES.GLOB);
-    assert.match(String(glob.description), /`path` is only an optional directory scope and does not replace pattern/);
+    assert.equal(definitions.has(EBOOK_TOOL_NAMES.GLOB), false);
 
     const grep = definitions.get(EBOOK_TOOL_NAMES.GREP);
     assert.match(String(grep.description), /literal text search by default/);
