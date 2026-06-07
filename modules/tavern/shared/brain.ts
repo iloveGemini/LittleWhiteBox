@@ -3,6 +3,7 @@ import {
     buildXbTavernMessages,
     createXbTavernBuildSnapshot,
     type XbTavernConversationMessagesTransform,
+    type XbTavernFinalMessagesTransform,
     type XbTavernWorldEntriesTransform,
     type XbTavernBuildSnapshot,
     type XbTavernContext,
@@ -36,6 +37,7 @@ export interface XbTavernBrainBuildInput {
 export interface XbTavernBrainAsyncBuildInput extends XbTavernBrainBuildInput {
     transformWorldEntries?: XbTavernWorldEntriesTransform;
     transformConversationMessages?: XbTavernConversationMessagesTransform;
+    transformFinalMessages?: XbTavernFinalMessagesTransform;
     regexApplications?: TavernRegexApplicationSummary;
 }
 
@@ -49,9 +51,12 @@ export interface XbTavernBrainBuildResult {
 export function createXbTavernWorldSettings(input: {
     turn?: number;
     entryStates?: Record<string, XbTavernWorldEntryState>;
+    worldSettings?: Partial<XbTavernWorldSettings>;
 } = {}): XbTavernWorldSettings {
+    const source = input.worldSettings || {};
     return {
         ...DEFAULT_XB_TAVERN_WORLD_SETTINGS,
+        ...source,
         turn: Math.max(0, Number(input.turn) || 0),
         entryStates: input.entryStates || {},
     };
@@ -62,6 +67,7 @@ export function createXbTavernRuntimeState(input: XbTavernBrainBuildInput): XbTa
         currentUserMessage: String(input.currentUserMessage || ''),
         historyMode: input.historyMode || 'raw',
         worldSettings: createXbTavernWorldSettings({
+            worldSettings: input.context?.worldSettings,
             turn: input.turn,
             entryStates: input.entryStates,
         }),
@@ -90,6 +96,7 @@ export async function buildXbTavernBrainAsync(input: XbTavernBrainAsyncBuildInpu
     const buildResult = await buildXbTavernMessagesAsync(context, chatPreset, runtimeState, {
         transformWorldEntries: input.transformWorldEntries,
         transformConversationMessages: input.transformConversationMessages,
+        transformFinalMessages: input.transformFinalMessages,
         regexApplications: input.regexApplications,
     });
     const buildSnapshot = createXbTavernBuildSnapshot(context, chatPreset, buildResult, input.diagnostics);

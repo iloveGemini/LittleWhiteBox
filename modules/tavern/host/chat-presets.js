@@ -118,6 +118,31 @@ function replaceActivePromptOrder(existingPromptOrder, activeCharacterId, nextOr
   }
   return containers;
 }
+function pickPromptManagerRuntimeFields(source = {}) {
+  const result = {};
+  if (Array.isArray(source.prompts)) {
+    result.prompts = cloneJson(source.prompts);
+  }
+  if (Array.isArray(source.prompt_order)) {
+    result.prompt_order = cloneJson(source.prompt_order);
+  }
+  return result;
+}
+function setPromptManagerSelectedPresetName(name = "") {
+  const manager = getPresetManager("openai");
+  const presetName = normalizeText(name);
+  if (!manager || !presetName) {
+    return;
+  }
+  const value = manager.findPreset?.(presetName);
+  if (value === void 0 || value === null) {
+    return;
+  }
+  try {
+    manager.select?.val?.(value);
+  } catch {
+  }
+}
 function buildCurrentBundle() {
   const promptSettings = asRecord(promptManager?.serviceSettings);
   const promptPresetName = normalizeText(getPresetManager("openai")?.getSelectedPresetName?.());
@@ -194,13 +219,9 @@ async function savePromptManagerPreset(bundle) {
   }
   await manager.savePreset?.(name, patch);
   if (promptManager?.serviceSettings) {
-    if (Array.isArray(patch.prompts)) {
-      promptManager.serviceSettings.prompts = cloneJson(patch.prompts);
-    }
-    if (Array.isArray(patch.prompt_order)) {
-      promptManager.serviceSettings.prompt_order = cloneJson(patch.prompt_order);
-    }
+    Object.assign(promptManager.serviceSettings, pickPromptManagerRuntimeFields(patch));
   }
+  setPromptManagerSelectedPresetName(name);
   promptManager?.saveServiceSettings?.();
   promptManager?.render?.(false);
 }
@@ -215,8 +236,13 @@ function applyPromptManagerPromptFieldsFromPreset(name = "") {
     return false;
   }
   if (promptManager?.serviceSettings) {
-    Object.assign(promptManager.serviceSettings, cloneJson(preset));
+    const promptFields = pickPromptManagerRuntimeFields(preset);
+    if (!Object.keys(promptFields).length) {
+      return false;
+    }
+    Object.assign(promptManager.serviceSettings, promptFields);
   }
+  setPromptManagerSelectedPresetName(presetName);
   promptManager?.saveServiceSettings?.();
   promptManager?.render?.(false);
   return true;

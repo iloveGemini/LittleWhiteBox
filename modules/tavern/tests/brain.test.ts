@@ -65,6 +65,32 @@ test('xb tavern brain world setting helper normalizes state defaults', () => {
     });
 });
 
+test('xb tavern brain uses world settings from SillyTavern context', () => {
+    const brain = buildXbTavernBrain({
+        context: {
+            character: { name: 'Aster' },
+            worldSettings: {
+                recursion: false,
+                recursionLimit: 1,
+                budgetChars: 128,
+                caseSensitive: true,
+                matchWholeWords: true,
+                insertionStrategy: 2,
+            },
+        },
+        currentUserMessage: 'Hello.',
+        turn: 2,
+    });
+
+    assert.equal(brain.runtimeState.worldSettings?.recursion, false);
+    assert.equal(brain.runtimeState.worldSettings?.recursionLimit, 1);
+    assert.equal(brain.runtimeState.worldSettings?.budgetChars, 128);
+    assert.equal(brain.runtimeState.worldSettings?.caseSensitive, true);
+    assert.equal(brain.runtimeState.worldSettings?.matchWholeWords, true);
+    assert.equal(brain.runtimeState.worldSettings?.insertionStrategy, 2);
+    assert.equal(brain.runtimeState.worldSettings?.turn, 2);
+});
+
 test('xb tavern brain injects memory between history and current user message', () => {
     const preset = createDefaultXbTavernPreset();
     const brain = buildXbTavernBrain({

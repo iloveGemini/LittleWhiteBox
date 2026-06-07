@@ -16,7 +16,7 @@ import {
     setSlotSelection, clearSlotSelection,
     updatePreviewSavedUrl, deletePreview, getCacheStats, clearExpiredCache, clearAllCache,
     getGallerySummary, getCharacterPreviews, openGallery, closeGallery, destroyGalleryCache,
-    getPreviewDisplayUrl
+    getPreviewDisplayUrl, preloadPreviewDisplayUrl, warmSlotPreviewNeighbors
 } from '../../shared/gallery-cache.js';
 import {
     PROVIDER_MAP,
@@ -1676,6 +1676,9 @@ async function navigateToImage(container, targetIndex) {
 
     const direction = targetIndex > currentIndex ? 'left' : 'right';
     imgEl.classList.add(`sliding-${direction}`);
+    setTimeout(() => {
+        void preloadPreviewDisplayUrl(targetPreview).catch(() => false);
+    }, 0);
 
     await new Promise(r => setTimeout(r, 200));
 
@@ -1688,6 +1691,7 @@ async function navigateToImage(container, targetIndex) {
 
     setImageState(container, targetPreview.savedUrl ? ImageState.SAVED : ImageState.PREVIEW);
     updateNavControls(container, targetIndex, historyCount);
+    void warmSlotPreviewNeighbors(slotId, targetIndex).catch(() => {});
     await setSlotSelection(slotId, targetPreview.imgId);
     if (targetPreview.savedUrl) {
         const messageId = parseInt(container.dataset.mesid);

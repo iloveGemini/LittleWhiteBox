@@ -1,0 +1,152 @@
+/* Home cover layout foundation. */
+.xb-os-shell.is-home-view {
+    display: block;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+    background:
+        linear-gradient(90deg, transparent 50%, var(--xb-paper-warm) 50%),
+        var(--xb-paper);
+}
+
+.xb-os-shell.is-home-view .xb-os-stage {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+}
+
+.xb-os-shell.is-home-view .home-command-center {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: stretch;
+    padding: 8vw 12vw;
+    background:
+        linear-gradient(90deg, transparent 50%, var(--xb-paper-warm) 50%),
+        var(--xb-paper);
+}
+
+.xb-os-shell.is-home-view .home-command-hero {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: stretch;
+    gap: 8vw;
+    margin: 0;
+}
+
+.xb-os-shell.is-home-view .home-brand-panel {
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+}
+
+.xb-os-shell.is-home-view .home-brand-panel .eyebrow {
+    display: none;
+}
+
+.xb-os-shell.is-home-view .home-brand-panel p {
+    max-width: 82%;
+    margin: 0;
+    color: var(--xb-ink-soft);
+    font-family: var(--xb-font-serif);
+    font-size: 1.25rem;
+    line-height: 1.8;
+}
+
+.xb-os-shell.is-home-view .home-brand-panel .home-version-line {
+    margin-top: 1rem;
+    color: var(--xb-ink-faint);
+    font-family: var(--xb-font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+}
+
+.xb-os-shell.is-home-view .home-enter-chat {
+    margin-top: 4rem;
+    min-height: 42px;
+    border: 1px solid var(--xb-ink);
+    border-radius: 40px;
+    background: transparent;
+    color: var(--xb-ink);
+    font-family: var(--xb-font-ui);
+    font-size: 0.85rem;
+    letter-spacing: 0.16em;
+    padding: 12px 32px;
+}
+
+.xb-os-shell.is-home-view .home-enter-chat:hover:not(:disabled) {
+    background: var(--xb-ink);
+    color: var(--xb-paper);
+}
+
+.xb-os-shell.is-home-view .home-menu-panel {
+    justify-content: center;
+    padding-left: 4vw;
+}
+
+.xb-os-shell.is-home-view .home-menu-item {
+    min-height: 0;
+    border-bottom: 1px solid var(--xb-rule);
+    color: var(--xb-ink);
+    padding: 0 0 1rem;
+    margin: 0 0 2rem;
+}
+
+.xb-os-shell.is-home-view .home-menu-item:first-child {
+    border-top: 0;
+}
+
+.xb-os-shell.is-home-view .home-menu-item strong {
+    color: inherit;
+    font-family: var(--xb-font-serif);
+    font-size: 2rem;
+    font-weight: 500;
+}
+
+.xb-os-shell.is-home-view .home-menu-item span {
+    color: var(--xb-ink-soft);
+    font-family: var(--xb-font-mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.16em;
+}
+
+.xb-os-shell.is-home-view .home-menu-item:hover:not(:disabled),
+.xb-os-shell.is-home-view .home-menu-item.accent {
+    border-bottom-color: var(--xb-stamp);
+    color: var(--xb-stamp);
+}
+
+.xb-os-shell.is-home-view .home-menu-item:hover:not(:disabled) {
+    padding-left: 1rem;
+}
+
+@media (max-width: 980px) {
+    .xb-os-shell.is-home-view {
+        overflow: auto;
+    }
+
+    .xb-os-shell.is-home-view .home-command-center {
+        height: auto;
+        min-height: 100vh;
+        overflow: visible;
+        padding: 32px 24px;
+    }
+
+    .xb-os-shell.is-home-view .home-command-hero {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 42px;
+    }
+
+    .xb-os-shell.is-home-view .home-brand-panel p {
+        max-width: 100%;
+    }
+
+    .xb-os-shell.is-home-view .home-menu-panel {
+        padding-left: 0;
+    }
+}

@@ -37,11 +37,14 @@ export interface XbTavernCharacter {
     id?: string;
     name?: string;
     avatar?: string;
+    tags?: string[];
     description?: string;
     personality?: string;
     scenario?: string;
     firstMessage?: string;
     first_mes?: string;
+    alternateGreetings?: string[];
+    alternate_greetings?: string[];
     mesExample?: string;
     mes_example?: string;
     creatorNotes?: string;
@@ -71,6 +74,8 @@ export interface XbTavernWorldBook {
     name: string;
     entries: XbTavernWorldEntry[];
     error?: string;
+    worldSourceType?: 'chat' | 'persona' | 'character' | 'global' | 'embedded' | string;
+    worldSourceIndex?: number;
 }
 
 export interface XbTavernWorldEntry {
@@ -90,26 +95,91 @@ export interface XbTavernWorldEntry {
     constant?: boolean;
     disable?: boolean;
     disabled?: boolean;
+    enabled?: boolean;
+    vectorized?: boolean;
     decorators?: string[] | string;
     selective?: boolean;
     selectiveLogic?: XBTavernSelectiveLogic | number;
     selective_logic?: XBTavernSelectiveLogic | number;
+    scanDepth?: number | null;
+    scan_depth?: number | null;
     caseSensitive?: boolean;
     case_sensitive?: boolean;
     matchWholeWords?: boolean;
     match_whole_words?: boolean;
+    ignoreBudget?: boolean;
+    ignore_budget?: boolean;
+    excludeRecursion?: boolean;
+    exclude_recursion?: boolean;
+    preventRecursion?: boolean;
+    prevent_recursion?: boolean;
+    delayUntilRecursion?: boolean | number;
+    delay_until_recursion?: boolean | number;
+    characterFilter?: {
+        names?: string[];
+        tags?: string[];
+        isExclude?: boolean;
+    };
+    group?: string;
+    groupOverride?: boolean;
+    group_override?: boolean;
+    groupWeight?: number;
+    group_weight?: number;
+    useGroupScoring?: boolean | null;
+    use_group_scoring?: boolean | null;
+    matchPersonaDescription?: boolean;
+    matchCharacterDescription?: boolean;
+    matchCharacterPersonality?: boolean;
+    matchCharacterDepthPrompt?: boolean;
+    matchScenario?: boolean;
+    matchCreatorNotes?: boolean;
     probability?: number;
     useProbability?: boolean;
     useProbabilityGlobal?: boolean;
     sticky?: number | boolean;
     cooldown?: number;
     delay?: number;
+    triggers?: string[];
     outlet?: string;
     outletName?: string;
     world?: string;
     worldName?: string;
+    worldSourceType?: 'chat' | 'persona' | 'character' | 'global' | 'embedded' | string;
+    worldSourceIndex?: number;
     sourceWorldBook?: string;
     extensions?: Record<string, unknown>;
+}
+
+export interface XbTavernNativeWorldInfoTimedEffect {
+    hash?: number;
+    start?: number;
+    end?: number;
+    protected?: boolean;
+}
+
+export interface XbTavernNativeWorldInfoTimedState {
+    sticky?: Record<string, XbTavernNativeWorldInfoTimedEffect>;
+    cooldown?: Record<string, XbTavernNativeWorldInfoTimedEffect>;
+}
+
+export interface XbTavernNativeWorldInfoSource {
+    name: string;
+    sourceType?: 'chat' | 'persona' | 'character' | 'global' | 'embedded' | string;
+    sourceIndex?: number;
+}
+
+export interface XbTavernNativeWorldInfoRuntime {
+    trigger?: string;
+    sourceNames?: XbTavernNativeWorldInfoSource[];
+    activatedEntries?: XbTavernWorldEntry[];
+    worldInfoBefore?: string;
+    worldInfoAfter?: string;
+    worldInfoExamples?: Array<{ position?: string; content?: string }>;
+    worldInfoDepth?: Array<{ depth?: number; role?: number; entries?: string[] }>;
+    anBefore?: string[];
+    anAfter?: string[];
+    outlets?: Record<string, string[]>;
+    timedState?: XbTavernNativeWorldInfoTimedState;
 }
 
 export interface XbTavernContext {
@@ -118,6 +188,8 @@ export interface XbTavernContext {
     history?: XbTavernHistoryMessage[];
     worldBooks?: XbTavernWorldBook[];
     worldEntries?: XbTavernWorldEntry[];
+    worldSettings?: Partial<XbTavernWorldSettings>;
+    nativeWorldInfo?: XbTavernNativeWorldInfoRuntime;
     sessionMeta?: Record<string, unknown>;
 }
 
@@ -253,11 +325,31 @@ export interface XbTavernWorldEntryState {
 
 export interface XbTavernWorldSettings {
     scanText?: string;
+    scanMessages?: string[];
+    scanDepth?: number;
+    globalScanData?: {
+        personaDescription?: string;
+        characterDescription?: string;
+        characterPersonality?: string;
+        characterDepthPrompt?: string;
+        scenario?: string;
+        creatorNotes?: string;
+    };
+    characterFilterData?: {
+        names?: string[];
+        tags?: string[];
+    };
     caseSensitive?: boolean;
     matchWholeWords?: boolean;
     budgetChars?: number;
     recursion?: boolean;
     recursionLimit?: number;
+    insertionStrategy?: number;
+    includeNames?: boolean;
+    useGroupScoring?: boolean;
+    minActivations?: number;
+    minActivationsDepthMax?: number;
+    trigger?: string;
     turn?: number;
     entryStates?: Record<string, XbTavernWorldEntryState>;
     random?: () => number;
@@ -276,7 +368,18 @@ export interface ActivatedWorldEntry extends XbTavernWorldEntry {
     depth: number;
     activationReason: string;
     sourceWorldBook: string;
+    worldSourceType?: string;
+    worldSourceIndex?: number;
     contentChars: number;
+    scanDepth?: number | null;
+    ignoreBudget?: boolean;
+    excludeRecursion?: boolean;
+    preventRecursion?: boolean;
+    delayUntilRecursion?: boolean | number;
+    group?: string;
+    groupOverride?: boolean;
+    groupWeight?: number;
+    useGroupScoring?: boolean | null;
 }
 
 export interface XbTavernWorldEntryCandidate {
@@ -284,6 +387,8 @@ export interface XbTavernWorldEntryCandidate {
     activationKey: string;
     title: string;
     sourceWorldBook: string;
+    worldSourceType?: string;
+    worldSourceIndex?: number;
     content: string;
     contentChars: number;
     key: string[];
@@ -363,6 +468,10 @@ export interface XbTavernBuildSnapshot {
         insertionTarget: string;
         contentChars: number;
     }>;
+    nativeWorldInfo?: {
+        trigger: string;
+        sourceNames: XbTavernNativeWorldInfoSource[];
+    };
     worldBudget: XbTavernMessageBuildResult['meta']['worldBudget'];
     worldPositionCounts: Record<string, number>;
     scanTextChars: number;
@@ -371,6 +480,7 @@ export interface XbTavernBuildSnapshot {
 
 export type XbTavernWorldEntriesTransform = (entries: ActivatedWorldEntry[]) => ActivatedWorldEntry[] | Promise<ActivatedWorldEntry[]>;
 export type XbTavernConversationMessagesTransform = (messages: XbTavernMessage[]) => XbTavernMessage[] | Promise<XbTavernMessage[]>;
+export type XbTavernFinalMessagesTransform = (messages: XbTavernMessage[]) => XbTavernMessage[] | Promise<XbTavernMessage[]>;
 
 const ROLE_BY_NUMBER: Record<number, XbTavernRole> = {
     [XBTavernPromptRole.SYSTEM]: 'system',
@@ -581,10 +691,16 @@ function resolveWorldPosition(position: XbTavernWorldEntry['position']): XBTaver
 }
 
 function normalizeEntry(entry: XbTavernWorldEntry = {}, index = 0): ActivatedWorldEntry {
+    const rawEntry = entry as XbTavernWorldEntry & Record<string, unknown>;
+    const extensions = entry.extensions || {};
+    const extensionOrEntry = (extensionKey: string, entryKey: string) => (
+        Object.prototype.hasOwnProperty.call(extensions, extensionKey) ? extensions[extensionKey] : rawEntry[entryKey]
+    );
     const stripped = stripDecorators(entry.content || '');
     const rawUid = entry.uid ?? entry.id ?? entry.comment ?? entry.name ?? index + 1;
     const sourceWorldBook = normalizeText(entry.sourceWorldBook || entry.worldName || entry.world);
     const content = stripped.content || normalizeText(entry.content);
+    const rawOrder = rawEntry.order ?? rawEntry.insertion_order;
     return {
         ...entry,
         uid: rawUid,
@@ -599,12 +715,43 @@ function normalizeEntry(entry: XbTavernWorldEntry = {}, index = 0): ActivatedWor
             ...normalizeStringArray(entry.keysecondary),
             ...normalizeStringArray(entry.secondary_keys),
         ],
-        order: Number(entry.order) || 0,
-        depth: Number.isFinite(Number(entry.depth)) ? Number(entry.depth) : 4,
-        role: normalizeRole(entry.role, 'system'),
-        position: resolveWorldPosition(entry.position),
+        order: Number(rawOrder) || 0,
+        disable: rawEntry.disable === true || rawEntry.disabled === true || rawEntry.enabled === false,
+        enabled: rawEntry.enabled === false ? false : rawEntry.disable !== true && rawEntry.disabled !== true,
+        vectorized: extensionOrEntry('vectorized', 'vectorized') === true,
+        depth: Number.isFinite(Number(extensionOrEntry('depth', 'depth'))) ? Number(extensionOrEntry('depth', 'depth')) : 4,
+        role: normalizeRole(extensionOrEntry('role', 'role'), 'system'),
+        position: resolveWorldPosition(extensionOrEntry('position', 'position') as XbTavernWorldEntry['position']),
+        selectiveLogic: extensionOrEntry('selectiveLogic', 'selectiveLogic') as XbTavernWorldEntry['selectiveLogic'],
+        scanDepth: Number.isFinite(Number(extensionOrEntry('scan_depth', 'scanDepth'))) ? Number(extensionOrEntry('scan_depth', 'scanDepth')) : null,
+        caseSensitive: extensionOrEntry('case_sensitive', 'caseSensitive') as XbTavernWorldEntry['caseSensitive'],
+        matchWholeWords: extensionOrEntry('match_whole_words', 'matchWholeWords') as XbTavernWorldEntry['matchWholeWords'],
+        characterFilter: (extensionOrEntry('character_filter', 'characterFilter') || rawEntry.character_filter) as XbTavernWorldEntry['characterFilter'],
+        ignoreBudget: extensionOrEntry('ignore_budget', 'ignoreBudget') === true,
+        excludeRecursion: extensionOrEntry('exclude_recursion', 'excludeRecursion') === true,
+        preventRecursion: extensionOrEntry('prevent_recursion', 'preventRecursion') === true,
+        delayUntilRecursion: extensionOrEntry('delay_until_recursion', 'delayUntilRecursion') as XbTavernWorldEntry['delayUntilRecursion'],
+        group: normalizeText(extensionOrEntry('group', 'group')),
+        groupOverride: extensionOrEntry('group_override', 'groupOverride') === true,
+        groupWeight: Number.isFinite(Number(extensionOrEntry('group_weight', 'groupWeight'))) ? Number(extensionOrEntry('group_weight', 'groupWeight')) : undefined,
+        useGroupScoring: extensionOrEntry('use_group_scoring', 'useGroupScoring') as XbTavernWorldEntry['useGroupScoring'],
+        probability: extensionOrEntry('probability', 'probability') as XbTavernWorldEntry['probability'],
+        useProbability: extensionOrEntry('useProbability', 'useProbability') as XbTavernWorldEntry['useProbability'],
+        sticky: extensionOrEntry('sticky', 'sticky') as XbTavernWorldEntry['sticky'],
+        cooldown: extensionOrEntry('cooldown', 'cooldown') as XbTavernWorldEntry['cooldown'],
+        delay: extensionOrEntry('delay', 'delay') as XbTavernWorldEntry['delay'],
+        triggers: normalizeStringArray(extensionOrEntry('triggers', 'triggers')),
+        outletName: normalizeText(extensionOrEntry('outlet_name', 'outletName')),
+        matchPersonaDescription: extensionOrEntry('match_persona_description', 'matchPersonaDescription') as XbTavernWorldEntry['matchPersonaDescription'],
+        matchCharacterDescription: extensionOrEntry('match_character_description', 'matchCharacterDescription') as XbTavernWorldEntry['matchCharacterDescription'],
+        matchCharacterPersonality: extensionOrEntry('match_character_personality', 'matchCharacterPersonality') as XbTavernWorldEntry['matchCharacterPersonality'],
+        matchCharacterDepthPrompt: extensionOrEntry('match_character_depth_prompt', 'matchCharacterDepthPrompt') as XbTavernWorldEntry['matchCharacterDepthPrompt'],
+        matchScenario: extensionOrEntry('match_scenario', 'matchScenario') as XbTavernWorldEntry['matchScenario'],
+        matchCreatorNotes: extensionOrEntry('match_creator_notes', 'matchCreatorNotes') as XbTavernWorldEntry['matchCreatorNotes'],
         activationReason: '',
         sourceWorldBook,
+        worldSourceType: normalizeText(entry.worldSourceType),
+        worldSourceIndex: Number.isFinite(Number(entry.worldSourceIndex)) ? Number(entry.worldSourceIndex) : index,
         contentChars: content.length,
     };
 }
@@ -619,20 +766,79 @@ export function describeWorldPosition(position: XBTavernWorldPosition): string {
     return POSITION_LABELS[position] || 'after character';
 }
 
+function normalizeScanDepth(value: unknown, fallback = 2): number {
+    const depth = Number(value);
+    return Number.isFinite(depth) ? Math.max(0, Math.floor(depth)) : fallback;
+}
+
+function buildScanTextFromMessages(messages: string[] = [], depth = 2): string {
+    const normalizedDepth = normalizeScanDepth(depth, 2);
+    if (normalizedDepth <= 0) {return '';}
+    return messages.slice(-normalizedDepth).map((item) => String(item || '')).filter(Boolean).join('\n');
+}
+
+function buildEntryScanText(settings: XbTavernWorldSettings = {}, entry?: XbTavernWorldEntry): string {
+    const scanDepth = entry?.scanDepth === null || entry?.scanDepth === undefined
+        ? normalizeScanDepth(settings.scanDepth ?? 2, 2)
+        : normalizeScanDepth(entry.scanDepth, 2);
+    const baseScanText = Array.isArray(settings.scanMessages)
+        ? buildScanTextFromMessages(settings.scanMessages, scanDepth)
+        : String(settings.scanText || '');
+    const recursionText = String((settings as XbTavernWorldSettings & { recursionText?: string }).recursionText || '');
+    const source = [baseScanText, recursionText];
+    const globalScanData = settings.globalScanData || {};
+    if (entry?.matchPersonaDescription && globalScanData.personaDescription) {
+        source.push(globalScanData.personaDescription);
+    }
+    if (entry?.matchCharacterDescription && globalScanData.characterDescription) {
+        source.push(globalScanData.characterDescription);
+    }
+    if (entry?.matchCharacterPersonality && globalScanData.characterPersonality) {
+        source.push(globalScanData.characterPersonality);
+    }
+    if (entry?.matchCharacterDepthPrompt && globalScanData.characterDepthPrompt) {
+        source.push(globalScanData.characterDepthPrompt);
+    }
+    if (entry?.matchScenario && globalScanData.scenario) {
+        source.push(globalScanData.scenario);
+    }
+    if (entry?.matchCreatorNotes && globalScanData.creatorNotes) {
+        source.push(globalScanData.creatorNotes);
+    }
+    return source.filter(Boolean).join('\n');
+}
+
 function buildMatcher(settings: XbTavernWorldSettings = {}, entry?: XbTavernWorldEntry) {
     const caseSensitive = !!(entry?.caseSensitive ?? entry?.case_sensitive ?? settings.caseSensitive);
     const matchWholeWords = !!(entry?.matchWholeWords ?? entry?.match_whole_words ?? settings.matchWholeWords);
-    const source = caseSensitive ? String(settings.scanText || '') : String(settings.scanText || '').toLowerCase();
+    const rawSource = buildEntryScanText(settings, entry);
+    const source = caseSensitive ? rawSource : rawSource.toLowerCase();
 
     return (keyword = '') => {
         const rawKeyword = String(keyword || '').trim();
         if (!rawKeyword) {return false;}
+        const regex = parseWorldInfoRegex(rawKeyword);
+        if (regex) {return regex.test(rawSource);}
         const key = caseSensitive ? rawKeyword : rawKeyword.toLowerCase();
         if (!matchWholeWords) {return source.includes(key);}
         const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const pattern = new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}($|[^\\p{L}\\p{N}_])`, caseSensitive ? 'u' : 'iu');
         return pattern.test(source);
     };
+}
+
+function parseWorldInfoRegex(input = ''): RegExp | null {
+    const match = String(input || '').match(/^\/([\w\W]+?)\/([gimsuy]*)$/);
+    if (!match) {return null;}
+    let pattern = match[1] || '';
+    const flags = match[2] || '';
+    if (/(^|[^\\])\//.test(pattern)) {return null;}
+    pattern = pattern.replace('\\/', '/');
+    try {
+        return new RegExp(pattern, flags);
+    } catch {
+        return null;
+    }
 }
 
 function secondaryMatches(entry: ActivatedWorldEntry, matchesKeyword: (keyword: string) => boolean): boolean {
@@ -677,15 +883,47 @@ function shouldPassProbability(entry: ActivatedWorldEntry, settings: XbTavernWor
     return random() <= probability;
 }
 
+function getRecursionPass(settings: XbTavernWorldSettings): number {
+    return Math.max(0, Number((settings as XbTavernWorldSettings & { recursionPass?: number }).recursionPass) || 0);
+}
+
+function isDelayUntilRecursionReady(entry: ActivatedWorldEntry, recursionPass: number): boolean {
+    const value = entry.delayUntilRecursion ?? entry.delay_until_recursion;
+    if (!value) {return true;}
+    if (recursionPass <= 0) {return false;}
+    if (value === true) {return true;}
+    const requiredPass = Math.max(1, Number(value) || 1);
+    return recursionPass >= requiredPass;
+}
+
+function passesCharacterFilter(entry: ActivatedWorldEntry, settings: XbTavernWorldSettings): boolean {
+    const filter = entry.characterFilter;
+    if (!filter || typeof filter !== 'object') {return true;}
+    const requiredNames = Array.isArray(filter.names) ? filter.names.map((item) => normalizeText(item)).filter(Boolean) : [];
+    const requiredTags = Array.isArray(filter.tags) ? filter.tags.map((item) => normalizeText(item)).filter(Boolean) : [];
+    if (!requiredNames.length && !requiredTags.length) {return true;}
+    const currentNames = new Set((settings.characterFilterData?.names || []).map((item) => normalizeText(item)).filter(Boolean));
+    const currentTags = new Set((settings.characterFilterData?.tags || []).map((item) => normalizeText(item)).filter(Boolean));
+    const nameIncluded = requiredNames.some((name) => currentNames.has(name));
+    const tagIncluded = requiredTags.some((tag) => currentTags.has(tag));
+    const included = nameIncluded || tagIncluded;
+    return filter.isExclude ? !included : included;
+}
+
 function activationReasonForEntry(entry: ActivatedWorldEntry, settings: XbTavernWorldSettings): string {
     if (entry.disable === true || entry.disabled === true) {return '';}
+    if (entry.triggers?.length && !entry.triggers.includes(normalizeText(settings.trigger) || 'normal')) {return '';}
+    if (!passesCharacterFilter(entry, settings)) {return '';}
 
     const turn = Number(settings.turn) || 0;
     const state = getEntryState(settings, entry);
     const stickyActive = isStickyActive(entry, settings);
+    const recursionPass = getRecursionPass(settings);
     if (Number(state.delayUntilTurn) > turn) {return '';}
     if (Number(entry.delay) > 0 && turn < Number(entry.delay)) {return '';}
     if (Number(state.cooldownUntilTurn) > turn && !stickyActive) {return '';}
+    if (recursionPass > 0 && entry.excludeRecursion && !stickyActive) {return '';}
+    if (!isDelayUntilRecursionReady(entry, recursionPass) && !stickyActive) {return '';}
     if (entry.decorators.includes('@@activate')) {return 'decorator';}
     if (entry.decorators.includes('@@dont_activate')) {return '';}
     if (entry.constant === true) {return 'constant';}
@@ -700,14 +938,25 @@ function activationReasonForEntry(entry: ActivatedWorldEntry, settings: XbTavern
 
 function explainEntryStatus(entry: ActivatedWorldEntry, settings: XbTavernWorldSettings): { status: string; activationReason: string } {
     if (entry.disable === true || entry.disabled === true) {return { status: 'disabled', activationReason: '' };}
+    if (entry.triggers?.length && !entry.triggers.includes(normalizeText(settings.trigger) || 'normal')) {
+        return { status: 'trigger_filtered', activationReason: '' };
+    }
+    if (!passesCharacterFilter(entry, settings)) {return { status: 'character_filtered', activationReason: '' };}
 
     const turn = Number(settings.turn) || 0;
     const state = getEntryState(settings, entry);
     const stickyActive = isStickyActive(entry, settings);
+    const recursionPass = getRecursionPass(settings);
     if (Number(state.delayUntilTurn) > turn || (Number(entry.delay) > 0 && turn < Number(entry.delay))) {
         return { status: 'delay', activationReason: '' };
     }
     if (Number(state.cooldownUntilTurn) > turn && !stickyActive) {return { status: 'cooldown', activationReason: '' };}
+    if (recursionPass > 0 && entry.excludeRecursion && !stickyActive) {
+        return { status: 'excluded_from_recursion', activationReason: '' };
+    }
+    if (!isDelayUntilRecursionReady(entry, recursionPass) && !stickyActive) {
+        return { status: 'delay_until_recursion', activationReason: '' };
+    }
     if (entry.decorators.includes('@@activate')) {return { status: 'activated', activationReason: 'decorator' };}
     if (entry.decorators.includes('@@dont_activate')) {return { status: 'suppressed_by_decorator', activationReason: '' };}
     if (entry.constant === true) {return { status: 'activated', activationReason: 'constant' };}
@@ -720,8 +969,36 @@ function explainEntryStatus(entry: ActivatedWorldEntry, settings: XbTavernWorldS
     return { status: 'activated', activationReason: 'keyword' };
 }
 
-function sortWorldEntries(left: ActivatedWorldEntry, right: ActivatedWorldEntry): number {
-    return right.order - left.order || left.activationKey.localeCompare(right.activationKey, 'en');
+function worldSourceRank(entry: ActivatedWorldEntry, settings: XbTavernWorldSettings = {}): number {
+    const sourceType = normalizeText(entry.worldSourceType);
+    if (sourceType === 'chat') {return 0;}
+    if (sourceType === 'persona') {return 1;}
+    const strategy = Number(settings.insertionStrategy ?? 1);
+    if (sourceType === 'character' || sourceType === 'embedded') {
+        return strategy === 2 ? 3 : 2;
+    }
+    if (sourceType === 'global') {
+        return strategy === 1 ? 3 : 2;
+    }
+    return 4;
+}
+
+function worldSourceTieRank(entry: ActivatedWorldEntry, settings: XbTavernWorldSettings = {}): number {
+    const sourceType = normalizeText(entry.worldSourceType);
+    const strategy = Number(settings.insertionStrategy ?? 1);
+    if (strategy === 0) {
+        if (sourceType === 'global') {return 0;}
+        if (sourceType === 'character' || sourceType === 'embedded') {return 1;}
+    }
+    return 0;
+}
+
+function sortWorldEntries(left: ActivatedWorldEntry, right: ActivatedWorldEntry, settings: XbTavernWorldSettings = {}): number {
+    return worldSourceRank(left, settings) - worldSourceRank(right, settings)
+        || right.order - left.order
+        || worldSourceTieRank(left, settings) - worldSourceTieRank(right, settings)
+        || Number(left.worldSourceIndex ?? 0) - Number(right.worldSourceIndex ?? 0)
+        || left.activationKey.localeCompare(right.activationKey, 'en');
 }
 
 function getWorldBudgetLimit(settings: XbTavernWorldSettings): number {
@@ -746,6 +1023,7 @@ function buildWorldBudgetDebug(sortedEntries: ActivatedWorldEntry[] = [], settin
     const result: ActivatedWorldEntry[] = [];
     let used = 0;
     let skippedChars = 0;
+    let overflowed = false;
 
     sortedEntries.forEach((entry) => {
         const size = entry.content.length;
@@ -754,9 +1032,15 @@ function buildWorldBudgetDebug(sortedEntries: ActivatedWorldEntry[] = [], settin
         byKey.set(entry.activationKey, {
             budgetUsedBefore: used,
             budgetRemainingBefore: enabled ? remaining : undefined,
-            budgetShortfall: enabled && used + size > limit ? used + size - limit : undefined,
+            budgetShortfall: enabled && !entry.ignoreBudget && (overflowed || used + size >= limit) ? Math.max(1, used + size - limit) : undefined,
         });
-        if (enabled && used + size > limit) {
+        if (entry.ignoreBudget) {
+            result.push(entry);
+            includedKeys.add(entry.activationKey);
+            return;
+        }
+        if (overflowed || (enabled && used + size >= limit)) {
+            overflowed = enabled;
             skippedChars += size;
             return;
         }
@@ -777,10 +1061,95 @@ function buildWorldBudgetDebug(sortedEntries: ActivatedWorldEntry[] = [], settin
     };
 }
 
-function applyWorldBudget(entries: ActivatedWorldEntry[], settings: XbTavernWorldSettings): ActivatedWorldEntry[] {
-    const debug = buildWorldBudgetDebug(entries, settings);
-    if (!debug.enabled) {return entries;}
-    return entries.filter((entry) => debug.includedKeys.has(entry.activationKey));
+function entryGroups(entry: ActivatedWorldEntry): string[] {
+    return normalizeText(entry.group).split(/,\s*/).map((item) => item.trim()).filter(Boolean);
+}
+
+function getEntryMatchScore(entry: ActivatedWorldEntry, settings: XbTavernWorldSettings = {}): number {
+    const matchesKeyword = buildMatcher(settings, entry);
+    const primaryMatches = entry.key.filter((keyword) => matchesKeyword(keyword)).length;
+    if (!entry.key.length || !primaryMatches) {return 0;}
+    const secondaryMatchesCount = entry.keysecondary.filter((keyword) => matchesKeyword(keyword)).length;
+    if (entry.keysecondary.length > 0) {
+        const logic = Number(entry.selectiveLogic ?? entry.selective_logic ?? XBTavernSelectiveLogic.AND_ANY);
+        if (logic === XBTavernSelectiveLogic.AND_ANY) {
+            return primaryMatches + secondaryMatchesCount;
+        }
+        if (logic === XBTavernSelectiveLogic.AND_ALL && secondaryMatchesCount === entry.keysecondary.length) {
+            return primaryMatches + secondaryMatchesCount;
+        }
+    }
+    return primaryMatches;
+}
+
+function filterByInclusionGroups(
+    entries: ActivatedWorldEntry[] = [],
+    alreadyActivated: Map<string, ActivatedWorldEntry>,
+    settings: XbTavernWorldSettings = {},
+): ActivatedWorldEntry[] {
+    const kept = new Set(entries);
+    const activatedGroups = new Set<string>();
+    alreadyActivated.forEach((entry) => {
+        entryGroups(entry).forEach((group) => activatedGroups.add(group));
+    });
+    const grouped = new Map<string, ActivatedWorldEntry[]>();
+    entries.forEach((entry) => {
+        entryGroups(entry).forEach((group) => {
+            const list = grouped.get(group) || [];
+            list.push(entry);
+            grouped.set(group, list);
+        });
+    });
+    grouped.forEach((groupEntries, group) => {
+        const activeEntries = groupEntries.filter((entry) => kept.has(entry));
+        if (!activeEntries.length) {return;}
+        if (activatedGroups.has(group)) {
+            activeEntries.forEach((entry) => kept.delete(entry));
+            return;
+        }
+        if (settings.useGroupScoring === true || activeEntries.some((entry) => entry.useGroupScoring === true)) {
+            const scores = activeEntries.map((entry) => getEntryMatchScore(entry, settings));
+            const maxScore = Math.max(...scores);
+            activeEntries.forEach((entry, index) => {
+                const isScored = entry.useGroupScoring ?? settings.useGroupScoring;
+                if (isScored && scores[index] < maxScore) {
+                    kept.delete(entry);
+                }
+            });
+        }
+        const scoredEntries = activeEntries.filter((entry) => kept.has(entry));
+        if (scoredEntries.length <= 1) {return;}
+        const priorityWinner = scoredEntries
+            .filter((entry) => entry.groupOverride)
+            .sort((left, right) => sortWorldEntries(left, right, settings))[0];
+        const winner = priorityWinner || pickWeightedGroupWinner(scoredEntries, settings);
+        scoredEntries.forEach((entry) => {
+            if (entry !== winner) {kept.delete(entry);}
+        });
+    });
+    return entries.filter((entry) => kept.has(entry));
+}
+
+function pickWeightedGroupWinner(entries: ActivatedWorldEntry[] = [], settings: XbTavernWorldSettings = {}): ActivatedWorldEntry | null {
+    if (!entries.length) {return null;}
+    const weighted = entries.map((entry) => ({
+        entry,
+        weight: Math.max(1, Number(entry.groupWeight) || 100),
+    }));
+    const total = weighted.reduce((sum, item) => sum + item.weight, 0);
+    const random = settings.random || Math.random;
+    let roll = random() * total;
+    for (const item of weighted) {
+        roll -= item.weight;
+        if (roll <= 0) {return item.entry;}
+    }
+    return weighted[weighted.length - 1]?.entry || null;
+}
+
+interface WorldActivationRunResult {
+    activatedBeforeBudget: ActivatedWorldEntry[];
+    activatedEntries: ActivatedWorldEntry[];
+    budgetDebug: ReturnType<typeof buildWorldBudgetDebug>;
 }
 
 export function activateWorldEntries(
@@ -788,34 +1157,111 @@ export function activateWorldEntries(
     scanStateOrSettings: XbTavernWorldSettings | { scanText?: string } = {},
     settings: XbTavernWorldSettings = {},
 ): ActivatedWorldEntry[] {
+    return runWorldActivation(entries, scanStateOrSettings, settings).activatedEntries;
+}
+
+function runWorldActivation(
+    entries: XbTavernWorldEntry[] = [],
+    scanStateOrSettings: XbTavernWorldSettings | { scanText?: string } = {},
+    settings: XbTavernWorldSettings = {},
+): WorldActivationRunResult {
     const baseSettings = {
         ...scanStateOrSettings,
         ...settings,
         scanText: settings.scanText ?? scanStateOrSettings.scanText ?? '',
     };
-    const normalizedEntries = (Array.isArray(entries) ? entries : []).map((entry, index) => normalizeEntry(entry, index));
-    const recursionLimit = Math.max(1, Number(baseSettings.recursionLimit) || 1);
+    const normalizedEntries = (Array.isArray(entries) ? entries : [])
+        .map((entry, index) => normalizeEntry(entry, index))
+        .sort((left, right) => sortWorldEntries(left, right, baseSettings));
+    const configuredRecursionLimit = Math.max(0, Number(baseSettings.recursionLimit) || 0);
     const allowRecursion = !!baseSettings.recursion;
+    const maxRecursionPasses = allowRecursion
+        ? (configuredRecursionLimit > 0 ? Math.max(0, configuredRecursionLimit - 1) : Math.max(1, normalizedEntries.length))
+        : 0;
     const activated = new Map<string, ActivatedWorldEntry>();
-    let scanText = String(baseSettings.scanText || '');
+    const activatedBeforeBudget = new Map<string, ActivatedWorldEntry>();
+    const failedProbability = new Set<string>();
+    const initialScanText = String(baseSettings.scanText || '');
+    const baseScanDepth = normalizeScanDepth(baseSettings.scanDepth ?? 2, 2);
+    const minActivations = Math.max(0, Number(baseSettings.minActivations) || 0);
+    const minDepthMax = Math.max(0, Number(baseSettings.minActivationsDepthMax) || 0);
+    const scanMessageCount = Array.isArray(baseSettings.scanMessages) ? baseSettings.scanMessages.length : 0;
+    const maxMinDepth = Math.max(baseScanDepth, minDepthMax > 0 ? minDepthMax : scanMessageCount);
+    let recursionText = '';
+    let recursionPass = 0;
+    let scanDepthSkew = 0;
+    let scanMode: 'initial' | 'recursion' | 'minActivations' = 'initial';
+    let guard = 0;
+    const maxLoops = Math.max(1, normalizedEntries.length + maxRecursionPasses + maxMinDepth + 4);
 
-    for (let pass = 0; pass < (allowRecursion ? recursionLimit : 1); pass += 1) {
-        const passSettings = { ...baseSettings, scanText };
+    while (guard < maxLoops) {
+        guard += 1;
+        const activeScanDepth = baseScanDepth + scanDepthSkew;
+        const recursionTextForScan = scanMode === 'minActivations' ? '' : recursionText;
+        const scanText = [initialScanText, recursionTextForScan].filter(Boolean).join('\n');
+        const passSettings = {
+            ...baseSettings,
+            scanDepth: activeScanDepth,
+            scanText,
+            recursionText: recursionTextForScan,
+            recursionPass: scanMode === 'recursion' ? recursionPass : 0,
+        };
         let changed = false;
+        const activatedThisPass: ActivatedWorldEntry[] = [];
         normalizedEntries.forEach((entry) => {
             const key = entry.activationKey;
-            if (activated.has(key)) {return;}
+            if (activatedBeforeBudget.has(key) || failedProbability.has(key)) {return;}
             const activationReason = activationReasonForEntry(entry, passSettings);
             if (!activationReason) {return;}
-            if (!shouldPassProbability(entry, passSettings)) {return;}
-            activated.set(key, { ...entry, activationReason });
-            scanText += `\n${entry.content}`;
-            changed = true;
+            activatedThisPass.push({ ...entry, activationReason });
         });
-        if (!allowRecursion || !changed) {break;}
+        filterByInclusionGroups(activatedThisPass, activatedBeforeBudget, baseSettings).forEach((entry) => {
+            if (!shouldPassProbability(entry, passSettings)) {
+                failedProbability.add(entry.activationKey);
+                return;
+            }
+            activatedBeforeBudget.set(entry.activationKey, entry);
+            const budgetDebug = buildWorldBudgetDebug([...activatedBeforeBudget.values()].sort((left, right) => sortWorldEntries(left, right, baseSettings)), baseSettings);
+            const included = !budgetDebug.enabled || budgetDebug.includedKeys.has(entry.activationKey);
+            if (included) {
+                activated.set(entry.activationKey, entry);
+                if (!entry.preventRecursion) {
+                    recursionText = [recursionText, entry.content].filter(Boolean).join('\n');
+                }
+                changed = true;
+            }
+        });
+
+        const currentBudgetDebug = buildWorldBudgetDebug([...activatedBeforeBudget.values()].sort((left, right) => sortWorldEntries(left, right, baseSettings)), baseSettings);
+        const budgetOverflowed = currentBudgetDebug.enabled && currentBudgetDebug.skippedChars > 0;
+        if (allowRecursion && changed && !budgetOverflowed && recursionPass < maxRecursionPasses) {
+            recursionPass += 1;
+            scanMode = 'recursion';
+            continue;
+        }
+
+        const needsMinActivationScan = minActivations > 0 && activated.size < minActivations;
+        const canAdvanceScanDepth = scanMessageCount > 0
+            && activeScanDepth < maxMinDepth
+            && activeScanDepth < scanMessageCount;
+        if (!budgetOverflowed && needsMinActivationScan && canAdvanceScanDepth) {
+            scanDepthSkew += 1;
+            scanMode = 'minActivations';
+            continue;
+        }
+
+        break;
     }
 
-    return applyWorldBudget([...activated.values()].sort(sortWorldEntries), baseSettings);
+    const sortedBeforeBudget = [...activatedBeforeBudget.values()].sort((left, right) => sortWorldEntries(left, right, baseSettings));
+    const budgetDebug = buildWorldBudgetDebug(sortedBeforeBudget, baseSettings);
+    return {
+        activatedBeforeBudget: sortedBeforeBudget,
+        activatedEntries: [...activated.values()]
+            .sort((left, right) => sortWorldEntries(left, right, baseSettings))
+            .filter((entry) => !budgetDebug.enabled || budgetDebug.includedKeys.has(entry.activationKey)),
+        budgetDebug,
+    };
 }
 
 function buildWorldEntryCandidates(
@@ -842,6 +1288,8 @@ function buildWorldEntryCandidates(
             activationKey: normalized.activationKey,
             title: normalizeText(normalized.comment || normalized.title || normalized.name || normalized.uid),
             sourceWorldBook: normalized.sourceWorldBook,
+            worldSourceType: normalized.worldSourceType,
+            worldSourceIndex: normalized.worldSourceIndex,
             content: normalized.content,
             contentChars: normalized.contentChars,
             key: normalized.key,
@@ -860,6 +1308,101 @@ function buildWorldEntryCandidates(
             ...budgetInfo,
         };
     });
+}
+
+function normalizeNativeActivatedEntries(entries: XbTavernWorldEntry[] = []): ActivatedWorldEntry[] {
+    return (Array.isArray(entries) ? entries : [])
+        .map((entry, index) => {
+            const normalized = normalizeEntry(entry, index);
+            return {
+                ...normalized,
+                activationReason: normalizeText((entry as { activationReason?: unknown }).activationReason) || 'native',
+            };
+        })
+        .filter((entry) => !!entry.content);
+}
+
+function buildNativeWorldEntryCandidates(entries: ActivatedWorldEntry[] = []): XbTavernWorldEntryCandidate[] {
+    return entries.map((entry) => ({
+        uid: entry.uid,
+        activationKey: entry.activationKey,
+        title: normalizeText(entry.comment || entry.title || entry.name || entry.uid),
+        sourceWorldBook: entry.sourceWorldBook,
+        worldSourceType: entry.worldSourceType,
+        worldSourceIndex: entry.worldSourceIndex,
+        content: entry.content,
+        contentChars: entry.contentChars,
+        key: entry.key,
+        keysecondary: entry.keysecondary,
+        matchedKeys: [] as string[],
+        matchedSecondaryKeys: [] as string[],
+        decorators: entry.decorators,
+        position: entry.position,
+        positionLabel: describeWorldPosition(entry.position),
+        role: entry.role,
+        order: entry.order,
+        depth: entry.depth,
+        status: 'activated',
+        activationReason: entry.activationReason || 'native',
+        insertionTarget: insertionTargetForEntry(entry),
+    }));
+}
+
+function buildNativePromptEntries(runtime: XbTavernNativeWorldInfoRuntime = {}): ActivatedWorldEntry[] {
+    const entries: ActivatedWorldEntry[] = [];
+    let order = 0;
+    const pushEntry = (content: unknown, position: XBTavernWorldPosition, patch: Partial<ActivatedWorldEntry> = {}) => {
+        const text = normalizeText(content);
+        if (!text) {return;}
+        const activationKey = `native:${position}:${order}`;
+        entries.push({
+            uid: activationKey,
+            activationKey,
+            content: text,
+            contentChars: text.length,
+            key: [],
+            keysecondary: [],
+            decorators: [],
+            position,
+            role: patch.role || 'system',
+            order,
+            depth: Number.isFinite(Number(patch.depth)) ? Number(patch.depth) : 4,
+            activationReason: 'native',
+            sourceWorldBook: '',
+            title: '',
+            comment: '',
+            ...patch,
+        });
+        order += 1;
+    };
+    pushEntry(runtime.worldInfoBefore, XBTavernWorldPosition.before);
+    pushEntry(runtime.worldInfoAfter, XBTavernWorldPosition.after);
+    (Array.isArray(runtime.worldInfoExamples) ? runtime.worldInfoExamples : []).forEach((entry) => {
+        const position = normalizeText(entry?.position) === 'after'
+            ? XBTavernWorldPosition.EMBottom
+            : XBTavernWorldPosition.EMTop;
+        pushEntry(entry?.content, position);
+    });
+    (Array.isArray(runtime.anBefore) ? runtime.anBefore : []).forEach((content) => {
+        pushEntry(content, XBTavernWorldPosition.ANTop);
+    });
+    (Array.isArray(runtime.anAfter) ? runtime.anAfter : []).forEach((content) => {
+        pushEntry(content, XBTavernWorldPosition.ANBottom);
+    });
+    (Array.isArray(runtime.worldInfoDepth) ? runtime.worldInfoDepth : []).forEach((entry) => {
+        const depth = Number.isFinite(Number(entry?.depth)) ? Number(entry.depth) : 4;
+        const role = normalizeRole(ROLE_BY_NUMBER[Number(entry?.role)] || 'system', 'system');
+        (Array.isArray(entry?.entries) ? entry.entries : []).forEach((content) => {
+            pushEntry(content, XBTavernWorldPosition.atDepth, { depth, role });
+        });
+    });
+    const outlets = runtime.outlets && typeof runtime.outlets === 'object' ? runtime.outlets : {};
+    Object.entries(outlets).forEach(([outletName, values]) => {
+        (Array.isArray(values) ? values : []).forEach((content) => {
+            pushEntry(content, XBTavernWorldPosition.outlet, { outletName });
+        });
+    });
+    return entries;
 }
 
 function insertionTargetForEntry(entry: Pick<ActivatedWorldEntry, 'position' | 'depth' | 'outletName' | 'outlet'>): string {
@@ -979,8 +1522,16 @@ function buildWorldEntryStateUpdates(entries: ActivatedWorldEntry[] = [], settin
     return updates;
 }
 
+function sortPromptEntries(entries: ActivatedWorldEntry[] = []): ActivatedWorldEntry[] {
+    return [...entries].sort((left, right) => (
+        left.order - right.order
+        || Number(right.worldSourceIndex ?? 0) - Number(left.worldSourceIndex ?? 0)
+        || right.activationKey.localeCompare(left.activationKey, 'en')
+    ));
+}
+
 function renderEntryBlock(title: string, entries: ActivatedWorldEntry[] = []): string {
-    const content = entries.map((entry) => entry.content).filter(Boolean).join('\n\n');
+    const content = sortPromptEntries(entries).map((entry) => entry.content).filter(Boolean).join('\n\n');
     return content ? `<${title}>\n${content}\n</${title}>` : '';
 }
 
@@ -1274,7 +1825,7 @@ function buildHistoryMessages(history: XbTavernHistoryMessage[] = [], options: {
 
 function buildDepthMessages(entries: ActivatedWorldEntry[] = []): Array<{ depth: number; message: XbTavernMessage }> {
     const groups = new Map<string, { depth: number; role: XbTavernRole; entries: string[] }>();
-    entries.forEach((entry) => {
+    sortPromptEntries(entries).forEach((entry) => {
         const depth = Math.max(0, Number(entry.depth) || 0);
         const role = normalizeRole(entry.role, 'system');
         const key = `${depth}\u0000${role}`;
@@ -1305,21 +1856,60 @@ function insertDepthMessages(messages: XbTavernMessage[] = [], depthMessages: Ar
     return result;
 }
 
-export function buildScanText(context: XbTavernContext = {}, currentUserMessage = ''): string {
+function buildGlobalScanData(context: XbTavernContext = {}): XbTavernWorldSettings['globalScanData'] {
     const character = context.character || {};
     const user = context.user || {};
-    const history = context.history || [];
     const data = character.data || {};
+    return {
+        personaDescription: normalizeText(user.persona || user.description),
+        characterDescription: normalizeText(character.description || pickNestedString(data, ['description'])),
+        characterPersonality: normalizeText(character.personality || pickNestedString(data, ['personality'])),
+        characterDepthPrompt: normalizeText(pickNestedString(data, ['character_depth_prompt']) || pickNestedString(data, ['depth_prompt'])),
+        scenario: normalizeText(character.scenario || pickNestedString(data, ['scenario'])),
+        creatorNotes: normalizeText(character.creatorNotes || character.creator_notes || pickNestedString(data, ['creator_notes'])),
+    };
+}
+
+function buildCharacterFilterData(context: XbTavernContext = {}): XbTavernWorldSettings['characterFilterData'] {
+    const character = context.character || {};
+    const avatar = normalizeText(character.avatar);
+    const avatarFile = avatar.split(/[\\/]/).pop() || avatar;
+    const tags = Array.isArray(character.tags) ? character.tags : [];
+    return {
+        names: [
+            character.name,
+            character.id,
+            avatar,
+            avatarFile,
+        ].map((item) => normalizeText(item)).filter(Boolean),
+        tags: tags.map((item) => normalizeText(item)).filter(Boolean),
+    };
+}
+
+function formatScanMessageWithName(message: XbTavernHistoryMessage = {}, context: XbTavernContext = {}): string {
+    const content = String(message.content || message.mes || message.message || '');
+    if (!content) {return '';}
+    const role = message.is_user === true ? 'user' : normalizeRole(message.role, 'assistant');
+    const fallbackName = role === 'user' ? context.user?.name : context.character?.name;
+    const name = normalizeText(message.name || fallbackName);
+    return name ? `${name}: ${content}` : content;
+}
+
+function buildScanMessages(context: XbTavernContext = {}, currentUserMessage = '', includeNames = false): string[] {
+    const history = context.history || [];
+    const currentUser = includeNames && currentUserMessage
+        ? `${normalizeText(context.user?.name) || 'User'}: ${currentUserMessage}`
+        : currentUserMessage;
     return [
-        character.name,
-        character.description || pickNestedString(data, ['description']),
-        character.personality || pickNestedString(data, ['personality']),
-        character.scenario || pickNestedString(data, ['scenario']),
-        user.name,
-        user.persona || user.description,
-        ...history.map((message) => message.content || message.mes || message.message || ''),
-        currentUserMessage,
-    ].map((item) => String(item || '')).filter(Boolean).join('\n');
+        ...history.map((message) => includeNames
+            ? formatScanMessageWithName(message, context)
+            : (message.content || message.mes || message.message || '')),
+        currentUser,
+    ].map((item) => String(item || '')).filter(Boolean);
+}
+
+export function buildScanText(context: XbTavernContext = {}, currentUserMessage = '', settings: XbTavernWorldSettings = {}): string {
+    return buildScanTextFromMessages(buildScanMessages(context, currentUserMessage, settings.includeNames === true), normalizeScanDepth(settings.scanDepth ?? 2, 2));
 }
 
 function collectContextWorldEntries(context: XbTavernContext = {}): XbTavernWorldEntry[] {
@@ -1329,12 +1919,20 @@ function collectContextWorldEntries(context: XbTavernContext = {}): XbTavernWorl
         sourceWorldBook: entry.sourceWorldBook || entry.worldName || entry.world || '',
     })) : [];
     const bookEntries = (Array.isArray(context.worldBooks) ? context.worldBooks : [])
-        .flatMap((book) => Array.isArray(book.entries)
-            ? book.entries.map((entry) => ({
-                ...entry,
-                sourceWorldBook: entry.sourceWorldBook || entry.worldName || entry.world || book.name,
-            }))
-            : []);
+        .flatMap((book) => {
+            const sourceType = normalizeText((book as unknown as Record<string, unknown>).worldSourceType);
+            const sourceIndex = Number((book as unknown as Record<string, unknown>).worldSourceIndex);
+            return Array.isArray(book.entries)
+                ? book.entries.map((entry) => ({
+                    ...entry,
+                    sourceWorldBook: entry.sourceWorldBook || entry.worldName || entry.world || book.name,
+                    worldSourceType: normalizeText(entry.worldSourceType) || sourceType,
+                    worldSourceIndex: Number.isFinite(Number(entry.worldSourceIndex))
+                        ? Number(entry.worldSourceIndex)
+                        : (Number.isFinite(sourceIndex) ? sourceIndex : undefined),
+                }))
+                : [];
+        });
     return dedupeWorldEntries([...directEntries, ...bookEntries]);
 }
 
@@ -1394,21 +1992,45 @@ function prepareXbTavernMessageBuild(
     const historyMode = runtimeState.historyMode || 'raw';
     const memoryContext = runtimeState.memoryContext || {};
     const presetSections = normalizeChatPromptSections(chatPreset);
-    const scanText = runtimeState.worldScanText || buildScanText(context, currentUserMessage);
+    const runtimeWorldSettings = runtimeState.worldSettings || {};
+    const explicitScanText = typeof runtimeState.worldScanText === 'string';
+    const scanMessages = buildScanMessages(context, currentUserMessage, runtimeWorldSettings.includeNames === true);
+    const scanText = explicitScanText ? String(runtimeState.worldScanText || '') : buildScanTextFromMessages(scanMessages, normalizeScanDepth(runtimeWorldSettings.scanDepth ?? 2, 2));
+    const nativeActivatedEntries = normalizeNativeActivatedEntries(context.nativeWorldInfo?.activatedEntries);
+    const nativePromptEntries = buildNativePromptEntries(context.nativeWorldInfo);
     const worldSettings = {
-        ...runtimeState.worldSettings,
+        ...runtimeWorldSettings,
         scanText,
+        scanMessages: explicitScanText ? undefined : scanMessages,
+        globalScanData: runtimeWorldSettings.globalScanData || buildGlobalScanData(context),
+        characterFilterData: runtimeWorldSettings.characterFilterData || buildCharacterFilterData(context),
         turn: runtimeState.turn ?? runtimeState.worldSettings?.turn,
         entryStates: runtimeState.entryStates ?? runtimeState.worldSettings?.entryStates,
     };
+    if (nativeActivatedEntries.length || nativePromptEntries.length || context.nativeWorldInfo) {
+        const budgetDebug = buildWorldBudgetDebug([], { budgetChars: 0 });
+        return {
+            character,
+            user,
+            history,
+            currentUserMessage,
+            historyMode,
+            squashRole: runtimeState.squashRole,
+            memoryContext,
+            presetSections,
+            scanText,
+            worldSettings,
+            worldEntryCandidates: buildNativeWorldEntryCandidates(nativeActivatedEntries),
+            activatedWorldEntries: nativePromptEntries.length ? nativePromptEntries : nativeActivatedEntries,
+            budgetDebug,
+        };
+    }
     const worldEntries = collectContextWorldEntries(context);
-    const activatedBeforeBudget = activateWorldEntries(worldEntries, {
-        ...worldSettings,
-        budgetChars: 0,
-    });
-    const budgetDebug = buildWorldBudgetDebug(activatedBeforeBudget, worldSettings);
+    const activation = runWorldActivation(worldEntries, worldSettings);
+    const activatedBeforeBudget = activation.activatedBeforeBudget;
+    const budgetDebug = activation.budgetDebug;
     const worldEntryCandidates = buildWorldEntryCandidates(worldEntries, activatedBeforeBudget, worldSettings, budgetDebug);
-    const activatedWorldEntries = activatedBeforeBudget.filter((entry) => !budgetDebug.enabled || budgetDebug.includedKeys.has(entry.activationKey));
+    const activatedWorldEntries = activation.activatedEntries;
     return {
         character,
         user,
@@ -1555,6 +2177,35 @@ function buildXbTavernMessagesFromPrepared(
     };
 }
 
+function replaceBuildResultMessages(
+    result: XbTavernMessageBuildResult,
+    messages: XbTavernMessage[] = [],
+): XbTavernMessageBuildResult {
+    const compactedMessages = compactMessages(messages.map((message) => ({
+        ...message,
+        content: normalizeText(message.content),
+    })));
+    return {
+        ...result,
+        messages: compactedMessages,
+        messageLayers: result.messageLayers.map((layer, index) => {
+            const message = compactedMessages[index];
+            if (!message) {return layer;}
+            const chars = message.content.length;
+            return {
+                ...layer,
+                role: message.role,
+                chars,
+                tokenEstimate: Math.max(1, Math.ceil(chars / 4)),
+            };
+        }),
+        meta: {
+            ...result.meta,
+            rawMessagesJson: JSON.stringify(compactedMessages, null, 2),
+        },
+    };
+}
+
 export function buildXbTavernMessages(
     context: XbTavernContext = {},
     chatPreset: TavernChatPromptPresetBundle = {},
@@ -1573,6 +2224,7 @@ export async function buildXbTavernMessagesAsync(
     options: {
         transformWorldEntries?: XbTavernWorldEntriesTransform;
         transformConversationMessages?: XbTavernConversationMessagesTransform;
+        transformFinalMessages?: XbTavernFinalMessagesTransform;
         regexApplications?: TavernRegexApplicationSummary;
     } = {},
 ): Promise<XbTavernMessageBuildResult> {
@@ -1595,7 +2247,9 @@ export async function buildXbTavernMessagesAsync(
                 })),
         );
     }
-    return buildXbTavernMessagesFromPrepared(chatPreset, prepared, options.regexApplications);
+    const result = buildXbTavernMessagesFromPrepared(chatPreset, prepared, options.regexApplications);
+    if (!options.transformFinalMessages) {return result;}
+    return replaceBuildResultMessages(result, await options.transformFinalMessages(result.messages));
 }
 
 export function createXbTavernBuildSnapshot(
@@ -1638,6 +2292,18 @@ export function createXbTavernBuildSnapshot(
                 contentChars: entry.contentChars,
             };
         }),
+        ...(context.nativeWorldInfo ? {
+            nativeWorldInfo: {
+                trigger: normalizeText(context.nativeWorldInfo.trigger),
+                sourceNames: Array.isArray(context.nativeWorldInfo.sourceNames)
+                    ? context.nativeWorldInfo.sourceNames.map((source) => ({
+                        name: normalizeText(source.name),
+                        ...(source.sourceType ? { sourceType: source.sourceType } : {}),
+                        ...(Number.isFinite(Number(source.sourceIndex)) ? { sourceIndex: Number(source.sourceIndex) } : {}),
+                    }))
+                    : [],
+            },
+        } : {}),
         worldBudget: result.meta.worldBudget,
         worldPositionCounts: result.meta.worldPositionCounts,
         scanTextChars: result.meta.scanTextChars,

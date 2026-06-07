@@ -112,11 +112,17 @@ function normalizeRegexOptions(value) {
   }
   return options;
 }
-function normalizeRegexScript(input) {
+function fallbackScriptId(scriptType, index) {
+  if (Number.isFinite(Number(scriptType)) && Number.isInteger(Number(index)) && Number(index) >= 0) {
+    return `legacy-${Number(scriptType)}-${Number(index)}`;
+  }
+  return createId();
+}
+function normalizeRegexScript(input, scriptType, index) {
   const source = asRecord(input);
   return {
     ...cloneJson(source),
-    id: text(source.id) || createId(),
+    id: text(source.id) || fallbackScriptId(scriptType, index),
     scriptName: text(source.scriptName),
     findRegex: String(source.findRegex || ""),
     replaceString: String(source.replaceString || ""),
@@ -125,7 +131,7 @@ function normalizeRegexScript(input) {
     disabled: source.disabled === true,
     markdownOnly: source.markdownOnly === true,
     promptOnly: source.promptOnly === true,
-    runOnEdit: source.runOnEdit !== false,
+    runOnEdit: source.runOnEdit === true,
     substituteRegex: Number.isFinite(Number(source.substituteRegex)) ? Number(source.substituteRegex) : substitute_find_regex.NONE,
     minDepth: nullableNumber(source.minDepth),
     maxDepth: nullableNumber(source.maxDepth)
@@ -136,7 +142,7 @@ function currentCharacter() {
   return Number.isFinite(index) ? characters?.[index] : void 0;
 }
 function buildGroup(scriptType, key, label) {
-  const scripts = getScriptsByType(scriptType).map((script) => normalizeRegexScript(script));
+  const scripts = getScriptsByType(scriptType).map((script, index) => normalizeRegexScript(script, scriptType, index));
   const presetApi = getCurrentPresetAPI();
   const presetName = getCurrentPresetName();
   return {
@@ -170,7 +176,7 @@ async function saveTavernRegexScript(input) {
   if (!script.scriptName) {
     throw new Error("\u6B63\u5219\u540D\u79F0\u4E0D\u80FD\u4E3A\u7A7A\u3002");
   }
-  const scripts = getScriptsByType(scriptType).map((item) => normalizeRegexScript(item));
+  const scripts = getScriptsByType(scriptType).map((item, index2) => normalizeRegexScript(item, scriptType, index2));
   const index = scripts.findIndex((item) => item.id === script.id);
   if (index >= 0) {
     scripts[index] = script;
@@ -183,7 +189,11 @@ async function saveTavernRegexScript(input) {
   } else if (scriptType === SCRIPT_TYPES.PRESET) {
     allowPresetScripts(getCurrentPresetAPI(), getCurrentPresetName());
   }
-  return listTavernRegexScripts();
+  return {
+    ...listTavernRegexScripts(),
+    savedScriptId: script.id,
+    savedScriptType: scriptType
+  };
 }
 async function deleteTavernRegexScript(input) {
   const source = asRecord(input);
@@ -192,7 +202,7 @@ async function deleteTavernRegexScript(input) {
   if (!id) {
     throw new Error("\u7F3A\u5C11\u6B63\u5219 ID\u3002");
   }
-  const scripts = getScriptsByType(scriptType).map((item) => normalizeRegexScript(item)).filter((item) => item.id !== id);
+  const scripts = getScriptsByType(scriptType).map((item, index) => normalizeRegexScript(item, scriptType, index)).filter((item) => item.id !== id);
   await saveScriptsByType(scripts, scriptType);
   return listTavernRegexScripts();
 }

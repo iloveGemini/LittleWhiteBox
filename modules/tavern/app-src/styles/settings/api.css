@@ -1,0 +1,210 @@
+/* Tavern settings: api */
+
+.api-workspace {
+    overflow: hidden;
+    padding: 0;
+}
+
+.api-scroll-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 0 clamp(26px, 4vw, 54px) 56px;
+}
+
+.api-workspace .what-to-check {
+    max-width: 780px;
+    border: 0;
+    border-left: 2px solid rgba(var(--xb-accent-rgb), 0.36);
+    border-radius: 0;
+    background: transparent;
+    color: var(--xb-text-muted);
+    margin: 20px 0 22px;
+    padding: 6px 0 6px 14px;
+}
+
+.api-workspace .what-to-check.warning {
+    border-left-color: rgba(212, 180, 109, 0.48);
+}
+
+.tavern-api-settings {
+    width: min(860px, 100%);
+    min-height: 0;
+    padding-bottom: 24px;
+}
+
+.tavern-api-settings .xb-assistant-config {
+    display: grid;
+    gap: 16px;
+}
+
+.tavern-api-settings .xb-assistant-config-tabs {
+    display: flex;
+    gap: 4px;
+    border: 1px solid var(--xb-line);
+    border-radius: 999px;
+    background: var(--xb-settings-subtle-bg);
+    padding: 4px;
+}
+
+.tavern-api-settings .xb-assistant-config-tab {
+    flex: 1 1 0;
+    min-height: 34px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--xb-text-muted);
+}
+
+.tavern-api-settings .xb-assistant-config-tab.is-active {
+    background: var(--xb-settings-soft-bg);
+    color: var(--xb-text-main);
+}
+
+.tavern-api-settings .xb-assistant-config-page {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    min-width: 0;
+}
+
+.tavern-api-settings .xb-assistant-config-page[hidden] {
+    display: none;
+}
+
+.tavern-api-settings .xb-assistant-config-page > label,
+.tavern-api-settings .xb-assistant-inline-input.xb-assistant-model-row,
+.tavern-api-settings .xb-assistant-config-note,
+.tavern-api-settings .xb-assistant-inline-status {
+    grid-column: 1 / -1;
+}
+
+.tavern-api-settings .xb-assistant-config-page > label:nth-of-type(2),
+.tavern-api-settings .xb-assistant-config-page > label:nth-of-type(3),
+.tavern-api-settings .xb-assistant-config-page > label:nth-of-type(5),
+.tavern-api-settings .xb-assistant-temperature-row label,
+.tavern-api-settings .xb-assistant-checkbox-row {
+    grid-column: auto;
+}
+
+.tavern-api-settings .xb-assistant-config label {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+    margin: 0;
+}
+
+.tavern-api-settings .xb-assistant-config label > span:first-child,
+.tavern-api-settings .xb-assistant-config-note {
+    color: var(--xb-text-muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.tavern-api-settings .xb-assistant-config label small {
+    display: block;
+    margin-top: 2px;
+    color: var(--xb-text-dim);
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.tavern-api-settings .xb-assistant-inline-input {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.tavern-api-settings .xb-assistant-inline-input > input,
+.tavern-api-settings .xb-assistant-inline-input > select {
+    min-width: 0;
+    width: 100%;
+}
+
+.tavern-api-settings .xb-assistant-inline-input button,
+.tavern-api-settings .xb-assistant-actions button {
+    min-height: 38px;
+    border-radius: 12px;
+    padding: 0 14px;
+}
+
+.tavern-api-settings .xb-assistant-temperature-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(140px, 0.42fr) minmax(160px, 0.58fr);
+    align-items: end;
+    gap: 14px;
+}
+
+.tavern-api-settings .xb-assistant-checkbox-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: 42px;
+    border: 1px solid var(--xb-line);
+    border-radius: 14px;
+    background: var(--xb-settings-subtle-bg);
+    padding: 9px 12px;
+}
+
+.tavern-api-settings .xb-assistant-checkbox-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--xb-text-muted);
+    font-size: 12px;
+}
+
+.tavern-api-settings .xb-assistant-checkbox-control input {
+    width: 16px;
+    height: 16px;
+    accent-color: rgb(var(--xb-accent-rgb));
+}
+
+.tavern-api-settings .xb-assistant-model-row label {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+}
+
+.tavern-api-settings .xb-assistant-inline-status {
+    min-height: 22px;
+    color: var(--xb-text-muted);
+    font-size: 12px;
+}
+
+.tavern-api-settings .xb-assistant-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-top: 2px;
+}
+
+.tavern-api-settings .xb-assistant-runtime {
+    border-left: 2px solid rgba(var(--xb-accent-rgb), 0.34);
+    color: var(--xb-text-muted);
+    background: transparent;
+    padding: 4px 0 4px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.tavern-api-settings .xb-assistant-toast {
+    min-height: 20px;
+    color: var(--xb-gold);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+@media (max-width: 560px) {
+
+    .preset-workspace .prompt-detail-form,
+    .regex-studio .native-form-grid,
+    .tavern-api-settings .xb-assistant-config-page,
+    .tavern-api-settings .xb-assistant-temperature-row,
+    .preset-meta-strip {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

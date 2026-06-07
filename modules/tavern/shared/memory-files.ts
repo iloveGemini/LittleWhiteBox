@@ -6,6 +6,8 @@ import {
     tavernEpisodeSummariesTable,
     tavernSessionsTable,
     tavernTurnSummariesTable,
+    ensureTavernManagerMemorySnapshot,
+    updateTavernManagerMemorySnapshotAfter,
     listTavernTurnSummaries,
     upsertTavernEpisodeSummary,
     upsertTavernTurnSummary,
@@ -257,6 +259,9 @@ export async function writeTavernMemoryFile(sessionId = '', pathInput = '', cont
     const id = String(sessionId || '').trim();
     if (!id) {throw new Error('memory_session_required');}
     const path = normalizeTavernMemoryPath(pathInput);
+    if (String(options.source || '').trim() === 'user' && /^memory\/turns\/.+\.md$/i.test(path)) {
+        throw new Error('memory_turns_user_write_forbidden');
+    }
     const timestamp = now();
     const existing = await tavernMemoryFilesTable.get([id, path]);
     const record: TavernMemoryFileRecord = {
@@ -649,6 +654,14 @@ function assertManagerWriteAllowed(path: string, caller: TavernManagerToolCaller
     }
 }
 
+function isManagerControlError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error || '');
+    const name = error instanceof Error ? error.name : '';
+    return name === 'AbortError'
+        || message === 'manager_source_messages_changed'
+        || message === 'manager_aborted';
+}
+
 function sliceRecentMessages(
     messages: TavernMessageRecord[],
     offset = 0,
@@ -686,7 +699,11 @@ export async function executeTavernMemoryTool(
     sessionId = '',
     toolName = '',
     args: Record<string, unknown> = {},
-    options: { caller?: TavernManagerToolCaller } = {},
+    options: {
+        caller?: TavernManagerToolCaller;
+        managerRunId?: string;
+        beforeWriteGuard?: () => Promise<void> | void;
+    } = {},
 ): Promise<TavernMemoryToolResult> {
     const id = String(sessionId || '').trim();
     if (!id) {return { ok: false, summary: '缺少 sessionId。', error: 'memory_session_required' };}
@@ -731,7 +748,14 @@ export async function executeTavernMemoryTool(
         if (toolName === TAVERN_MEMORY_TOOL_NAMES.WRITE) {
             const path = getToolPath(args);
             assertManagerWriteAllowed(path, options.caller);
+            await options.beforeWriteGuard?.();
+            if (options.managerRunId) {
+                await ensureTavernManagerMemorySnapshot({ managerRunId: options.managerRunId, sessionId: id, path });
+            }
             const file = await writeTavernMemoryFile(id, path, String(args.content || ''), { source: 'manager' });
+            if (options.managerRunId) {
+                await updateTavernManagerMemorySnapshotAfter({ managerRunId: options.managerRunId, sessionId: id, path: file.path });
+            }
             const saved = await getTavernMemoryFile(id, file.path);
             if (!saved || saved.content !== file.content) {
                 return {
@@ -763,7 +787,14 @@ export async function executeTavernMemoryTool(
             const failedCount = Math.max(0, editResults.length - successCount);
             const changed = result.content !== file.content;
             if (changed) {
+                await options.beforeWriteGuard?.();
+                if (options.managerRunId) {
+                    await ensureTavernManagerMemorySnapshot({ managerRunId: options.managerRunId, sessionId: id, path });
+                }
                 await writeTavernMemoryFile(id, path, result.content, { source: 'manager' });
+                if (options.managerRunId) {
+                    await updateTavernManagerMemorySnapshotAfter({ managerRunId: options.managerRunId, sessionId: id, path });
+                }
                 const saved = await getTavernMemoryFile(id, path);
                 if (!saved || saved.content !== result.content) {
                     return {
@@ -936,6 +967,9 @@ export async function executeTavernMemoryTool(
         }
         return { ok: false, summary: `${toolName} 不可用。`, error: 'memory_tool_not_available' };
     } catch (error) {
+        if (isManagerControlError(error)) {
+            throw error;
+        }
         return {
             ok: false,
             summary: error instanceof Error ? error.message : String(error || 'memory_tool_failed'),

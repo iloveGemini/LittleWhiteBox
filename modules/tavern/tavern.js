@@ -16,13 +16,13 @@ import {
   listTavernRegexScripts,
   saveTavernRegexScript
 } from "./host/regex.js";
+import { applyTavernSubstituteParams } from "./host/substitute-params.js";
 import { buildTavernContext } from "./host/sillytavern-context.js";
 import {
-  createTavernWorldbookEntry,
-  getTavernWorldbook,
-  listTavernWorldbooks,
-  saveTavernWorldbook,
-  setTavernWorldbookActive
+  getTavernWorldbookPreview,
+  getTavernWorldbookRuntime,
+  listTavernWorldbookSources,
+  openTavernWorldbookEditor
 } from "./host/worldbooks.js";
 const SOURCE_HOST = "xb-tavern-host";
 const SOURCE_APP = "xb-tavern-app";
@@ -35,6 +35,29 @@ let frameReady = false;
 let pendingMessages = [];
 let messageHandlerInstalled = false;
 let overlayResizeHandler = null;
+function cloneFramePayload(value) {
+  const seen = /* @__PURE__ */ new WeakSet();
+  try {
+    return JSON.parse(JSON.stringify(value, (_key, item) => {
+      if (typeof item === "bigint") {
+        return String(item);
+      }
+      if (typeof item === "function" || typeof item === "symbol") {
+        return void 0;
+      }
+      if (!item || typeof item !== "object") {
+        return item;
+      }
+      if (seen.has(item)) {
+        return void 0;
+      }
+      seen.add(item);
+      return item;
+    }));
+  } catch {
+    return {};
+  }
+}
 async function loadTavernCacheKey() {
   if (tavernCacheKey) {
     return tavernCacheKey;
@@ -112,7 +135,7 @@ function postToFrame(type, payload = {}) {
   if (!iframe?.contentWindow) {
     return false;
   }
-  const message = { type, payload };
+  const message = cloneFramePayload({ type, payload });
   if (!frameReady) {
     pendingMessages.push(message);
     return false;
@@ -190,28 +213,41 @@ async function handleChatPresetRequest(type, payload = {}) {
     });
   }
 }
-async function handleWorldbookRequest(type, payload = {}) {
+async function handleContextRequest(type, payload = {}) {
   const requestId = String(payload.requestId || "");
   try {
     let result;
-    if (type === "xb-tavern:list-worldbooks") {
-      result = await listTavernWorldbooks();
-    } else if (type === "xb-tavern:get-worldbook") {
-      result = await getTavernWorldbook(payload.payload);
-    } else if (type === "xb-tavern:save-worldbook") {
-      result = await saveTavernWorldbook(payload.payload);
-    } else if (type === "xb-tavern:create-worldbook-entry") {
-      result = await createTavernWorldbookEntry(payload.payload);
-    } else if (type === "xb-tavern:set-worldbook-active") {
-      result = setTavernWorldbookActive(payload.payload);
+    if (type === "xb-tavern:get-context") {
+      result = await buildTavernContext(payload.payload || {});
     }
     replyHostResult(requestId, {
       ok: true,
       result
     });
-    if (type !== "xb-tavern:list-worldbooks") {
-      await sendConfigToFrame();
+  } catch (error) {
+    replyHostResult(requestId, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error || "context_request_failed")
+    });
+  }
+}
+async function handleWorldbookRequest(type, payload = {}) {
+  const requestId = String(payload.requestId || "");
+  try {
+    let result;
+    if (type === "xb-tavern:list-worldbook-sources") {
+      result = await listTavernWorldbookSources(payload.payload);
+    } else if (type === "xb-tavern:get-worldbook-preview") {
+      result = await getTavernWorldbookPreview(payload.payload);
+    } else if (type === "xb-tavern:get-worldbook-runtime") {
+      result = await getTavernWorldbookRuntime(payload.payload);
+    } else if (type === "xb-tavern:open-worldbook-editor") {
+      result = openTavernWorldbookEditor(payload.payload);
     }
+    replyHostResult(requestId, {
+      ok: true,
+      result
+    });
   } catch (error) {
     replyHostResult(requestId, {
       ok: false,
@@ -240,6 +276,24 @@ async function handleRegexRequest(type, payload = {}) {
     replyHostResult(requestId, {
       ok: false,
       error: error instanceof Error ? error.message : String(error || "regex_failed")
+    });
+  }
+}
+async function handleSubstituteParamsRequest(type, payload = {}) {
+  const requestId = String(payload.requestId || "");
+  try {
+    let result;
+    if (type === "xb-tavern:substitute-params") {
+      result = applyTavernSubstituteParams(payload.payload);
+    }
+    replyHostResult(requestId, {
+      ok: true,
+      result
+    });
+  } catch (error) {
+    replyHostResult(requestId, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error || "substitute_params_failed")
     });
   }
 }
@@ -325,17 +379,19 @@ function handleFrameMessage(event) {
     case "xb-tavern:get-host-request-headers":
       handleHostRequestHeaders(data.payload || {});
       break;
+    case "xb-tavern:get-context":
+      void handleContextRequest(data.type, data.payload || {});
+      break;
     case "xb-tavern:list-chat-presets":
     case "xb-tavern:get-chat-preset":
     case "xb-tavern:save-chat-preset":
     case "xb-tavern:select-chat-preset":
       void handleChatPresetRequest(data.type, data.payload || {});
       break;
-    case "xb-tavern:list-worldbooks":
-    case "xb-tavern:get-worldbook":
-    case "xb-tavern:save-worldbook":
-    case "xb-tavern:create-worldbook-entry":
-    case "xb-tavern:set-worldbook-active":
+    case "xb-tavern:list-worldbook-sources":
+    case "xb-tavern:get-worldbook-preview":
+    case "xb-tavern:get-worldbook-runtime":
+    case "xb-tavern:open-worldbook-editor":
       void handleWorldbookRequest(data.type, data.payload || {});
       break;
     case "xb-tavern:list-regex-scripts":
@@ -343,6 +399,9 @@ function handleFrameMessage(event) {
     case "xb-tavern:delete-regex-script":
     case "xb-tavern:apply-regex":
       void handleRegexRequest(data.type, data.payload || {});
+      break;
+    case "xb-tavern:substitute-params":
+      void handleSubstituteParamsRequest(data.type, data.payload || {});
       break;
     default:
       break;

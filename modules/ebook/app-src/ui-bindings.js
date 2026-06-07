@@ -2,7 +2,11 @@ import { buildActionPrompt } from './prompts.js';
 import { countMessageWindowUnits } from './renderer.js';
 import { EBOOK_THEME_STORAGE_KEY } from './state.js';
 import { formatDraftMetrics } from './text-metrics.js';
-import { expandMessageWindow } from '../../agent-core/ui/message-windowing.js';
+import {
+    AGENT_MESSAGE_WINDOW_DEFAULT,
+    expandMessageWindow,
+    resetMessageWindow,
+} from '../../agent-core/ui/message-windowing.js';
 
 const messageActionFeedbackTimers = new Map();
 
@@ -697,6 +701,14 @@ export function bindEbookEvents(options = {}) {
         scheduleFrame(() => { apply(); scheduleFrame(apply); });
     }
 
+    function collapseAgentWindowAtBottom() {
+        if (Number(state.uiMessageWindowLimit || 0) <= AGENT_MESSAGE_WINDOW_DEFAULT) return false;
+        resetMessageWindow(state);
+        render();
+        scrollAgentToBottom(root.querySelector('.xb-agent-main'));
+        return true;
+    }
+
     function isAgentNearBottom(threshold = 48) {
         if (!agentMain) return true;
         return agentMain.scrollHeight - agentMain.scrollTop - agentMain.clientHeight <= threshold;
@@ -718,11 +730,13 @@ export function bindEbookEvents(options = {}) {
         const previousScrollHeight = agentMain.scrollHeight;
         const previousScrollTop = agentMain.scrollTop;
         render();
-        scheduleFrame(() => {
+        const restoreExpandedWindowScroll = () => {
             const nextAgentMain = root.querySelector('.xb-agent-main');
             if (!nextAgentMain) return;
             nextAgentMain.scrollTop = Math.max(0, nextAgentMain.scrollHeight - previousScrollHeight + previousScrollTop);
-        });
+        };
+        restoreExpandedWindowScroll();
+        scheduleFrame(restoreExpandedWindowScroll);
         return true;
     }
 
@@ -755,12 +769,13 @@ export function bindEbookEvents(options = {}) {
         agentLastScrollTop = currentScrollTop;
         const nearBottom = isAgentNearBottom();
         const atBottom = isAgentAtBottom();
-        if (nearBottom && state.agentAutoScroll !== false) {
-            state.agentAutoScroll = true;
-        } else if (atBottom) {
+        if (atBottom) {
             if (state.agentAutoScroll !== false || scrollingTowardBottom) {
                 state.agentAutoScroll = true;
+                if (collapseAgentWindowAtBottom()) return;
             }
+        } else if (nearBottom && state.agentAutoScroll !== false) {
+            state.agentAutoScroll = true;
         } else {
             state.agentAutoScroll = false;
         }
@@ -806,7 +821,9 @@ export function bindEbookEvents(options = {}) {
 
     scrollBottomBtn?.addEventListener('click', () => {
         state.agentAutoScroll = true;
-        scrollAgentToBottom(agentMain);
+        if (!collapseAgentWindowAtBottom()) {
+            scrollAgentToBottom(agentMain);
+        }
         showScrollHelpers();
         updateAgentScrollButtonsVisibility();
         scheduleHideScrollHelpers();

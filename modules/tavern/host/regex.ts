@@ -126,11 +126,18 @@ function normalizeRegexOptions(value: unknown): Record<string, unknown> {
     return options;
 }
 
-function normalizeRegexScript(input: unknown): TavernRegexScript {
+function fallbackScriptId(scriptType: number | null | undefined, index: number | null | undefined): string {
+    if (Number.isFinite(Number(scriptType)) && Number.isInteger(Number(index)) && Number(index) >= 0) {
+        return `legacy-${Number(scriptType)}-${Number(index)}`;
+    }
+    return createId();
+}
+
+function normalizeRegexScript(input: unknown, scriptType?: number, index?: number): TavernRegexScript {
     const source = asRecord(input);
     return {
         ...cloneJson(source),
-        id: text(source.id) || createId(),
+        id: text(source.id) || fallbackScriptId(scriptType, index),
         scriptName: text(source.scriptName),
         findRegex: String(source.findRegex || ''),
         replaceString: String(source.replaceString || ''),
@@ -139,7 +146,7 @@ function normalizeRegexScript(input: unknown): TavernRegexScript {
         disabled: source.disabled === true,
         markdownOnly: source.markdownOnly === true,
         promptOnly: source.promptOnly === true,
-        runOnEdit: source.runOnEdit !== false,
+        runOnEdit: source.runOnEdit === true,
         substituteRegex: Number.isFinite(Number(source.substituteRegex)) ? Number(source.substituteRegex) : substitute_find_regex.NONE,
         minDepth: nullableNumber(source.minDepth),
         maxDepth: nullableNumber(source.maxDepth),
@@ -152,7 +159,7 @@ function currentCharacter(): unknown {
 }
 
 function buildGroup(scriptType: number, key: string, label: string): Record<string, unknown> {
-    const scripts = getScriptsByType(scriptType).map((script) => normalizeRegexScript(script));
+    const scripts = getScriptsByType(scriptType).map((script, index) => normalizeRegexScript(script, scriptType, index));
     const presetApi = getCurrentPresetAPI();
     const presetName = getCurrentPresetName();
     return {
@@ -192,7 +199,7 @@ export async function saveTavernRegexScript(input: unknown): Promise<Record<stri
     if (!script.scriptName) {
         throw new Error('正则名称不能为空。');
     }
-    const scripts = getScriptsByType(scriptType).map((item) => normalizeRegexScript(item));
+    const scripts = getScriptsByType(scriptType).map((item, index) => normalizeRegexScript(item, scriptType, index));
     const index = scripts.findIndex((item) => item.id === script.id);
     if (index >= 0) {
         scripts[index] = script;
@@ -205,7 +212,11 @@ export async function saveTavernRegexScript(input: unknown): Promise<Record<stri
     } else if (scriptType === SCRIPT_TYPES.PRESET) {
         allowPresetScripts(getCurrentPresetAPI(), getCurrentPresetName());
     }
-    return listTavernRegexScripts();
+    return {
+        ...listTavernRegexScripts(),
+        savedScriptId: script.id,
+        savedScriptType: scriptType,
+    };
 }
 
 export async function deleteTavernRegexScript(input: unknown): Promise<Record<string, unknown>> {
@@ -216,7 +227,7 @@ export async function deleteTavernRegexScript(input: unknown): Promise<Record<st
         throw new Error('缺少正则 ID。');
     }
     const scripts = getScriptsByType(scriptType)
-        .map((item) => normalizeRegexScript(item))
+        .map((item, index) => normalizeRegexScript(item, scriptType, index))
         .filter((item) => item.id !== id);
     await saveScriptsByType(scripts, scriptType);
     return listTavernRegexScripts();

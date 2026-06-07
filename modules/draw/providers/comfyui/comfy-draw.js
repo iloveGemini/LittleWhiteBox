@@ -16,13 +16,14 @@ import {
     getPreviewsBySlot,
     getPreview,
     getGallerySummary,
-    getCharacterPreviews,
     clearExpiredCache,
     clearAllCache,
     deletePreview,
     deleteFailedRecordsForSlot,
     updatePreviewSavedUrl,
     getPreviewDisplayUrl,
+    preloadPreviewDisplayUrl,
+    warmSlotPreviewNeighbors,
 } from "../../shared/gallery-cache.js";
 import {
     generateAndParseScenePlan,
@@ -2595,8 +2596,9 @@ async function renderGalleryManagement() {
 
     for (const charName of chars) {
         const charSummary = summary[charName];
-        const slots = await getCharacterPreviews(charName).catch(() => ({}));
-        const slotIds = Object.keys(slots).sort((a, b) => ((slots[b]?.[0]?.timestamp || 0) - (slots[a]?.[0]?.timestamp || 0)));
+        const slotSummaries = charSummary.slots || {};
+        const slotIds = Object.keys(slotSummaries)
+            .sort((a, b) => ((slotSummaries[b]?.latestTimestamp || 0) - (slotSummaries[a]?.latestTimestamp || 0)));
 
         const card = document.createElement('div');
         card.className = 'gallery-char-card';
@@ -2615,19 +2617,20 @@ async function renderGalleryManagement() {
         grid.className = 'gallery-slots';
 
         slotIds.slice(0, 8).forEach((slotId, index) => {
-            const latest = slots[slotId]?.[0];
-            if (!latest) return;
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'gallery-slot-btn';
             button.addEventListener('click', async () => {
-                await openGallery(slotId, Number(latest.messageId || 0), buildSharedGalleryCallbacks(slotId, Number(latest.messageId || 0)));
+                const latest = await getPreview(slotSummaries[slotId]?.latestImgId).catch(() => null);
+                await openGallery(slotId, Number(latest?.messageId || 0), buildSharedGalleryCallbacks(slotId, Number(latest?.messageId || 0)));
             });
 
             const img = document.createElement('img');
             img.className = 'gallery-slot-thumb';
-            img.src = getPreviewDisplayUrl(latest);
             img.alt = '';
+            void getPreview(slotSummaries[slotId]?.latestImgId).then((latest) => {
+                if (latest) img.src = getPreviewDisplayUrl(latest);
+            }).catch(() => {});
 
             const label = document.createElement('div');
             label.className = 'gallery-slot-title';
@@ -2635,7 +2638,7 @@ async function renderGalleryManagement() {
 
             const sub = document.createElement('div');
             sub.className = 'gallery-slot-sub';
-            sub.textContent = `${slots[slotId]?.length || 1} 个版本`;
+            sub.textContent = `${slotSummaries[slotId]?.count || 1} 个版本`;
 
             button.append(img, label, sub);
             grid.appendChild(button);
@@ -4277,6 +4280,7 @@ function syncContainerToPreview(container, preview, historyCount = 1, currentInd
     container.dataset.historyCount = String(historyCount);
     setImageState(container, preview.savedUrl ? ImageState.SAVED : ImageState.PREVIEW);
     updateNavControls(container, currentIndex, historyCount);
+    void warmSlotPreviewNeighbors(container.dataset.slotId, currentIndex).catch(() => {});
 }
 
 async function getPreviewByImageId(container) {
@@ -4336,6 +4340,9 @@ async function navigateToImage(container, targetIndex) {
     if (!imgEl || !targetPreview) return;
     const direction = targetIndex > currentIndex ? 'left' : 'right';
     imgEl.classList.add(`sliding-${direction}`);
+    setTimeout(() => {
+        void preloadPreviewDisplayUrl(targetPreview).catch(() => false);
+    }, 0);
     await new Promise(resolve => setTimeout(resolve, 200));
     syncContainerToPreview(container, targetPreview, historyCount, targetIndex);
     await setSlotSelection(slotId, targetPreview.imgId);

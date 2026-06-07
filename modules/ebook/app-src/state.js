@@ -41,6 +41,7 @@ export function createEbookState() {
         isBusy: false,
         activeController: null,
         agentAutoScroll: true,
+        agentForceScrollBottomOnce: false,
         agentInputDraft: '',
         drawStatus: {
             provider: 'disabled',

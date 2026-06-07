@@ -7,7 +7,6 @@ export interface TavernAssistantPreset {
     statePrompt: string;
     episodePrompt: string;
     inboxPrompt: string;
-    managerCustomPrompt?: string;
     memoryManagerPrompt?: string;
     updatedAt?: number;
 }
@@ -24,7 +23,7 @@ type LegacyAssistantPresetInput = Partial<TavernAssistantPreset> & {
 export const DEFAULT_TAVERN_ASSISTANT_PRESET_ID = 'littlewhitebox-assistant-default-v1';
 
 const FIXED_MANAGER_SYSTEM_PROMPT = [
-    '# 后台管理者',
+    '# 记忆管理员',
     '',
     '## Role',
     [
@@ -109,7 +108,6 @@ function buildDefaultAssistantPresetSections() {
         statePrompt: buildDefaultStatePrompt(),
         episodePrompt: buildDefaultEpisodePrompt(),
         inboxPrompt: buildDefaultInboxPrompt(),
-        managerCustomPrompt: '',
     };
 }
 
@@ -174,21 +172,6 @@ function normalizeAssistantSectionText(value: unknown, fallback: string, legacyD
     return text;
 }
 
-function normalizeLegacyManagerPrompt(input: LegacyAssistantPresetInput = {}): string {
-    const legacy = normalizeText(input.memoryManagerPrompt);
-    if (!legacy) {return '';}
-    if (legacy === buildDefaultMemoryManagerPrompt()) {return '';}
-    return legacy;
-}
-
-function composeLegacyCustomPrompt(input: LegacyAssistantPresetInput = {}): string {
-    const blocks = [
-        normalizeText(input.managerCustomPrompt),
-        normalizeLegacyManagerPrompt(input),
-    ].filter(Boolean);
-    return blocks.join('\n\n').trim();
-}
-
 function composeManagerSystemPrompt(input: Partial<TavernAssistantPreset> = {}): string {
     const fallback = buildDefaultAssistantPresetSections();
     const sections = [
@@ -196,7 +179,6 @@ function composeManagerSystemPrompt(input: Partial<TavernAssistantPreset> = {}):
         ['状态栏职责与字段格式', normalizeText(input.statePrompt) || fallback.statePrompt],
         ['阶段档案职责', normalizeText(input.episodePrompt) || fallback.episodePrompt],
         ['收件箱职责', normalizeText(input.inboxPrompt) || fallback.inboxPrompt],
-        ['自定义条目', normalizeText(input.managerCustomPrompt)],
     ].filter(([, content]) => content);
     const lines = [FIXED_MANAGER_SYSTEM_PROMPT];
     sections.forEach(([title, content]) => {
@@ -218,7 +200,7 @@ export function createDefaultTavernAssistantPreset(): TavernAssistantPreset {
     return {
         id: DEFAULT_TAVERN_ASSISTANT_PRESET_ID,
         name: '默认助手预设',
-        description: '后台管理员的职责层默认规则。',
+        description: '记忆管理员的默认维护规则。',
         version: '3.0.0',
         ...sections,
         memoryManagerPrompt: composeManagerSystemPrompt(sections),
@@ -238,7 +220,6 @@ export function normalizeTavernAssistantPreset(input: LegacyAssistantPresetInput
         statePrompt: normalizeAssistantSectionText(input.statePrompt, fallback.statePrompt, LEGACY_DEFAULT_SECTIONS.statePrompt),
         episodePrompt: normalizeAssistantSectionText(input.episodePrompt, fallback.episodePrompt, LEGACY_DEFAULT_SECTIONS.episodePrompt),
         inboxPrompt: normalizeAssistantSectionText(input.inboxPrompt, fallback.inboxPrompt, LEGACY_DEFAULT_SECTIONS.inboxPrompt),
-        managerCustomPrompt: normalizeText(input.managerCustomPrompt) || composeLegacyCustomPrompt(input) || '',
         updatedAt: Number(input.updatedAt) || undefined,
     };
     normalized.memoryManagerPrompt = composeManagerSystemPrompt(normalized);

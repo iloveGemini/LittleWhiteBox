@@ -1,0 +1,309 @@
+/* Tavern characters: dossier preview */
+
+.character-preview-panel {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+    overflow-y: auto;
+    background: var(--xb-paper);
+    padding: clamp(28px, 4vw, 48px);
+}
+
+.dossier-empty {
+    align-items: center;
+    justify-content: center;
+}
+
+.cyber-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    color: var(--xb-rule-strong);
+    font-family: var(--xb-font-mono);
+    font-size: 14px;
+    letter-spacing: 0.3em;
+    text-align: center;
+}
+
+.cyber-placeholder .ring {
+    width: 64px;
+    height: 64px;
+    border: 1px dashed var(--xb-rule-strong);
+    border-radius: 50%;
+    animation: xb-tavern-character-rotate 10s linear infinite;
+}
+
+@keyframes xb-tavern-character-rotate {
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.dossier-header {
+    display: flex;
+    align-items: flex-end;
+    gap: 32px;
+}
+
+.dossier-portrait {
+    position: relative;
+    flex-shrink: 0;
+    width: 180px;
+    height: 240px;
+    border: 1px solid var(--xb-rule-strong);
+    background: var(--xb-paper-plain);
+    padding: 4px;
+}
+
+.dossier-portrait img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    filter: grayscale(20%) contrast(1.1);
+}
+
+.portrait-overlay {
+    pointer-events: none;
+    position: absolute;
+    inset: 4px;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.2);
+}
+
+.no-avatar-text {
+    height: 100%;
+    display: grid;
+    place-items: center;
+    color: var(--xb-rule-strong);
+    font-family: var(--xb-font-serif);
+    font-size: 64px;
+}
+
+.dossier-identity {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 8px;
+}
+
+.sys-mono {
+    margin: 0;
+    color: var(--xb-stamp);
+    font-family: var(--xb-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+}
+
+.dossier-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.dossier-title-row h3 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    color: var(--xb-ink);
+    font-family: var(--xb-font-serif);
+    font-size: clamp(34px, 4vw, 42px);
+    font-weight: 500;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+}
+
+.dossier-summary {
+    margin-top: 12px;
+    border-left: 2px solid var(--xb-rule-strong);
+    background: var(--xb-paper-plain);
+    color: var(--xb-ink-soft);
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 16px;
+}
+
+.dossier-details {
+    flex: 1;
+    min-height: 0;
+}
+
+.data-group {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    margin: 0;
+}
+
+.data-section {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    border-top: 1px solid var(--xb-rule);
+    padding-top: 22px;
+}
+
+.data-section-title {
+    color: var(--xb-ink);
+    font-family: var(--xb-font-serif);
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.data-row dt {
+    margin-bottom: 8px;
+    color: var(--xb-ink);
+    font-family: var(--xb-font-mono);
+    font-size: 12px;
+}
+
+.data-row dt span {
+    margin-left: 8px;
+    color: var(--xb-ink-faint);
+}
+
+.data-row dd {
+    margin: 0;
+}
+
+.data-block {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--xb-rule);
+    border-radius: 4px;
+    background: var(--xb-paper-plain);
+    color: var(--xb-ink-soft);
+    font-family: var(--xb-font-serif);
+    font-size: 14px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    padding: 20px;
+}
+
+.data-block::-webkit-scrollbar {
+    width: 4px;
+}
+
+.data-block::-webkit-scrollbar-thumb {
+    background: var(--xb-rule-strong);
+}
+
+.greeting-choice-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.greeting-choice {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 14px;
+    width: 100%;
+    border: 1px solid var(--xb-rule);
+    border-radius: 4px;
+    background: var(--xb-paper-plain);
+    color: var(--xb-ink-soft);
+    padding: 12px 14px;
+    text-align: left;
+    transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.greeting-choice:hover:not(:disabled),
+.greeting-choice.selected {
+    border-color: var(--xb-rule-strong);
+    background: var(--xb-paper);
+    color: var(--xb-ink);
+}
+
+.greeting-choice.selected {
+    box-shadow: inset 3px 0 0 var(--xb-stamp);
+}
+
+.greeting-choice-name {
+    color: var(--xb-ink);
+    font-family: var(--xb-font-mono);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.greeting-choice-text {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.55;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    white-space: pre-wrap;
+}
+
+.os-system-act-btn {
+    position: relative;
+    flex: 0 0 auto;
+    overflow: hidden;
+    min-height: 40px;
+    border: none;
+    border-radius: 4px;
+    background: var(--xb-ink);
+    color: var(--xb-paper);
+    font-family: var(--xb-font-serif);
+    font-size: 14px;
+    letter-spacing: 0;
+    padding: 9px 22px;
+    transition: all 0.2s;
+}
+
+.os-system-act-btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+}
+
+.os-system-act-btn:hover:not(:disabled) {
+    background: var(--xb-paper);
+    color: var(--xb-ink);
+}
+
+.os-system-act-btn:hover:not(:disabled)::before {
+    border-color: var(--xb-ink);
+}
+
+.os-system-act-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+@media (max-width: 760px) {
+    .dossier-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .dossier-portrait {
+        width: min(100%, 260px);
+        height: 320px;
+    }
+
+    .dossier-title-row {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .os-system-act-btn {
+        width: 100%;
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .greeting-choice {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+}

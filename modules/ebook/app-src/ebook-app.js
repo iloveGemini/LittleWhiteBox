@@ -53,6 +53,16 @@ function getScrollAnchorConfig(selector = '') {
     return null;
 }
 
+function isVolatileScrollAnchorKey(selector = '', key = '') {
+    return selector === '.xb-agent-main' && String(key || '').startsWith('history-gate:');
+}
+
+export function shouldForceAgentScrollToBottom(state = {}, snapshot = null) {
+    if (state.agentForceScrollBottomOnce) return true;
+    if (state.agentAutoScroll === false) return false;
+    return !snapshot || snapshot.nearBottom !== false;
+}
+
 export function captureScrollState(root, selector) {
     const node = root?.querySelector?.(selector);
     if (!node) return null;
@@ -61,7 +71,7 @@ export function captureScrollState(root, selector) {
         ? node.getBoundingClientRect()
         : null;
     const anchorConfig = getScrollAnchorConfig(selector);
-    const anchor = containerRect && anchorConfig
+    const visibleAnchors = containerRect && anchorConfig
         ? Array.from(node.querySelectorAll?.(`[${anchorConfig.attr}]`) || [])
             .map((item) => ({
                 key: item?.dataset?.[anchorConfig.datasetKey] || '',
@@ -69,12 +79,23 @@ export function captureScrollState(root, selector) {
                     ? item.getBoundingClientRect()
                     : null,
             }))
-            .find((item) => item.key && item.rect && item.rect.bottom >= containerRect.top + 1)
-        : null;
+            .filter((item) => (
+                item.key
+                && item.rect
+                && item.rect.bottom >= containerRect.top + 1
+                && item.rect.top <= containerRect.bottom - 1
+            ))
+        : [];
+    const anchor = visibleAnchors.find((item) => !isVolatileScrollAnchorKey(selector, item.key))
+        || visibleAnchors[0]
+        || null;
     return {
         selector,
         scrollTop: node.scrollTop,
         nearBottom: distanceToBottom < 80,
+        distanceToBottom,
+        scrollHeight: node.scrollHeight,
+        clientHeight: node.clientHeight,
         anchorKey: anchor?.key || '',
         anchorTopOffset: anchor?.rect ? anchor.rect.top - containerRect.top : 0,
     };
@@ -456,7 +477,7 @@ export function createEbookApp(options = {}) {
         }
 
         const agentScroll = captureScrollState(root, '.xb-agent-main');
-        const shouldAutoScrollAgent = state.agentAutoScroll !== false;
+        const shouldAutoScrollAgent = shouldForceAgentScrollToBottom(state, agentScroll);
         agentMain.classList.toggle('is-busy', !!state.isBusy);
         agentRenderCache = applyAgentRenderUnits(
             agentLog,
@@ -501,6 +522,7 @@ export function createEbookApp(options = {}) {
             defaultToBottom: shouldAutoScrollAgent,
             preserveScrollTop: !shouldAutoScrollAgent,
         });
+        state.agentForceScrollBottomOnce = false;
         updateAgentScrollButtons(root);
         bumpRenderPerfCounter('agentSurface');
         return true;
@@ -789,12 +811,13 @@ export function createEbookApp(options = {}) {
             clearConversation: conversationStore.clearConversation,
             showToast,
         });
-        const shouldAutoScrollAgent = state.agentAutoScroll !== false;
+        const shouldAutoScrollAgent = shouldForceAgentScrollToBottom(state, agentScroll);
         restoreScrollState(root, agentScroll, '.xb-agent-main', {
             forceBottom: shouldAutoScrollAgent,
             defaultToBottom: shouldAutoScrollAgent,
             preserveScrollTop: !shouldAutoScrollAgent,
         });
+        state.agentForceScrollBottomOnce = false;
         restoreScrollState(root, readerScroll, '.xb-reader-paper', {
             defaultToBottom: false,
             preserveScrollTop: true,

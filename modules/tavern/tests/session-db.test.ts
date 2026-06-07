@@ -14,6 +14,7 @@ import db, {
     getTavernSession,
     listTavernEpisodeSummaries,
     listTavernManagerMessages,
+    listTavernManagerMemorySnapshots,
     listTavernManagerRuns,
     listUserTavernPresets,
     listTavernMessages,
@@ -23,6 +24,7 @@ import db, {
     mergeWorldEntryStates,
     normalizeTavernSessionState,
     replaceTavernSessionState,
+    rollbackManagerRunsForMessageRange,
     saveTavernPreset,
     setActiveTavernPresetId,
     updateTavernManagerMessage,
@@ -36,16 +38,20 @@ import db, {
 import { DEFAULT_XB_TAVERN_PRESET_ID, createDefaultXbTavernPreset } from '../shared/presets';
 import { buildXbTavernMessages, createXbTavernBuildSnapshot } from '../shared/message-assembler';
 import {
+    cancelAndRollbackXbTavernManagersForMessageRange,
     runXbTavernManagerChat,
     runXbTavernManagerAfterTurn,
+    scheduleXbTavernManagerAfterTurn,
 } from '../app-src/runtime/manager';
 import {
     ensureTavernMemoryDefaults,
     executeTavernMemoryTool,
     getTavernManagerToolDefinitions,
+    getTavernMemoryFile,
     getTavernMemoryIndex,
     listTavernMemoryFiles,
     rebuildTavernMemoryDerivedIndex,
+    writeTavernMemoryFile,
 } from '../shared/memory-files';
 import * as looseToolArgumentsModule from '../../agent-core/runtime/loose-tool-arguments.js';
 
@@ -268,6 +274,10 @@ test('tavern session state stores turn and merges world entry states', async () 
         worldEntryStates: {
             'Lore\u0000gate': { stickyUntilTurn: 4 },
         },
+        nativeWorldInfoTimedState: {
+            sticky: {},
+            cooldown: {},
+        },
     });
 
     await updateTavernSessionState(session.id, {
@@ -374,6 +384,11 @@ test('tavern memory files are scoped markdown sources with derived index', async
     });
     assert.equal(blocked.ok, false);
     assert.match(blocked.error || '', /memory_path_scope_required/);
+
+    await assert.rejects(
+        () => writeTavernMemoryFile(session.id, 'memory/turns/20260601-0000.md', 'manual edit', { source: 'user' }),
+        /memory_turns_user_write_forbidden/,
+    );
 
     const written = await executeTavernMemoryTool(session.id, 'MemoryWrite', {
         filePath: 'memory/turns/20260601-0000.md',
@@ -852,7 +867,229 @@ test('tavern manager refuses to write memory when source messages changed', asyn
     assert.equal(result.ok, false);
     assert.equal(result.error, 'manager_source_messages_changed');
     assert.equal((await listTavernTurnSummaries(session.id)).length, 0);
-    assert.equal((await listTavernManagerRuns(session.id))[0]?.status, 'failed');
+    assert.equal((await listTavernManagerRuns(session.id))[0]?.status, 'superseded');
+});
+
+test('tavern manager rolls back earlier memory writes when source messages change mid-run', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Mid-run rollback' });
+    const userMessage = await appendTavernMessage(session.id, { role: 'user', content: '记录这段。' });
+    const assistantMessage = await appendTavernMessage(session.id, { role: 'assistant', content: '她把线索放进抽屉。' });
+    let calls = 0;
+
+    const result = await runXbTavernManagerAfterTurn({
+        sessionId: session.id,
+        agentConfig: {},
+        userMessage,
+        assistantMessage,
+        turn: 1,
+        executeManagerOnce: async () => {
+            calls += 1;
+            if (calls === 1) {
+                return {
+                    text: '',
+                    toolCalls: [{
+                        id: 'write-episode',
+                        name: 'MemoryWrite',
+                        arguments: {
+                            filePath: 'memory/episodes/mid-run.md',
+                            content: '# 临时阶段\n\n这条写入稍后必须回滚。',
+                        },
+                    }],
+                };
+            }
+            await updateTavernMessage(session.id, assistantMessage.order, { content: '她没有把线索放进抽屉。' });
+            return {
+                text: '',
+                toolCalls: [{
+                    id: 'write-state',
+                    name: 'MemoryWrite',
+                    arguments: {
+                        filePath: 'memory/state.md',
+                        content: '# State\n\n不应该写到这里。',
+                    },
+                }],
+            };
+        },
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.error, 'manager_source_messages_changed');
+    assert.equal((await getTavernMemoryFile(session.id, 'memory/episodes/mid-run.md')), null);
+    assert.doesNotMatch((await getTavernMemoryFile(session.id, 'memory/state.md'))?.content || '', /不应该写到这里/);
+    const run = (await listTavernManagerRuns(session.id))[0];
+    assert.equal(run?.status, 'rolled_back');
+    const snapshots = await listTavernManagerMemorySnapshots(run?.id || '');
+    assert.equal(snapshots.length, 1);
+    assert.equal(snapshots[0]?.path, 'memory/episodes/mid-run.md');
+    assert.equal(snapshots[0]?.rollbackStatus, 'rolled_back');
+});
+
+test('tavern manager cancellation aborts an active auto run and rolls back written memory', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Active cancel rollback' });
+    const userMessage = await appendTavernMessage(session.id, { role: 'user', content: '第一轮。' });
+    const assistantMessage = await appendTavernMessage(session.id, { role: 'assistant', content: '第一轮回复。' });
+    let calls = 0;
+    let releaseSecondRound!: () => void;
+    let resolveSecondRoundStarted!: () => void;
+    const secondRoundGate = new Promise<void>((resolve) => {
+        releaseSecondRound = resolve;
+    });
+    const secondRoundSeen = new Promise<void>((resolve) => {
+        resolveSecondRoundStarted = resolve;
+    });
+
+    const scheduled = await scheduleXbTavernManagerAfterTurn({
+        sessionId: session.id,
+        agentConfig: {},
+        userMessage,
+        assistantMessage,
+        turn: 1,
+        awaitCompletion: false,
+        executeManagerOnce: async () => {
+            calls += 1;
+            if (calls === 1) {
+                return {
+                    text: '',
+                    toolCalls: [{
+                        id: 'write-episode',
+                        name: 'MemoryWrite',
+                        arguments: {
+                            filePath: 'memory/episodes/cancelled.md',
+                            content: '# 会被取消\n\n旧管理员写入。',
+                        },
+                    }],
+                };
+            }
+            resolveSecondRoundStarted();
+            await secondRoundGate;
+            return { text: '如果没有检查 abort，这里会错误完成。' };
+        },
+    });
+
+    await secondRoundSeen;
+    const rollback = await cancelAndRollbackXbTavernManagersForMessageRange(session.id, assistantMessage.order);
+    assert.equal(rollback.rolledBack, 1);
+    assert.equal(await getTavernMemoryFile(session.id, 'memory/episodes/cancelled.md'), null);
+    releaseSecondRound();
+    const completed = await scheduled.completion;
+
+    assert.equal(completed?.ok, false);
+    assert.notEqual(completed?.managerRun.status, 'completed');
+    assert.equal((await getTavernMemoryFile(session.id, 'memory/episodes/cancelled.md')), null);
+    const run = (await listTavernManagerRuns(session.id))[0];
+    assert.equal(run?.status, 'rolled_back');
+});
+
+test('tavern manager rollback uses snapshots even when changedFiles were not finalized', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Snapshot truth' });
+    const userMessage = await appendTavernMessage(session.id, { role: 'user', content: '第一轮。' });
+    const assistantMessage = await appendTavernMessage(session.id, { role: 'assistant', content: '第一轮回复。' });
+    const run = await createTavernManagerRun({
+        sessionId: session.id,
+        turn: 1,
+        userOrder: userMessage.order,
+        assistantOrder: assistantMessage.order,
+        trigger: 'after_turn',
+        status: 'running',
+        changedFiles: [],
+    });
+
+    const writeResult = await executeTavernMemoryTool(session.id, 'MemoryWrite', {
+        filePath: 'memory/episodes/not-finalized.md',
+        content: '# 尚未 finalize\n\nchangedFiles 还没落库。',
+    }, {
+        caller: 'auto',
+        managerRunId: run.id,
+    });
+    assert.equal(writeResult.ok, true);
+
+    const rollback = await rollbackManagerRunsForMessageRange(session.id, assistantMessage.order);
+
+    assert.equal(rollback.rolledBack, 1);
+    assert.equal(await getTavernMemoryFile(session.id, 'memory/episodes/not-finalized.md'), null);
+    assert.equal((await listTavernManagerRuns(session.id))[0]?.status, 'rolled_back');
+});
+
+test('tavern manager memory rollback is idempotent', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Idempotent rollback' });
+    const userMessage = await appendTavernMessage(session.id, { role: 'user', content: '第一轮。' });
+    const assistantMessage = await appendTavernMessage(session.id, { role: 'assistant', content: '第一轮回复。' });
+    const run = await createTavernManagerRun({
+        sessionId: session.id,
+        turn: 1,
+        userOrder: userMessage.order,
+        assistantOrder: assistantMessage.order,
+        trigger: 'after_turn',
+        status: 'completed',
+        changedFiles: ['memory/episodes/idempotent.md'],
+    });
+    await executeTavernMemoryTool(session.id, 'MemoryWrite', {
+        filePath: 'memory/episodes/idempotent.md',
+        content: '# 可重复回滚\n\n第一次回滚后第二次不应冲突。',
+    }, {
+        caller: 'auto',
+        managerRunId: run.id,
+    });
+
+    const first = await rollbackManagerRunsForMessageRange(session.id, assistantMessage.order);
+    const second = await rollbackManagerRunsForMessageRange(session.id, assistantMessage.order);
+
+    assert.equal(first.rolledBack, 1);
+    assert.equal(second.rolledBack, 0);
+    assert.deepEqual(second.conflicts, []);
+    const snapshot = (await listTavernManagerMemorySnapshots(run.id))[0];
+    assert.equal(snapshot?.rollbackStatus, 'rolled_back');
+});
+
+test('tavern manager rollback does not overwrite user-edited memory conflicts', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Rollback conflict' });
+    const userMessage = await appendTavernMessage(session.id, { role: 'user', content: '第一轮。' });
+    const assistantMessage = await appendTavernMessage(session.id, { role: 'assistant', content: '第一轮回复。' });
+    await ensureTavernMemoryDefaults(session.id);
+    const before = (await getTavernMemoryFile(session.id, 'memory/session.md'))?.content || '';
+    const run = await createTavernManagerRun({
+        sessionId: session.id,
+        turn: 1,
+        userOrder: userMessage.order,
+        assistantOrder: assistantMessage.order,
+        trigger: 'after_turn',
+        status: 'completed',
+        changedFiles: ['memory/session.md'],
+    });
+
+    const writeResult = await executeTavernMemoryTool(session.id, 'MemoryWrite', {
+        filePath: 'memory/session.md',
+        content: `${before}\n\n管理员写入。`,
+    }, {
+        caller: 'auto',
+        managerRunId: run.id,
+    });
+    assert.equal(writeResult.ok, true);
+    await writeTavernMemoryFile(session.id, 'memory/session.md', '用户手动修正。', { source: 'user' });
+
+    const rollback = await rollbackManagerRunsForMessageRange(session.id, assistantMessage.order);
+
+    assert.deepEqual(rollback.conflicts, ['memory/session.md']);
+    assert.equal((await getTavernMemoryFile(session.id, 'memory/session.md'))?.content, '用户手动修正。');
+    const snapshot = (await listTavernManagerMemorySnapshots(run.id))[0];
+    assert.equal(snapshot?.rollbackStatus, 'conflict');
+    assert.equal((await listTavernManagerRuns(session.id))[0]?.status, 'rolled_back');
+    assert.match((await getTavernMemoryIndex(session.id))?.error || '', /rollback_conflict:memory\/session\.md/);
 });
 
 test('tavern manager keeps raw output when no memory tool is used', async () => {

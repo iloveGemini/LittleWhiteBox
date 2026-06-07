@@ -4,6 +4,8 @@ import {
     type XbTavernContext,
     type XbTavernMessage,
     type XbTavernMessageBuildResult,
+    type XbTavernNativeWorldInfoRuntime,
+    type XbTavernNativeWorldInfoTimedState,
     type TavernChatPromptPresetBundle,
     type XbTavernRuntimeState,
     XBTavernWorldPosition,
@@ -25,6 +27,7 @@ import {
     type TavernSessionRecord,
     type TavernSessionState,
 } from '../../shared/session-db';
+import { rebuildTavernMemoryDerivedIndex } from '../../shared/memory-files';
 import { buildXbTavernBrain, buildXbTavernBrainAsync } from '../../shared/brain';
 import {
     countRegexApplications,
@@ -34,6 +37,12 @@ import {
     type TavernAppliedRegexItem,
     type TavernRegexApplicationSummary,
 } from '../../shared/regex';
+import type {
+    TavernApplySubstituteParams,
+    TavernSubstituteParamsItem,
+    TavernSubstituteParamsOptions,
+    TavernSubstitutedParamsItem,
+} from '../../shared/substitute-params';
 import {
     buildXbTavernMemoryIgnoredTerms,
     buildXbTavernMemoryQuery,
@@ -41,6 +50,7 @@ import {
 } from '../../shared/memory-retrieval';
 import { createXbTavernAgentRuntime } from './agent-runtime';
 import {
+    cancelAndRollbackXbTavernManagersForMessageRange,
     scheduleXbTavernManagerAfterTurn,
     type XbTavernManagerOnceOptions,
     type XbTavernManagerOnceResult,
@@ -98,6 +108,14 @@ export interface TavernDiagnostics {
     worldbookErrors?: Array<{ name: string; error: string }>;
 }
 
+export type TavernGetNativeWorldInfoRuntime = (input: {
+    context: XbTavernContext;
+    currentUserMessage: string;
+    trigger?: string;
+    timedState?: XbTavernNativeWorldInfoTimedState;
+    maxContext?: number;
+}) => Promise<XbTavernNativeWorldInfoRuntime>;
+
 export interface XbTavernRunTurnInput {
     sessionId?: string;
     agentConfig: Record<string, unknown>;
@@ -117,9 +135,12 @@ export interface XbTavernRunTurnInput {
     reuseUserMessageOrder?: number;
     awaitManager?: boolean;
     runManager?: boolean;
+    generationTrigger?: string;
     executeRunOnce?: (options: TavernRunOnceOptions) => Promise<TavernRunOnceResult>;
     executeManagerOnce?: (options: XbTavernManagerOnceOptions) => Promise<XbTavernManagerOnceResult>;
     applyRegex?: TavernApplyRegex;
+    applySubstituteParams?: TavernApplySubstituteParams;
+    getNativeWorldInfoRuntime?: TavernGetNativeWorldInfoRuntime;
 }
 
 export interface XbTavernRunResult {
@@ -150,7 +171,10 @@ export interface XbTavernSimulateRequestInput {
     runtimeState?: TavernSessionState;
     diagnostics?: TavernDiagnostics;
     historyMode?: XbTavernRuntimeState['historyMode'];
+    generationTrigger?: string;
     applyRegex?: TavernApplyRegex;
+    applySubstituteParams?: TavernApplySubstituteParams;
+    getNativeWorldInfoRuntime?: TavernGetNativeWorldInfoRuntime;
 }
 
 export interface XbTavernSimulateRequestResult {
@@ -201,14 +225,14 @@ function resolveSessionContext(
     session?: Pick<TavernSessionRecord, 'contextSnapshot'> | null,
     fallbackContext: XbTavernContext = {},
 ): XbTavernContext {
-    return hasUsableTavernContext(session?.contextSnapshot)
-        ? session?.contextSnapshot || {}
-        : fallbackContext || {};
+    if (hasUsableTavernContext(fallbackContext)) {return fallbackContext || {};}
+    if (hasUsableTavernContext(session?.contextSnapshot)) {return session?.contextSnapshot || {};}
+    return fallbackContext || session?.contextSnapshot || {};
 }
 
 function assertUsableTavernContext(context: XbTavernContext = {}): void {
     if (hasUsableTavernContext(context)) {return;}
-    throw new Error('当前没有可用角色资料，请先选择角色或刷新当前资料。');
+    throw new Error('当前没有可用角色，请先选择角色或刷新当前会话。');
 }
 
 function resolveInputChatPreset(input: {
@@ -357,6 +381,245 @@ async function applyPromptRegexToConversationMessages(input: {
     };
 }
 
+function unchangedSubstituteParamsItems(items: TavernSubstituteParamsItem[] = []): TavernSubstitutedParamsItem[] {
+    return items.map((item) => ({
+        id: item.id,
+        text: item.text,
+        changed: false,
+    }));
+}
+
+async function applyTavernSubstituteParamsItems(
+    applySubstituteParams: TavernApplySubstituteParams | undefined,
+    items: TavernSubstituteParamsItem[] = [],
+): Promise<TavernSubstitutedParamsItem[]> {
+    if (!items.length) {return [];}
+    if (!applySubstituteParams) {return unchangedSubstituteParamsItems(items);}
+    const result = await applySubstituteParams(items);
+    const byId = new Map((Array.isArray(result.items) ? result.items : []).map((item) => [item.id, item]));
+    return items.map((item) => byId.get(item.id) || {
+        id: item.id,
+        text: item.text,
+        changed: false,
+    });
+}
+
+function buildSubstituteParamsOptions(context: XbTavernContext = {}): TavernSubstituteParamsOptions {
+    const options: TavernSubstituteParamsOptions = {};
+    const userName = String(context.user?.name || '').trim();
+    const characterName = String(context.character?.name || '').trim();
+    if (userName) {options.name1Override = userName;}
+    if (characterName) {options.name2Override = characterName;}
+    return options;
+}
+
+async function applySingleTavernSubstituteParams(input: {
+    applySubstituteParams?: TavernApplySubstituteParams;
+    text: string;
+    id: string;
+    options?: TavernSubstituteParamsOptions;
+}): Promise<string> {
+    const [item] = await applyTavernSubstituteParamsItems(input.applySubstituteParams, [{
+        id: input.id,
+        text: input.text,
+        options: input.options,
+    }]);
+    return item?.text ?? input.text;
+}
+
+function textList(value: unknown): string[] {
+    if (Array.isArray(value)) {return value.map((item) => String(item || ''));}
+    if (value === undefined || value === null) {return [];}
+    return [String(value)];
+}
+
+async function substituteWorldEntryPromptFields(input: {
+    applySubstituteParams?: TavernApplySubstituteParams;
+    entries: Array<Record<string, unknown>>;
+    options: TavernSubstituteParamsOptions;
+    scope: string;
+}): Promise<Array<Record<string, unknown>>> {
+    const entries = Array.isArray(input.entries) ? input.entries : [];
+    const items: TavernSubstituteParamsItem[] = [];
+    const refs: Array<{ entryIndex: number; field: 'content' | 'key' | 'keysecondary' | 'secondary_keys'; valueIndex?: number; id: string }> = [];
+    entries.forEach((entry, entryIndex) => {
+        const content = String(entry.content || '');
+        if (content) {
+            const id = `${input.scope}:${entryIndex}:content`;
+            refs.push({ entryIndex, field: 'content', id });
+            items.push({ id, text: content, options: input.options });
+        }
+        (['key', 'keysecondary', 'secondary_keys'] as const).forEach((field) => {
+            textList(entry[field]).forEach((text, valueIndex) => {
+                if (!text) {return;}
+                const id = `${input.scope}:${entryIndex}:${field}:${valueIndex}`;
+                refs.push({ entryIndex, field, valueIndex, id });
+                items.push({ id, text, options: input.options });
+            });
+        });
+    });
+    const applied = await applyTavernSubstituteParamsItems(input.applySubstituteParams, items);
+    const byId = new Map(applied.map((item) => [item.id, item.text]));
+    const output = entries.map((entry) => ({ ...entry }));
+    refs.forEach((ref) => {
+        const text = byId.get(ref.id);
+        if (text === undefined) {return;}
+        const entry = output[ref.entryIndex];
+        if (!entry) {return;}
+        if (ref.field === 'content') {
+            entry.content = text;
+            return;
+        }
+        const original = entry[ref.field];
+        if (Array.isArray(original)) {
+            const list = [...original];
+            list[ref.valueIndex || 0] = text;
+            entry[ref.field] = list;
+        } else {
+            entry[ref.field] = text;
+        }
+    });
+    return output;
+}
+
+async function substituteContextWorldEntriesForPrompt(input: {
+    applySubstituteParams?: TavernApplySubstituteParams;
+    context: XbTavernContext;
+    options: TavernSubstituteParamsOptions;
+}): Promise<XbTavernContext> {
+    if (!input.applySubstituteParams) {return input.context;}
+    const context: XbTavernContext = {
+        ...input.context,
+        worldEntries: input.context.worldEntries
+            ? await substituteWorldEntryPromptFields({
+                applySubstituteParams: input.applySubstituteParams,
+                entries: input.context.worldEntries as Array<Record<string, unknown>>,
+                options: input.options,
+                scope: 'worldEntries',
+            }) as XbTavernContext['worldEntries']
+            : input.context.worldEntries,
+    };
+    if (Array.isArray(input.context.worldBooks)) {
+        context.worldBooks = await Promise.all(input.context.worldBooks.map(async (book, bookIndex) => ({
+            ...book,
+            entries: await substituteWorldEntryPromptFields({
+                applySubstituteParams: input.applySubstituteParams,
+                entries: (Array.isArray(book.entries) ? book.entries : []) as Array<Record<string, unknown>>,
+                options: input.options,
+                scope: `worldBooks:${bookIndex}`,
+            }) as typeof book.entries,
+        })));
+    }
+    return context;
+}
+
+async function applyPromptSubstitutionToMessages(input: {
+    applySubstituteParams?: TavernApplySubstituteParams;
+    messages: XbTavernMessage[];
+    options: TavernSubstituteParamsOptions;
+}): Promise<XbTavernMessage[]> {
+    const messages = Array.isArray(input.messages) ? input.messages : [];
+    const items: TavernSubstituteParamsItem[] = [];
+    messages.forEach((message, index) => {
+        const content = String(message.content || '');
+        if (content) {
+            items.push({
+                id: `message:${index}`,
+                text: content,
+                options: input.options,
+            });
+        }
+        if (message.role === 'assistant' && Array.isArray(message.thoughts)) {
+            message.thoughts.forEach((thought, thoughtIndex) => {
+                const text = String(thought?.text || '');
+                if (!text) {return;}
+                items.push({
+                    id: `thought:${index}:${thoughtIndex}`,
+                    text,
+                    options: input.options,
+                });
+            });
+        }
+    });
+    const applied = await applyTavernSubstituteParamsItems(input.applySubstituteParams, items);
+    const byId = new Map(applied.map((item) => [item.id, item.text]));
+    return messages.map((message, index) => {
+        const thoughts = Array.isArray(message.thoughts)
+            ? message.thoughts.map((thought, thoughtIndex) => ({
+                ...thought,
+                text: byId.get(`thought:${index}:${thoughtIndex}`) ?? thought.text,
+            }))
+            : message.thoughts;
+        return {
+            ...message,
+            content: byId.get(`message:${index}`) ?? message.content,
+            ...(thoughts ? { thoughts } : {}),
+        };
+    });
+}
+
+function normalizeNativeWorldInfoTimedState(value: unknown): XbTavernNativeWorldInfoTimedState {
+    const source = value && typeof value === 'object' && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : {};
+    const normalizeBucket = (bucket: unknown) => {
+        if (!bucket || typeof bucket !== 'object' || Array.isArray(bucket)) {return {};}
+        const result: Record<string, { hash?: number; start?: number; end?: number; protected?: boolean }> = {};
+        Object.entries(bucket as Record<string, unknown>).forEach(([key, item]) => {
+            if (!key || !item || typeof item !== 'object' || Array.isArray(item)) {return;}
+            const record = item as Record<string, unknown>;
+            const normalized: { hash?: number; start?: number; end?: number; protected?: boolean } = {};
+            const hash = Number(record.hash);
+            const start = Number(record.start);
+            const end = Number(record.end);
+            if (Number.isFinite(hash)) {normalized.hash = hash;}
+            if (Number.isFinite(start)) {normalized.start = start;}
+            if (Number.isFinite(end)) {normalized.end = end;}
+            if (record.protected === true) {normalized.protected = true;}
+            if (Object.keys(normalized).length) {
+                result[key] = normalized;
+            }
+        });
+        return result;
+    };
+    return {
+        sticky: normalizeBucket(source.sticky),
+        cooldown: normalizeBucket(source.cooldown),
+    };
+}
+
+async function injectNativeWorldInfoRuntime(input: {
+    getNativeWorldInfoRuntime?: TavernGetNativeWorldInfoRuntime;
+    context: XbTavernContext;
+    currentUserMessage: string;
+    trigger?: string;
+    timedState?: XbTavernNativeWorldInfoTimedState;
+}): Promise<{
+    context: XbTavernContext;
+    timedState: XbTavernNativeWorldInfoTimedState;
+}> {
+    const timedState = normalizeNativeWorldInfoTimedState(input.timedState);
+    if (!input.getNativeWorldInfoRuntime) {
+        return {
+            context: input.context,
+            timedState,
+        };
+    }
+    const nativeWorldInfo = await input.getNativeWorldInfoRuntime({
+        context: input.context,
+        currentUserMessage: input.currentUserMessage,
+        trigger: input.trigger,
+        timedState,
+    });
+    return {
+        context: {
+            ...input.context,
+            nativeWorldInfo,
+        },
+        timedState: normalizeNativeWorldInfoTimedState(nativeWorldInfo?.timedState),
+    };
+}
+
 export function buildTavernRequestSnapshot(
     agentConfig: Record<string, unknown> = {},
     messages: XbTavernMessage[] = [],
@@ -480,7 +743,6 @@ export function deriveTavernSessionStateFromMessages(input: {
     const contextSnapshot = input.contextSnapshot || {};
     const priorMessages: TavernMessageRecord[] = [];
     let turn = 0;
-    let worldEntryStates: NonNullable<TavernSessionState['worldEntryStates']> = {};
     let lastBuildSnapshot: XbTavernBuildSnapshot | undefined;
     let lastRequestSnapshot: unknown;
     let lastProvider = '';
@@ -502,13 +764,9 @@ export function deriveTavernSessionStateFromMessages(input: {
                 currentUserMessage: message.content,
                 historyMode: input.historyMode || 'raw',
                 turn,
-                entryStates: worldEntryStates,
+                entryStates: {},
                 diagnostics: input.diagnostics || {},
             });
-            worldEntryStates = mergeWorldEntryStates(
-                worldEntryStates,
-                brain.buildResult.meta.worldEntryStateUpdates,
-            );
             turn += 1;
             lastBuildSnapshot = brain.buildSnapshot;
             lastRequestSnapshot = assistant.requestSnapshot || message.requestSnapshot;
@@ -521,7 +779,105 @@ export function deriveTavernSessionStateFromMessages(input: {
     const lastMessage = sorted[sorted.length - 1];
     return {
         turn,
+        worldEntryStates: {},
+        nativeWorldInfoTimedState: { sticky: {}, cooldown: {} },
+        lastBuildSnapshot,
+        lastRequestSnapshot,
+        lastProvider,
+        lastModel,
+        lastError: lastMessage?.error ? String(lastMessage.content || '') : '',
+    };
+}
+
+export async function deriveTavernSessionStateFromMessagesAsync(input: {
+    messages?: TavernMessageRecord[];
+    contextSnapshot?: XbTavernContext;
+    chatPreset?: TavernChatPromptPresetBundle;
+    preset?: TavernChatPromptPresetBundle;
+    historyMode?: XbTavernRuntimeState['historyMode'];
+    diagnostics?: TavernDiagnostics;
+    applySubstituteParams?: TavernApplySubstituteParams;
+    getNativeWorldInfoRuntime?: TavernGetNativeWorldInfoRuntime;
+}): Promise<TavernSessionState> {
+    if (!input.applySubstituteParams && !input.getNativeWorldInfoRuntime) {
+        return deriveTavernSessionStateFromMessages(input);
+    }
+    const chatPreset = resolveInputChatPreset(input);
+    const sorted = [...(input.messages || [])].sort((left, right) => left.order - right.order);
+    const contextSnapshot = input.contextSnapshot || {};
+    const substituteOptions = buildSubstituteParamsOptions(contextSnapshot);
+    const priorMessages: TavernMessageRecord[] = [];
+    let turn = 0;
+    let worldEntryStates: NonNullable<TavernSessionState['worldEntryStates']> = {};
+    let nativeWorldInfoTimedState: XbTavernNativeWorldInfoTimedState = { sticky: {}, cooldown: {} };
+    let lastBuildSnapshot: XbTavernBuildSnapshot | undefined;
+    let lastRequestSnapshot: unknown;
+    let lastProvider = '';
+    let lastModel = '';
+
+    for (let index = 0; index < sorted.length; index += 1) {
+        const message = sorted[index];
+        if (message.role !== 'user' || message.error || !String(message.content || '').trim()) {
+            priorMessages.push(message);
+            continue;
+        }
+        const assistant = findCompletedAssistantForUser(sorted, index);
+        if (assistant) {
+            const trigger = String(
+                (assistant.buildSnapshot as { nativeWorldInfo?: { trigger?: string } } | undefined)?.nativeWorldInfo?.trigger
+                || (message.buildSnapshot as { nativeWorldInfo?: { trigger?: string } } | undefined)?.nativeWorldInfo?.trigger
+                || 'normal',
+            );
+            const contextBase = {
+                ...contextSnapshot,
+                worldSettings: {
+                    ...(contextSnapshot.worldSettings || {}),
+                    trigger,
+                },
+                history: buildContextHistory(priorMessages),
+            };
+            const nativeContext = await injectNativeWorldInfoRuntime({
+                getNativeWorldInfoRuntime: input.getNativeWorldInfoRuntime,
+                context: contextBase,
+                currentUserMessage: message.content,
+                trigger,
+                timedState: nativeWorldInfoTimedState,
+            });
+            nativeWorldInfoTimedState = nativeContext.timedState;
+            const contextForBuild = await substituteContextWorldEntriesForPrompt({
+                applySubstituteParams: input.applySubstituteParams,
+                context: nativeContext.context,
+                options: substituteOptions,
+            });
+            const brain = await buildXbTavernBrainAsync({
+                context: contextForBuild,
+                chatPreset,
+                currentUserMessage: message.content,
+                historyMode: input.historyMode || 'raw',
+                turn,
+                entryStates: worldEntryStates,
+                diagnostics: input.diagnostics || {},
+            });
+            worldEntryStates = input.getNativeWorldInfoRuntime
+                ? {}
+                : mergeWorldEntryStates(
+                    worldEntryStates,
+                    brain.buildResult.meta.worldEntryStateUpdates,
+                );
+            turn += 1;
+            lastBuildSnapshot = brain.buildSnapshot;
+            lastRequestSnapshot = assistant.requestSnapshot || message.requestSnapshot;
+            lastProvider = String(assistant.provider || '');
+            lastModel = String(assistant.model || '');
+        }
+        priorMessages.push(message);
+    }
+
+    const lastMessage = sorted[sorted.length - 1];
+    return {
+        turn,
         worldEntryStates,
+        nativeWorldInfoTimedState,
         lastBuildSnapshot,
         lastRequestSnapshot,
         lastProvider,
@@ -549,6 +905,7 @@ async function ensureRunSession(input: XbTavernRunTurnInput, buildSnapshot?: XbT
         state: {
             turn: 0,
             worldEntryStates: {},
+            nativeWorldInfoTimedState: { sticky: {}, cooldown: {} },
         },
     });
 }
@@ -606,8 +963,8 @@ export async function simulateXbTavernRequest(input: XbTavernSimulateRequestInpu
     const chatPreset = resolveInputChatPreset(input);
     const session = input.sessionId ? await getTavernSession(input.sessionId) : null;
     const sessionMessages = session ? await listTavernMessages(session.id) : [];
-    const lockedContext = resolveSessionContext(session, input.contextSnapshot);
-    assertUsableTavernContext(lockedContext);
+    const liveContext = resolveSessionContext(session, input.contextSnapshot);
+    assertUsableTavernContext(liveContext);
     const sessionState = normalizeTavernSessionState(session?.state || input.runtimeState || {});
     const inputRegex = await applySingleTavernRegex({
         applyRegex: input.applyRegex,
@@ -617,11 +974,33 @@ export async function simulateXbTavernRequest(input: XbTavernSimulateRequestInpu
     });
     const regexApplications: TavernRegexApplicationSummary = {};
     addRegexSummary(regexApplications, inputRegex.summary);
-    const currentUserMessage = inputRegex.text;
-    const contextForBuild: XbTavernContext = {
-        ...lockedContext,
+    const substituteOptions = buildSubstituteParamsOptions(liveContext);
+    const currentUserMessage = await applySingleTavernSubstituteParams({
+        applySubstituteParams: input.applySubstituteParams,
+        id: 'userInput:simulate',
+        text: inputRegex.text,
+        options: substituteOptions,
+    });
+    const contextForBuildRaw: XbTavernContext = {
+        ...liveContext,
+        worldSettings: {
+            ...(liveContext.worldSettings || {}),
+            trigger: String(input.generationTrigger || 'normal'),
+        },
         history: session ? buildContextHistory(sessionMessages) : (input.contextSnapshot.history || []),
     };
+    const nativeContext = await injectNativeWorldInfoRuntime({
+        getNativeWorldInfoRuntime: input.getNativeWorldInfoRuntime,
+        context: contextForBuildRaw,
+        currentUserMessage,
+        trigger: String(input.generationTrigger || 'normal'),
+        timedState: sessionState.nativeWorldInfoTimedState,
+    });
+    const contextForBuild = await substituteContextWorldEntriesForPrompt({
+        applySubstituteParams: input.applySubstituteParams,
+        context: nativeContext.context,
+        options: substituteOptions,
+    });
     const memoryQuery = buildXbTavernMemoryQuery(contextForBuild, currentUserMessage);
     const brain = await buildXbTavernBrainAsync({
         context: contextForBuild,
@@ -640,14 +1019,24 @@ export async function simulateXbTavernRequest(input: XbTavernSimulateRequestInpu
         diagnostics: input.diagnostics || {},
         regexApplications,
         transformConversationMessages: async (messages) => {
+            const substitutedMessages = await applyPromptSubstitutionToMessages({
+                applySubstituteParams: input.applySubstituteParams,
+                messages,
+                options: substituteOptions,
+            });
             const applied = await applyPromptRegexToConversationMessages({
                 applyRegex: input.applyRegex,
-                messages,
+                messages: substitutedMessages,
             });
             addRegexSummary(regexApplications, applied.summary);
             return applied.messages;
         },
-        transformWorldEntries: async (entries) => {
+        transformFinalMessages: async (messages) => applyPromptSubstitutionToMessages({
+            applySubstituteParams: input.applySubstituteParams,
+            messages,
+            options: substituteOptions,
+        }),
+        transformWorldEntries: contextForBuild.nativeWorldInfo ? undefined : async (entries) => {
             const applied = await applyTavernRegexItems(input.applyRegex, entries.map((entry) => ({
                 id: `worldInfo:${entry.activationKey}`,
                 text: entry.content,
@@ -697,14 +1086,18 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
     }
     const baseSession = await ensureRunSession(input);
     let sessionMessages = await listTavernMessages(baseSession.id);
-    const lockedContext = resolveSessionContext(baseSession, input.contextSnapshot);
-    assertUsableTavernContext(lockedContext);
+    const liveContext = resolveSessionContext(baseSession, input.contextSnapshot);
+    assertUsableTavernContext(liveContext);
     const reusedOrder = Number(input.reuseUserMessageOrder);
     const reusedUserMessage = Number.isInteger(reusedOrder) && reusedOrder >= 0
         ? sessionMessages.find((message) => message.order === reusedOrder && message.role === 'user' && !message.error) || null
         : null;
     if (reusedUserMessage) {
+        const rollback = await cancelAndRollbackXbTavernManagersForMessageRange(baseSession.id, reusedUserMessage.order + 1);
         await markTavernMemoryStaleFromOrder(baseSession.id, reusedUserMessage.order);
+        if (!rollback.conflicts.length) {
+            await rebuildTavernMemoryDerivedIndex(baseSession.id);
+        }
         await deleteTavernMessages(
             baseSession.id,
             sessionMessages
@@ -717,12 +1110,14 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
         ? sessionMessages.filter((message) => message.order < reusedUserMessage.order)
         : sessionMessages;
     const sessionState = reusedUserMessage
-        ? normalizeTavernSessionState(deriveTavernSessionStateFromMessages({
+        ? normalizeTavernSessionState(await deriveTavernSessionStateFromMessagesAsync({
             messages: historyMessages,
-            contextSnapshot: lockedContext,
+            contextSnapshot: liveContext,
             chatPreset: input.chatPreset,
             historyMode: input.historyMode || 'raw',
             diagnostics: input.diagnostics,
+            applySubstituteParams: input.applySubstituteParams,
+            getNativeWorldInfoRuntime: input.getNativeWorldInfoRuntime,
         }))
         : normalizeTavernSessionState(baseSession.state || input.runtimeState || {});
     const shouldReplaceSessionState = !!reusedUserMessage;
@@ -737,11 +1132,36 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
             text: rawCurrentUserMessage,
         });
     addRegexSummary(regexApplications, inputRegex.summary);
-    const currentUserMessage = inputRegex.text;
-    const contextForBuild: XbTavernContext = {
-        ...lockedContext,
+    const substituteOptions = buildSubstituteParamsOptions(liveContext);
+    const currentUserMessage = reusedUserMessage
+        ? inputRegex.text
+        : await applySingleTavernSubstituteParams({
+            applySubstituteParams: input.applySubstituteParams,
+            id: 'userInput:turn',
+            text: inputRegex.text,
+            options: substituteOptions,
+        });
+    const generationTrigger = String(input.generationTrigger || (reusedUserMessage ? 'regenerate' : 'normal'));
+    const contextForBuildRaw: XbTavernContext = {
+        ...liveContext,
+        worldSettings: {
+            ...(liveContext.worldSettings || {}),
+            trigger: generationTrigger,
+        },
         history: buildContextHistory(historyMessages),
     };
+    const nativeContext = await injectNativeWorldInfoRuntime({
+        getNativeWorldInfoRuntime: input.getNativeWorldInfoRuntime,
+        context: contextForBuildRaw,
+        currentUserMessage,
+        trigger: generationTrigger,
+        timedState: sessionState.nativeWorldInfoTimedState,
+    });
+    const contextForBuild = await substituteContextWorldEntriesForPrompt({
+        applySubstituteParams: input.applySubstituteParams,
+        context: nativeContext.context,
+        options: substituteOptions,
+    });
     const memoryQuery = buildXbTavernMemoryQuery(contextForBuild, currentUserMessage);
     const brain = await buildXbTavernBrainAsync({
         context: contextForBuild,
@@ -758,14 +1178,24 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
         diagnostics: input.diagnostics || {},
         regexApplications,
         transformConversationMessages: async (messages) => {
+            const substitutedMessages = await applyPromptSubstitutionToMessages({
+                applySubstituteParams: input.applySubstituteParams,
+                messages,
+                options: substituteOptions,
+            });
             const applied = await applyPromptRegexToConversationMessages({
                 applyRegex: input.applyRegex,
-                messages,
+                messages: substitutedMessages,
             });
             addRegexSummary(regexApplications, applied.summary);
             return applied.messages;
         },
-        transformWorldEntries: async (entries) => {
+        transformFinalMessages: async (messages) => applyPromptSubstitutionToMessages({
+            applySubstituteParams: input.applySubstituteParams,
+            messages,
+            options: substituteOptions,
+        }),
+        transformWorldEntries: contextForBuild.nativeWorldInfo ? undefined : async (entries) => {
             const applied = await applyTavernRegexItems(input.applyRegex, entries.map((entry) => ({
                 id: `worldInfo:${entry.activationKey}`,
                 text: entry.content,
@@ -790,16 +1220,14 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
         },
     });
     const { buildResult, buildSnapshot } = brain;
-    const session = baseSession.buildSnapshot
-        ? baseSession
-        : await updateTavernSessionSnapshot(baseSession.id, {
-            contextSnapshot: lockedContext,
-            buildSnapshot,
-            chatPresetId: String(chatPreset.id || baseSession.chatPresetId || baseSession.presetId || ''),
-            chatPresetName: String(chatPreset.name || baseSession.chatPresetName || baseSession.presetName || ''),
-            presetId: String(chatPreset.id || baseSession.presetId || ''),
-            presetName: String(chatPreset.name || baseSession.presetName || ''),
-        }) || baseSession;
+    const session = await updateTavernSessionSnapshot(baseSession.id, {
+        contextSnapshot: liveContext,
+        buildSnapshot,
+        chatPresetId: String(chatPreset.id || baseSession.chatPresetId || baseSession.presetId || ''),
+        chatPresetName: String(chatPreset.name || baseSession.chatPresetName || baseSession.presetName || ''),
+        presetId: String(chatPreset.id || baseSession.presetId || ''),
+        presetName: String(chatPreset.name || baseSession.presetName || ''),
+    }) || baseSession;
 
     let latestStreamText = '';
     const handleStreamProgress = (snapshot: { text?: string; thoughts?: Array<{ label?: string; text?: string }> }) => {
@@ -832,7 +1260,7 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
     const userMessage = reusedUserMessage || await appendTavernMessage(session.id, {
             role: 'user',
             content: currentUserMessage,
-            contextSnapshot: lockedContext,
+            contextSnapshot: liveContext,
             buildSnapshot,
             chatPresetId: presetId,
             chatPresetName: presetName,
@@ -876,7 +1304,7 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
             content: outputRegex.text,
             thoughts: reasoningRegex.thoughts,
             providerPayload: result.providerPayload,
-            contextSnapshot: lockedContext,
+            contextSnapshot: liveContext,
             buildSnapshot,
             chatPresetId: presetId,
             chatPresetName: presetName,
@@ -891,9 +1319,14 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
         const nextTurn = Number(sessionState.turn || 0) + 1;
         await persistRunSessionState(session.id, {
             turn: nextTurn,
-            worldEntryStates: shouldReplaceSessionState
-                ? mergeWorldEntryStates(sessionState.worldEntryStates || {}, buildResult.meta.worldEntryStateUpdates)
-                : buildResult.meta.worldEntryStateUpdates,
+            worldEntryStates: contextForBuild.nativeWorldInfo
+                ? (shouldReplaceSessionState ? sessionState.worldEntryStates || {} : sessionState.worldEntryStates || {})
+                : (shouldReplaceSessionState
+                    ? mergeWorldEntryStates(sessionState.worldEntryStates || {}, buildResult.meta.worldEntryStateUpdates)
+                    : buildResult.meta.worldEntryStateUpdates),
+            nativeWorldInfoTimedState: contextForBuild.nativeWorldInfo
+                ? nativeContext.timedState
+                : normalizeNativeWorldInfoTimedState(sessionState.nativeWorldInfoTimedState),
             lastBuildSnapshot: buildSnapshot,
             lastRequestSnapshot: assistantRequestSnapshot,
             lastProvider: result.provider || '',
@@ -903,7 +1336,11 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
         });
         let managerRunId = '';
         let managerStatus = '';
-        if (input.runManager === true && !assistantMessage.error) {
+        const assistantFinishReason = String(result.finishReason || '').trim();
+        const canRunManager = input.runManager === true
+            && !assistantMessage.error
+            && !['aborted', 'error'].includes(assistantFinishReason);
+        if (canRunManager) {
             const manager = await scheduleXbTavernManagerAfterTurn({
                 sessionId: session.id,
                 agentConfig: input.agentConfig,
@@ -953,6 +1390,12 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
                 text: partialText,
             });
             addRegexSummary(regexApplications, partialRegex.summary);
+            if (hasRegexApplications(regexApplications)) {
+                requestSnapshot = {
+                    ...requestSnapshot,
+                    regexApplications,
+                };
+            }
             if (partialRegex.text !== partialText) {
                 input.onStreamProgress?.({ text: partialRegex.text });
             }
@@ -960,7 +1403,7 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
                 role: 'assistant',
                 content: partialRegex.text,
                 error: false,
-                contextSnapshot: lockedContext,
+                contextSnapshot: liveContext,
                 buildSnapshot,
                 chatPresetId: presetId,
                 chatPresetName: presetName,
@@ -975,9 +1418,14 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
             const nextTurn = Number(sessionState.turn || 0) + 1;
             await persistRunSessionState(session.id, {
                 turn: nextTurn,
-                worldEntryStates: shouldReplaceSessionState
-                    ? mergeWorldEntryStates(sessionState.worldEntryStates || {}, buildResult.meta.worldEntryStateUpdates)
-                    : buildResult.meta.worldEntryStateUpdates,
+                worldEntryStates: contextForBuild.nativeWorldInfo
+                    ? (shouldReplaceSessionState ? sessionState.worldEntryStates || {} : sessionState.worldEntryStates || {})
+                    : (shouldReplaceSessionState
+                        ? mergeWorldEntryStates(sessionState.worldEntryStates || {}, buildResult.meta.worldEntryStateUpdates)
+                        : buildResult.meta.worldEntryStateUpdates),
+                nativeWorldInfoTimedState: contextForBuild.nativeWorldInfo
+                    ? nativeContext.timedState
+                    : normalizeNativeWorldInfoTimedState(sessionState.nativeWorldInfoTimedState),
                 lastBuildSnapshot: buildSnapshot,
                 lastRequestSnapshot: requestSnapshot,
                 lastProvider: requestSnapshot.provider,
@@ -985,25 +1433,6 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
             }, {
                 replace: shouldReplaceSessionState,
             });
-            let managerRunId = '';
-            let managerStatus = '';
-            if (input.runManager === true) {
-                const manager = await scheduleXbTavernManagerAfterTurn({
-                    sessionId: session.id,
-                    agentConfig: input.agentConfig,
-                    userMessage,
-                    assistantMessage: errorMessage,
-                    turn: nextTurn,
-                    assistantPreset: input.assistantPreset,
-                    awaitCompletion: input.awaitManager === true,
-                    executeManagerOnce: input.executeManagerOnce,
-                    onManagerRunSaved: async (run) => {
-                        await notifyRunCallback(() => input.onManagerRunSaved?.(session.id, run.id));
-                    },
-                });
-                managerRunId = manager.managerRunId;
-                managerStatus = manager.managerStatus;
-            }
             return {
                 sessionId: session.id,
                 userMessage,
@@ -1016,8 +1445,8 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
                 finishReason: 'aborted',
                 previewMatchesRequest: buildResult.meta.rawMessagesJson === requestSnapshot.rawMessagesJson,
                 nextTurn,
-                managerRunId,
-                managerStatus,
+                managerRunId: '',
+                managerStatus: '',
             };
         }
         const errorText = error instanceof Error ? error.message : String(error || 'run_failed');
@@ -1025,7 +1454,7 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
             role: 'assistant',
             content: aborted ? '已停止生成。' : errorText,
             error: true,
-            contextSnapshot: lockedContext,
+            contextSnapshot: liveContext,
             buildSnapshot,
             chatPresetId: presetId,
             chatPresetName: presetName,
@@ -1040,6 +1469,7 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
         await persistRunSessionState(session.id, {
             turn: Number(sessionState.turn || 0),
             worldEntryStates: shouldReplaceSessionState ? sessionState.worldEntryStates || {} : {},
+            nativeWorldInfoTimedState: normalizeNativeWorldInfoTimedState(sessionState.nativeWorldInfoTimedState),
             lastBuildSnapshot: buildSnapshot,
             lastRequestSnapshot: requestSnapshot,
             lastProvider: requestSnapshot.provider,

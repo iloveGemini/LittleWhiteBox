@@ -3,6 +3,7 @@ import {
     getDisplayPreviewForSlot,
     getPreviewsBySlot,
     getPreviewDisplayUrl,
+    warmSlotPreviewNeighbors,
 } from "./gallery-cache.js";
 import { LLMServiceError } from "./scene-planner.js";
 import { createModuleEvents, event_types } from "../../../core/event-manager.js";
@@ -820,6 +821,7 @@ export async function renderPreviewsForMessage(messageId) {
                     historyCount: displayData.historyCount,
                     currentIndex: displayData.currentIndex ?? 0,
                 });
+                void warmSlotPreviewNeighbors(slotId, displayData.currentIndex ?? 0).catch(() => {});
             } else {
                 replacementHtml = buildFailedPlaceholderHtml({
                     slotId,

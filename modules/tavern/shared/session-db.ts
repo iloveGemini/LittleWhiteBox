@@ -3,6 +3,8 @@ import type {
     XbTavernBuildSnapshot,
     XbTavernContext,
     XbTavernMessage,
+    XbTavernNativeWorldInfoTimedEffect,
+    XbTavernNativeWorldInfoTimedState,
     TavernChatPromptPresetBundle,
     XbTavernWorldEntryState,
 } from './message-assembler';
@@ -38,6 +40,7 @@ export interface TavernSessionRecord {
 export interface TavernSessionState {
     turn?: number;
     worldEntryStates?: Record<string, XbTavernWorldEntryState>;
+    nativeWorldInfoTimedState?: XbTavernNativeWorldInfoTimedState;
     lastBuildSnapshot?: XbTavernBuildSnapshot;
     lastRequestSnapshot?: unknown;
     lastProvider?: string;
@@ -65,7 +68,7 @@ interface DexieVersionWithUpgrade {
 }
 
 export type TavernMemoryRecordStatus = 'active' | 'stale';
-export type TavernManagerRunStatus = 'queued' | 'running' | 'completed' | 'failed';
+export type TavernManagerRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'superseded' | 'rolled_back';
 
 export interface TavernMessageRecord {
     sessionId: string;
@@ -169,6 +172,22 @@ export interface TavernMemoryFileRecord {
     staleFromOrder?: number;
 }
 
+export type TavernManagerMemorySnapshotStatus = 'pending' | 'rolled_back' | 'conflict' | 'skipped';
+
+export interface TavernManagerMemorySnapshotRecord {
+    managerRunId: string;
+    sessionId: string;
+    path: string;
+    beforeExists: boolean;
+    beforeFile?: TavernMemoryFileRecord;
+    beforeHash: string;
+    afterHash?: string;
+    rollbackStatus: TavernManagerMemorySnapshotStatus;
+    error?: string;
+    createdAt: number;
+    updatedAt: number;
+}
+
 export interface TavernMemoryIndexRecord {
     sessionId: string;
     kind: string;
@@ -245,6 +264,7 @@ class TavernDatabase extends Dexie {
     memoryFiles!: DexieTable<TavernMemoryFileRecord>;
     memoryIndexes!: DexieTable<TavernMemoryIndexRecord>;
     assistantPresets!: DexieTable<TavernAssistantPresetRecord>;
+    managerMemorySnapshots!: DexieTable<TavernManagerMemorySnapshotRecord>;
 
     constructor() {
         super('LittleWhiteBox_Tavern');
@@ -307,6 +327,20 @@ class TavernDatabase extends Dexie {
             memoryIndexes: '[sessionId+kind], sessionId, kind, status, updatedAt',
             assistantPresets: 'id, updatedAt',
         });
+        this.version(7).stores({
+            sessions: 'id, updatedAt, characterId, characterName',
+            messages: '[sessionId+order], sessionId, order',
+            managerMessages: '[sessionId+order], sessionId, order',
+            meta: 'key',
+            presets: 'id, updatedAt, sourcePresetId',
+            turnSummaries: 'id, sessionId, episodeId, turn, userOrder, assistantOrder, status, updatedAt',
+            episodeSummaries: 'id, sessionId, status, updatedAt, startTurn, endTurn',
+            managerRuns: 'id, sessionId, status, turn, updatedAt',
+            memoryFiles: '[sessionId+path], sessionId, path, status, updatedAt',
+            memoryIndexes: '[sessionId+kind], sessionId, kind, status, updatedAt',
+            assistantPresets: 'id, updatedAt',
+            managerMemorySnapshots: '[managerRunId+path], managerRunId, sessionId, path, updatedAt',
+        });
     }
 }
 
@@ -323,6 +357,7 @@ export const tavernManagerRunsTable = db.managerRuns;
 export const tavernMemoryFilesTable = db.memoryFiles;
 export const tavernMemoryIndexesTable = db.memoryIndexes;
 export const tavernAssistantPresetsTable = db.assistantPresets;
+export const tavernManagerMemorySnapshotsTable = db.managerMemorySnapshots;
 
 function now(): number {
     return Date.now();
@@ -386,7 +421,7 @@ function normalizeMemoryStatus(value: unknown): TavernMemoryRecordStatus {
 }
 
 function normalizeManagerRunStatus(value: unknown): TavernManagerRunStatus {
-    return ['queued', 'running', 'completed', 'failed'].includes(String(value || ''))
+    return ['queued', 'running', 'completed', 'failed', 'cancelled', 'superseded', 'rolled_back'].includes(String(value || ''))
         ? value as TavernManagerRunStatus
         : 'queued';
 }
@@ -411,12 +446,51 @@ function normalizeWorldEntryStates(value: unknown): Record<string, XbTavernWorld
     return states;
 }
 
+function normalizeNativeWorldInfoTimedEffect(value: unknown): XbTavernNativeWorldInfoTimedEffect | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {return null;}
+    const source = value as Record<string, unknown>;
+    const normalized: XbTavernNativeWorldInfoTimedEffect = {};
+    const hash = Number(source.hash);
+    const start = Number(source.start);
+    const end = Number(source.end);
+    if (Number.isFinite(hash)) {normalized.hash = hash;}
+    if (Number.isFinite(start)) {normalized.start = start;}
+    if (Number.isFinite(end)) {normalized.end = end;}
+    if (source.protected === true) {normalized.protected = true;}
+    return (normalized.hash !== undefined || normalized.start !== undefined || normalized.end !== undefined || normalized.protected)
+        ? normalized
+        : null;
+}
+
+function normalizeNativeWorldInfoTimedState(value: unknown): XbTavernNativeWorldInfoTimedState {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return { sticky: {}, cooldown: {} };
+    }
+    const source = value as Record<string, unknown>;
+    const normalizeBucket = (bucket: unknown): Record<string, XbTavernNativeWorldInfoTimedEffect> => {
+        if (!bucket || typeof bucket !== 'object' || Array.isArray(bucket)) {return {};}
+        const result: Record<string, XbTavernNativeWorldInfoTimedEffect> = {};
+        Object.entries(bucket as Record<string, unknown>).forEach(([key, item]) => {
+            const normalized = normalizeNativeWorldInfoTimedEffect(item);
+            if (key && normalized) {
+                result[key] = normalized;
+            }
+        });
+        return result;
+    };
+    return {
+        sticky: normalizeBucket(source.sticky),
+        cooldown: normalizeBucket(source.cooldown),
+    };
+}
+
 export function normalizeTavernSessionState(value: unknown): TavernSessionState {
     const source = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
     return {
         ...source,
         turn: Math.max(0, Number(source.turn) || 0),
         worldEntryStates: normalizeWorldEntryStates(source.worldEntryStates),
+        nativeWorldInfoTimedState: normalizeNativeWorldInfoTimedState(source.nativeWorldInfoTimedState),
     };
 }
 
@@ -494,16 +568,18 @@ export async function deleteTavernSession(sessionId = ''): Promise<number> {
         tavernTurnSummariesTable,
         tavernEpisodeSummariesTable,
         tavernManagerRunsTable,
+        tavernManagerMemorySnapshotsTable,
         tavernMemoryFilesTable,
         tavernMemoryIndexesTable,
         tavernMetaTable,
         async () => {
-            const [messages, managerMessages, turns, episodes, runs, files, indexes] = await Promise.all([
+            const [messages, managerMessages, turns, episodes, runs, snapshots, files, indexes] = await Promise.all([
                 tavernMessagesTable.where('sessionId').equals(id).toArray(),
                 tavernManagerMessagesTable.where('sessionId').equals(id).toArray(),
                 tavernTurnSummariesTable.where('sessionId').equals(id).toArray(),
                 tavernEpisodeSummariesTable.where('sessionId').equals(id).toArray(),
                 tavernManagerRunsTable.where('sessionId').equals(id).toArray(),
+                tavernManagerMemorySnapshotsTable.where('sessionId').equals(id).toArray(),
                 tavernMemoryFilesTable.where('sessionId').equals(id).toArray(),
                 tavernMemoryIndexesTable.where('sessionId').equals(id).toArray(),
             ]);
@@ -513,6 +589,7 @@ export async function deleteTavernSession(sessionId = ''): Promise<number> {
                 turns.length ? tavernTurnSummariesTable.bulkDelete(turns.map((summary) => summary.id)) : 0,
                 episodes.length ? tavernEpisodeSummariesTable.bulkDelete(episodes.map((episode) => episode.id)) : 0,
                 runs.length ? tavernManagerRunsTable.bulkDelete(runs.map((run) => run.id)) : 0,
+                snapshots.length ? tavernManagerMemorySnapshotsTable.bulkDelete(snapshots.map((snapshot) => [snapshot.managerRunId, snapshot.path])) : 0,
                 files.length ? tavernMemoryFilesTable.bulkDelete(files.map((file) => [file.sessionId, file.path])) : 0,
                 indexes.length ? tavernMemoryIndexesTable.bulkDelete(indexes.map((index) => [index.sessionId, index.kind])) : 0,
             ]);
@@ -912,6 +989,188 @@ export async function listTavernManagerRuns(sessionId = '', options: {
     const rows = await tavernManagerRunsTable.where('sessionId').equals(id).sortBy('updatedAt');
     const limit = Math.max(0, Number(options.limit) || 0);
     return (limit ? rows.slice(-limit) : rows).reverse();
+}
+
+function hashMemorySnapshot(file?: Pick<TavernMemoryFileRecord, 'content' | 'status' | 'source' | 'staleFromOrder'> | null): string {
+    const text = JSON.stringify({
+        content: String(file?.content || ''),
+        status: String(file?.status || ''),
+        source: String(file?.source || ''),
+        staleFromOrder: Number.isFinite(Number(file?.staleFromOrder)) ? Number(file?.staleFromOrder) : null,
+    });
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 16777619) >>> 0;
+    }
+    return hash.toString(16);
+}
+
+export async function ensureTavernManagerMemorySnapshot(input: {
+    managerRunId?: string;
+    sessionId?: string;
+    path?: string;
+}): Promise<TavernManagerMemorySnapshotRecord | null> {
+    const managerRunId = String(input.managerRunId || '').trim();
+    const sessionId = String(input.sessionId || '').trim();
+    const path = String(input.path || '').trim();
+    if (!managerRunId || !sessionId || !path) {return null;}
+    const existingSnapshot = await tavernManagerMemorySnapshotsTable.get([managerRunId, path]);
+    if (existingSnapshot) {return existingSnapshot;}
+    const timestamp = now();
+    const beforeFile = await tavernMemoryFilesTable.get([sessionId, path]) || null;
+    const snapshot: TavernManagerMemorySnapshotRecord = {
+        managerRunId,
+        sessionId,
+        path,
+        beforeExists: !!beforeFile,
+        beforeFile: beforeFile ? cloneSerializable(beforeFile, undefined) : undefined,
+        beforeHash: hashMemorySnapshot(beforeFile),
+        afterHash: '',
+        rollbackStatus: 'pending',
+        error: '',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+    };
+    await tavernManagerMemorySnapshotsTable.put(snapshot);
+    return snapshot;
+}
+
+export async function updateTavernManagerMemorySnapshotAfter(input: {
+    managerRunId?: string;
+    sessionId?: string;
+    path?: string;
+}): Promise<TavernManagerMemorySnapshotRecord | null> {
+    const managerRunId = String(input.managerRunId || '').trim();
+    const sessionId = String(input.sessionId || '').trim();
+    const path = String(input.path || '').trim();
+    if (!managerRunId || !sessionId || !path) {return null;}
+    const snapshot = await ensureTavernManagerMemorySnapshot({ managerRunId, sessionId, path });
+    if (!snapshot) {return null;}
+    const afterFile = await tavernMemoryFilesTable.get([sessionId, path]) || null;
+    await tavernManagerMemorySnapshotsTable.update([managerRunId, path], {
+        afterHash: hashMemorySnapshot(afterFile),
+        updatedAt: now(),
+    });
+    return await tavernManagerMemorySnapshotsTable.get([managerRunId, path]) || null;
+}
+
+export async function listTavernManagerMemorySnapshots(managerRunId = ''): Promise<TavernManagerMemorySnapshotRecord[]> {
+    const id = String(managerRunId || '').trim();
+    if (!id) {return [];}
+    return await tavernManagerMemorySnapshotsTable.where('managerRunId').equals(id).sortBy('updatedAt');
+}
+
+export async function rollbackManagerRunMemoryWrites(managerRunId = ''): Promise<{
+    rolledBack: number;
+    conflicts: string[];
+    skipped: number;
+}> {
+    const id = String(managerRunId || '').trim();
+    if (!id) {return { rolledBack: 0, conflicts: [], skipped: 0 };}
+    const run = await tavernManagerRunsTable.get(id);
+    if (!run) {return { rolledBack: 0, conflicts: [], skipped: 0 };}
+    const snapshots = (await listTavernManagerMemorySnapshots(id)).reverse();
+    let rolledBack = 0;
+    let skipped = 0;
+    const conflicts: string[] = [];
+    for (const snapshot of snapshots) {
+        if (snapshot.rollbackStatus === 'rolled_back' || snapshot.rollbackStatus === 'skipped') {
+            skipped += 1;
+            continue;
+        }
+        if (snapshot.rollbackStatus === 'conflict') {
+            conflicts.push(snapshot.path);
+            skipped += 1;
+            continue;
+        }
+        const current = await tavernMemoryFilesTable.get([snapshot.sessionId, snapshot.path]) || null;
+        if (!snapshot.afterHash) {
+            skipped += 1;
+            await tavernManagerMemorySnapshotsTable.update([snapshot.managerRunId, snapshot.path], {
+                rollbackStatus: 'skipped',
+                error: 'snapshot_after_hash_missing',
+                updatedAt: now(),
+            });
+            continue;
+        }
+        if (hashMemorySnapshot(current) !== snapshot.afterHash) {
+            conflicts.push(snapshot.path);
+            await tavernManagerMemorySnapshotsTable.update([snapshot.managerRunId, snapshot.path], {
+                rollbackStatus: 'conflict',
+                error: 'rollback_conflict_current_file_changed',
+                updatedAt: now(),
+            });
+            continue;
+        }
+        if (snapshot.beforeExists && snapshot.beforeFile) {
+            await tavernMemoryFilesTable.put(cloneSerializable(snapshot.beforeFile, snapshot.beforeFile));
+        } else {
+            await tavernMemoryFilesTable.delete([snapshot.sessionId, snapshot.path]);
+        }
+        rolledBack += 1;
+        await tavernManagerMemorySnapshotsTable.update([snapshot.managerRunId, snapshot.path], {
+            rollbackStatus: 'rolled_back',
+            error: '',
+            updatedAt: now(),
+        });
+    }
+    await tavernMemoryIndexesTable.put({
+        sessionId: run.sessionId,
+        kind: 'markdown-derived',
+        status: 'stale',
+        error: conflicts.length ? `rollback_conflict:${conflicts.join(',')}` : '',
+        sourceFingerprint: '',
+        derivedAt: now(),
+        updatedAt: now(),
+    });
+    await updateTavernManagerRun(id, {
+        status: 'rolled_back',
+        error: conflicts.length ? `rollback_conflict:${conflicts.join(',')}` : '',
+    });
+    await tavernSessionsTable.update(run.sessionId, { updatedAt: now() });
+    return { rolledBack, conflicts, skipped };
+}
+
+export async function rollbackManagerRunsForMessageRange(sessionId = '', fromOrder = 0): Promise<{
+    runIds: string[];
+    rolledBack: number;
+    conflicts: string[];
+    skipped: number;
+}> {
+    const id = String(sessionId || '').trim();
+    const order = Number(fromOrder);
+    if (!id || !Number.isFinite(order)) {
+        return { runIds: [], rolledBack: 0, conflicts: [], skipped: 0 };
+    }
+    const runs = (await tavernManagerRunsTable.where('sessionId').equals(id).toArray())
+        .filter((run) => run.trigger === 'after_turn'
+            && (Number(run.userOrder) >= order || Number(run.assistantOrder) >= order))
+        .sort((left, right) => right.updatedAt - left.updatedAt);
+    let rolledBack = 0;
+    let skipped = 0;
+    const conflicts: string[] = [];
+    for (const run of runs) {
+        const snapshots = await listTavernManagerMemorySnapshots(run.id);
+        const hasWrittenSnapshot = snapshots.some((snapshot) => String(snapshot.afterHash || '').trim());
+        if (hasWrittenSnapshot) {
+            const result = await rollbackManagerRunMemoryWrites(run.id);
+            rolledBack += result.rolledBack;
+            skipped += result.skipped;
+            conflicts.push(...result.conflicts);
+            continue;
+        }
+        await updateTavernManagerRun(run.id, {
+            status: ['queued', 'running'].includes(run.status) ? 'cancelled' : 'superseded',
+            error: 'manager_source_messages_superseded',
+        });
+    }
+    return {
+        runIds: runs.map((run) => run.id),
+        rolledBack,
+        conflicts,
+        skipped,
+    };
 }
 
 export async function markTavernMemoryStaleFromOrder(sessionId = '', fromOrder = 0): Promise<number> {

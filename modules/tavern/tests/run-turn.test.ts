@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 
 import db, {
     appendTavernMessage,
+    createTavernManagerRun,
     createTavernSession,
     deleteTavernMessages,
     getTavernSession,
@@ -11,9 +12,14 @@ import db, {
     listTavernManagerRuns,
     listTavernMessages,
     listTavernTurnSummaries,
-    updateTavernSessionSnapshot,
     upsertTavernTurnSummary,
 } from '../shared/session-db';
+import {
+    executeTavernMemoryTool,
+    getTavernMemoryFile,
+    getTavernMemoryIndex,
+    writeTavernMemoryFile,
+} from '../shared/memory-files';
 import { createDefaultXbTavernPreset } from '../shared/presets';
 import {
     buildXbTavernMemoryIgnoredTerms,
@@ -33,6 +39,7 @@ import {
 import { createXbTavernAgentRuntime, EMPTY_XB_TAVERN_CAPABILITY_REGISTRY } from '../app-src/runtime/agent-runtime';
 import { resolveXbTavernProviderConfig } from '../app-src/runtime/provider';
 import type { TavernApplyRegexItem } from '../shared/regex';
+import type { TavernSubstituteParamsItem } from '../shared/substitute-params';
 
 async function resetDb() {
     await db.delete();
@@ -119,7 +126,7 @@ test('xb tavern run turn can trigger manager summary with delegate config', asyn
     const result = await runXbTavernTurn({
         agentConfig: {
             currentPresetName: '主聊天',
-            delegatePresetName: '后台管理者',
+            delegatePresetName: '记忆管理员',
             presets: {
                 主聊天: {
                     provider: 'sillytavern-claude',
@@ -226,7 +233,7 @@ test('xb tavern run turn can trigger manager summary with delegate config', asyn
     assert.equal(result.managerStatus, 'completed', JSON.stringify(debugRuns[0] || null));
     assert.ok(result.managerRunId);
     assert.equal(managerProvider, 'sillytavern-openai-compatible');
-    assert.match(managerPrompt, /后台管理者/);
+    assert.match(managerPrompt, /记忆管理员/);
     assert.match(managerPrompt, /## Tool Use Guide/);
     assert.match(managerPrompt, /## Selection Strategy/);
     assert.match(managerPrompt, /ChatHistory recent 读取最新消息/);
@@ -564,6 +571,143 @@ test('xb tavern regex failure before sending does not save untransformed chat me
         /regex_failed_before_send/,
     );
     assert.deepEqual(await listTavernMessages(session.id), []);
+});
+
+test('xb tavern applies native macro substitution to user input, world keys, world content, and final prompt JSON', async () => {
+    await resetDb();
+    const session = await createTavernSession({
+        title: 'Macro substitution',
+        characterId: 'char-1',
+        characterName: 'Aster',
+        contextSnapshot: {
+            character: { id: 'char-1', name: 'Aster', description: 'Pilot for {{user}}.' },
+            user: { name: 'Player' },
+            worldBooks: [{
+                name: 'Lore',
+                entries: [{
+                    uid: 'macro-world',
+                    key: ['{{char}} beacon'],
+                    content: 'World says {{char}} trusts {{user}}.',
+                }],
+            }],
+            worldSettings: {
+                scanDepth: 2,
+            },
+        },
+    });
+    await appendTavernMessage(session.id, { role: 'assistant', content: 'Earlier {{char}} note.' });
+    const applySubstituteParams = async (items: TavernSubstituteParamsItem[]) => ({
+        items: items.map((item) => {
+            const text = item.text
+                .replace(/\{\{char\}\}/g, String(item.options?.name2Override || 'Aster'))
+                .replace(/\{\{user\}\}/g, String(item.options?.name1Override || 'Player'));
+            return {
+                id: item.id,
+                text,
+                changed: text !== item.text,
+            };
+        }),
+        changedCount: items.filter((item) => /\{\{(?:char|user)\}\}/.test(item.text)).length,
+    });
+    let providerMessagesJson = '';
+
+    const result = await runXbTavernTurn({
+        sessionId: session.id,
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot: session.contextSnapshot || {},
+        chatPreset: {
+            sections: [{
+                id: 'macro-preset',
+                role: 'system',
+                placement: 'top',
+                content: 'Preset greets {{char}} and {{user}}.',
+            }],
+        },
+        currentUserMessage: '{{char}} beacon from {{user}}.',
+        applySubstituteParams,
+        executeRunOnce: async (options: TavernRunOnceOptions) => {
+            providerMessagesJson = JSON.stringify(options.messages);
+            return {
+                text: 'Done.',
+                provider: 'fake-provider',
+                model: 'fake-model',
+                requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
+            };
+        },
+    });
+
+    assert.match(providerMessagesJson, /Preset greets Aster and Player/);
+    assert.match(providerMessagesJson, /Pilot for Player/);
+    assert.match(providerMessagesJson, /World says Aster trusts Player/);
+    assert.match(providerMessagesJson, /Earlier Aster note/);
+    assert.match(providerMessagesJson, /Aster beacon from Player/);
+    assert.doesNotMatch(providerMessagesJson, /\{\{char\}\}|\{\{user\}\}/);
+    assert.match(result.requestSnapshot.rawRequestJson, /World says Aster trusts Player/);
+    assert.doesNotMatch(result.requestSnapshot.rawRequestJson, /\{\{char\}\}|\{\{user\}\}/);
+    const messages = await listTavernMessages(result.sessionId);
+    assert.equal(messages.find((message) => message.role === 'user')?.content, 'Aster beacon from Player.');
+});
+
+test('xb tavern does not pass empty macro name overrides that would hide SillyTavern globals', async () => {
+    await resetDb();
+    const session = await createTavernSession({
+        title: 'Macro fallback',
+        contextSnapshot: {
+            character: { id: 'char-1', name: 'Aster' },
+            user: { name: '' },
+        },
+    });
+    const seenOptions: Array<Record<string, unknown> | undefined> = [];
+    const applySubstituteParams = async (items: TavernSubstituteParamsItem[]) => ({
+        items: items.map((item) => {
+            seenOptions.push(item.options as Record<string, unknown> | undefined);
+            const charName = Object.prototype.hasOwnProperty.call(item.options || {}, 'name2Override')
+                ? String(item.options?.name2Override ?? '')
+                : 'GlobalChar';
+            const userName = Object.prototype.hasOwnProperty.call(item.options || {}, 'name1Override')
+                ? String(item.options?.name1Override ?? '')
+                : 'GlobalUser';
+            const text = item.text
+                .replace(/\{\{char\}\}/g, charName)
+                .replace(/\{\{user\}\}/g, userName);
+            return {
+                id: item.id,
+                text,
+                changed: text !== item.text,
+            };
+        }),
+        changedCount: items.filter((item) => /\{\{(?:char|user)\}\}/.test(item.text)).length,
+    });
+    let providerMessagesJson = '';
+
+    const result = await runXbTavernTurn({
+        sessionId: session.id,
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot: session.contextSnapshot || {},
+        chatPreset: {
+            sections: [{
+                id: 'macro-fallback-preset',
+                role: 'system',
+                placement: 'top',
+                content: 'Preset sees {{char}} and {{user}}.',
+            }],
+        },
+        currentUserMessage: '{{char}} meets {{user}}.',
+        applySubstituteParams,
+        executeRunOnce: async (options: TavernRunOnceOptions) => {
+            providerMessagesJson = JSON.stringify(options.messages);
+            return {
+                text: 'Done.',
+                requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
+            };
+        },
+    });
+
+    assert.equal(seenOptions.some((options) => Object.prototype.hasOwnProperty.call(options || {}, 'name1Override')), false);
+    assert.equal(seenOptions.some((options) => String(options?.name2Override || '') === 'Aster'), true);
+    assert.match(providerMessagesJson, /Preset sees Aster and GlobalUser/);
+    assert.match(providerMessagesJson, /Aster meets GlobalUser/);
+    assert.equal((await listTavernMessages(result.sessionId)).find((message) => message.role === 'user')?.content, 'Aster meets GlobalUser.');
 });
 
 test('xb tavern memory recall reuses tokenizer terms without letting user and character names recall everything', () => {
@@ -1169,6 +1313,7 @@ test('xb tavern run turn keeps the actual failed request snapshot when provider 
 test('xb tavern run turn records aborted partial text as assistant message', async () => {
     await resetDb();
     const preset = createDefaultXbTavernPreset();
+    let managerCalls = 0;
     const result = await runXbTavernTurn({
         agentConfig: { provider: 'fake-provider', model: 'fake-model' },
         contextSnapshot: {
@@ -1176,23 +1321,67 @@ test('xb tavern run turn records aborted partial text as assistant message', asy
         },
         preset,
         currentUserMessage: 'Start then stop.',
+        runManager: true,
+        awaitManager: true,
         executeRunOnce: async (options: TavernRunOnceOptions) => {
             options.onStreamProgress?.({ text: '# Partial\n\nStill useful.' });
             const error = new Error('aborted by user');
             error.name = 'AbortError';
             throw error;
         },
+        executeManagerOnce: async () => {
+            managerCalls += 1;
+            return { text: '不应该调用自动管理员。' };
+        },
     });
 
     assert.equal(result.error, undefined);
     assert.equal(result.finishReason, 'aborted');
     assert.equal(result.nextTurn, 1);
+    assert.equal(result.managerRunId, '');
+    assert.equal(result.managerStatus, '');
+    assert.equal(managerCalls, 0);
     const messages = await listTavernMessages(result.sessionId);
     assert.deepEqual(messages.map((message) => message.role), ['user', 'assistant']);
     assert.equal(messages[1]?.content, '# Partial\n\nStill useful.');
     assert.equal(messages[1]?.error, false);
     assert.equal(messages[1]?.finishReason, 'aborted');
     assert.doesNotMatch(messages[1]?.content || '', /<h1>/);
+    assert.equal((await listTavernManagerRuns(result.sessionId)).length, 0);
+});
+
+test('xb tavern aborted partial output records AI_OUTPUT regex in request snapshot metadata', async () => {
+    await resetDb();
+    const preset = createDefaultXbTavernPreset();
+    const result = await runXbTavernTurn({
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot: {
+            character: { id: 'char-1', name: 'Aster' },
+        },
+        preset,
+        currentUserMessage: 'Start then stop.',
+        applyRegex: async (items: TavernApplyRegexItem[]) => ({
+            items: items.map((item) => ({
+                id: item.id,
+                text: item.placement === 'aiOutput' ? item.text.replace(/RAW_PARTIAL/g, 'REGEX_PARTIAL') : item.text,
+                changed: item.placement === 'aiOutput' && item.text.includes('RAW_PARTIAL'),
+            })),
+            changedCount: items.filter((item) => item.placement === 'aiOutput' && item.text.includes('RAW_PARTIAL')).length,
+        }),
+        executeRunOnce: async (options: TavernRunOnceOptions) => {
+            options.onStreamProgress?.({ text: 'RAW_PARTIAL text.' });
+            const error = new Error('aborted by user');
+            error.name = 'AbortError';
+            throw error;
+        },
+    });
+
+    assert.equal(result.finishReason, 'aborted');
+    assert.equal(result.assistantMessage?.content, 'REGEX_PARTIAL text.');
+    assert.equal((result.requestSnapshot.regexApplications as { aiOutput?: number } | undefined)?.aiOutput, 1);
+    const messages = await listTavernMessages(result.sessionId);
+    assert.equal(messages[1]?.content, 'REGEX_PARTIAL text.');
+    assert.equal(((messages[1]?.requestSnapshot as { regexApplications?: { aiOutput?: number } })?.regexApplications)?.aiOutput, 1);
 });
 
 test('xb tavern run turn records aborted empty run as error assistant message', async () => {
@@ -1308,6 +1497,132 @@ test('xb tavern run turn can rerun from an existing user without duplicating the
     assert.doesNotMatch(rawMessages, /ignored because reused order wins/);
 });
 
+test('xb tavern rerun uses regenerate world info trigger', async () => {
+    await resetDb();
+    const preset = createDefaultXbTavernPreset();
+    const contextSnapshot = {
+        character: { id: 'char-1', name: 'Aster' },
+        worldBooks: [{
+            name: 'Lore',
+            entries: [
+                { uid: 'normal-only', content: 'NORMAL_TRIGGER_LORE', constant: true, triggers: ['normal'] },
+                { uid: 'regen-only', content: 'REGENERATE_TRIGGER_LORE', constant: true, triggers: ['regenerate'] },
+            ],
+        }],
+    };
+    const first = await runXbTavernTurn({
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot,
+        preset,
+        currentUserMessage: 'Try again.',
+        executeRunOnce: async (options: TavernRunOnceOptions) => {
+            const rawMessages = JSON.stringify(options.messages);
+            assert.match(rawMessages, /NORMAL_TRIGGER_LORE/);
+            assert.doesNotMatch(rawMessages, /REGENERATE_TRIGGER_LORE/);
+            return {
+                text: 'Old answer.',
+                requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
+            };
+        },
+    });
+    assert.equal(await deleteTavernMessages(first.sessionId, [1]), 1);
+
+    let rerunRawMessages = '';
+    await runXbTavernTurn({
+        sessionId: first.sessionId,
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot,
+        preset,
+        currentUserMessage: 'ignored',
+        reuseUserMessageOrder: 0,
+        executeRunOnce: async (options: TavernRunOnceOptions) => {
+            rerunRawMessages = JSON.stringify(options.messages);
+            return {
+                text: 'New answer.',
+                requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
+            };
+        },
+    });
+
+    assert.match(rerunRawMessages, /REGENERATE_TRIGGER_LORE/);
+    assert.doesNotMatch(rerunRawMessages, /NORMAL_TRIGGER_LORE/);
+});
+
+test('xb tavern rerun rebuilds world entry state with macro-substituted world keys', async () => {
+    await resetDb();
+    const preset = createDefaultXbTavernPreset();
+    const contextSnapshot = {
+        character: { id: 'char-1', name: 'Aster' },
+        user: { name: 'Player' },
+        worldBooks: [{
+            name: 'Lore',
+            entries: [{
+                uid: 'macro-sticky',
+                key: ['{{char}} trigger'],
+                content: 'MACRO_STICKY_LORE',
+                sticky: 8,
+            }],
+        }],
+    };
+    const applySubstituteParams = async (items: TavernSubstituteParamsItem[]) => ({
+        items: items.map((item) => {
+            const text = item.text
+                .replace(/\{\{char\}\}/g, String(item.options?.name2Override || 'Aster'))
+                .replace(/\{\{user\}\}/g, String(item.options?.name1Override || 'Player'));
+            return {
+                id: item.id,
+                text,
+                changed: text !== item.text,
+            };
+        }),
+        changedCount: items.filter((item) => /\{\{(?:char|user)\}\}/.test(item.text)).length,
+    });
+    const first = await runXbTavernTurn({
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot,
+        preset,
+        currentUserMessage: '{{char}} trigger.',
+        applySubstituteParams,
+        executeRunOnce: async (options: TavernRunOnceOptions) => ({
+            text: 'First.',
+            requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
+        }),
+    });
+    const second = await runXbTavernTurn({
+        sessionId: first.sessionId,
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot,
+        preset,
+        currentUserMessage: 'No trigger here.',
+        applySubstituteParams,
+        executeRunOnce: async (options: TavernRunOnceOptions) => ({
+            text: 'Second.',
+            requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
+        }),
+    });
+    await deleteTavernMessages(second.sessionId, [3]);
+
+    let rerunRawMessages = '';
+    await runXbTavernTurn({
+        sessionId: second.sessionId,
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot,
+        preset,
+        currentUserMessage: 'ignored',
+        reuseUserMessageOrder: 2,
+        applySubstituteParams,
+        executeRunOnce: async (options: TavernRunOnceOptions) => {
+            rerunRawMessages = JSON.stringify(options.messages);
+            return {
+                text: 'Second again.',
+                requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
+            };
+        },
+    });
+
+    assert.match(rerunRawMessages, /MACRO_STICKY_LORE/);
+});
+
 test('xb tavern rerun deletes future messages and rebuilds state from remaining history', async () => {
     await resetDb();
     const preset = createDefaultXbTavernPreset();
@@ -1376,6 +1691,65 @@ test('xb tavern rerun deletes future messages and rebuilds state from remaining 
     });
 });
 
+test('xb tavern rerun preserves rollback conflicts instead of rebuilding them away', async () => {
+    await resetDb();
+    const preset = createDefaultXbTavernPreset();
+    const first = await runXbTavernTurn({
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot: {
+            character: { id: 'char-1', name: 'Aster' },
+        },
+        preset,
+        currentUserMessage: 'First turn.',
+        executeRunOnce: async (options: TavernRunOnceOptions) => ({
+            text: 'First answer.',
+            requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
+        }),
+    });
+    const messages = await listTavernMessages(first.sessionId);
+    const userMessage = messages.find((message) => message.role === 'user');
+    const assistantMessage = messages.find((message) => message.role === 'assistant');
+    assert.ok(userMessage);
+    assert.ok(assistantMessage);
+    const run = await createTavernManagerRun({
+        sessionId: first.sessionId,
+        turn: 1,
+        userOrder: userMessage.order,
+        assistantOrder: assistantMessage.order,
+        trigger: 'after_turn',
+        status: 'completed',
+        changedFiles: ['memory/session.md'],
+    });
+    const before = (await getTavernMemoryFile(first.sessionId, 'memory/session.md'))?.content || '';
+    const writeResult = await executeTavernMemoryTool(first.sessionId, 'MemoryWrite', {
+        filePath: 'memory/session.md',
+        content: `${before}\n\n管理员写入。`,
+    }, {
+        caller: 'auto',
+        managerRunId: run.id,
+    });
+    assert.equal(writeResult.ok, true);
+    await writeTavernMemoryFile(first.sessionId, 'memory/session.md', '用户手动修正。', { source: 'user' });
+
+    await runXbTavernTurn({
+        sessionId: first.sessionId,
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot: {
+            character: { id: 'char-1', name: 'Aster' },
+        },
+        preset,
+        currentUserMessage: 'ignored',
+        reuseUserMessageOrder: userMessage.order,
+        executeRunOnce: async (options: TavernRunOnceOptions) => ({
+            text: 'Replacement answer.',
+            requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
+        }),
+    });
+
+    assert.equal((await getTavernMemoryFile(first.sessionId, 'memory/session.md'))?.content, '用户手动修正。');
+    assert.match((await getTavernMemoryIndex(first.sessionId))?.error || '', /rollback_conflict:memory\/session\.md/);
+});
+
 test('xb tavern context history filters saved error messages for preview and runtime', () => {
     const history = buildContextHistory([
         {
@@ -1408,7 +1782,7 @@ test('xb tavern context history filters saved error messages for preview and run
     ]);
 });
 
-test('xb tavern run turn keeps existing session context locked until explicit snapshot refresh', async () => {
+test('xb tavern run turn prefers the latest live context for an existing session', async () => {
     await resetDb();
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
@@ -1433,35 +1807,13 @@ test('xb tavern run turn keeps existing session context locked until explicit sn
         executeRunOnce: async (options: TavernRunOnceOptions) => {
             sentRaw = JSON.stringify(options.messages);
             return {
-                text: 'I am old.',
-                requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
-            };
-        },
-    });
-    assert.match(sentRaw, /Old Character/);
-    assert.doesNotMatch(sentRaw, /New Character/);
-
-    await updateTavernSessionSnapshot(session.id, {
-        contextSnapshot: {
-            character: { id: 'new', name: 'New Character', description: 'New card.' },
-        },
-    });
-    await runXbTavernTurn({
-        sessionId: session.id,
-        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
-        contextSnapshot: {
-            character: { id: 'ignored', name: 'Ignored Character' },
-        },
-        preset,
-        currentUserMessage: 'And now?',
-        executeRunOnce: async (options: TavernRunOnceOptions) => {
-            sentRaw = JSON.stringify(options.messages);
-            return {
                 text: 'I am new.',
                 requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
             };
         },
     });
     assert.match(sentRaw, /New Character/);
-    assert.doesNotMatch(sentRaw, /Ignored Character/);
+    assert.doesNotMatch(sentRaw, /Old Character/);
+    const updated = await getTavernSession(session.id);
+    assert.equal(updated?.contextSnapshot?.character?.name, 'New Character');
 });

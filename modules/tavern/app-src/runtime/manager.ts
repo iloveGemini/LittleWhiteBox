@@ -19,9 +19,12 @@ import {
     createTavernManagerRun,
     deleteTavernManagerMessages,
     listTavernEpisodeSummaries,
+    listTavernManagerMemorySnapshots,
     listTavernManagerMessages,
     listTavernMessages,
     listTavernTurnSummaries,
+    rollbackManagerRunMemoryWrites,
+    rollbackManagerRunsForMessageRange,
     updateTavernManagerRun,
     type TavernEpisodeSummaryRecord,
     type TavernManagerMessageRecord,
@@ -135,6 +138,12 @@ export const TAVERN_MANAGER_DEFAULT_PRESERVED_TURNS = 2;
 export const TAVERN_MANAGER_MIN_PRESERVED_TURNS = 1;
 
 const managerQueues = new Map<string, Promise<unknown>>();
+const activeAutoManagerRuns = new Map<string, {
+    controller: AbortController;
+    sessionId: string;
+    userOrder: number;
+    assistantOrder: number;
+}>();
 const MAX_MANAGER_TOOL_ROUNDS = 8;
 
 function normalizeText(value: unknown = '', limit = 4000): string {
@@ -245,7 +254,7 @@ async function runManagerOnce(options: XbTavernManagerOnceOptions): Promise<XbTa
         timeoutMs: 15 * 60 * 1000,
     });
     const adapter = createAgentAdapter(providerConfig, {
-        missingApiKeyMessage: '请先在 API 配置里填写后台管理者 API。',
+        missingApiKeyMessage: '请先在 API 配置里填写记忆管理员 API。',
     });
     const result = await adapter.chat({
         systemPrompt: options.messages[0]?.content || '',
@@ -288,11 +297,49 @@ function hasFailedMemoryTool(toolTrace: Array<Record<string, unknown>> = []): bo
     return toolTrace.some((item) => item.ok === false);
 }
 
+function isManagerAbortLike(error: unknown, signal?: AbortSignal): boolean {
+    if (signal?.aborted) {return true;}
+    const message = error instanceof Error ? error.message : String(error || '');
+    const name = error instanceof Error ? error.name : '';
+    return name === 'AbortError' || /abort|aborted|cancelled|canceled/i.test(message);
+}
+
+function managerFailureStatus(error: unknown, signal?: AbortSignal): TavernManagerRunRecord['status'] {
+    const message = error instanceof Error ? error.message : String(error || '');
+    if (isManagerAbortLike(error, signal)) {return 'cancelled';}
+    if (message === 'manager_source_messages_changed') {return 'superseded';}
+    return 'failed';
+}
+
+async function rollbackManagerRunIfWroteMemory(managerRunId = ''): Promise<{
+    managerRun: TavernManagerRunRecord | null;
+    conflicts: string[];
+} | null> {
+    const snapshots = await listTavernManagerMemorySnapshots(managerRunId);
+    if (!snapshots.some((snapshot) => String(snapshot.afterHash || '').trim())) {
+        return null;
+    }
+    const result = await rollbackManagerRunMemoryWrites(managerRunId);
+    return {
+        managerRun: await updateTavernManagerRun(managerRunId, {}),
+        conflicts: result.conflicts,
+    };
+}
+
+function throwIfManagerAborted(signal?: AbortSignal) {
+    if (!signal?.aborted) {return;}
+    const error = new Error('manager_aborted');
+    error.name = 'AbortError';
+    throw error;
+}
+
 async function runManagerAgentWithTools(input: {
     sessionId: string;
     agentConfig: Record<string, unknown>;
     caller: 'auto' | 'chat';
     messages: XbTavernMessage[];
+    managerRunId?: string;
+    beforeWriteGuard?: () => Promise<void> | void;
     signal?: AbortSignal;
     executeManagerOnce?: (options: XbTavernManagerOnceOptions) => Promise<XbTavernManagerOnceResult>;
     onStreamProgress?: (text: string) => void;
@@ -317,6 +364,7 @@ async function runManagerAgentWithTools(input: {
     let reminded = false;
 
     for (let round = 1; round <= MAX_MANAGER_TOOL_ROUNDS; round += 1) {
+        throwIfManagerAborted(input.signal);
         const result = await executeManagerOnce({
             agentConfig: input.agentConfig,
             messages: input.messages,
@@ -325,6 +373,7 @@ async function runManagerAgentWithTools(input: {
             signal: input.signal,
             onStreamProgress: input.onStreamProgress,
         });
+        throwIfManagerAborted(input.signal);
         finalText = String(result.text || '').trim();
         resultProvider = String(result.provider || resultProvider || providerConfig.provider || '');
         resultModel = String(result.model || resultModel || providerConfig.model || '');
@@ -356,8 +405,11 @@ async function runManagerAgentWithTools(input: {
 
         for (const toolCall of toolCalls) {
             const args = safeJsonParse(toolCall.arguments, {});
+            throwIfManagerAborted(input.signal);
             const toolResult = await executeTavernMemoryTool(input.sessionId, toolCall.name, args, {
                 caller: input.caller,
+                managerRunId: input.managerRunId,
+                beforeWriteGuard: input.beforeWriteGuard,
             });
             if (toolResult.changed && toolResult.path) {
                 changedFiles.add(toolResult.path);
@@ -391,6 +443,7 @@ async function assertManagerSourceMessagesCurrent(input: XbTavernManagerRunInput
         && userMessage.content === input.userMessage.content;
     const assistantMatches = assistantMessage?.role === 'assistant'
         && assistantMessage.error !== true
+        && !['aborted', 'error'].includes(String(assistantMessage.finishReason || '').trim())
         && assistantMessage.content === input.assistantMessage.content;
     if (!userMatches || !assistantMatches) {
         throw new Error('manager_source_messages_changed');
@@ -491,6 +544,7 @@ async function runManagerTask(input: {
     inputSummary: string;
     caller: 'auto' | 'chat';
     requireChangedFiles: boolean;
+    beforeWriteGuard?: () => Promise<void> | void;
     signal?: AbortSignal;
     executeManagerOnce?: (options: XbTavernManagerOnceOptions) => Promise<XbTavernManagerOnceResult>;
     onStreamProgress?: (text: string) => void;
@@ -528,6 +582,8 @@ async function runManagerTask(input: {
             agentConfig: input.agentConfig,
             caller: input.caller,
             messages: input.messages,
+            managerRunId: managerRun.id,
+            beforeWriteGuard: input.beforeWriteGuard,
             signal: input.signal,
             executeManagerOnce: input.executeManagerOnce,
             onStreamProgress: input.onStreamProgress,
@@ -565,9 +621,9 @@ async function runManagerTask(input: {
         };
     } catch (error) {
         const errorText = error instanceof Error ? error.message : String(error || 'manager_failed');
-        await rebuildTavernMemoryDerivedIndex(input.sessionId);
+        const status = managerFailureStatus(error, input.signal);
         const failed = await finalizeManagerRun(managerRun, {
-            status: 'failed',
+            status,
             provider: resultProvider,
             model: resultModel,
             outputText: resultText,
@@ -575,9 +631,15 @@ async function runManagerTask(input: {
             changedFiles,
             error: errorText,
         });
+        const rolledBack = ['cancelled', 'superseded'].includes(status)
+            ? await rollbackManagerRunIfWroteMemory(managerRun.id)
+            : null;
+        if (!rolledBack?.conflicts.length) {
+            await rebuildTavernMemoryDerivedIndex(input.sessionId);
+        }
         return {
             ok: false,
-            managerRun: failed,
+            managerRun: rolledBack?.managerRun || failed,
             text: resultText,
             provider: resultProvider,
             model: resultModel,
@@ -759,6 +821,10 @@ export async function runXbTavernManagerAfterTurn(input: XbTavernManagerRunInput
             managerRunId: managerRun.id,
             caller: 'auto',
             requireChangedFiles: true,
+            beforeWriteGuard: async () => {
+                throwIfManagerAborted(input.signal);
+                await assertManagerSourceMessagesCurrent(input);
+            },
             signal: input.signal,
             executeManagerOnce: input.executeManagerOnce,
         });
@@ -800,15 +866,21 @@ export async function runXbTavernManagerAfterTurn(input: XbTavernManagerRunInput
             changedFiles: result.changedFiles,
         };
     } catch (error) {
-        await rebuildTavernMemoryDerivedIndex(sessionId);
         const errorText = error instanceof Error ? error.message : String(error || 'manager_failed');
+        const status = managerFailureStatus(error, input.signal);
         const failed = await finalizeManagerRun(managerRun, {
-            status: 'failed',
+            status,
             error: errorText,
         });
+        const rolledBack = ['cancelled', 'superseded'].includes(status)
+            ? await rollbackManagerRunIfWroteMemory(managerRun.id)
+            : null;
+        if (!rolledBack?.conflicts.length) {
+            await rebuildTavernMemoryDerivedIndex(sessionId);
+        }
         return {
             ok: false,
-            managerRun: failed,
+            managerRun: rolledBack?.managerRun || failed,
             error: errorText,
         };
     }
@@ -874,13 +946,28 @@ export async function scheduleXbTavernManagerAfterTurn(input: XbTavernManagerRun
         }),
     });
     await input.onManagerRunSaved?.(queued);
+    const controller = new AbortController();
+    const abortFromInput = () => controller.abort();
+    if (input.signal?.aborted) {
+        controller.abort();
+    } else {
+        input.signal?.addEventListener('abort', abortFromInput, { once: true });
+    }
+    activeAutoManagerRuns.set(queued.id, {
+        controller,
+        sessionId: input.sessionId,
+        userOrder: input.userMessage.order,
+        assistantOrder: input.assistantMessage.order,
+    });
     const previous = managerQueues.get(input.sessionId) || Promise.resolve();
     const completion = previous
         .catch(() => {})
         .then(async () => {
+            throwIfManagerAborted(controller.signal);
             const result = await runXbTavernManagerAfterTurn({
                 ...input,
                 managerRunId: queued.id,
+                signal: controller.signal,
             });
             await input.onManagerRunSaved?.(result.managerRun);
             return result;
@@ -888,7 +975,7 @@ export async function scheduleXbTavernManagerAfterTurn(input: XbTavernManagerRun
         .catch(async (error) => {
             const errorText = error instanceof Error ? error.message : String(error || 'manager_failed');
             const failed = await updateTavernManagerRun(queued.id, {
-                status: 'failed',
+                status: managerFailureStatus(error, input.signal),
                 error: errorText,
             }) || queued;
             await input.onManagerRunSaved?.(failed);
@@ -900,6 +987,8 @@ export async function scheduleXbTavernManagerAfterTurn(input: XbTavernManagerRun
         });
     managerQueues.set(input.sessionId, completion);
     completion.finally(() => {
+        input.signal?.removeEventListener('abort', abortFromInput);
+        activeAutoManagerRuns.delete(queued.id);
         if (managerQueues.get(input.sessionId) === completion) {
             managerQueues.delete(input.sessionId);
         }
@@ -910,4 +999,24 @@ export async function scheduleXbTavernManagerAfterTurn(input: XbTavernManagerRun
         managerStatus: completedResult?.managerRun?.status || queued.status,
         completion,
     };
+}
+
+export async function cancelAndRollbackXbTavernManagersForMessageRange(sessionId = '', fromOrder = 0): Promise<{
+    runIds: string[];
+    rolledBack: number;
+    conflicts: string[];
+    skipped: number;
+}> {
+    const id = String(sessionId || '').trim();
+    const order = Number(fromOrder);
+    if (!id || !Number.isFinite(order)) {
+        return { runIds: [], rolledBack: 0, conflicts: [], skipped: 0 };
+    }
+    activeAutoManagerRuns.forEach((run) => {
+        if (run.sessionId !== id) {return;}
+        if (run.userOrder >= order || run.assistantOrder >= order) {
+            run.controller.abort();
+        }
+    });
+    return await rollbackManagerRunsForMessageRange(id, order);
 }

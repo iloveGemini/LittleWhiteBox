@@ -66,7 +66,13 @@ const {
     buildDelegateBookContextPrompt,
 } = promptsModule;
 const { buildEbookProviderMessagesFromHistory, createEbookAgentRunner } = agentRunnerModule;
-const { captureScrollState, createEbookApp, restoreScrollState, shouldResetReaderScrollOnRender } = ebookAppModule;
+const {
+    captureScrollState,
+    createEbookApp,
+    restoreScrollState,
+    shouldForceAgentScrollToBottom,
+    shouldResetReaderScrollOnRender,
+} = ebookAppModule;
 const {
     collectAgentRenderUnits,
     collectStudioFileSectionModels,
@@ -867,7 +873,7 @@ test('Book context budget defaults stay aligned with assistant', () => {
     assert.equal(EBOOK_MIN_PRESERVED_TURNS, 1);
 });
 
-test('Default outline template pushes volume-level planning before chapter drafting', () => {
+test('Default outline template keeps drafting user-directed without chapter outlines', () => {
     const outline = DEFAULT_BOOK_FILES.find((file) => file.path === 'book/outline.md')?.content || '';
     const volume = DEFAULT_BOOK_FILES.find((file) => file.path === 'book/volumes/001.md')?.content || '';
 
@@ -886,46 +892,46 @@ test('Default outline template pushes volume-level planning before chapter draft
     );
     assert.match(outline, /怎么写好这本书（执行方案确认）/);
     assert.match(outline, /必须先向用户说明“我准备怎样写好这本书”/);
-    assert.match(outline, /这一步是卷结构、事件集团和情节轮章纲的前置条件/);
+    assert.match(outline, /这一步是卷结构和事件集团的前置条件/);
     assert.match(outline, /终极欲望牵引全书/);
     assert.match(outline, /长期欲望牵引卷/);
     assert.match(outline, /中期欲望牵引事件集团/);
     assert.match(outline, /短期欲望分布在章节和场景/);
     assert.match(outline, /大纲推进原则/);
     assert.match(outline, /大概有几卷/);
-    assert.match(outline, /情节轮清单/);
-    assert.match(outline, /当前轮 3-5 章章纲/);
+    assert.match(outline, /当前可写方向/);
+    assert.match(outline, /不做章纲/);
     assert.match(outline, /book\/volumes\/001\.md/);
     assert.match(outline, /## 卷规划索引/);
     assert.doesNotMatch(outline, /## 当前卷推进草图/);
     assert.match(volume, /# 第一卷规划/);
     assert.match(volume, /卷内事件集团骨架/);
     assert.match(volume, /中期欲望/);
-    assert.match(volume, /本卷情节轮清单/);
-    assert.match(volume, /短期欲望簇/);
-    assert.match(volume, /当前情节轮/);
-    assert.match(volume, /本轮 3-5 章章纲/);
-    assert.match(volume, /主角渴望 -> 主角障碍 -> 主角行动 -> 行动结果/);
-    assert.match(volume, /副情节 \/ 下一章铺垫/);
-    assert.match(volume, /正负倾向/);
-    assert.match(volume, /积极约 3/);
-    assert.match(volume, /章末位移是写完后回头看的结果/);
+    assert.match(volume, /当前可写方向/);
+    assert.match(volume, /当前欲望\/压力/);
+    assert.match(volume, /当前用户指挥记录/);
+    assert.match(volume, /停止点/);
+    assert.match(volume, /禁止偏离/);
+    assert.match(volume, /写后复盘/);
+    assert.match(volume, /不要在动笔前把它变成章节任务表/);
+    assert.doesNotMatch(volume, /本轮 3-5 章章纲|主角渴望 -> 主角障碍 -> 主角行动 -> 行动结果|正负倾向|积极约 3/);
     assert.doesNotMatch(volume, /第 1 章写到：主角第一次注意到女主那个下午/);
     const style = DEFAULT_BOOK_FILES.find((file) => file.path === 'book/style.md')?.content || '';
     assert.match(style, /## 怎么写好这本书/);
     assert.match(style, /执行方案确认/);
-    assert.match(style, /情节轮清单和本轮章纲都要在这一步之后形成/);
+    assert.match(style, /动笔阶段不做章纲，具体章节由用户逐章指挥/);
     assert.match(style, /慢写不是把一场戏写长/);
     assert.match(style, /章节是连续流里的呼吸点/);
     assert.match(style, /章节不是任务/);
     assert.match(style, /一章里不需要“完成”任何事/);
 
     const reviewRules = DEFAULT_BOOK_FILES.find((file) => file.path === 'book/review-rules.md')?.content || '';
-    assert.match(reviewRules, /## 情节轮审稿/);
+    assert.match(reviewRules, /## 章节审稿/);
     assert.match(reviewRules, /欲望链是否在引领结构/);
-    assert.match(reviewRules, /短期欲望 -> 障碍 -> 行动 -> 结果/);
-    assert.match(reviewRules, /每 5 章内是否有 1-3 个实质进展/);
-    assert.match(reviewRules, /积极约 3、阻碍\/落空\/误解\/代价约 7/);
+    assert.match(reviewRules, /是否服从用户给出的起点、场景、核心事件、禁止偏离和停止点/);
+    assert.match(reviewRules, /用户没说的事件是否被擅自加入/);
+    assert.match(reviewRules, /人物是否在具体时空中观察、误读、犹豫、反应、选择/);
+    assert.doesNotMatch(reviewRules, /每 5 章内是否有 1-3 个实质进展|积极约 3、阻碍\/落空\/误解\/代价约 7/);
 
     const firstChapter = DEFAULT_BOOK_FILES.find((file) => file.path === 'book/chapters/001.md')?.content || '';
     assert.equal(firstChapter, '从这里开始写正文。\n');
@@ -1097,15 +1103,16 @@ test('Delegate prompt gives the reviewer a stable book-specific tool model', () 
     assert.match(EBOOK_DELEGATE_PROMPT, /### Highest Priority Checks/);
     assert.match(EBOOK_DELEGATE_PROMPT, /catch task-list writing/);
     assert.match(EBOOK_DELEGATE_PROMPT, /characters lack observation, misreading, bodily reaction/);
-    assert.match(EBOOK_DELEGATE_PROMPT, /if the plan is overloaded, the plan should be revised/);
-    assert.match(EBOOK_DELEGATE_PROMPT, /merely because it hit the plan targets/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /If the user direction is overloaded, say so/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /merely because it hit planned targets/);
     assert.match(EBOOK_DELEGATE_PROMPT, /catch fake iceberg exposition/);
     assert.match(EBOOK_DELEGATE_PROMPT, /The narrator must not speak from the future/);
     assert.match(EBOOK_DELEGATE_PROMPT, /### Structure/);
     assert.match(EBOOK_DELEGATE_PROMPT, /Desire chain leads structure/);
     assert.match(EBOOK_DELEGATE_PROMPT, /An event group is the narrative unit/);
     assert.match(EBOOK_DELEGATE_PROMPT, /### Pacing/);
-    assert.match(EBOOK_DELEGATE_PROMPT, /short-term desire -> obstacle -> action -> result/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /User direction is the drafting unit/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /does not need to complete a preset task list/);
     assert.match(EBOOK_DELEGATE_PROMPT, /Chapter-end displacement is a result, not a target/);
     assert.match(EBOOK_DELEGATE_PROMPT, /### Characters/);
     assert.match(EBOOK_DELEGATE_PROMPT, /Characters should feel alive/);
@@ -1154,43 +1161,48 @@ test('Book action prompts rely on injected core story files', () => {
     assert.match(stylePlanPrompt, /把结果整理进 `book\/style\.md`/);
     assert.doesNotMatch(stylePlanPrompt, /全书大纲先定骨架|当前情节轮还没有本轮 3-5 章章纲|连续起草本轮 3-5 章/);
     assert.match(EBOOK_SYSTEM_PROMPT, /# 创作流程/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /不要把章纲当待办清单去填/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /正文要让人物在当下生活/);
     assert.match(EBOOK_SYSTEM_PROMPT, /不要把作者知道的后续剧情提前解释给读者/);
     assert.match(EBOOK_SYSTEM_PROMPT, /让潜台词从动作、停顿、视线和后果里长出来/);
     assert.match(EBOOK_SYSTEM_PROMPT, /## 阶段与顺序/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /创作流程是严格线性的/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /具体字段、问题、表格和说明以对应默认模板为准/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /动笔阶段没有章纲，完全由用户逐章指挥/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /### 规划阶段（线性，不可跳步）/);
     assert.match(EBOOK_SYSTEM_PROMPT, /\| 1\. 开书定位 \| 确定读者承诺、类型边界、核心卖点 \| `book\/outline\.md`/);
     assert.match(EBOOK_SYSTEM_PROMPT, /\| 3\. 写法方案 \| 确定节奏、场景密度、慢写位置、审稿重点 \| `book\/style\.md`/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /\| 5\. 当前卷规划 \| 当前卷的事件集团、情节轮划分 \| `book\/volumes\/NNN\.md`/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /\| 5\. 当前卷规划 \| 当前卷的事件集团、情节走向 \| `book\/volumes\/NNN\.md`/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /### 动笔阶段（用户驱动，无章纲）/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /\| 6\. 用户指挥 \| 用户说这一章\/这一段写什么、从哪开始、到哪停、核心发生什么 \| - \|/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /\| 7\. 动笔 \| AI 按用户指挥写正文 \| `book\/chapters\/NNN\.md` \|/);
     assert.match(EBOOK_SYSTEM_PROMPT, /\| 9\. 复盘 \| 记录实际变化、伏笔、关系、进度 \| `book\/state\.md` \+ `book\/volumes\/NNN\.md`/);
     assert.match(EBOOK_SYSTEM_PROMPT, /## 铁律/);
     assert.match(EBOOK_SYSTEM_PROMPT, /没有开书定位 -> 不做故事脊柱/);
     assert.match(EBOOK_SYSTEM_PROMPT, /没有故事脊柱和欲望链 -> 不做写法方案/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /没有写法方案 -> 不拆卷和情节轮/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /没有当前卷规划 -> 不写本轮章纲/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /没有本轮章纲 -> 不动笔/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /没有写法方案 -> 不拆卷/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /没有当前卷规划 -> 不动笔/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /### 动笔铁律/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /不做章纲/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /用户是导演，你是写手/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /用户没说的事件，不发生/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /可以建议，不可以擅动/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /用户指挥已经足够清楚时，直接动笔/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /写完一章就停/);
     assert.match(EBOOK_SYSTEM_PROMPT, /## 关于提问/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /问用户只问影响当前阶段判断的问题/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /问用户只问影响当前判断的问题/);
     assert.match(EBOOK_SYSTEM_PROMPT, /不是为了填满模板/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /## 关于动笔/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /情节轮是动笔单位，章节是自然切割点/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /每章动笔前，先想清楚四件事/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /衔接，跟上一章怎么接/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /场景，本章的场景设定/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /`book\/style\.md` 对本章的要求/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /## 关于复盘/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /衔接：跟上一章怎么接/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /场景：本章在哪、什么时间、谁在场/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /`book\/style\.md` 对这类场景的要求/);
     assert.match(EBOOK_SYSTEM_PROMPT, /审核规范里需要避开的点/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /直接动笔写正文/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /审稿 -> 修订 -> 复盘 -> 用户确认/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /本章实际发生了什么、人物关系变化、新增伏笔、时间线推进/);
     assert.match(EBOOK_SYSTEM_PROMPT, /及时落到对应文件里永久保存/);
     assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /作品入口三项是：类型\/题材入口、情绪\/读者体验入口、关系\/设定张力入口/);
     assert.match(EBOOK_SYSTEM_PROMPT, /book\/volumes\/NNN\.md/);
     assert.match(EBOOK_SYSTEM_PROMPT, /book\/volumes\/` is not stably injected/);
     assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /章节表是地图和回头记录/);
     assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /积极约 3、阻碍\/落空\/误解\/代价约 7/);
+    assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /情节轮|本轮章纲|3-5 章章纲|连续起草/);
     assert.match(EBOOK_DELEGATE_PROMPT, /Desire chain leads structure/);
-    assert.match(EBOOK_DELEGATE_PROMPT, /short-term desire -> obstacle -> action -> result/);
+    assert.match(EBOOK_DELEGATE_PROMPT, /User direction is the drafting unit/);
     assert.match(EBOOK_SYSTEM_PROMPT, /保持分身独立性/);
     assert.match(EBOOK_SYSTEM_PROMPT, /task 里只写目标文件路径/);
     assert.match(EBOOK_SYSTEM_PROMPT, /除了文件路径，其他都不允许写进 task 影响分身判断/);
@@ -1208,20 +1220,20 @@ test('Book action prompts rely on injected core story files', () => {
     assert.match(outlinePrompt, /不一次性生成全书每章细纲/);
     assert.match(outlinePrompt, /这一动作只负责“全书怎么走”/);
     assert.match(outlinePrompt, /更新 `book\/outline\.md` 里的全书骨架和卷结构/);
-    assert.doesNotMatch(outlinePrompt, /当前卷规划写入 `book\/volumes\/NNN\.md`|先拆出本卷有多少个中期欲望\/事件集团|当前情节轮还没有本轮 3-5 章章纲|连续起草本轮 3-5 章/);
+    assert.doesNotMatch(outlinePrompt, /当前卷规划写入 `book\/volumes\/NNN\.md`|先拆出本卷有多少个中期欲望\/事件集团|当前情节轮还没有本轮 3-5 章章纲|连续起草本轮 3-5 章|情节轮/);
     assert.match(volumePlanPrompt, /请制定当前卷规划/);
     assert.match(volumePlanPrompt, /这一动作只处理当前卷/);
     assert.match(volumePlanPrompt, /当前卷规划写入 `book\/volumes\/NNN\.md`/);
     assert.match(volumePlanPrompt, /本卷长期欲望/);
     assert.match(volumePlanPrompt, /事件集团骨架/);
-    assert.match(volumePlanPrompt, /情节轮清单/);
-    assert.match(volumePlanPrompt, /不要提前展开当前轮 3-5 章章纲/);
-    assert.doesNotMatch(volumePlanPrompt, /book\/outline\.md` 的全书骨架|连续起草本轮 3-5 章/);
+    assert.match(volumePlanPrompt, /当前可写方向/);
+    assert.match(volumePlanPrompt, /不要提前展开逐章章纲/);
+    assert.doesNotMatch(volumePlanPrompt, /book\/outline\.md` 的全书骨架|连续起草本轮 3-5 章|情节轮/);
     assert.match(nextChapterPrompt, /\[作品核心设定\]/);
     assert.match(nextChapterPrompt, /不要直接硬写长正文/);
     assert.match(nextChapterPrompt, /先要求完成 `volume-plan`/);
-    assert.match(nextChapterPrompt, /当前情节轮还没有本轮 3-5 章章纲/);
-    assert.match(nextChapterPrompt, /短期欲望/);
+    assert.match(nextChapterPrompt, /不要补章纲/);
+    assert.match(nextChapterPrompt, /当前可写方向/);
     assert.match(nextChapterPrompt, /先从 `\[用户本轮请求\]` 里提炼本次明确指挥/);
     assert.match(nextChapterPrompt, /如果用户没有明确本章范围、核心内容或停止点/);
     assert.match(nextChapterPrompt, /只写用户这次明确要求的这一章或这一段/);
@@ -1230,6 +1242,7 @@ test('Book action prompts rely on injected core story files', () => {
     assert.match(nextChapterPrompt, /不要把章节当任务清单，也不要把大纲当工单执行/);
     assert.match(nextChapterPrompt, /只读取目标章节或相邻章节/);
     assert.match(nextChapterPrompt, /写完这次用户明确要求的部分就停/);
+    assert.doesNotMatch(nextChapterPrompt, /本轮 3-5 章章纲|情节轮/);
     assert.match(openingOptionsPrompt, /不要直接写入文件/);
     assert.match(openingOptionsPrompt, /给 2 到 3 个不同开场方案/);
     assert.match(organizePrompt, /材料太少/);
@@ -2475,7 +2488,7 @@ test('Studio renders mobile workspace switching and file drawer hooks', () => {
     assert.match(html, />定写法<\/button>/);
     assert.match(html, />搭大纲<\/button>/);
     assert.match(html, />定当前卷<\/button>/);
-    assert.match(html, />推当前轮<\/button>/);
+    assert.match(html, />按指挥写<\/button>/);
     assert.match(html, />试写开场<\/button>/);
     assert.doesNotMatch(html, /续写草稿|审一遍|按意见改稿/);
     assert.doesNotMatch(html, /保存稿纸/);
@@ -4801,6 +4814,7 @@ test('Book agent chat loads older mounted history when scrolled to the top', () 
         state,
         render() {
             renderCount += 1;
+            agentMain.scrollHeight = 1800;
         },
         postToHost() {},
         bookController: {},
@@ -4815,6 +4829,128 @@ test('Book agent chat loads older mounted history when scrolled to the top', () 
     assert.equal(state.uiMessageWindowLimit, 9);
     assert.equal(state.agentAutoScroll, false);
     assert.equal(renderCount, 1);
+    assert.equal(agentMain.scrollTop, 800);
+});
+
+test('Book agent message window keeps the mounted start stable while reading history', () => {
+    const state = {
+        agentAutoScroll: true,
+        uiMessageWindowLimit: 5,
+        messages: Array.from({ length: 10 }, (_, index) => ({
+            role: index % 2 === 0 ? 'user' : 'assistant',
+            content: `消息_${index}`,
+        })),
+    };
+
+    let units = collectAgentRenderUnits(state);
+    assert.equal(units[0].key, 'history-gate:5');
+    assert.equal(state.uiMessageWindowLimit, 5);
+    assert.equal(state.uiMessageWindowTotal, 10);
+
+    state.agentAutoScroll = false;
+    state.messages.push(
+        { role: 'user', content: '下方新增请求。' },
+        { role: 'assistant', content: '下方新增回复。' },
+    );
+
+    units = collectAgentRenderUnits(state);
+    assert.equal(units[0].key, 'history-gate:5');
+    assert.equal(state.uiMessageWindowLimit, 7);
+    assert.equal(state.uiMessageWindowTotal, 12);
+});
+
+test('Book agent message window follows the bottom only during auto-scroll', () => {
+    const state = {
+        agentAutoScroll: true,
+        uiMessageWindowLimit: 5,
+        messages: Array.from({ length: 10 }, (_, index) => ({
+            role: index % 2 === 0 ? 'user' : 'assistant',
+            content: `消息_${index}`,
+        })),
+    };
+
+    let units = collectAgentRenderUnits(state);
+    assert.equal(units[0].key, 'history-gate:5');
+
+    state.messages.push(
+        { role: 'user', content: '下方新增请求。' },
+        { role: 'assistant', content: '下方新增回复。' },
+    );
+
+    units = collectAgentRenderUnits(state);
+    assert.equal(units[0].key, 'history-gate:7');
+    assert.equal(state.uiMessageWindowLimit, 5);
+    assert.equal(state.uiMessageWindowTotal, 12);
+});
+
+test('Book agent chat collapses expanded mounted history after returning to bottom', () => {
+    const listeners = {};
+    const agentMain = {
+        scrollTop: 1500,
+        scrollHeight: 1800,
+        clientHeight: 300,
+        addEventListener(eventName, handler) {
+            listeners[`main:${eventName}`] = handler;
+        },
+        scrollTo({ top }) {
+            this.scrollTop = top;
+        },
+    };
+    const inertButton = {
+        classList: { toggle() {} },
+        addEventListener() {},
+    };
+    const bottomButton = {
+        classList: { toggle() {} },
+        addEventListener(eventName, handler) {
+            listeners[`bottom:${eventName}`] = handler;
+        },
+    };
+    const state = {
+        agentAutoScroll: false,
+        uiMessageWindowLimit: 25,
+        uiMessageWindowTotal: 25,
+        messages: Array.from({ length: 25 }, (_, index) => ({
+            role: index % 2 === 0 ? 'user' : 'assistant',
+            content: `消息_${index}`,
+        })),
+    };
+    let renderCount = 0;
+    const root = {
+        querySelector(selector) {
+            if (selector === '.xb-agent-main') return agentMain;
+            if (selector === '#xb-agent-scroll-top') return inertButton;
+            if (selector === '#xb-agent-scroll-bottom') return bottomButton;
+            if (selector === '#xb-agent-scroll-helpers') return { classList: { add() {}, remove() {} } };
+            return null;
+        },
+        querySelectorAll() {
+            return [];
+        },
+    };
+
+    bindEbookEvents({
+        root,
+        state,
+        render() {
+            renderCount += 1;
+            agentMain.scrollHeight = 900;
+        },
+        postToHost() {},
+        bookController: {},
+        agentRunner: {},
+        persistConversation() {},
+        clearConversation() {},
+        showToast() {},
+    });
+
+    listeners['bottom:click']();
+
+    assert.equal(state.agentAutoScroll, true);
+    assert.equal(state.uiMessageWindowLimit, 5);
+    assert.equal(state.uiMessageWindowTotal, undefined);
+    assert.equal(renderCount, 1);
+    assert.equal(agentMain.scrollTop, 900);
 });
 
 test('Book app preserves manual agent scroll even when previous position was near bottom', () => {
@@ -4883,6 +5019,73 @@ test('Book app anchors manual agent scroll across lower render changes', () => {
         preserveScrollTop: true,
     });
     assert.equal(agentMain.scrollTop, 620);
+});
+
+test('Book app uses stable message anchors instead of the history gate', () => {
+    const historyGate = {
+        dataset: { agentUnitKey: 'history-gate:12' },
+        getBoundingClientRect() {
+            return { top: 0, bottom: 24 };
+        },
+    };
+    const messageAnchor = {
+        dataset: { agentUnitKey: 'message:7' },
+        getBoundingClientRect() {
+            return { top: 28, bottom: 128 };
+        },
+    };
+    const agentMain = {
+        scrollTop: 0,
+        scrollHeight: 1400,
+        clientHeight: 420,
+        getBoundingClientRect() {
+            return { top: 0, bottom: 420 };
+        },
+        querySelectorAll(selector) {
+            return selector === '[data-agent-unit-key]' ? [historyGate, messageAnchor] : [];
+        },
+    };
+    const root = {
+        querySelector(selector) {
+            return selector === '.xb-agent-main' ? agentMain : null;
+        },
+    };
+
+    const snapshot = captureScrollState(root, '.xb-agent-main');
+
+    assert.equal(snapshot.anchorKey, 'message:7');
+    assert.equal(snapshot.anchorTopOffset, 28);
+});
+
+test('Book app does not force bottom when auto-scroll state is stale but the viewport is not near bottom', () => {
+    assert.equal(
+        shouldForceAgentScrollToBottom(
+            { agentAutoScroll: true, agentForceScrollBottomOnce: false },
+            { nearBottom: false },
+        ),
+        false,
+    );
+    assert.equal(
+        shouldForceAgentScrollToBottom(
+            { agentAutoScroll: true, agentForceScrollBottomOnce: true },
+            { nearBottom: false },
+        ),
+        true,
+    );
+    assert.equal(
+        shouldForceAgentScrollToBottom(
+            { agentAutoScroll: true, agentForceScrollBottomOnce: false },
+            { nearBottom: true },
+        ),
+        true,
+    );
+    assert.equal(
+        shouldForceAgentScrollToBottom(
+            { agentAutoScroll: false, agentForceScrollBottomOnce: false },
+            { nearBottom: true },
+        ),
+        false,
+    );
 });
 
 test('Book app anchors reader scroll across unrelated renders', () => {
@@ -7535,7 +7738,7 @@ test('Book prompt keeps assistant-style tool layers and recovery rules', () => {
     assert.match(EBOOK_SYSTEM_PROMPT, /## 阶段与顺序/);
     assert.match(EBOOK_SYSTEM_PROMPT, /## 铁律/);
     assert.match(EBOOK_SYSTEM_PROMPT, /## 关于提问/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /## 关于动笔/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /## 关于复盘/);
     assert.match(EBOOK_SYSTEM_PROMPT, /If a tool returns an error/);
     assert.match(EBOOK_SYSTEM_PROMPT, /Edit changes text inside existing files/);
     assert.match(EBOOK_SYSTEM_PROMPT, /Use Edit `oldString` for small in-sentence, small-paragraph, or multi-spot local revisions/);
@@ -7563,7 +7766,8 @@ test('Book prompt keeps assistant-style tool layers and recovery rules', () => {
     assert.match(EBOOK_SYSTEM_PROMPT, /写作伙伴/);
     assert.match(EBOOK_SYSTEM_PROMPT, /让故事更有生命/);
     assert.match(EBOOK_SYSTEM_PROMPT, /用人类的五感演绎场景/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /不要让人物只为完成章节任务而说话或行动/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /不要让人物只为完成任务而说话或行动/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /用户是导演，你是写手/);
     assert.match(EBOOK_SYSTEM_PROMPT, /展现你对创作的热情和天赋/);
     assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /先说结论或动作，再说理由/);
     assert.match(EBOOK_SYSTEM_PROMPT, /\[ebook-image:slotId\]/);

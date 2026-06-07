@@ -1429,7 +1429,9 @@ export function collectAgentRenderUnits(state = {}) {
             createAgentRenderUnit('empty', '<div class="xb-agent-empty">这里是写作助手记录。可以先导入资料，也可以直接说“我想试试写一本书”。</div>'),
         ].filter(Boolean);
     }
-    const messageWindow = getMessageWindow(state, units.length);
+    const messageWindow = getMessageWindow(state, units.length, {
+        preserveStartOnGrow: state.agentAutoScroll === false,
+    });
     const historyGate = messageWindow.hiddenBefore
         ? createAgentRenderUnit(
             `history-gate:${messageWindow.hiddenBefore}`,
@@ -1674,7 +1676,7 @@ function renderStudioShell(options = {}) {
                                     <button data-action="organize" ${agentActionAttr}>整理资料</button>
                                     <button data-action="outline" ${agentActionAttr}>搭大纲</button>
                                     <button data-action="volume-plan" ${agentActionAttr}>定当前卷</button>
-                                    <button data-action="next-chapter" ${agentActionAttr}>推当前轮</button>
+                                    <button data-action="next-chapter" ${agentActionAttr}>按指挥写</button>
                                     <button data-action="opening-options" ${agentActionAttr}>试写开场</button>
                                 </div>
                             </details>

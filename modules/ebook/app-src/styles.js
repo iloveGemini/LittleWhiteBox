@@ -958,6 +958,7 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
             height: 100%;
             min-height: 0;
             overflow: auto;
+            overflow-anchor: none;
             display: flex;
             flex-direction: column;
             gap: 18px;

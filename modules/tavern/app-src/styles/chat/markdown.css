@@ -1,0 +1,173 @@
+/* Tavern chat: markdown */
+
+.xb-tavern-markdown {
+    min-width: 0;
+    max-width: 100%;
+    margin-top: 4px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.74;
+    color: var(--xb-ink);
+    font: 18px/1.78 var(--xb-font-serif);
+}
+
+.chat-bubble.from-user .xb-tavern-markdown {
+    color: var(--xb-ink-soft);
+}
+
+.xb-tavern-markdown code,
+.xb-tavern-markdown pre {
+    border-color: var(--xb-rule);
+    background: rgba(255, 255, 255, 0.52);
+    color: var(--xb-ink);
+}
+
+.xb-tavern-markdown > :first-child {
+    margin-top: 0;
+}
+
+.xb-tavern-markdown > :last-child {
+    margin-bottom: 0;
+}
+
+.xb-tavern-markdown p,
+.xb-tavern-markdown ul,
+.xb-tavern-markdown ol,
+.xb-tavern-markdown pre,
+.xb-tavern-markdown blockquote,
+.xb-tavern-markdown table,
+.xb-tavern-markdown h1,
+.xb-tavern-markdown h2,
+.xb-tavern-markdown h3,
+.xb-tavern-markdown h4 {
+    margin: 0 0 0.82em;
+}
+
+.xb-tavern-markdown p,
+.xb-tavern-markdown li,
+.xb-tavern-markdown blockquote {
+    white-space: pre-wrap;
+}
+
+.xb-tavern-markdown h1,
+.xb-tavern-markdown h2,
+.xb-tavern-markdown h3,
+.xb-tavern-markdown h4 {
+    color: var(--xb-text-main);
+    font-family: var(--xb-font-serif);
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.36;
+}
+
+.xb-tavern-markdown h1 { font-size: 1.42rem; }
+
+.xb-tavern-markdown h2 { font-size: 1.28rem; }
+
+.xb-tavern-markdown h3 { font-size: 1.15rem; }
+
+.xb-tavern-markdown h4 { font-size: 1.04rem; }
+
+.xb-tavern-markdown strong,
+.xb-tavern-markdown em {
+    color: var(--xb-text-main);
+}
+
+.xb-tavern-markdown ul,
+.xb-tavern-markdown ol {
+    padding-left: 1.45em;
+}
+
+.xb-tavern-markdown blockquote {
+    padding-left: 12px;
+    border-left: 2px solid rgba(143, 180, 189, 0.32);
+    color: var(--xb-text-muted);
+}
+
+.xb-tavern-markdown code {
+    border-radius: 6px;
+    background: rgba(143, 180, 189, 0.10);
+    color: var(--xb-text-main);
+    padding: 0.08em 0.32em;
+    font-family: var(--xb-font-mono);
+    font-size: 0.92em;
+}
+
+.xb-tavern-markdown pre {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-y: visible;
+    border: 1px solid var(--xb-line);
+    border-radius: 10px;
+    background: rgba(10, 12, 18, 0.28);
+    padding: 12px 14px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.xb-tavern-markdown pre code {
+    padding: 0;
+    background: transparent;
+}
+
+.xb-tavern-markdown table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 0.95em;
+}
+
+.xb-tavern-markdown th,
+.xb-tavern-markdown td {
+    border: 1px solid var(--xb-line);
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.xb-tavern-markdown th {
+    background: rgba(143, 180, 189, 0.08);
+    color: var(--xb-text-main);
+    font-weight: 650;
+}
+
+.xb-tavern-markdown a {
+    color: var(--xb-cyan);
+    text-decoration: underline;
+}
+
+.xb-markdown-html-head,
+.xb-markdown-html-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.xb-markdown-html-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.xb-markdown-html-actions button {
+    min-height: 28px;
+    border-radius: 999px;
+    padding: 5px 9px;
+    font-size: 12px;
+}
+
+.xb-markdown-html-actions button.is-active {
+    background: rgba(143, 180, 189, 0.16);
+}
+
+.chat-head-actions button,
+.side-block-head button,
+.manager-head button,
+.message-edit-actions button,
+.xb-markdown-html-actions button {
+    border-radius: 999px;
+    min-height: 32px;
+    background: rgba(255, 255, 255, 0.045);
+}

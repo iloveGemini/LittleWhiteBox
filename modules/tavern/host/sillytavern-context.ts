@@ -1,5 +1,9 @@
 import { getContext } from '../../../../../../extensions.js';
-import { getRequestHeaders, getThumbnailUrl } from '../../../../../../../script.js';
+import { getTagKeyForEntity, tag_map } from '../../../../../../tags.js';
+import { getCharaFilename } from '../../../../../../utils.js';
+import { getWorldInfoSettings, METADATA_KEY, selected_world_info, world_info, world_info_position } from '../../../../../../world-info.js';
+import { power_user } from '../../../../../../power-user.js';
+import { chat_metadata, getRequestHeaders, getThumbnailUrl } from '../../../../../../../script.js';
 
 interface TavernHostOptions {
     characterId?: string | number;
@@ -20,6 +24,10 @@ interface TavernHostCharacterOption {
     personality: string;
     scenario: string;
     firstMessage: string;
+    alternateGreetings: string[];
+    mesExample: string;
+    creatorNotes: string;
+    characterDepthPrompt: string;
 }
 
 interface TavernHostContextPayload {
@@ -27,6 +35,12 @@ interface TavernHostContextPayload {
     diagnostics: TavernHostDiagnostics;
     availableCharacters: TavernHostCharacterOption[];
     selectedCharacterId: string;
+}
+
+interface TavernWorldbookSource {
+    name: string;
+    sourceType: 'chat' | 'persona' | 'character' | 'global';
+    sourceIndex: number;
 }
 
 function normalizeText(value: unknown = ''): string {
@@ -111,6 +125,17 @@ function addUnique(target: string[], value: unknown): void {
     if (text && !target.includes(text)) {target.push(text);}
 }
 
+function addUniqueSource(target: TavernWorldbookSource[], seen: Set<string>, source: Omit<TavernWorldbookSource, 'sourceIndex'>): void {
+    const name = normalizeText(source.name);
+    if (!name || seen.has(name)) {return;}
+    seen.add(name);
+    target.push({
+        ...source,
+        name,
+        sourceIndex: target.length,
+    });
+}
+
 function cloneJson<T>(value: T): T {
     try {
         return JSON.parse(JSON.stringify(value)) as T;
@@ -193,14 +218,21 @@ function normalizeCharacter(ctx: Record<string, unknown> = getContext?.() || {},
         data.name,
         ctx.name2,
     ].map((value) => normalizeText(value)).find((value) => value && !isSystemCharacterName(value)) || '';
+    const characterId = resolveCharacterId(ctx, options);
+    const tagKey = getTagKeyForEntity?.(characterId as string | number | null);
+    const tags = tagKey && Array.isArray(tag_map?.[tagKey])
+        ? tag_map[tagKey].map((item) => normalizeText(item)).filter(Boolean)
+        : [];
     return {
-        id: normalizeText(resolveCharacterId(ctx, options)),
+        id: normalizeText(characterId),
         name,
         avatar: normalizeCharacterAvatar(character.avatar || data.avatar || readGlobalString('default_avatar')),
+        tags,
         description: normalizeText(data.description || character.description),
         personality: normalizeText(data.personality || character.personality),
         scenario: normalizeText(data.scenario || character.scenario),
         firstMessage: normalizeText(data.first_mes || character.first_mes),
+        alternateGreetings: asArray(data.alternate_greetings || character.alternate_greetings).map(normalizeText).filter(Boolean),
         mesExample: normalizeText(data.mes_example || character.mes_example),
         creatorNotes: normalizeText(data.creator_notes || character.creator_notes),
         data: cloneJson(data),
@@ -240,39 +272,138 @@ function normalizeEmbeddedCharacterBook(ctx: Record<string, unknown> = getContex
     const name = normalizeText(characterBook.name) || `${normalizeText(character.name || data.name) || 'Character'} embedded lorebook`;
     return {
         name,
-        entries: entries.map((entry) => ({
-            ...entry,
-            sourceWorldBook: name,
-        })),
+        entries: entries.map((entry, index) => normalizeCharacterBookEntry(entry, name, index)),
+        worldSourceType: 'embedded',
+        worldSourceIndex: -1,
     };
 }
 
-function collectWorldbookNames(ctx: Record<string, unknown> = getContext?.() || {}, options: TavernHostOptions = {}): string[] {
+function normalizeCharacterBookEntry(entry: Record<string, unknown> = {}, sourceWorldBook = '', index = 0): Record<string, unknown> {
+    const extensions = asRecord(entry.extensions);
+    const position = extensions.position ?? (
+        normalizeText(entry.position) === 'before_char' ? world_info_position.before : world_info_position.after
+    );
+    return {
+        ...cloneJson(entry),
+        uid: entry.id ?? entry.uid ?? index,
+        key: Array.isArray(entry.keys) ? entry.keys : entry.key,
+        keysecondary: Array.isArray(entry.secondary_keys) ? entry.secondary_keys : entry.keysecondary,
+        comment: entry.comment || '',
+        content: entry.content || '',
+        constant: entry.constant === true,
+        selective: entry.selective === true,
+        order: Number.isFinite(Number(entry.insertion_order)) ? Number(entry.insertion_order) : entry.order,
+        position,
+        disable: entry.enabled === false || entry.disable === true,
+        excludeRecursion: extensions.exclude_recursion ?? entry.excludeRecursion,
+        preventRecursion: extensions.prevent_recursion ?? entry.preventRecursion,
+        delayUntilRecursion: extensions.delay_until_recursion ?? entry.delayUntilRecursion,
+        probability: extensions.probability ?? entry.probability,
+        useProbability: extensions.useProbability ?? entry.useProbability,
+        depth: extensions.depth ?? entry.depth,
+        selectiveLogic: extensions.selectiveLogic ?? entry.selectiveLogic,
+        outletName: extensions.outlet_name ?? entry.outletName,
+        group: extensions.group ?? entry.group,
+        groupOverride: extensions.group_override ?? entry.groupOverride,
+        groupWeight: extensions.group_weight ?? entry.groupWeight,
+        scanDepth: extensions.scan_depth ?? entry.scanDepth,
+        caseSensitive: extensions.case_sensitive ?? entry.caseSensitive,
+        matchWholeWords: extensions.match_whole_words ?? entry.matchWholeWords,
+        characterFilter: extensions.character_filter ?? entry.characterFilter ?? entry.character_filter,
+        useGroupScoring: extensions.use_group_scoring ?? entry.useGroupScoring,
+        role: extensions.role ?? entry.role,
+        sticky: extensions.sticky ?? entry.sticky,
+        cooldown: extensions.cooldown ?? entry.cooldown,
+        delay: extensions.delay ?? entry.delay,
+        matchPersonaDescription: extensions.match_persona_description ?? entry.matchPersonaDescription,
+        matchCharacterDescription: extensions.match_character_description ?? entry.matchCharacterDescription,
+        matchCharacterPersonality: extensions.match_character_personality ?? entry.matchCharacterPersonality,
+        matchCharacterDepthPrompt: extensions.match_character_depth_prompt ?? entry.matchCharacterDepthPrompt,
+        matchScenario: extensions.match_scenario ?? entry.matchScenario,
+        matchCreatorNotes: extensions.match_creator_notes ?? entry.matchCreatorNotes,
+        triggers: extensions.triggers ?? entry.triggers,
+        ignoreBudget: extensions.ignore_budget ?? entry.ignoreBudget,
+        sourceWorldBook,
+        worldSourceType: 'embedded',
+        worldSourceIndex: -1,
+    };
+}
+
+function collectWorldbookSources(ctx: Record<string, unknown> = getContext?.() || {}, options: TavernHostOptions = {}): TavernWorldbookSource[] {
     const character = getCurrentCharacter(ctx, options) || {};
     const data = asRecord(character.data) || character;
     const dataExtensions = asRecord(data.extensions);
     const characterBook = asRecord(data.character_book);
-    const windowRecord = getWindowRecord();
-    const worldInfo = asRecord(windowRecord.world_info || asRecord(ctx.world_info));
-    const names: string[] = [];
-    addUnique(names, dataExtensions.world);
-    addUnique(names, character.world);
-    if (!readEntryList(characterBook.entries).length) {
-        addUnique(names, characterBook.name);
+    const worldInfo = asRecord(world_info);
+    const sources: TavernWorldbookSource[] = [];
+    const seen = new Set<string>();
+    const globalNames: string[] = [];
+    addUnique(globalNames, selected_world_info);
+    addUnique(globalNames, worldInfo.globalSelect);
+    const globalSet = new Set(globalNames);
+    const chatName = normalizeText(chat_metadata?.[METADATA_KEY]);
+    const personaName = normalizeText(power_user?.persona_description_lorebook);
+
+    if (!globalSet.has(chatName)) {
+        addUniqueSource(sources, seen, { name: chatName, sourceType: 'chat' });
     }
-    addUnique(names, ctx.worldNames);
-    addUnique(names, windowRecord.selected_world_info);
-    addUnique(names, worldInfo.globalSelect);
-    const avatar = normalizeText(character.avatar);
+    if (!globalSet.has(personaName) && personaName !== chatName) {
+        addUniqueSource(sources, seen, { name: personaName, sourceType: 'persona' });
+    }
+
+    const characterNames: string[] = [];
+    addUnique(characterNames, dataExtensions.world);
+    addUnique(characterNames, character.world);
+    if (!readEntryList(characterBook.entries).length) {
+        addUnique(characterNames, characterBook.name);
+    }
+    let avatar = normalizeText(character.avatar);
+    try {
+        avatar = normalizeText(getCharaFilename(resolveCharacterId(ctx, options) as string | number | null)) || avatar;
+    } catch {}
     asArray<Record<string, unknown>>(worldInfo.charLore).forEach((entry) => {
-        if (!avatar || normalizeText(entry?.name) === avatar) {addUnique(names, entry?.extraBooks);}
+        if (!avatar || normalizeText(entry?.name) === avatar) {addUnique(characterNames, entry?.extraBooks);}
     });
-    return names;
+    characterNames
+        .filter((name) => !globalSet.has(name) && name !== chatName && name !== personaName)
+        .forEach((name) => addUniqueSource(sources, seen, { name, sourceType: 'character' }));
+    globalNames.forEach((name) => addUniqueSource(sources, seen, { name, sourceType: 'global' }));
+    return sources;
+}
+
+function buildWorldSettings(ctx: Record<string, unknown> = getContext?.() || {}): Record<string, unknown> {
+    const settings = getWorldInfoSettings();
+    const maxContext = Math.max(0, Number(ctx.maxContext) || 0);
+    const budgetPercent = Math.min(100, Math.max(1, Number(settings.world_info_budget ?? 25)));
+    const percentBudgetChars = maxContext > 0 ? Math.round(maxContext * 4 * budgetPercent / 100) : 0;
+    const cap = Number(settings.world_info_budget_cap ?? 0);
+    const capChars = Number.isFinite(cap) && cap > 0 ? Math.round(cap * 4) : 0;
+    const budgetChars = capChars > 0 && percentBudgetChars > 0
+        ? Math.min(capChars, percentBudgetChars)
+        : capChars || percentBudgetChars || 24000;
+    const maxRecursionSteps = Math.max(0, Number(settings.world_info_max_recursion_steps) || 0);
+    return {
+        scanDepth: Math.max(0, Number(settings.world_info_depth) || 0),
+        caseSensitive: settings.world_info_case_sensitive === true,
+        matchWholeWords: settings.world_info_match_whole_words === true,
+        includeNames: settings.world_info_include_names === true,
+        useGroupScoring: settings.world_info_use_group_scoring === true,
+        minActivations: Math.max(0, Number(settings.world_info_min_activations) || 0),
+        minActivationsDepthMax: Math.max(0, Number(settings.world_info_min_activations_depth_max) || 0),
+        recursion: settings.world_info_recursive === true,
+        recursionLimit: maxRecursionSteps,
+        insertionStrategy: Number.isFinite(Number(settings.world_info_character_strategy))
+            ? Number(settings.world_info_character_strategy)
+            : 1,
+        budgetChars,
+    };
 }
 
 function listCharacters(ctx: Record<string, unknown> = getContext?.() || {}): TavernHostCharacterOption[] {
     return asArray<Record<string, unknown>>(ctx.characters).map((character, index) => {
         const data = asRecord(character?.data) || character || {};
+        const extensions = asRecord(data.extensions);
+        const depthPrompt = asRecord(extensions.depth_prompt);
         return {
             id: String(index),
             name: normalizeText(character?.name || data.name || `Character ${index + 1}`),
@@ -281,26 +412,34 @@ function listCharacters(ctx: Record<string, unknown> = getContext?.() || {}): Ta
             personality: normalizeText(data.personality || character.personality),
             scenario: normalizeText(data.scenario || character.scenario),
             firstMessage: normalizeText(data.first_mes || character.first_mes),
+            alternateGreetings: asArray(data.alternate_greetings || character.alternate_greetings).map(normalizeText).filter(Boolean),
+            mesExample: normalizeText(data.mes_example || character.mes_example),
+            creatorNotes: normalizeText(data.creator_notes || character.creator_notes),
+            characterDepthPrompt: normalizeText(depthPrompt.prompt || data.character_depth_prompt || data.depth_prompt),
         };
     }).filter((character) => character.name && !isSystemCharacterName(character.name));
 }
 
-async function fetchWorldbook(name = ''): Promise<Record<string, unknown>> {
+async function fetchWorldbook(source: TavernWorldbookSource): Promise<Record<string, unknown>> {
     const response = await fetch('/api/worldinfo/get', {
         method: 'POST',
         headers: getRequestHeaders(),
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name: source.name }),
     });
     if (!response.ok) {throw new Error(`worldbook_http_${response.status}`);}
     const data = await response.json();
     let entries = data?.entries;
     if (entries && !Array.isArray(entries)) {entries = Object.values(entries);}
     return {
-        name,
+        name: source.name,
+        worldSourceType: source.sourceType,
+        worldSourceIndex: source.sourceIndex,
         entries: Array.isArray(entries)
             ? entries.map((entry) => ({
                 ...asRecord(entry),
-                sourceWorldBook: name,
+                sourceWorldBook: source.name,
+                worldSourceType: source.sourceType,
+                worldSourceIndex: source.sourceIndex,
             }))
             : [],
     };
@@ -310,13 +449,16 @@ export async function buildTavernContext(options: TavernHostOptions = {}): Promi
     const ctx = (getContext?.() || {}) as Record<string, unknown>;
     const useCurrentHistory = options.includeHistory !== false && isCurrentCharacterSelection(ctx, options);
     const embeddedBook = normalizeEmbeddedCharacterBook(ctx, options);
-    const worldbookNames = collectWorldbookNames(ctx, options);
-    const fetchedWorldBooks = await Promise.all(worldbookNames.map(async (name) => {
+    const worldbookSources = collectWorldbookSources(ctx, options);
+    const worldbookNames = worldbookSources.map((source) => source.name);
+    const fetchedWorldBooks = await Promise.all(worldbookSources.map(async (source) => {
         try {
-            return await fetchWorldbook(name);
+            return await fetchWorldbook(source);
         } catch (error) {
             return {
-                name,
+                name: source.name,
+                worldSourceType: source.sourceType,
+                worldSourceIndex: source.sourceIndex,
                 entries: [],
                 error: error instanceof Error ? error.message : String(error || 'worldbook_failed'),
             };
@@ -330,6 +472,7 @@ export async function buildTavernContext(options: TavernHostOptions = {}): Promi
         character: normalizeCharacter(ctx, options),
         user: normalizeUser(ctx),
         history: useCurrentHistory ? normalizeHistory(ctx) : [],
+        worldSettings: buildWorldSettings(ctx),
         worldBooks,
         worldEntries: worldBooks.flatMap((book) => Array.isArray(book.entries) ? book.entries : []),
         sessionMeta: {
@@ -345,8 +488,8 @@ export async function buildTavernContext(options: TavernHostOptions = {}): Promi
         diagnostics: {
             ok: !!character.name,
             message: character.name
-                ? `已读取角色、${useCurrentHistory ? '当前聊天' : '空历史'}和 ${worldBooks.length} 本世界书`
-                : '当前没有选中角色，调试台只会显示空资料',
+                ? `已同步角色、${useCurrentHistory ? '当前聊天' : '空白会话'}和 ${worldBooks.length} 本世界书`
+                : '当前没有选中角色，页面会先显示空状态',
             worldbookErrors: worldBooks.filter((book) => book.error).map((book) => ({
                 name: normalizeText(book.name),
                 error: normalizeText(book.error),

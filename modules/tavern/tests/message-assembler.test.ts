@@ -120,6 +120,46 @@ test('xb tavern preset labels are debug metadata only', () => {
     assert.deepEqual(JSON.parse(result.meta.rawMessagesJson), result.messages);
 });
 
+test('xb tavern assembler uses native worldbook prompt blocks as the rendered truth', () => {
+    const result = buildXbTavernMessages({
+        character: { name: 'Aster', description: 'Pilot.' },
+        user: { name: 'Player' },
+        nativeWorldInfo: {
+            trigger: 'normal',
+            worldInfoBefore: 'Native before lore.',
+            worldInfoAfter: 'Native after lore.',
+            worldInfoExamples: [
+                { position: 'before', content: 'Example top lore.' },
+                { position: 'after', content: 'Example bottom lore.' },
+            ],
+            anBefore: ['Author note top lore.'],
+            anAfter: ['Author note bottom lore.'],
+            worldInfoDepth: [
+                { depth: 3, role: 0, entries: ['Depth lore.'] },
+            ],
+            activatedEntries: [{
+                uid: 'activated-entry',
+                sourceWorldBook: 'Lore',
+                content: 'Metadata-only activated entry.',
+                position: XBTavernWorldPosition.before,
+            }],
+        },
+    }, {}, {
+        currentUserMessage: '继续。',
+    });
+
+    const joined = result.messages.map((message) => message.content).join('\n');
+    assert.match(joined, /Native before lore\./);
+    assert.match(joined, /Native after lore\./);
+    assert.match(joined, /Example top lore\./);
+    assert.match(joined, /Example bottom lore\./);
+    assert.match(joined, /Author note top lore\./);
+    assert.match(joined, /Author note bottom lore\./);
+    assert.match(joined, /Depth lore\./);
+    assert.doesNotMatch(joined, /Metadata-only activated entry\./);
+    assert.equal(result.worldEntryCandidates[0]?.sourceWorldBook, 'Lore');
+});
+
 test('xb tavern disabled preset sections stay out of model messages', () => {
     const result = buildXbTavernMessages({}, {
         sections: [
@@ -250,6 +290,148 @@ test('xb tavern world activation supports recursion, budget, probability and sti
     assert.deepEqual(entries.map((entry) => entry.uid), ['first', 'recursive', 'sticky']);
 });
 
+test('xb tavern world budget-skipped entries do not feed recursion', () => {
+    const result = buildXbTavernMessages({
+        worldEntries: [
+            {
+                uid: 'too-large',
+                content: 'relay-key but this entry is too large for the tiny budget.',
+                key: ['start'],
+                order: 30,
+            },
+            {
+                uid: 'recursive',
+                content: 'Recursive lore.',
+                key: ['relay-key'],
+                order: 20,
+            },
+            {
+                uid: 'small',
+                content: 'Small.',
+                key: ['start'],
+                order: 40,
+            },
+        ],
+    }, {}, {
+        currentUserMessage: 'start',
+        worldSettings: {
+            recursion: true,
+            recursionLimit: 3,
+            budgetChars: 20,
+        },
+    });
+
+    assert.equal(result.worldEntryCandidates.find((entry) => entry.uid === 'too-large')?.status, 'budget_skipped');
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), ['small']);
+});
+
+test('xb tavern world probability failures are not rerolled during recursion', () => {
+    let rolls = 0;
+    const entries = activateWorldEntries([
+        {
+            uid: 'flaky',
+            content: 'Flaky lore.',
+            key: ['start'],
+            probability: 50,
+            useProbability: true,
+            order: 30,
+        },
+        {
+            uid: 'starter',
+            content: 'start relay-key',
+            key: ['start'],
+            order: 20,
+        },
+        {
+            uid: 'relay',
+            content: 'Relay lore.',
+            key: ['relay-key'],
+            order: 10,
+        },
+    ], {
+        scanText: 'start',
+        recursion: true,
+        recursionLimit: 3,
+        random: () => {
+            rolls += 1;
+            return rolls === 1 ? 1 : 0;
+        },
+    });
+
+    assert.equal(rolls, 1);
+    assert.deepEqual(entries.map((entry) => entry.uid), ['starter', 'relay']);
+});
+
+test('xb tavern world activation follows SillyTavern source priority and insertion strategy', () => {
+    const entries = activateWorldEntries([
+        {
+            uid: 'global',
+            content: 'Global lore.',
+            constant: true,
+            order: 10,
+            worldSourceType: 'global',
+        },
+        {
+            uid: 'character',
+            content: 'Character lore.',
+            constant: true,
+            order: 10,
+            worldSourceType: 'character',
+        },
+        {
+            uid: 'persona',
+            content: 'Persona lore.',
+            constant: true,
+            order: 10,
+            worldSourceType: 'persona',
+        },
+        {
+            uid: 'chat',
+            content: 'Chat lore.',
+            constant: true,
+            order: 10,
+            worldSourceType: 'chat',
+        },
+    ], {
+        insertionStrategy: 1,
+        budgetChars: 1000,
+    });
+
+    assert.deepEqual(entries.map((entry) => entry.uid), ['chat', 'persona', 'character', 'global']);
+
+    const globalFirst = activateWorldEntries(entries, {
+        insertionStrategy: 2,
+        budgetChars: 1000,
+    });
+    assert.deepEqual(globalFirst.map((entry) => entry.uid), ['chat', 'persona', 'global', 'character']);
+});
+
+test('xb tavern evenly sorted world activation keeps global before character on equal order', () => {
+    const entries = activateWorldEntries([
+        {
+            uid: 'character',
+            content: 'Character lore.',
+            constant: true,
+            order: 10,
+            worldSourceType: 'character',
+            worldSourceIndex: 0,
+        },
+        {
+            uid: 'global',
+            content: 'Global lore.',
+            constant: true,
+            order: 10,
+            worldSourceType: 'global',
+            worldSourceIndex: 1,
+        },
+    ], {
+        insertionStrategy: 0,
+        budgetChars: 1000,
+    });
+
+    assert.deepEqual(entries.map((entry) => entry.uid), ['global', 'character']);
+});
+
 test('xb tavern assembler exposes world candidate explanations', () => {
     const result = buildXbTavernMessages({
         worldBooks: [{
@@ -304,7 +486,7 @@ test('xb tavern assembler exposes world budget and insertion debug metadata', ()
                     comment: 'small lore',
                     content: 'Small.',
                     constant: true,
-                    order: 10,
+                    order: 30,
                     position: XBTavernWorldPosition.atDepth,
                     depth: 1,
                 },
@@ -321,7 +503,7 @@ test('xb tavern assembler exposes world budget and insertion debug metadata', ()
     const large = result.worldEntryCandidates.find((entry) => entry.uid === 'large');
     const small = result.worldEntryCandidates.find((entry) => entry.uid === 'small');
     assert.equal(large?.status, 'budget_skipped');
-    assert.equal(large?.budgetShortfall, 'Large lore costs many chars.'.length - 12);
+    assert.equal(large?.budgetShortfall, 'Small.'.length + 'Large lore costs many chars.'.length - 12);
     assert.equal(large?.insertionTarget, 'before character card');
     assert.equal(small?.status, 'activated');
     assert.equal(small?.insertionTarget, 'history depth 1');
@@ -377,7 +559,7 @@ test('xb tavern world candidate matrix explains every activation and skip gate',
                     comment: 'active keyword',
                     content: 'Active.',
                     key: ['station'],
-                    order: 90,
+                    order: 110,
                     position: XBTavernWorldPosition.after,
                 },
                 {
@@ -440,7 +622,7 @@ test('xb tavern world candidate matrix explains every activation and skip gate',
     const byUid = Object.fromEntries(result.worldEntryCandidates.map((entry) => [entry.uid, entry]));
     assert.equal(byUid['forced-budget']?.status, 'budget_skipped');
     assert.equal(byUid['forced-budget']?.activationReason, 'decorator');
-    assert.equal(byUid['forced-budget']?.budgetUsedBefore, 0);
+    assert.equal(byUid['forced-budget']?.budgetUsedBefore, 'Active.'.length);
     assert.equal(typeof byUid['forced-budget']?.budgetShortfall, 'number');
     assert.equal(byUid['forced-budget']?.insertionTarget, 'before character card');
     assert.equal(byUid.active?.status, 'activated');
@@ -542,6 +724,313 @@ test('xb tavern world recursion respects the configured recursion limit', () => 
     assert.deepEqual(entries.map((entry) => entry.uid), ['first', 'second']);
 });
 
+test('xb tavern world recursion treats zero limit as unlimited until no new entries', () => {
+    const entries = activateWorldEntries([
+        { uid: 'first', content: 'relay-1', key: ['start'], order: 50 },
+        { uid: 'second', content: 'relay-2', key: ['relay-1'], order: 40 },
+        { uid: 'third', content: 'relay-3', key: ['relay-2'], order: 30 },
+        { uid: 'fourth', content: 'relay-4', key: ['relay-3'], order: 20 },
+        { uid: 'fifth', content: 'done', key: ['relay-4'], order: 10 },
+    ], {
+        scanText: 'start',
+        recursion: true,
+        recursionLimit: 0,
+    });
+
+    assert.deepEqual(entries.map((entry) => entry.uid), ['first', 'second', 'third', 'fourth', 'fifth']);
+});
+
+test('xb tavern world recursion honors prevent, exclude and delay-until-recursion fields', () => {
+    const entries = activateWorldEntries([
+        { uid: 'starter', content: 'relay-key exclude-key delayed-key', key: ['start'], order: 60 },
+        { uid: 'preventer', content: 'blocked-key', key: ['start'], preventRecursion: true, order: 50 },
+        { uid: 'recursive', content: 'Recursive lore.', key: ['relay-key'], order: 40 },
+        { uid: 'blocked', content: 'Blocked lore.', key: ['blocked-key'], order: 30 },
+        { uid: 'excluded', content: 'Excluded lore.', key: ['exclude-key'], excludeRecursion: true, order: 20 },
+        { uid: 'delayed', content: 'Delayed lore.', key: ['delayed-key'], delayUntilRecursion: true, order: 10 },
+    ], {
+        scanText: 'start',
+        recursion: true,
+        recursionLimit: 3,
+    });
+
+    assert.deepEqual(entries.map((entry) => entry.uid), ['starter', 'preventer', 'recursive', 'delayed']);
+});
+
+test('xb tavern world activation keeps one winner per inclusion group', () => {
+    const entries = activateWorldEntries([
+        { uid: 'plain', content: 'Plain lore.', constant: true, order: 100 },
+        { uid: 'group-loser', content: 'Group loser.', constant: true, group: 'scene-choice', order: 90 },
+        { uid: 'group-winner', content: 'Group winner.', constant: true, group: 'scene-choice', groupOverride: true, order: 10 },
+    ], {
+        scanText: '',
+    });
+
+    assert.deepEqual(entries.map((entry) => entry.uid), ['plain', 'group-winner']);
+});
+
+test('xb tavern inclusion groups honor SillyTavern group scoring before weighted selection', () => {
+    const entries = activateWorldEntries([
+        {
+            uid: 'low-score',
+            content: 'Low score lore.',
+            key: ['vault'],
+            group: 'choice',
+            order: 20,
+        },
+        {
+            uid: 'high-score',
+            content: 'High score lore.',
+            key: ['vault'],
+            keysecondary: ['alpha', 'beta'],
+            selective: true,
+            group: 'choice',
+            order: 10,
+        },
+    ], {
+        scanText: 'vault alpha beta',
+        useGroupScoring: true,
+        random: () => 0,
+    });
+
+    assert.deepEqual(entries.map((entry) => entry.uid), ['high-score']);
+});
+
+test('xb tavern world scan depth uses recent chat instead of the whole history', () => {
+    const result = buildXbTavernMessages({
+        history: [
+            { role: 'user', content: 'ancient-keyword' },
+            { role: 'assistant', content: 'Recent answer.' },
+        ],
+        worldEntries: [
+            { uid: 'old', content: 'Old lore.', key: ['ancient-keyword'] },
+            { uid: 'now', content: 'Current lore.', key: ['current-keyword'] },
+        ],
+    }, {}, {
+        currentUserMessage: 'current-keyword',
+        worldSettings: {
+            scanDepth: 1,
+        },
+    });
+
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), ['now']);
+});
+
+test('xb tavern world scan can include chat speaker names like SillyTavern', () => {
+    const withNames = buildXbTavernMessages({
+        character: { name: 'Aster' },
+        user: { name: 'Mira' },
+        history: [
+            { role: 'assistant', content: 'Checks the panel.' },
+        ],
+        worldEntries: [
+            { uid: 'speaker', content: 'Speaker lore.', key: ['Aster'] },
+        ],
+    }, {}, {
+        currentUserMessage: 'Hello.',
+        worldSettings: {
+            includeNames: true,
+            scanDepth: 2,
+        },
+    });
+    const withoutNames = buildXbTavernMessages({
+        character: { name: 'Aster' },
+        user: { name: 'Mira' },
+        history: [
+            { role: 'assistant', content: 'Checks the panel.' },
+        ],
+        worldEntries: [
+            { uid: 'speaker', content: 'Speaker lore.', key: ['Aster'] },
+        ],
+    }, {}, {
+        currentUserMessage: 'Hello.',
+        worldSettings: {
+            includeNames: false,
+            scanDepth: 2,
+        },
+    });
+
+    assert.deepEqual(withNames.activatedWorldEntries.map((entry) => entry.uid), ['speaker']);
+    assert.deepEqual(withoutNames.activatedWorldEntries.map((entry) => entry.uid), []);
+});
+
+test('xb tavern world scan depth zero scans no chat text', () => {
+    const result = buildXbTavernMessages({
+        history: [
+            { role: 'assistant', content: 'history-keyword' },
+        ],
+        worldEntries: [
+            { uid: 'history', content: 'History lore.', key: ['history-keyword'] },
+            { uid: 'current', content: 'Current lore.', key: ['current-keyword'] },
+            { uid: 'constant', content: 'Constant lore.', constant: true },
+        ],
+    }, {}, {
+        currentUserMessage: 'current-keyword',
+        worldSettings: {
+            scanDepth: 0,
+        },
+    });
+
+    assert.equal(result.meta.scanText, '');
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), ['constant']);
+});
+
+test('xb tavern world entry scan depth overrides the global scan depth', () => {
+    const result = buildXbTavernMessages({
+        history: [
+            { role: 'assistant', content: 'previous-keyword' },
+        ],
+        worldEntries: [
+            { uid: 'global-depth', content: 'Global depth lore.', key: ['previous-keyword'], order: 30 },
+            { uid: 'entry-depth', content: 'Entry depth lore.', key: ['previous-keyword'], scanDepth: 2, order: 20 },
+            { uid: 'current', content: 'Current lore.', key: ['current-keyword'], order: 10 },
+        ],
+    }, {}, {
+        currentUserMessage: 'current-keyword',
+        worldSettings: {
+            scanDepth: 1,
+        },
+    });
+
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), ['entry-depth', 'current']);
+});
+
+test('xb tavern world min activations expands scan depth like SillyTavern', () => {
+    const result = buildXbTavernMessages({
+        history: [
+            { role: 'assistant', content: 'previous-keyword' },
+        ],
+        worldEntries: [
+            { uid: 'previous', content: 'Previous lore.', key: ['previous-keyword'], order: 20 },
+            { uid: 'current', content: 'Current lore.', key: ['current-keyword'], order: 10 },
+        ],
+    }, {}, {
+        currentUserMessage: 'current-keyword',
+        worldSettings: {
+            scanDepth: 1,
+            minActivations: 2,
+            minActivationsDepthMax: 2,
+        },
+    });
+
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), ['previous', 'current']);
+});
+
+test('xb tavern world keys support SillyTavern regex syntax', () => {
+    const result = buildXbTavernMessages({
+        worldEntries: [
+            { uid: 'regex', content: 'Regex lore.', key: ['/vault\\s+7/i'] },
+            { uid: 'plain', content: 'Plain lore.', key: ['/broken/pattern/'] },
+        ],
+    }, {}, {
+        currentUserMessage: 'The VAULT 7 door opens.',
+    });
+
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), ['regex']);
+});
+
+test('xb tavern world scan checks character data only when entry opts in', () => {
+    const result = buildXbTavernMessages({
+        character: {
+            description: 'A careful pilot.',
+        },
+        worldEntries: [
+            { uid: 'plain', content: 'Plain lore.', key: ['pilot'] },
+            { uid: 'character-scan', content: 'Character lore.', key: ['pilot'], matchCharacterDescription: true },
+        ],
+    }, {}, {
+        currentUserMessage: 'No keyword here.',
+    });
+
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), ['character-scan']);
+});
+
+test('xb tavern world activation honors generation type triggers', () => {
+    const result = buildXbTavernMessages({
+        worldEntries: [
+            { uid: 'normal', content: 'Normal lore.', constant: true, triggers: ['normal'] },
+            { uid: 'continue', content: 'Continue lore.', constant: true, triggers: ['continue'] },
+            { uid: 'always', content: 'Always lore.', constant: true },
+        ],
+    }, {}, {
+        currentUserMessage: 'Hello.',
+        worldSettings: {
+            trigger: 'normal',
+        },
+    });
+
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), ['normal', 'always']);
+    assert.equal(result.worldEntryCandidates.find((entry) => entry.uid === 'continue')?.status, 'trigger_filtered');
+});
+
+test('xb tavern world activation treats SillyTavern enabled false as disabled', () => {
+    const result = buildXbTavernMessages({
+        worldEntries: [
+            { uid: 'disabled-by-enabled', content: 'Hidden lore.', constant: true, enabled: false },
+            { uid: 'enabled-entry', content: 'Visible lore.', constant: true, enabled: true },
+        ],
+    }, {}, {
+        currentUserMessage: 'Hello.',
+    });
+
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), ['enabled-entry']);
+    assert.equal(result.worldEntryCandidates.find((entry) => entry.uid === 'disabled-by-enabled')?.status, 'disabled');
+    assert.doesNotMatch(result.messages.map((message) => message.content).join('\n'), /Hidden lore/);
+});
+
+test('xb tavern world character filters use the locked character identity', () => {
+    const result = buildXbTavernMessages({
+        character: {
+            name: 'Aster',
+            avatar: 'Aster.png',
+            tags: ['pilot-tag'],
+        },
+        worldEntries: [
+            {
+                uid: 'for-aster',
+                content: 'Aster lore.',
+                constant: true,
+                characterFilter: { names: ['Aster.png'] },
+                order: 30,
+            },
+            {
+                uid: 'for-nia',
+                content: 'Nia lore.',
+                constant: true,
+                characterFilter: { names: ['Nia.png'] },
+                order: 20,
+            },
+            {
+                uid: 'exclude-aster',
+                content: 'Excluded lore.',
+                constant: true,
+                characterFilter: { names: ['Aster.png'], isExclude: true },
+                order: 10,
+            },
+            {
+                uid: 'for-tag',
+                content: 'Pilot lore.',
+                constant: true,
+                extensions: { character_filter: { tags: ['pilot-tag'] } },
+                order: 40,
+            },
+            {
+                uid: 'exclude-tag',
+                content: 'Excluded tag lore.',
+                constant: true,
+                characterFilter: { tags: ['pilot-tag'], isExclude: true },
+                order: 50,
+            },
+        ],
+    }, {}, {
+        currentUserMessage: 'Hello.',
+    });
+
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), ['for-tag', 'for-aster']);
+    assert.equal(result.worldEntryCandidates.find((entry) => entry.uid === 'for-nia')?.status, 'character_filtered');
+    assert.equal(result.worldEntryCandidates.find((entry) => entry.uid === 'exclude-tag')?.status, 'character_filtered');
+});
+
 test('xb tavern world activation honors case, whole-word, cooldown, delay, and state updates', () => {
     const entries = activateWorldEntries([
         {
@@ -576,6 +1065,23 @@ test('xb tavern world activation honors case, whole-word, cooldown, delay, and s
     });
 
     assert.deepEqual(entries.map((entry) => entry.uid), ['case', 'whole']);
+
+    const budgetResult = buildXbTavernMessages({
+        worldEntries: [
+            { uid: 'ignored-budget', content: 'This entry is much longer than the budget.', constant: true, ignoreBudget: true, order: 30 },
+            { uid: 'small', content: 'Small.', constant: true, order: 20 },
+            { uid: 'skipped', content: 'This normal entry is too long for the remaining budget.', constant: true, order: 10 },
+        ],
+    }, {}, {
+        currentUserMessage: 'Hello.',
+        worldSettings: {
+            budgetChars: 10,
+        },
+    });
+
+    assert.deepEqual(budgetResult.activatedWorldEntries.map((entry) => entry.uid), ['ignored-budget', 'small']);
+    assert.equal(budgetResult.worldEntryCandidates.find((entry) => entry.uid === 'skipped')?.status, 'budget_skipped');
+    assert.equal(budgetResult.meta.worldBudget.used, 'Small.'.length);
 
     const result = buildXbTavernMessages({
         worldEntries: [
@@ -752,6 +1258,22 @@ test('xb tavern assembler maps world positions into stable message locations', (
     assert.equal(contents.includes('<world_info_examples_bottom>\nExample message lore.\n</world_info_examples_bottom>'), true);
     assert.equal(contents.includes('Look at the vault.'), true);
     assert.equal(contents.includes('<world_info_depth depth="0">\nDepth lore.\n</world_info_depth>'), true);
+});
+
+test('xb tavern world prompt blocks follow SillyTavern insertion order', () => {
+    const result = buildXbTavernMessages({
+        worldEntries: [
+            { uid: 'high', content: 'High order lore.', constant: true, order: 100, position: XBTavernWorldPosition.before },
+            { uid: 'low', content: 'Low order lore.', constant: true, order: 10, position: XBTavernWorldPosition.before },
+        ],
+    }, {}, {
+        currentUserMessage: 'Hello.',
+    });
+
+    assert.equal(
+        result.messages.some((message) => message.content === '<world_info_before_character>\nLow order lore.\n\nHigh order lore.\n</world_info_before_character>'),
+        true,
+    );
 });
 
 test('xb tavern build snapshot summarizes context, preset, world activation, and raw messages', () => {

@@ -27,6 +27,10 @@ declare module '*.js' {
     export function getThumbnailUrl(type: string, file: string, t?: boolean): string;
     export function getContext(): Record<string, unknown>;
     export function saveSettingsDebounced(): void;
+    export const event_types: Record<string, string>;
+    export const eventSource: {
+        emit?: (eventName: string, ...args: unknown[]) => unknown;
+    };
     export function getPresetManager(apiId?: string): {
         getSelectedPresetName?: () => string;
         getAllPresets?: () => string[];
@@ -45,17 +49,37 @@ declare module '*.js' {
     export const context_presets: Array<Record<string, unknown>>;
     export const instruct_presets: Array<Record<string, unknown>>;
     export const system_prompts: Array<Record<string, unknown>>;
-    export const power_user: Record<string, Record<string, unknown>>;
+    export const power_user: Record<string, unknown>;
+    export const chat_metadata: Record<string, unknown>;
     export const characters: Array<Record<string, unknown>>;
     export const this_chid: string | number | undefined;
+    export const name2: string;
+    export function setCharacterId(value?: string | number | null): void;
+    export function setCharacterName(value: string): void;
+    export const tag_map: Record<string, string[]>;
+    export function getTagKeyForEntity(entityId?: string | number | null): string;
+    export function getCurrentChatId(): string | null;
+    export function substituteParams(content: unknown, options?: Record<string, unknown>): string;
+    export const world_info: Record<string, unknown>;
+    export const world_info_position: Record<string, number>;
     export const world_names: string[];
     export const selected_world_info: string[];
+    export const METADATA_KEY: string;
     export function getWorldInfoSettings(): Record<string, unknown>;
     export function updateWorldInfoSettings(settings: Record<string, unknown>, activeWorldInfo?: string[]): void;
     export function updateWorldInfoList(): Promise<void>;
+    export function checkWorldInfo(
+        chat: string[],
+        maxContext: number,
+        isDryRun: boolean,
+        globalScanData?: Record<string, unknown>,
+    ): Promise<Record<string, unknown>>;
+    export function openWorldInfoEditor(worldName: string): void;
     export function loadWorldInfo(name: string): Promise<Record<string, unknown> | null>;
     export function saveWorldInfo(name: string, data: Record<string, unknown>, immediately?: boolean): Promise<void>;
     export function createWorldInfoEntry(name: string, data: Record<string, unknown>): Record<string, unknown> | undefined;
+    export function splitKeywordsAndRegexes(input: string): string[];
+    export function getCharaFilename(chid?: string | number | null, options?: Record<string, unknown>): string;
     export const SCRIPT_TYPES: { GLOBAL: number; SCOPED: number; PRESET: number };
     export const regex_placement: Record<string, number>;
     export const substitute_find_regex: { NONE: number; RAW: number; ESCAPED: number };
