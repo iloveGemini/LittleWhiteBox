@@ -279,6 +279,15 @@ export interface XbTavernMemoryContext {
     episodeSummaries?: XbTavernMemoryEpisodeSummary[];
     turnSummaries?: XbTavernMemoryTurnSummary[];
     memoryFiles?: XbTavernMemoryFileSummary[];
+    structuredStates?: XbTavernStructuredStateSummary[];
+}
+
+export interface XbTavernStructuredStateSummary {
+    docType?: string;
+    docId?: string;
+    title?: string;
+    revision?: number;
+    digest?: string;
 }
 
 export interface XbTavernMemoryFileSummary {
@@ -442,6 +451,7 @@ export interface XbTavernMessageBuildResult {
         };
         worldPositionCounts: Record<string, number>;
         worldEntryStateUpdates: Record<string, XbTavernWorldEntryState>;
+        structuredStates?: XbTavernStructuredStateSummary[];
     };
 }
 
@@ -472,6 +482,12 @@ export interface XbTavernBuildSnapshot {
         trigger: string;
         sourceNames: XbTavernNativeWorldInfoSource[];
     };
+    structuredStates?: Array<{
+        docType: string;
+        docId: string;
+        revision: number;
+        digestChars: number;
+    }>;
     worldBudget: XbTavernMessageBuildResult['meta']['worldBudget'];
     worldPositionCounts: Record<string, number>;
     scanTextChars: number;
@@ -1570,6 +1586,7 @@ function buildMemoryBlock(memoryContext: XbTavernMemoryContext = {}): string {
     const episodes = Array.isArray(memoryContext.episodeSummaries) ? memoryContext.episodeSummaries : [];
     const turns = Array.isArray(memoryContext.turnSummaries) ? memoryContext.turnSummaries : [];
     const memoryFiles = Array.isArray(memoryContext.memoryFiles) ? memoryContext.memoryFiles : [];
+    const structuredStates = Array.isArray(memoryContext.structuredStates) ? memoryContext.structuredStates : [];
     const sections: string[] = [];
 
     const fileLines = memoryFiles
@@ -1637,6 +1654,20 @@ function buildMemoryBlock(memoryContext: XbTavernMemoryContext = {}): string {
         .filter(Boolean);
     if (turnLines.length) {
         sections.push(`## 召回命中小总结\n${turnLines.join('\n')}`);
+    }
+
+    const stateLines = structuredStates
+        .map((state) => {
+            const docType = normalizeText(state.docType);
+            const docId = normalizeText(state.docId);
+            const title = normalizeText(state.title) || `${docType}/${docId}`;
+            const digest = normalizeText(state.digest);
+            if (!digest) {return '';}
+            return `### ${title}${docType || docId ? ` (${docType}/${docId}, revision ${Number(state.revision) || 0})` : ''}\n${digest}`;
+        })
+        .filter(Boolean);
+    if (stateLines.length) {
+        sections.push(`## 可视化结构状态摘要\n${stateLines.join('\n\n')}`);
     }
 
     return sections.length ? `<session_memory>\n${sections.join('\n\n')}\n</session_memory>` : '';
@@ -2163,6 +2194,7 @@ function buildXbTavernMessagesFromPrepared(
             squashedHistory: historyMode !== 'raw',
             rawMessagesJson: JSON.stringify(messages, null, 2),
             ...(regexApplications ? { regexApplications } : {}),
+            ...(memoryContext.structuredStates?.length ? { structuredStates: memoryContext.structuredStates } : {}),
             worldBudget: {
                 enabled: budgetDebug.enabled,
                 limit: budgetDebug.limit,
@@ -2301,8 +2333,16 @@ export function createXbTavernBuildSnapshot(
                         ...(source.sourceType ? { sourceType: source.sourceType } : {}),
                         ...(Number.isFinite(Number(source.sourceIndex)) ? { sourceIndex: Number(source.sourceIndex) } : {}),
                     }))
-                    : [],
+                : [],
             },
+        } : {}),
+        ...(result.meta.structuredStates?.length ? {
+            structuredStates: result.meta.structuredStates.map((state) => ({
+                docType: normalizeText(state.docType),
+                docId: normalizeText(state.docId),
+                revision: Number(state.revision) || 0,
+                digestChars: normalizeText(state.digest).length,
+            })),
         } : {}),
         worldBudget: result.meta.worldBudget,
         worldPositionCounts: result.meta.worldPositionCounts,

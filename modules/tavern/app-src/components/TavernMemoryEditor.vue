@@ -37,7 +37,7 @@ function handleDraftInput(event: Event) {
           :disabled="!documentAvailable || readOnly"
           @click="$emit('enter-edit')"
         >
-          记忆
+          编辑
         </button>
         <button
           type="button"
@@ -46,7 +46,7 @@ function handleDraftInput(event: Event) {
           :disabled="!documentAvailable"
           @click="$emit('preview')"
         >
-          预览
+          阅读
         </button>
         <button
           v-if="dirty"

@@ -118,7 +118,7 @@ export function restoreScrollState(root, snapshot, defaultSelector = null, optio
     }
     if (options.preserveScrollTop) {
         node.scrollTop = Math.min(Math.max(0, snapshot.scrollTop), node.scrollHeight);
-        if (snapshot.anchorKey) {
+        if (snapshot.anchorKey && options.preserveAnchor !== false) {
             const anchorConfig = getScrollAnchorConfig(selector);
             const containerRect = typeof node.getBoundingClientRect === 'function'
                 ? node.getBoundingClientRect()
@@ -521,6 +521,7 @@ export function createEbookApp(options = {}) {
             forceBottom: shouldAutoScrollAgent,
             defaultToBottom: shouldAutoScrollAgent,
             preserveScrollTop: !shouldAutoScrollAgent,
+            preserveAnchor: false,
         });
         state.agentForceScrollBottomOnce = false;
         updateAgentScrollButtons(root);

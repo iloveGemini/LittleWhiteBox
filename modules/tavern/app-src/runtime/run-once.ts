@@ -57,6 +57,12 @@ import {
 } from './manager';
 import { assertXbTavernProviderReady, resolveXbTavernProviderConfig } from './provider';
 
+const TAVERN_IMAGE_MARKER_REGEX = /\[tavern-image:[a-z0-9\-_]+\]/gi;
+
+function stripTavernImageMarkers(text = ''): string {
+    return String(text || '').replace(TAVERN_IMAGE_MARKER_REGEX, '').trim();
+}
+
 export interface TavernRunOnceOptions {
     agentConfig: Record<string, unknown>;
     messages: XbTavernMessage[];
@@ -712,10 +718,11 @@ export function buildContextHistory(messages: TavernMessageRecord[] = []): XbTav
             role: ['system', 'user', 'assistant', 'tool'].includes(message.role)
                 ? message.role as XbTavernMessage['role']
                 : 'assistant',
-            content: message.content,
+            content: stripTavernImageMarkers(message.content),
             ...(message.name ? { name: message.name } : {}),
             ...(Array.isArray(message.thoughts) && message.thoughts.length ? { thoughts: message.thoughts } : {}),
-        }));
+        }))
+        .filter((message) => String(message.content || '').trim());
 }
 
 function findCompletedAssistantForUser(messages: TavernMessageRecord[] = [], userIndex = -1): TavernMessageRecord | null {
@@ -749,7 +756,8 @@ export function deriveTavernSessionStateFromMessages(input: {
     let lastModel = '';
 
     sorted.forEach((message, index) => {
-        if (message.role !== 'user' || message.error || !String(message.content || '').trim()) {
+        const cleanContent = stripTavernImageMarkers(message.content);
+        if (message.role !== 'user' || message.error || !cleanContent) {
             priorMessages.push(message);
             return;
         }
@@ -761,7 +769,7 @@ export function deriveTavernSessionStateFromMessages(input: {
                     history: buildContextHistory(priorMessages),
                 },
                 chatPreset,
-                currentUserMessage: message.content,
+                currentUserMessage: cleanContent,
                 historyMode: input.historyMode || 'raw',
                 turn,
                 entryStates: {},
@@ -817,7 +825,8 @@ export async function deriveTavernSessionStateFromMessagesAsync(input: {
 
     for (let index = 0; index < sorted.length; index += 1) {
         const message = sorted[index];
-        if (message.role !== 'user' || message.error || !String(message.content || '').trim()) {
+        const cleanContent = stripTavernImageMarkers(message.content);
+        if (message.role !== 'user' || message.error || !cleanContent) {
             priorMessages.push(message);
             continue;
         }
@@ -839,7 +848,7 @@ export async function deriveTavernSessionStateFromMessagesAsync(input: {
             const nativeContext = await injectNativeWorldInfoRuntime({
                 getNativeWorldInfoRuntime: input.getNativeWorldInfoRuntime,
                 context: contextBase,
-                currentUserMessage: message.content,
+                currentUserMessage: cleanContent,
                 trigger,
                 timedState: nativeWorldInfoTimedState,
             });
@@ -852,7 +861,7 @@ export async function deriveTavernSessionStateFromMessagesAsync(input: {
             const brain = await buildXbTavernBrainAsync({
                 context: contextForBuild,
                 chatPreset,
-                currentUserMessage: message.content,
+                currentUserMessage: cleanContent,
                 historyMode: input.historyMode || 'raw',
                 turn,
                 entryStates: worldEntryStates,
@@ -1121,7 +1130,7 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
         }))
         : normalizeTavernSessionState(baseSession.state || input.runtimeState || {});
     const shouldReplaceSessionState = !!reusedUserMessage;
-    const rawCurrentUserMessage = reusedUserMessage?.content || input.currentUserMessage;
+    const rawCurrentUserMessage = stripTavernImageMarkers(reusedUserMessage?.content || input.currentUserMessage);
     const regexApplications: TavernRegexApplicationSummary = {};
     const inputRegex = reusedUserMessage
         ? { text: rawCurrentUserMessage, summary: undefined }

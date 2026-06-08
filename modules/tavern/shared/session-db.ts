@@ -48,25 +48,6 @@ export interface TavernSessionState {
     [key: string]: unknown;
 }
 
-interface DexieUpgradeTable {
-    clear(): Promise<unknown>;
-    where(index: string): {
-        equals(value: unknown): {
-            delete(): Promise<unknown>;
-        };
-    };
-}
-
-interface DexieUpgradeTransaction {
-    table(name: string): DexieUpgradeTable;
-}
-
-interface DexieVersionWithUpgrade {
-    stores(schema: Record<string, string>): {
-        upgrade(callback: (tx: DexieUpgradeTransaction) => Promise<void> | void): void;
-    };
-}
-
 export type TavernMemoryRecordStatus = 'active' | 'stale';
 export type TavernManagerRunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'superseded' | 'rolled_back';
 
@@ -153,6 +134,7 @@ export interface TavernManagerRunRecord {
     parsedAction?: string;
     toolTrace?: unknown;
     changedFiles?: string[];
+    changedStates?: string[];
     error?: string;
     createdAt: number;
     updatedAt: number;
@@ -160,6 +142,8 @@ export interface TavernManagerRunRecord {
 
 export type TavernMemoryFileStatus = 'active' | 'stale';
 export type TavernMemoryIndexStatus = 'ready' | 'stale' | 'failed';
+export type TavernStructuredStateStatus = 'active' | 'stale';
+export type TavernStructuredStateDocType = 'tavern.map';
 
 export interface TavernMemoryFileRecord {
     sessionId: string;
@@ -183,6 +167,57 @@ export interface TavernManagerMemorySnapshotRecord {
     beforeHash: string;
     afterHash?: string;
     rollbackStatus: TavernManagerMemorySnapshotStatus;
+    error?: string;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface TavernStructuredStateDocumentRecord {
+    sessionId: string;
+    docType: TavernStructuredStateDocType;
+    docId: string;
+    title: string;
+    revision: number;
+    data: unknown;
+    digest: string;
+    status: TavernStructuredStateStatus;
+    source?: string;
+    staleFromOrder?: number;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface TavernStructuredStatePatchRecord {
+    id: string;
+    sessionId: string;
+    docType: TavernStructuredStateDocType;
+    docId: string;
+    revision: number;
+    status?: 'active' | 'rolled_back';
+    managerRunId?: string;
+    sourceUserOrder?: number;
+    sourceAssistantOrder?: number;
+    source?: string;
+    summary?: string;
+    ops?: unknown[];
+    changedIds?: string[];
+    removedElements?: unknown[];
+    createdAt: number;
+    updatedAt: number;
+}
+
+export type TavernManagerStateSnapshotStatus = 'pending' | 'rolled_back' | 'conflict' | 'skipped';
+
+export interface TavernManagerStateSnapshotRecord {
+    managerRunId: string;
+    sessionId: string;
+    docType: TavernStructuredStateDocType;
+    docId: string;
+    beforeExists: boolean;
+    beforeDocument?: TavernStructuredStateDocumentRecord;
+    beforeHash: string;
+    afterHash?: string;
+    rollbackStatus: TavernManagerStateSnapshotStatus;
     error?: string;
     createdAt: number;
     updatedAt: number;
@@ -265,69 +300,13 @@ class TavernDatabase extends Dexie {
     memoryIndexes!: DexieTable<TavernMemoryIndexRecord>;
     assistantPresets!: DexieTable<TavernAssistantPresetRecord>;
     managerMemorySnapshots!: DexieTable<TavernManagerMemorySnapshotRecord>;
+    stateDocuments!: DexieTable<TavernStructuredStateDocumentRecord>;
+    statePatches!: DexieTable<TavernStructuredStatePatchRecord>;
+    managerStateSnapshots!: DexieTable<TavernManagerStateSnapshotRecord>;
 
     constructor() {
         super('LittleWhiteBox_Tavern');
         this.version(1).stores({
-            sessions: 'id, updatedAt, characterId, characterName',
-            messages: '[sessionId+order], sessionId, order',
-            meta: 'key',
-        });
-        this.version(2).stores({
-            sessions: 'id, updatedAt, characterId, characterName',
-            messages: '[sessionId+order], sessionId, order',
-            meta: 'key',
-            presets: 'id, updatedAt, sourcePresetId',
-        });
-        this.version(3).stores({
-            sessions: 'id, updatedAt, characterId, characterName',
-            messages: '[sessionId+order], sessionId, order',
-            meta: 'key',
-            presets: 'id, updatedAt, sourcePresetId',
-            turnSummaries: 'id, sessionId, episodeId, turn, userOrder, assistantOrder, status, updatedAt',
-            episodeSummaries: 'id, sessionId, status, updatedAt, startTurn, endTurn',
-            managerRuns: 'id, sessionId, status, turn, updatedAt',
-        });
-        this.version(4).stores({
-            sessions: 'id, updatedAt, characterId, characterName',
-            messages: '[sessionId+order], sessionId, order',
-            meta: 'key',
-            presets: 'id, updatedAt, sourcePresetId',
-            turnSummaries: 'id, sessionId, episodeId, turn, userOrder, assistantOrder, status, updatedAt',
-            episodeSummaries: 'id, sessionId, status, updatedAt, startTurn, endTurn',
-            managerRuns: 'id, sessionId, status, turn, updatedAt',
-            memoryFiles: '[sessionId+path], sessionId, path, status, updatedAt',
-            memoryIndexes: '[sessionId+kind], sessionId, kind, status, updatedAt',
-        });
-        (this.version(5) as unknown as DexieVersionWithUpgrade).stores({
-            sessions: 'id, updatedAt, characterId, characterName',
-            messages: '[sessionId+order], sessionId, order',
-            meta: 'key',
-            presets: 'id, updatedAt, sourcePresetId',
-            turnSummaries: 'id, sessionId, episodeId, turn, userOrder, assistantOrder, status, updatedAt',
-            episodeSummaries: 'id, sessionId, status, updatedAt, startTurn, endTurn',
-            managerRuns: 'id, sessionId, status, turn, updatedAt',
-            memoryFiles: '[sessionId+path], sessionId, path, status, updatedAt',
-            memoryIndexes: '[sessionId+kind], sessionId, kind, status, updatedAt',
-            assistantPresets: 'id, updatedAt',
-        }).upgrade(async (tx: DexieUpgradeTransaction) => {
-            await tx.table('presets').clear();
-            await tx.table('meta').where('key').equals('activePresetId').delete();
-        });
-        this.version(6).stores({
-            sessions: 'id, updatedAt, characterId, characterName',
-            messages: '[sessionId+order], sessionId, order',
-            managerMessages: '[sessionId+order], sessionId, order',
-            meta: 'key',
-            presets: 'id, updatedAt, sourcePresetId',
-            turnSummaries: 'id, sessionId, episodeId, turn, userOrder, assistantOrder, status, updatedAt',
-            episodeSummaries: 'id, sessionId, status, updatedAt, startTurn, endTurn',
-            managerRuns: 'id, sessionId, status, turn, updatedAt',
-            memoryFiles: '[sessionId+path], sessionId, path, status, updatedAt',
-            memoryIndexes: '[sessionId+kind], sessionId, kind, status, updatedAt',
-            assistantPresets: 'id, updatedAt',
-        });
-        this.version(7).stores({
             sessions: 'id, updatedAt, characterId, characterName',
             messages: '[sessionId+order], sessionId, order',
             managerMessages: '[sessionId+order], sessionId, order',
@@ -340,6 +319,9 @@ class TavernDatabase extends Dexie {
             memoryIndexes: '[sessionId+kind], sessionId, kind, status, updatedAt',
             assistantPresets: 'id, updatedAt',
             managerMemorySnapshots: '[managerRunId+path], managerRunId, sessionId, path, updatedAt',
+            stateDocuments: '[sessionId+docType+docId], sessionId, docType, docId, status, updatedAt',
+            statePatches: 'id, sessionId, docType, docId, managerRunId, revision, status, updatedAt',
+            managerStateSnapshots: '[managerRunId+docType+docId], managerRunId, sessionId, docType, docId, updatedAt',
         });
     }
 }
@@ -358,6 +340,9 @@ export const tavernMemoryFilesTable = db.memoryFiles;
 export const tavernMemoryIndexesTable = db.memoryIndexes;
 export const tavernAssistantPresetsTable = db.assistantPresets;
 export const tavernManagerMemorySnapshotsTable = db.managerMemorySnapshots;
+export const tavernStateDocumentsTable = db.stateDocuments;
+export const tavernStatePatchesTable = db.statePatches;
+export const tavernManagerStateSnapshotsTable = db.managerStateSnapshots;
 
 function now(): number {
     return Date.now();
@@ -569,19 +554,25 @@ export async function deleteTavernSession(sessionId = ''): Promise<number> {
         tavernEpisodeSummariesTable,
         tavernManagerRunsTable,
         tavernManagerMemorySnapshotsTable,
+        tavernManagerStateSnapshotsTable,
         tavernMemoryFilesTable,
         tavernMemoryIndexesTable,
+        tavernStateDocumentsTable,
+        tavernStatePatchesTable,
         tavernMetaTable,
         async () => {
-            const [messages, managerMessages, turns, episodes, runs, snapshots, files, indexes] = await Promise.all([
+            const [messages, managerMessages, turns, episodes, runs, snapshots, stateSnapshots, files, indexes, stateDocuments, statePatches] = await Promise.all([
                 tavernMessagesTable.where('sessionId').equals(id).toArray(),
                 tavernManagerMessagesTable.where('sessionId').equals(id).toArray(),
                 tavernTurnSummariesTable.where('sessionId').equals(id).toArray(),
                 tavernEpisodeSummariesTable.where('sessionId').equals(id).toArray(),
                 tavernManagerRunsTable.where('sessionId').equals(id).toArray(),
                 tavernManagerMemorySnapshotsTable.where('sessionId').equals(id).toArray(),
+                tavernManagerStateSnapshotsTable.where('sessionId').equals(id).toArray(),
                 tavernMemoryFilesTable.where('sessionId').equals(id).toArray(),
                 tavernMemoryIndexesTable.where('sessionId').equals(id).toArray(),
+                tavernStateDocumentsTable.where('sessionId').equals(id).toArray(),
+                tavernStatePatchesTable.where('sessionId').equals(id).toArray(),
             ]);
             await Promise.all([
                 messages.length ? tavernMessagesTable.bulkDelete(messages.map((message) => [message.sessionId, message.order])) : 0,
@@ -590,8 +581,11 @@ export async function deleteTavernSession(sessionId = ''): Promise<number> {
                 episodes.length ? tavernEpisodeSummariesTable.bulkDelete(episodes.map((episode) => episode.id)) : 0,
                 runs.length ? tavernManagerRunsTable.bulkDelete(runs.map((run) => run.id)) : 0,
                 snapshots.length ? tavernManagerMemorySnapshotsTable.bulkDelete(snapshots.map((snapshot) => [snapshot.managerRunId, snapshot.path])) : 0,
+                stateSnapshots.length ? tavernManagerStateSnapshotsTable.bulkDelete(stateSnapshots.map((snapshot) => [snapshot.managerRunId, snapshot.docType, snapshot.docId])) : 0,
                 files.length ? tavernMemoryFilesTable.bulkDelete(files.map((file) => [file.sessionId, file.path])) : 0,
                 indexes.length ? tavernMemoryIndexesTable.bulkDelete(indexes.map((index) => [index.sessionId, index.kind])) : 0,
+                stateDocuments.length ? tavernStateDocumentsTable.bulkDelete(stateDocuments.map((document) => [document.sessionId, document.docType, document.docId])) : 0,
+                statePatches.length ? tavernStatePatchesTable.bulkDelete(statePatches.map((patch) => patch.id)) : 0,
             ]);
             await tavernSessionsTable.delete(id);
             const selected = await tavernMetaTable.get('selectedSessionId');
@@ -945,6 +939,7 @@ export async function createTavernManagerRun(input: Partial<TavernManagerRunReco
         parsedAction: String(input.parsedAction || ''),
         toolTrace: 'toolTrace' in input ? cloneSerializable(input.toolTrace, undefined) : undefined,
         changedFiles: normalizeStringArray(input.changedFiles, 100),
+        changedStates: normalizeStringArray(input.changedStates, 100),
         error: String(input.error || ''),
         createdAt: Number(input.createdAt) || timestamp,
         updatedAt: timestamp,
@@ -973,6 +968,7 @@ export async function updateTavernManagerRun(
     });
     if ('toolTrace' in patch) {update.toolTrace = cloneSerializable(patch.toolTrace, undefined);}
     if ('changedFiles' in patch) {update.changedFiles = normalizeStringArray(patch.changedFiles, 100);}
+    if ('changedStates' in patch) {update.changedStates = normalizeStringArray(patch.changedStates, 100);}
     if ('turn' in patch) {update.turn = Math.max(0, Number(patch.turn) || 0);}
     if ('userOrder' in patch) {update.userOrder = Number(patch.userOrder);}
     if ('assistantOrder' in patch) {update.assistantOrder = Number(patch.assistantOrder);}
@@ -1004,6 +1000,136 @@ function hashMemorySnapshot(file?: Pick<TavernMemoryFileRecord, 'content' | 'sta
         hash = Math.imul(hash, 16777619) >>> 0;
     }
     return hash.toString(16);
+}
+
+function hashSerializableState(value: unknown): string {
+    const text = JSON.stringify(value ?? null);
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+        hash ^= text.charCodeAt(index);
+        hash = Math.imul(hash, 16777619) >>> 0;
+    }
+    return hash.toString(16);
+}
+
+function hashStateSnapshot(document?: TavernStructuredStateDocumentRecord | null): string {
+    return hashSerializableState(document ? {
+        docType: document.docType,
+        docId: document.docId,
+        title: String(document.title || ''),
+        revision: Number(document.revision) || 0,
+        data: document.data ?? null,
+        digest: String(document.digest || ''),
+        status: String(document.status || ''),
+        source: String(document.source || ''),
+        staleFromOrder: Number.isFinite(Number(document.staleFromOrder)) ? Number(document.staleFromOrder) : null,
+    } : null);
+}
+
+function mergeRollbackError(existing = '', conflicts: string[] = []): string {
+    const current = String(existing || '').trim();
+    if (!conflicts.length) {return current;}
+    const prefix = 'rollback_conflict:';
+    const currentConflicts = current.startsWith(prefix)
+        ? current.slice(prefix.length).split(',').map((item) => item.trim()).filter(Boolean)
+        : [];
+    const merged = [...new Set([...currentConflicts, ...conflicts])];
+    return `${prefix}${merged.join(',')}`;
+}
+
+export async function listTavernStructuredStateDocuments(sessionId = '', options: {
+    docType?: TavernStructuredStateDocType | string;
+    includeStale?: boolean;
+} = {}): Promise<TavernStructuredStateDocumentRecord[]> {
+    const id = String(sessionId || '').trim();
+    if (!id) {return [];}
+    const rows = await tavernStateDocumentsTable.where('sessionId').equals(id).sortBy('updatedAt');
+    const type = String(options.docType || '').trim();
+    return rows
+        .filter((row) => !type || row.docType === type)
+        .filter((row) => options.includeStale || row.status !== 'stale');
+}
+
+export async function getTavernStructuredStateDocument(
+    sessionId = '',
+    docType: TavernStructuredStateDocType | string = 'tavern.map',
+    docId = 'main',
+): Promise<TavernStructuredStateDocumentRecord | null> {
+    const id = String(sessionId || '').trim();
+    const type = String(docType || '').trim() as TavernStructuredStateDocType;
+    const documentId = String(docId || 'main').trim() || 'main';
+    if (!id || !type || !documentId) {return null;}
+    return await tavernStateDocumentsTable.get([id, type, documentId]) || null;
+}
+
+export async function putTavernStructuredStateDocument(
+    document: TavernStructuredStateDocumentRecord,
+): Promise<TavernStructuredStateDocumentRecord> {
+    const timestamp = now();
+    const record: TavernStructuredStateDocumentRecord = {
+        ...cloneSerializable(document, document),
+        sessionId: String(document.sessionId || '').trim(),
+        docType: String(document.docType || 'tavern.map') as TavernStructuredStateDocType,
+        docId: String(document.docId || 'main').trim() || 'main',
+        title: String(document.title || ''),
+        revision: Math.max(0, Number(document.revision) || 0),
+        digest: String(document.digest || ''),
+        status: document.status === 'stale' ? 'stale' : 'active',
+        createdAt: Number(document.createdAt) || timestamp,
+        updatedAt: timestamp,
+    };
+    if (!record.sessionId) {throw new Error('state_session_required');}
+    await tavernStateDocumentsTable.put(record);
+    await tavernSessionsTable.update(record.sessionId, { updatedAt: timestamp });
+    return record;
+}
+
+export async function appendTavernStructuredStatePatch(input: Partial<TavernStructuredStatePatchRecord> = {}): Promise<TavernStructuredStatePatchRecord> {
+    const sessionId = String(input.sessionId || '').trim();
+    const docType = String(input.docType || 'tavern.map') as TavernStructuredStateDocType;
+    const docId = String(input.docId || 'main').trim() || 'main';
+    if (!sessionId) {throw new Error('state_patch_session_required');}
+    const timestamp = now();
+    const record: TavernStructuredStatePatchRecord = {
+        id: String(input.id || createId('state-patch')),
+        sessionId,
+        docType,
+        docId,
+        revision: Math.max(0, Number(input.revision) || 0),
+        status: input.status === 'rolled_back' ? 'rolled_back' : 'active',
+        managerRunId: String(input.managerRunId || ''),
+        sourceUserOrder: Number.isFinite(Number(input.sourceUserOrder)) ? Number(input.sourceUserOrder) : undefined,
+        sourceAssistantOrder: Number.isFinite(Number(input.sourceAssistantOrder)) ? Number(input.sourceAssistantOrder) : undefined,
+        source: String(input.source || ''),
+        summary: String(input.summary || ''),
+        ops: Array.isArray(input.ops) ? cloneSerializable(input.ops, []) : [],
+        changedIds: normalizeStringArray(input.changedIds, 200),
+        removedElements: Array.isArray(input.removedElements) ? cloneSerializable(input.removedElements, []) : [],
+        createdAt: Number(input.createdAt) || timestamp,
+        updatedAt: timestamp,
+    };
+    await tavernStatePatchesTable.put(record);
+    await tavernSessionsTable.update(sessionId, { updatedAt: timestamp });
+    return record;
+}
+
+export async function listTavernStructuredStatePatches(input: {
+    sessionId?: string;
+    docType?: TavernStructuredStateDocType | string;
+    docId?: string;
+    limit?: number;
+    includeRolledBack?: boolean;
+} = {}): Promise<TavernStructuredStatePatchRecord[]> {
+    const sessionId = String(input.sessionId || '').trim();
+    if (!sessionId) {return [];}
+    const docType = String(input.docType || '').trim();
+    const docId = String(input.docId || '').trim();
+    const rows = await tavernStatePatchesTable.where('sessionId').equals(sessionId).sortBy('revision');
+    const filtered = rows.filter((row) => (!docType || row.docType === docType)
+        && (!docId || row.docId === docId)
+        && (input.includeRolledBack || row.status !== 'rolled_back'));
+    const limit = Math.max(0, Number(input.limit) || 0);
+    return limit ? filtered.slice(-limit) : filtered;
 }
 
 export async function ensureTavernManagerMemorySnapshot(input: {
@@ -1055,10 +1181,70 @@ export async function updateTavernManagerMemorySnapshotAfter(input: {
     return await tavernManagerMemorySnapshotsTable.get([managerRunId, path]) || null;
 }
 
+export async function ensureTavernManagerStateSnapshot(input: {
+    managerRunId?: string;
+    sessionId?: string;
+    docType?: TavernStructuredStateDocType | string;
+    docId?: string;
+}): Promise<TavernManagerStateSnapshotRecord | null> {
+    const managerRunId = String(input.managerRunId || '').trim();
+    const sessionId = String(input.sessionId || '').trim();
+    const docType = String(input.docType || 'tavern.map') as TavernStructuredStateDocType;
+    const docId = String(input.docId || 'main').trim() || 'main';
+    if (!managerRunId || !sessionId || !docType || !docId) {return null;}
+    const existingSnapshot = await tavernManagerStateSnapshotsTable.get([managerRunId, docType, docId]);
+    if (existingSnapshot) {return existingSnapshot;}
+    const timestamp = now();
+    const beforeDocument = await getTavernStructuredStateDocument(sessionId, docType, docId);
+    const snapshot: TavernManagerStateSnapshotRecord = {
+        managerRunId,
+        sessionId,
+        docType,
+        docId,
+        beforeExists: !!beforeDocument,
+        beforeDocument: beforeDocument ? cloneSerializable(beforeDocument, undefined) : undefined,
+        beforeHash: hashStateSnapshot(beforeDocument),
+        afterHash: '',
+        rollbackStatus: 'pending',
+        error: '',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+    };
+    await tavernManagerStateSnapshotsTable.put(snapshot);
+    return snapshot;
+}
+
+export async function updateTavernManagerStateSnapshotAfter(input: {
+    managerRunId?: string;
+    sessionId?: string;
+    docType?: TavernStructuredStateDocType | string;
+    docId?: string;
+}): Promise<TavernManagerStateSnapshotRecord | null> {
+    const managerRunId = String(input.managerRunId || '').trim();
+    const sessionId = String(input.sessionId || '').trim();
+    const docType = String(input.docType || 'tavern.map') as TavernStructuredStateDocType;
+    const docId = String(input.docId || 'main').trim() || 'main';
+    if (!managerRunId || !sessionId || !docType || !docId) {return null;}
+    const snapshot = await ensureTavernManagerStateSnapshot({ managerRunId, sessionId, docType, docId });
+    if (!snapshot) {return null;}
+    const afterDocument = await getTavernStructuredStateDocument(sessionId, docType, docId);
+    await tavernManagerStateSnapshotsTable.update([managerRunId, docType, docId], {
+        afterHash: hashStateSnapshot(afterDocument),
+        updatedAt: now(),
+    });
+    return await tavernManagerStateSnapshotsTable.get([managerRunId, docType, docId]) || null;
+}
+
 export async function listTavernManagerMemorySnapshots(managerRunId = ''): Promise<TavernManagerMemorySnapshotRecord[]> {
     const id = String(managerRunId || '').trim();
     if (!id) {return [];}
     return await tavernManagerMemorySnapshotsTable.where('managerRunId').equals(id).sortBy('updatedAt');
+}
+
+export async function listTavernManagerStateSnapshots(managerRunId = ''): Promise<TavernManagerStateSnapshotRecord[]> {
+    const id = String(managerRunId || '').trim();
+    if (!id) {return [];}
+    return await tavernManagerStateSnapshotsTable.where('managerRunId').equals(id).sortBy('updatedAt');
 }
 
 export async function rollbackManagerRunMemoryWrites(managerRunId = ''): Promise<{
@@ -1126,7 +1312,77 @@ export async function rollbackManagerRunMemoryWrites(managerRunId = ''): Promise
     });
     await updateTavernManagerRun(id, {
         status: 'rolled_back',
-        error: conflicts.length ? `rollback_conflict:${conflicts.join(',')}` : '',
+        error: mergeRollbackError(run.error, conflicts),
+    });
+    await tavernSessionsTable.update(run.sessionId, { updatedAt: now() });
+    return { rolledBack, conflicts, skipped };
+}
+
+export async function rollbackManagerRunStateWrites(managerRunId = ''): Promise<{
+    rolledBack: number;
+    conflicts: string[];
+    skipped: number;
+}> {
+    const id = String(managerRunId || '').trim();
+    if (!id) {return { rolledBack: 0, conflicts: [], skipped: 0 };}
+    const run = await tavernManagerRunsTable.get(id);
+    if (!run) {return { rolledBack: 0, conflicts: [], skipped: 0 };}
+    const snapshots = (await listTavernManagerStateSnapshots(id)).reverse();
+    let rolledBack = 0;
+    let skipped = 0;
+    const conflicts: string[] = [];
+    for (const snapshot of snapshots) {
+        const key = `${snapshot.docType}/${snapshot.docId}`;
+        if (snapshot.rollbackStatus === 'rolled_back' || snapshot.rollbackStatus === 'skipped') {
+            skipped += 1;
+            continue;
+        }
+        if (snapshot.rollbackStatus === 'conflict') {
+            conflicts.push(key);
+            skipped += 1;
+            continue;
+        }
+        const current = await getTavernStructuredStateDocument(snapshot.sessionId, snapshot.docType, snapshot.docId);
+        if (!snapshot.afterHash) {
+            skipped += 1;
+            await tavernManagerStateSnapshotsTable.update([snapshot.managerRunId, snapshot.docType, snapshot.docId], {
+                rollbackStatus: 'skipped',
+                error: 'snapshot_after_hash_missing',
+                updatedAt: now(),
+            });
+            continue;
+        }
+        if (hashStateSnapshot(current) !== snapshot.afterHash) {
+            conflicts.push(key);
+            await tavernManagerStateSnapshotsTable.update([snapshot.managerRunId, snapshot.docType, snapshot.docId], {
+                rollbackStatus: 'conflict',
+                error: 'rollback_conflict_current_state_changed',
+                updatedAt: now(),
+            });
+            continue;
+        }
+        if (snapshot.beforeExists && snapshot.beforeDocument) {
+            await tavernStateDocumentsTable.put(cloneSerializable(snapshot.beforeDocument, snapshot.beforeDocument));
+        } else {
+            await tavernStateDocumentsTable.delete([snapshot.sessionId, snapshot.docType, snapshot.docId]);
+        }
+        const patches = await tavernStatePatchesTable.where('managerRunId').equals(snapshot.managerRunId).toArray();
+        await Promise.all(patches
+            .filter((patch) => patch.docType === snapshot.docType && patch.docId === snapshot.docId)
+            .map((patch) => tavernStatePatchesTable.update(patch.id, {
+                status: 'rolled_back',
+                updatedAt: now(),
+            })));
+        rolledBack += 1;
+        await tavernManagerStateSnapshotsTable.update([snapshot.managerRunId, snapshot.docType, snapshot.docId], {
+            rollbackStatus: 'rolled_back',
+            error: '',
+            updatedAt: now(),
+        });
+    }
+    await updateTavernManagerRun(id, {
+        status: 'rolled_back',
+        error: mergeRollbackError(run.error, conflicts),
     });
     await tavernSessionsTable.update(run.sessionId, { updatedAt: now() });
     return { rolledBack, conflicts, skipped };
@@ -1164,6 +1420,41 @@ export async function rollbackManagerRunsForMessageRange(sessionId = '', fromOrd
             status: ['queued', 'running'].includes(run.status) ? 'cancelled' : 'superseded',
             error: 'manager_source_messages_superseded',
         });
+    }
+    return {
+        runIds: runs.map((run) => run.id),
+        rolledBack,
+        conflicts,
+        skipped,
+    };
+}
+
+export async function rollbackManagerStateRunsForMessageRange(sessionId = '', fromOrder = 0): Promise<{
+    runIds: string[];
+    rolledBack: number;
+    conflicts: string[];
+    skipped: number;
+}> {
+    const id = String(sessionId || '').trim();
+    const order = Number(fromOrder);
+    if (!id || !Number.isFinite(order)) {
+        return { runIds: [], rolledBack: 0, conflicts: [], skipped: 0 };
+    }
+    const runs = (await tavernManagerRunsTable.where('sessionId').equals(id).toArray())
+        .filter((run) => run.trigger === 'after_turn'
+            && (Number(run.userOrder) >= order || Number(run.assistantOrder) >= order))
+        .sort((left, right) => right.updatedAt - left.updatedAt);
+    let rolledBack = 0;
+    let skipped = 0;
+    const conflicts: string[] = [];
+    for (const run of runs) {
+        const snapshots = await listTavernManagerStateSnapshots(run.id);
+        const hasWrittenSnapshot = snapshots.some((snapshot) => String(snapshot.afterHash || '').trim());
+        if (!hasWrittenSnapshot) {continue;}
+        const result = await rollbackManagerRunStateWrites(run.id);
+        rolledBack += result.rolledBack;
+        skipped += result.skipped;
+        conflicts.push(...result.conflicts);
     }
     return {
         runIds: runs.map((run) => run.id),
@@ -1303,7 +1594,7 @@ export async function saveTavernAssistantPreset(
         id,
         name: normalized.name,
         description: normalized.description,
-        version: normalized.version,
+        version: '',
         isBuiltIn: options.isBuiltIn === true,
         createdAt: Number(existing?.createdAt) || timestamp,
         updatedAt: timestamp,

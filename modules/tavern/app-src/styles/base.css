@@ -348,14 +348,22 @@ pre {
 
 button,
 select,
-input {
-    border: 1px solid var(--xb-line);
+input,
+textarea {
+    font: inherit;
+    border: 1px solid var(--xb-rule);
     border-radius: var(--xb-radius);
-    color: var(--xb-text-main);
-    background: rgba(255, 255, 255, 0.035);
+    background: var(--xb-control-bg);
+    color: var(--xb-ink);
     padding: 8px 12px;
     min-height: 34px;
-    border-color: var(--xb-line);
+}
+
+button:hover:not(:disabled) {
+    transform: none;
+    border-color: var(--xb-stamp);
+    background: var(--xb-stamp-soft);
+    color: var(--xb-stamp);
 }
 
 .view-tabs {

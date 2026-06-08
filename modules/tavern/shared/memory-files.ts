@@ -1,4 +1,5 @@
 import { applyTextEdits } from '../../agent-core/tools/text-edit.js';
+import { getTavernStateToolDefinitions } from './structured-state';
 import {
     listTavernMessages,
     tavernMemoryFilesTable,
@@ -520,8 +521,9 @@ export function getTavernMemoryToolDefinitions(): Array<{ type: 'function'; func
                 name: TAVERN_MEMORY_TOOL_NAMES.WRITE,
                 description: [
                     'Create or replace one current-session memory Markdown file under `memory/...`.',
-                    'Use for new turn files, new episode files, or intentional whole-file rewrites where most content is new.',
-                    'For existing files, read first and include all original content you want to keep; Write replaces the complete file.',
+                    'Use for new turn files, new episode files, new inbox/state/session files, or intentional whole-file rewrites where most content is new.',
+                    'Read the target file first when it already exists. Write replaces the complete file, so include every original line that should survive.',
+                    'Automatic after-turn managers must write `memory/turns/*.md` in the derived format: `- Turn: N`, `- Source: messages userOrder/assistantOrder`, and `## Summary` are required.',
                     'Chat manager calls cannot write `memory/turns/*.md`; only automatic after-turn management owns turn流水 files.',
                     'Use MemoryEdit instead for small corrections inside an existing file.',
                 ].join('\n'),
@@ -542,10 +544,16 @@ export function getTavernMemoryToolDefinitions(): Array<{ type: 'function'; func
                 name: TAVERN_MEMORY_TOOL_NAMES.EDIT,
                 description: [
                     'Apply targeted edits to one existing current-session memory Markdown file under `memory/...`.',
-                    'Best for small corrections, local replacements, section edits, and insertions inside a known file.',
-                    'read the current file first unless its current text is already visible in the prompt or a recent tool result.',
-                    'Use one edit mode per item and do not mix oldString edits with line-number edits in the same call.',
-                    'Line-number edits use line numbers from MemoryRead `numberedContent`; use totalLines + 1 to append.',
+                    'One call edits one file. Best for small corrections, local replacements, section edits, and insertions inside a known file.',
+                    'Read the current file first unless its current text is already visible in the prompt or a recent tool result.',
+                    'Use oldString/newString for local word, sentence, or paragraph fixes. Use startLine/endLine/newString for contiguous section replacement. Use insertAtLine/newString to add text before a line or at the end.',
+                    'Put multiple edits in the `edits` array. `edits` must be a real, non-empty JSON array, not a quoted JSON string.',
+                    'Each edit item should choose exactly one mode. Do not intentionally mix oldString edits with line-number edits in the same MemoryEdit call.',
+                    'Line-number edits use line numbers from MemoryRead `numberedContent`. Use totalLines + 1 to append.',
+                    'Line-range and insertion items are applied by original line numbers from bottom to top. Do not recalculate later line numbers yourself.',
+                    'oldString must be a fragment present in the file; punctuation and long-whitespace tolerance exists, but it is not semantic fuzzy search. If matching fails, MemoryRead the file and anchor with exact surrounding text.',
+                    'If an oldString has multiple matches, expand the fragment with more context or set replaceAll:true only when every match should change.',
+                    'Set newString to an empty string to delete the matched fragment or line range.',
                     'If most of the file should change, use MemoryWrite instead of many tiny edits.',
                     'Chat manager calls cannot edit `memory/turns/*.md`.',
                 ].join('\n'),
@@ -611,6 +619,7 @@ export function getTavernMemoryToolDefinitions(): Array<{ type: 'function'; func
 export function getTavernManagerToolDefinitions(): Array<{ type: 'function'; function: { name: string; description: string; parameters: unknown } }> {
     return [
         ...getTavernMemoryToolDefinitions(),
+        ...getTavernStateToolDefinitions(),
         {
             type: 'function',
             function: {
@@ -620,6 +629,9 @@ export function getTavernManagerToolDefinitions(): Array<{ type: 'function'; fun
                     'This is read-only and returns message order, role, and snippet or full content.',
                     'Best for checking what actually happened in the RP before correcting memory files.',
                     'Use recent for current continuity, range when you know message order, and grep when you only know a keyword.',
+                    'recent reads the latest messages; offset pages backward from the newest messages.',
+                    'range reads message order ascending; if startOrder is provided and endOrder is omitted, the range continues through the latest message.',
+                    'grep searches message content and returns ascending earliest matches; offset/limit continue through later matches.',
                     'Results include count/truncated/nextOffset for pagination. Set full:true when exact wording or evidence matters.',
                     'This does not search memory Markdown files. Use MemoryGrep for memory files.',
                 ].join('\n'),

@@ -25,6 +25,12 @@
     box-shadow: 0 8px 26px rgba(26, 26, 26, 0.08);
 }
 
+.xb-os-shell.theme-dark .page-corner-actions .home-icon-button {
+    border-color: rgba(240, 238, 232, 0.12);
+    background: rgba(12, 14, 18, 0.72);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.30);
+}
+
 .page-corner-actions .page-home-button {
     width: 40px;
     min-width: 40px;

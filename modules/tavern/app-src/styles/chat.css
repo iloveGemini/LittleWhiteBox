@@ -4,4 +4,5 @@
 @import './chat/compose.css';
 @import './chat/manager.css';
 @import './chat/memory-editor.css';
+@import './chat/map.css';
 @import './chat/markdown.css';

@@ -38,6 +38,12 @@ interface TavernFacade {
 declare global {
     interface Window {
         xiaobaixTavern?: TavernFacade;
+        xiaobaixDraw?: {
+            getStatus?: () => Record<string, unknown>;
+            getProvider?: () => string;
+            isEnabled?: () => boolean;
+            generateImagesFromText?: (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
+        };
     }
 }
 
@@ -53,6 +59,15 @@ let frameReady = false;
 let pendingMessages: PendingFrameMessage[] = [];
 let messageHandlerInstalled = false;
 let overlayResizeHandler: (() => void) | null = null;
+const pendingDrawRequests = new Map<string, AbortController>();
+
+async function getDrawGalleryCacheModule(): Promise<{
+    getDisplayPreviewForSlot: (slotId: string) => Promise<Record<string, unknown>>;
+}> {
+    return await import('../draw/shared/gallery-cache.js') as unknown as {
+        getDisplayPreviewForSlot: (slotId: string) => Promise<Record<string, unknown>>;
+    };
+}
 
 function cloneFramePayload<T>(value: T): T {
     const seen = new WeakSet<object>();
@@ -202,6 +217,119 @@ function handleHostRequestHeaders(payload: Record<string, unknown> = {}): void {
         ok: true,
         hostRequestHeaders: getRequestHeaders?.() || {},
     });
+}
+
+function getDrawStatus(): Record<string, unknown> {
+    const facade = window.xiaobaixDraw;
+    const status = typeof facade?.getStatus === 'function'
+        ? facade.getStatus()
+        : {
+            provider: typeof facade?.getProvider === 'function' ? facade.getProvider() : 'disabled',
+            enabled: !!facade?.isEnabled?.(),
+            ready: !!facade?.generateImagesFromText,
+        };
+    return {
+        provider: String(status?.provider || 'disabled'),
+        enabled: !!status?.enabled,
+        ready: !!status?.ready,
+    };
+}
+
+function handleDrawStatus(payload: Record<string, unknown> = {}): void {
+    replyHostResult(String(payload.requestId || ''), {
+        ok: true,
+        ...getDrawStatus(),
+    });
+}
+
+async function handleDrawGenerate(payload: Record<string, unknown> = {}): Promise<void> {
+    const requestId = String(payload.requestId || '');
+    const controller = new AbortController();
+    if (requestId) {
+        pendingDrawRequests.set(requestId, controller);
+    }
+    try {
+        const facade = window.xiaobaixDraw;
+        if (typeof facade?.generateImagesFromText !== 'function') {
+            throw new Error('画图模块未初始化');
+        }
+        const drawPayload = payload.payload && typeof payload.payload === 'object'
+            ? payload.payload as Record<string, unknown>
+            : {};
+        const result = await facade.generateImagesFromText({
+            ...drawPayload,
+            signal: controller.signal,
+            onStateChange: (state: string, data: Record<string, unknown> = {}) => {
+                postToFrame('xb-tavern:draw-progress', {
+                    requestId,
+                    state,
+                    data,
+                });
+            },
+        });
+        replyHostResult(requestId, {
+            ok: true,
+            result,
+        });
+    } catch (error) {
+        replyHostResult(requestId, {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error || 'draw_failed'),
+        });
+    } finally {
+        if (requestId) {
+            pendingDrawRequests.delete(requestId);
+        }
+    }
+}
+
+function previewToTransferableUrl(preview: Record<string, unknown> = {}): string {
+    const savedUrl = String(preview.savedUrl || '').trim();
+    if (savedUrl) {return savedUrl;}
+    const base64 = String(preview.base64 || '').trim();
+    if (!base64) {return '';}
+    if (/^data:[^;]+;base64,/i.test(base64)) {return base64;}
+    return `data:image/png;base64,${base64}`;
+}
+
+async function handleDrawImage(payload: Record<string, unknown> = {}): Promise<void> {
+    const requestId = String(payload.requestId || '');
+    const source = payload.payload && typeof payload.payload === 'object'
+        ? payload.payload as Record<string, unknown>
+        : payload;
+    const slotId = String(source.slotId || '').trim();
+    try {
+        if (!slotId) {throw new Error('slot_id_required');}
+        const { getDisplayPreviewForSlot } = await getDrawGalleryCacheModule();
+        const result = await getDisplayPreviewForSlot(slotId);
+        const preview = result.preview as Record<string, unknown> || {};
+        const failedInfo = result.failedInfo as Record<string, unknown> || {};
+        replyHostResult(requestId, {
+            ok: true,
+            result: {
+                slotId,
+                hasData: !!result.hasData,
+                isFailed: !!result.isFailed,
+                historyCount: Number(result.historyCount) || 0,
+                url: result.hasData ? previewToTransferableUrl(preview) : '',
+                tags: preview.tags || failedInfo.tags || '',
+                positive: preview.positive || failedInfo.positive || '',
+                errorType: failedInfo.errorType || '',
+                errorMessage: failedInfo.errorMessage || '',
+            },
+        });
+    } catch (error) {
+        replyHostResult(requestId, {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error || 'image_lookup_failed'),
+        });
+    }
+}
+
+function handleCancelRequest(payload: Record<string, unknown> = {}): void {
+    const requestId = String(payload.requestId || '').trim();
+    if (!requestId) {return;}
+    pendingDrawRequests.get(requestId)?.abort();
 }
 
 async function handleChatPresetRequest(type: string, payload: Record<string, unknown> = {}): Promise<void> {
@@ -400,6 +528,18 @@ function handleFrameMessage(event: MessageEvent): void {
             break;
         case 'xb-tavern:get-host-request-headers':
             handleHostRequestHeaders(data.payload || {});
+            break;
+        case 'xb-tavern:draw-status':
+            handleDrawStatus(data.payload || {});
+            break;
+        case 'xb-tavern:draw-generate':
+            void handleDrawGenerate(data.payload || {});
+            break;
+        case 'xb-tavern:draw-image':
+            void handleDrawImage(data.payload || {});
+            break;
+        case 'xb-tavern:cancel-request':
+            handleCancelRequest(data.payload || {});
             break;
         case 'xb-tavern:get-context':
             void handleContextRequest(data.type, data.payload || {});

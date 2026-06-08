@@ -1,8 +1,6 @@
-/* Tavern settings: layout *//* =============================================================================
-   SETTINGS WORKSPACE: CONSOLIDATED VISUAL SYSTEM
-   The settings surface is intentionally owned here so older setting-page skins
-   above cannot mix into the current UI.
-   ============================================================================= */.settings-layout {
+/* Tavern settings: layout and settings-local surface tokens. */
+
+.settings-layout {
     --xb-settings-page-bg:
         radial-gradient(circle at 18% 0%, rgba(var(--xb-accent-rgb), 0.09), transparent 31%),
         linear-gradient(135deg, #090a0c 0%, #101216 45%, #171312 100%);
@@ -30,29 +28,9 @@
     overflow: hidden;
     color: var(--xb-text-main);
     background: var(--xb-settings-page-bg);
-}.settings-layout .page-corner-actions {
-    top: 18px;
-    right: 18px;
-    z-index: 80;
-}.settings-layout .page-corner-actions .home-icon-button {
-    width: 38px;
-    min-width: 38px;
-    height: 38px;
-    min-height: 38px;
-    border: 1px solid var(--xb-settings-corner-border);
-    border-radius: 50%;
-    background: var(--xb-settings-corner-bg);
-    color: var(--xb-text-main);
-    box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28);
-    backdrop-filter: blur(18px);
-}.settings-layout .page-corner-actions .home-icon-button:hover:not(:disabled),
-.settings-layout .page-corner-actions .home-icon-button:focus-visible {
-    outline: none;
-    transform: translateY(-1px);
-    border-color: rgba(var(--xb-accent-rgb), 0.42);
-    background: rgba(var(--xb-accent-rgb), 0.11);
-    color: var(--xb-cyan);
-}.xb-os-shell.theme-light .settings-layout {
+}
+
+.xb-os-shell.theme-light .settings-layout {
     --xb-settings-page-bg:
         linear-gradient(90deg, transparent 50%, rgba(234, 232, 223, 0.86) 50%),
         var(--xb-paper);
@@ -70,14 +48,46 @@
     --xb-settings-soft-bg: rgba(251, 250, 246, 0.58);
     --xb-settings-subtle-bg: rgba(251, 250, 246, 0.36);
     --xb-settings-float-bg: rgba(251, 250, 246, 0.97);
-}.settings-layout .settings-sidebar {
+}
+
+.settings-layout .page-corner-actions {
+    top: 18px;
+    right: 18px;
+    z-index: 80;
+}
+
+.settings-layout .page-corner-actions .home-icon-button {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+    border: 1px solid var(--xb-settings-corner-border);
+    border-radius: 50%;
+    background: var(--xb-settings-corner-bg);
+    color: var(--xb-text-main);
+    box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(18px);
+}
+
+.settings-layout .page-corner-actions .home-icon-button:hover:not(:disabled),
+.settings-layout .page-corner-actions .home-icon-button:focus-visible {
+    outline: none;
+    transform: translateY(-1px);
+    border-color: rgba(var(--xb-accent-rgb), 0.42);
+    background: rgba(var(--xb-accent-rgb), 0.11);
+    color: var(--xb-cyan);
+}
+
+.settings-layout .settings-sidebar {
     min-width: 0;
     min-height: 0;
     overflow: hidden auto;
     border-right: 1px solid var(--xb-line);
     background: var(--xb-settings-sidebar-bg);
     padding: 34px 18px 22px;
-}.settings-layout .guide-card {
+}
+
+.settings-layout .guide-card {
     display: grid;
     gap: 22px;
     width: 100%;
@@ -87,7 +97,9 @@
     box-shadow: none;
     padding: 0;
     margin: 0;
-}.settings-layout .guide-card h2 {
+}
+
+.settings-layout .guide-card h2 {
     margin: 0;
     padding: 0 8px 10px;
     border-bottom: 1px solid var(--xb-line);
@@ -97,10 +109,14 @@
     font-weight: 520;
     line-height: 1;
     letter-spacing: 0;
-}.settings-layout .guide-steps {
+}
+
+.settings-layout .guide-steps {
     display: grid;
     gap: 6px;
-}.settings-layout .guide-step {
+}
+
+.settings-layout .guide-step {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
@@ -114,26 +130,34 @@
     text-align: left;
     padding: 12px 14px;
     transform: none;
-}.settings-layout .guide-step strong,
+}
+
+.settings-layout .guide-step strong,
 .settings-layout .guide-step span {
     grid-column: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}.settings-layout .guide-step strong {
+}
+
+.settings-layout .guide-step strong {
     color: inherit;
     font-family: var(--xb-font-serif);
     font-size: 19px;
     font-weight: 540;
     letter-spacing: 0;
-}.settings-layout .guide-step span {
+}
+
+.settings-layout .guide-step span {
     color: var(--xb-text-dim);
     font-family: var(--xb-font-ui);
     font-size: 12px;
     letter-spacing: 0;
     text-transform: none;
-}.settings-layout .guide-step em {
+}
+
+.settings-layout .guide-step em {
     grid-column: 2;
     grid-row: 1;
     align-self: center;
@@ -150,26 +174,34 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     padding: 4px 8px;
-}.settings-layout .guide-step:hover:not(:disabled),
+}
+
+.settings-layout .guide-step:hover:not(:disabled),
 .settings-layout .guide-step:focus-visible {
     outline: none;
     border-color: var(--xb-line-strong);
     background: var(--xb-settings-soft-bg);
     color: var(--xb-text-main);
     transform: none;
-}.settings-layout .guide-step.active {
+}
+
+.settings-layout .guide-step.active {
     border-color: rgba(var(--xb-accent-rgb), 0.22);
     background: linear-gradient(90deg, rgba(var(--xb-accent-rgb), 0.12), rgba(240, 238, 232, 0.04));
     color: var(--xb-text-main);
     box-shadow: inset 3px 0 0 rgba(var(--xb-accent-rgb), 0.82);
-}.settings-layout .xb-main {
+}
+
+.settings-layout .xb-main {
     min-width: 0;
     min-height: 0;
     overflow: hidden;
     display: flex;
     flex-direction: column;
     background: var(--xb-settings-main-bg);
-}.settings-layout .step-panel {
+}
+
+.settings-layout .step-panel {
     flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
@@ -184,9 +216,13 @@
     box-shadow: none;
     padding: 0;
     margin: 0;
-}.settings-layout .step-panel[style*="display: none"] {
+}
+
+.settings-layout .step-panel[style*="display: none"] {
     display: none !important;
-}.settings-layout .pill {
+}
+
+.settings-layout .pill {
     min-height: 30px;
     display: inline-flex;
     align-items: center;
@@ -202,11 +238,15 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     padding: 0 12px;
-}.settings-layout .pill.warning {
+}
+
+.settings-layout .pill.warning {
     border-color: rgba(212, 180, 109, 0.36);
     background: rgba(212, 180, 109, 0.1);
     color: var(--xb-gold);
-}.settings-layout input:not([type="checkbox"]):not([type="radio"]),
+}
+
+.settings-layout input:not([type="checkbox"]):not([type="radio"]),
 .settings-layout select,
 .settings-layout textarea {
     min-width: 0;
@@ -219,17 +259,23 @@
     letter-spacing: 0;
     padding: 10px 12px;
     box-shadow: none;
-}.settings-layout textarea {
+}
+
+.settings-layout textarea {
     line-height: 1.72;
     resize: vertical;
-}.settings-layout input:not([type="checkbox"]):not([type="radio"]):focus,
+}
+
+.settings-layout input:not([type="checkbox"]):not([type="radio"]):focus,
 .settings-layout select:focus,
 .settings-layout textarea:focus {
     outline: none;
     border-color: rgba(var(--xb-accent-rgb), 0.36);
     background: var(--xb-settings-control-focus-bg);
     box-shadow: 0 0 0 3px rgba(var(--xb-accent-rgb), 0.055);
-}.settings-layout .inline-check {
+}
+
+.settings-layout .inline-check {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -238,14 +284,18 @@
     background: var(--xb-settings-soft-bg);
     color: var(--xb-text-muted);
     padding: 6px 10px;
-}.settings-layout .inline-empty-note,
+}
+
+.settings-layout .inline-empty-note,
 .settings-layout .empty-note {
     border: 1px dashed var(--xb-line-strong);
     border-radius: 14px;
     background: var(--xb-settings-subtle-bg);
     color: var(--xb-text-muted);
     padding: 18px;
-}.source-light {
+}
+
+.source-light {
     display: inline-grid;
     place-items: center;
     width: 22px;
@@ -257,20 +307,25 @@
     color: var(--xb-text-muted);
     font-size: 11px;
     font-style: normal;
-}.source-light.source-global.active {
+}
+
+.source-light.source-global.active {
     border-color: rgba(var(--xb-accent-rgb), 0.52);
     background: rgba(var(--xb-accent-rgb), 0.14);
     color: var(--xb-cyan);
-}@media (max-width: 1160px) {
+}
+
+@media (max-width: 1160px) {
     .settings-layout {
         grid-template-columns: 236px minmax(0, 1fr);
     }
-}@media (max-width: 860px) {
+}
+
+@media (max-width: 860px) {
     .settings-layout {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: auto minmax(0, 1fr);
     }
-}@media (max-width: 860px) {
 
     .settings-layout .settings-sidebar {
         border-right: 0;
@@ -278,18 +333,15 @@
         padding: 18px 14px 12px;
         overflow: visible;
     }
-}@media (max-width: 860px) {
 
     .settings-layout .guide-card {
         gap: 12px;
     }
-}@media (max-width: 860px) {
 
     .settings-layout .guide-card h2 {
         font-size: 26px;
         padding: 0 6px 6px;
     }
-}@media (max-width: 860px) {
 
     .settings-layout .guide-steps {
         display: flex;
@@ -297,24 +349,23 @@
         overflow-x: auto;
         padding-bottom: 4px;
     }
-}@media (max-width: 860px) {
 
     .settings-layout .guide-step {
         min-width: 154px;
         min-height: 52px;
     }
-}@media (max-width: 860px) {
 
     .settings-layout .panel-pills {
         display: none;
     }
-}@media (max-width: 560px) {
+}
+
+@media (max-width: 560px) {
     .settings-layout .page-corner-actions {
         top: 10px;
         right: 10px;
         gap: 6px;
     }
-}@media (max-width: 560px) {
 
     .settings-layout .page-corner-actions .home-icon-button {
         width: 34px;

@@ -20,6 +20,7 @@ import {
     getTavernMemoryIndex,
     writeTavernMemoryFile,
 } from '../shared/memory-files';
+import { executeTavernStateTool } from '../shared/structured-state';
 import { createDefaultXbTavernPreset } from '../shared/presets';
 import {
     buildXbTavernMemoryIgnoredTerms,
@@ -233,17 +234,17 @@ test('xb tavern run turn can trigger manager summary with delegate config', asyn
     assert.equal(result.managerStatus, 'completed', JSON.stringify(debugRuns[0] || null));
     assert.ok(result.managerRunId);
     assert.equal(managerProvider, 'sillytavern-openai-compatible');
-    assert.match(managerPrompt, /记忆管理员/);
-    assert.match(managerPrompt, /## Tool Use Guide/);
-    assert.match(managerPrompt, /## Selection Strategy/);
-    assert.match(managerPrompt, /ChatHistory recent 读取最新消息/);
-    assert.match(managerPrompt, /ChatHistory range 按 order 升序读取区间/);
-    assert.match(managerPrompt, /ChatHistory grep 按关键词搜索/);
-    assert.match(managerPrompt, /MemoryEdit `edits` 必须是真正的非空数组/);
-    assert.match(managerPrompt, /不要把 oldString 改法和行号改法混在同一个 MemoryEdit 调用里/);
+    assert.match(managerPrompt, /小白酒馆后台管理员/);
+    assert.match(managerPrompt, /后台统筹者/);
+    assert.match(managerPrompt, /## Work Loop/);
+    assert.match(managerPrompt, /## Source Strategy/);
+    assert.match(managerPrompt, /## Structured State/);
+    assert.match(managerPrompt, /自动 after-turn 优先写本轮 turns 流水/);
     assert.match(managerPrompt, /MemoryGrep；如果要找“RP 原文里是否发生过某件事”，用 ChatHistory grep/);
     assert.match(managerPrompt, /必须写成可派生格式/);
     assert.match(managerPrompt, /- Source: messages userOrder\/assistantOrder/);
+    assert.doesNotMatch(managerPrompt, /ChatHistory recent 读取最新消息/);
+    assert.doesNotMatch(managerPrompt, /MemoryEdit `edits` 必须是真正的非空数组/);
     const summaries = await listTavernTurnSummaries(result.sessionId);
     assert.equal(summaries.length, 1);
     assert.equal(summaries[0]?.userOrder, 0);
@@ -1071,6 +1072,62 @@ test('xb tavern simulated request builds raw API JSON without saving chat messag
     assert.match(result.requestSnapshot.rawRequestJson, /"stream": true/);
     assert.match(result.requestSnapshot.rawRequestJson, /只模拟，不发送。/);
     assert.deepEqual(await listTavernMessages(session.id), []);
+});
+
+test('xb tavern simulated request injects map digest without full map JSON', async () => {
+    await resetDb();
+    const preset = createDefaultXbTavernPreset();
+    const session = await createTavernSession({
+        title: 'Map digest',
+        characterId: 'char-map',
+        characterName: 'Mapper',
+        contextSnapshot: {
+            character: { id: 'char-map', name: 'Mapper', description: 'A cartographer.' },
+        },
+        presetId: preset.id,
+        presetName: preset.name,
+    });
+    await executeTavernStateTool(session.id, 'StatePatch', {
+        ops: [{
+            op: 'init',
+            document: {
+                meta: { name: 'Hidden Cellar', theme: 'parchment', viewBox: [0, 0, 500, 400] },
+                elements: [
+                    { id: 'cellar-room', type: 'rect', pos: [30, 30], size: [120, 80], cat: 'wall' },
+                    { id: 'cellar-label', type: 'text', pos: [90, 80], content: 'Cellar', cat: 'label' },
+                ],
+            },
+        }],
+    });
+
+    const result = await simulateXbTavernRequest({
+        sessionId: session.id,
+        agentConfig: {
+            currentPresetName: '酒馆 OpenAI',
+            presets: {
+                '酒馆 OpenAI': {
+                    provider: 'sillytavern-openai-compatible',
+                    modelConfigs: {
+                        'sillytavern-openai-compatible': {
+                            model: 'gpt-test',
+                        },
+                    },
+                },
+            },
+        },
+        contextSnapshot: session.contextSnapshot || {},
+        preset,
+        currentUserMessage: '我看向地窖。',
+    });
+
+    assert.match(result.buildSnapshot.rawMessagesJson, /可视化结构状态摘要/);
+    assert.match(result.buildSnapshot.rawMessagesJson, /Hidden Cellar/);
+    assert.match(result.buildSnapshot.rawMessagesJson, /revision 1/);
+    assert.doesNotMatch(result.buildSnapshot.rawMessagesJson, /"elements"/);
+    assert.equal(result.buildSnapshot.structuredStates?.[0]?.docType, 'tavern.map');
+    assert.equal(result.buildSnapshot.structuredStates?.[0]?.docId, 'main');
+    assert.equal(result.buildSnapshot.structuredStates?.[0]?.revision, 1);
+    assert.ok(Number(result.buildSnapshot.structuredStates?.[0]?.digestChars) > 0);
 });
 
 test('xb tavern simulated request ignores unusable empty session snapshots', async () => {

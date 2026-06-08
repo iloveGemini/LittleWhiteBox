@@ -5021,6 +5021,46 @@ test('Book app anchors manual agent scroll across lower render changes', () => {
     assert.equal(agentMain.scrollTop, 620);
 });
 
+test('Book app can preserve manual agent scroll without re-anchoring lower streaming changes', () => {
+    let anchorDocumentTop = 560;
+    const anchor = {
+        dataset: { agentUnitKey: 'message:3' },
+        getBoundingClientRect() {
+            return {
+                top: anchorDocumentTop - agentMain.scrollTop,
+                bottom: anchorDocumentTop - agentMain.scrollTop + 80,
+            };
+        },
+    };
+    const agentMain = {
+        scrollTop: 500,
+        scrollHeight: 2000,
+        clientHeight: 400,
+        getBoundingClientRect() {
+            return { top: 0, bottom: 400 };
+        },
+        querySelectorAll(selector) {
+            return selector === '[data-agent-unit-key]' ? [anchor] : [];
+        },
+    };
+    const root = {
+        querySelector(selector) {
+            return selector === '.xb-agent-main' ? agentMain : null;
+        },
+    };
+    const snapshot = captureScrollState(root, '.xb-agent-main');
+
+    anchorDocumentTop = 680;
+    agentMain.scrollTop = 500;
+    restoreScrollState(root, snapshot, '.xb-agent-main', {
+        defaultToBottom: false,
+        preserveScrollTop: true,
+        preserveAnchor: false,
+    });
+
+    assert.equal(agentMain.scrollTop, 500);
+});
+
 test('Book app uses stable message anchors instead of the history gate', () => {
     const historyGate = {
         dataset: { agentUnitKey: 'history-gate:12' },

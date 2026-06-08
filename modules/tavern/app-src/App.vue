@@ -64,9 +64,12 @@ import {
     type TavernMemoryIndexRecord,
     type TavernMessageRecord,
     type TavernAssistantPresetRecord,
+    type TavernStructuredStateDocumentRecord,
+    type TavernStructuredStatePatchRecord,
     type TavernSessionRecord,
     type TavernTurnSummaryRecord,
 } from '../shared/session-db';
+import { getTavernMapStateForSession } from '../shared/structured-state';
 import {
     createDefaultTavernAssistantPreset,
     normalizeTavernAssistantPreset,
@@ -268,9 +271,15 @@ const historyMode = ref<'raw' | 'squash'>('raw');
 const runtimeText = ref('');
 const runtimeThoughts = ref<Array<{ label?: string; text?: string }>>([]);
 const runtimeError = ref('');
+const composeErrorMessage = ref('');
 const runtimeProvider = ref('');
 const runtimeModel = ref('');
 const isRunning = ref(false);
+const tavernDrawStatus = ref({ provider: 'disabled', enabled: false, ready: false });
+const drawingMessageKey = ref('');
+const drawStatusMessageKey = ref('');
+const drawStatusKind = ref<'idle' | 'running' | 'success' | 'error'>('idle');
+const drawProgressText = ref('');
 const sessions = ref<TavernSessionRecord[]>([]);
 const selectedSessionId = ref('');
 const sessionMessages = ref<TavernMessageRecord[]>([]);
@@ -286,6 +295,9 @@ const memoryEditorLoadedPath = ref('');
 const memoryEditorBaseContent = ref('');
 const memoryEditorMode = ref<'preview' | 'edit'>('preview');
 const memoryEditorStatus = ref('');
+const chatWorkspacePanel = ref<'state' | 'memory'>('state');
+const mapStateDocument = ref<TavernStructuredStateDocumentRecord | null>(null);
+const mapStatePatches = ref<TavernStructuredStatePatchRecord[]>([]);
 const managerActionStatus = ref('');
 const managerInputDraft = ref('');
 const managerInputStatus = ref('');
@@ -374,8 +386,13 @@ interface PendingHostRequest {
     resolve: (value: Record<string, unknown>) => void;
     reject: (error: Error) => void;
     timer: number;
+    abort?: () => void;
+    signal?: AbortSignal;
 }
 const pendingHostRequests = new Map<string, PendingHostRequest>();
+const TAVERN_IMAGE_MARKER_REGEX = /\[tavern-image:([a-z0-9\-_]+)\]/gi;
+const TAVERN_DRAW_REQUEST_TIMEOUT_MS = 1000 * 60 * 20;
+const DRAW_COMPLETION_NOTICE_TEXT = '配图已生成';
 const presetDirty = computed(() => snapshotPreset(preset.value) !== savedPresetJson.value);
 const assistantPresetDirty = computed(() => snapshotAssistantPreset(assistantPreset.value) !== savedAssistantPresetJson.value);
 const chatPresetOptions = computed<ChatPresetOptionRow[]>(() => {
@@ -673,6 +690,7 @@ const simulateRequestError = ref('');
 const messageActionFeedback = ref<Record<string, 'success' | 'error'>>({});
 const activeRunController = ref<AbortController | null>(null);
 const managerAssistantController = ref<AbortController | null>(null);
+const tavernDrawController = ref<AbortController | null>(null);
 const markdownHtmlCache = new Map<string, string>();
 const characterOptionCache = new Map<string, { signature: string; option: TavernCharacterOption }>();
 const sessionSearchCorpusCache = new Map<string, { signature: string; corpus: string }>();
@@ -698,6 +716,7 @@ let managerLastScrollTop = 0;
 let simulateRequestSequence = 0;
 let managerCompactionOverlayHideTimer: number | null = null;
 let managerScrollHideTimer: number | null = null;
+let composeErrorHideTimer: number | null = null;
 let sessionContextSyncSequence = 0;
 const effectiveContext = computed<XbTavernContext>(() => ({
     ...context.value,
@@ -710,6 +729,13 @@ const characterName = computed(() => displayableTavernName(effectiveCharacter.va
 const characterAvatar = computed(() => String(effectiveCharacter.value.avatar || '').trim());
 const visibleCharacterAvatar = computed(() => {
     const url = characterAvatar.value;
+    return url && !brokenAvatarUrls.value[url] ? url : '';
+});
+const effectiveUser = computed(() => effectiveContext.value.user || {});
+const userName = computed(() => displayableTavernName(effectiveUser.value.name || '', 'User'));
+const userAvatar = computed(() => String(effectiveUser.value.avatar || '').trim());
+const visibleUserAvatar = computed(() => {
+    const url = userAvatar.value;
     return url && !brokenAvatarUrls.value[url] ? url : '';
 });
 const liveCharacter = computed(() => context.value.character || {});
@@ -887,10 +913,10 @@ const chatMessageWindow = computed(() => getMessageWindow({
     uiMessageWindowLimit: chatMessageWindowLimit.value,
 }, chatMessages.value.length));
 const visibleChatMessages = computed(() => chatMessages.value.slice(chatMessageWindow.value.startIndex));
-const latestErrorMessage = computed(() => {
-    if (runtimeError.value) {return runtimeError.value;}
+const latestErrorMessage = computed(() => composeErrorMessage.value);
+const latestSavedChatError = computed(() => {
     const lastMessage = [...sessionMessages.value].sort((left, right) => left.order - right.order).at(-1);
-    return lastMessage?.error ? lastMessage.content : '';
+    return lastMessage?.error ? `${lastMessage.sessionId}:${lastMessage.order}:${lastMessage.content || ''}` : '';
 });
 const latestManagerRun = computed(() => managerRuns.value[0] || null);
 const visibleManagerRuns = computed(() => managerRuns.value.slice(0, MANAGER_RUN_VISIBLE_LIMIT));
@@ -1941,6 +1967,33 @@ function describeError(error: unknown) {
     return error instanceof Error ? error.message : String(error || 'unknown_error');
 }
 
+function clearComposeError() {
+    if (composeErrorHideTimer) {
+        window.clearTimeout(composeErrorHideTimer);
+        composeErrorHideTimer = null;
+    }
+    composeErrorMessage.value = '';
+}
+
+function showComposeError(message = '', durationMs = 4200) {
+    const text = String(message || '').trim();
+    if (!text) {
+        clearComposeError();
+        return;
+    }
+    if (composeErrorHideTimer) {
+        window.clearTimeout(composeErrorHideTimer);
+        composeErrorHideTimer = null;
+    }
+    composeErrorMessage.value = text;
+    composeErrorHideTimer = window.setTimeout(() => {
+        composeErrorHideTimer = null;
+        if (composeErrorMessage.value === text) {
+            composeErrorMessage.value = '';
+        }
+    }, durationMs);
+}
+
 function postToHost(type: string, payload: Record<string, unknown> = {}) {
     const safePayload = clonePostMessagePayload(payload);
     window.parent?.postMessage({ source: SOURCE_APP, type, payload: safePayload }, window.location.origin);
@@ -1950,16 +2003,191 @@ function createHostRequestId(prefix = 'host') {
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function requestHost(type: string, payload: Record<string, unknown> = {}, options: { timeoutMs?: number } = {}) {
+function createAbortError() {
+    try {
+        return new DOMException('request_aborted', 'AbortError') as unknown as Error;
+    } catch {
+        return new Error('request_aborted');
+    }
+}
+
+function requestHost(type: string, payload: Record<string, unknown> = {}, options: { timeoutMs?: number; signal?: AbortSignal } = {}) {
     const requestId = createHostRequestId();
+    if (options.signal?.aborted) {
+        return Promise.reject(createAbortError());
+    }
     postToHost(type, { ...payload, requestId });
     return new Promise<Record<string, unknown>>((resolve, reject) => {
-        const timer = window.setTimeout(() => {
+        const cleanup = () => {
+            const pending = pendingHostRequests.get(requestId);
+            if (pending?.abort && options.signal) {
+                options.signal.removeEventListener('abort', pending.abort);
+            }
             pendingHostRequests.delete(requestId);
+        };
+        const timer = window.setTimeout(() => {
+            cleanup();
             reject(new Error('host_request_timeout'));
         }, Number(options.timeoutMs) || HOST_REQUEST_TIMEOUT_MS);
-        pendingHostRequests.set(requestId, { resolve, reject, timer });
+        const abort = () => {
+            window.clearTimeout(timer);
+            cleanup();
+            postToHost('xb-tavern:cancel-request', { requestId });
+            reject(createAbortError());
+        };
+        if (options.signal) {
+            options.signal.addEventListener('abort', abort, { once: true });
+        }
+        pendingHostRequests.set(requestId, { resolve, reject, timer, abort: options.signal ? abort : undefined, signal: options.signal });
     });
+}
+
+function stripTavernImageMarkers(text = '') {
+    return String(text || '').replace(TAVERN_IMAGE_MARKER_REGEX, '').trim();
+}
+
+function findAnchorPosition(content = '', anchor = '') {
+    const text = String(content || '');
+    const normalizedAnchor = String(anchor || '').trim();
+    if (!text || !normalizedAnchor) {return -1;}
+    const directIndex = text.indexOf(normalizedAnchor);
+    if (directIndex >= 0) {return directIndex + normalizedAnchor.length;}
+    const compactText = text.replace(/\s+/g, '');
+    const compactAnchor = normalizedAnchor.replace(/\s+/g, '');
+    if (!compactAnchor) {return -1;}
+    const compactIndex = compactText.indexOf(compactAnchor);
+    if (compactIndex < 0) {return -1;}
+    let compactCursor = 0;
+    for (let index = 0; index < text.length; index += 1) {
+        if (/\s/.test(text[index])) {continue;}
+        compactCursor += 1;
+        if (compactCursor >= compactIndex + compactAnchor.length) {
+            return index + 1;
+        }
+    }
+    return -1;
+}
+
+function findNearestSentenceEnd(content = '', startPos = -1) {
+    const text = String(content || '');
+    if (startPos < 0 || !text) {return startPos;}
+    if (startPos >= text.length) {return text.length;}
+    const maxLookAhead = 80;
+    const endLimit = Math.min(text.length, startPos + maxLookAhead);
+    const basicEnders = new Set(['。', '！', '？', '!', '?', '…']);
+    const closingMarks = new Set(['”', '“', '’', '‘', '」', '』', '】', '）', ')', '"', "'", '*', '~', '～', ']']);
+    const eatClosingMarks = (position: number) => {
+        let next = position;
+        while (next < text.length && closingMarks.has(text[next])) {
+            next += 1;
+        }
+        return next;
+    };
+    if (startPos > 0 && basicEnders.has(text[startPos - 1])) {
+        return eatClosingMarks(startPos);
+    }
+    for (let offset = 0; offset < maxLookAhead && startPos + offset < endLimit; offset += 1) {
+        const position = startPos + offset;
+        const char = text[position];
+        if (char === '\n') {return position + 1;}
+        if (basicEnders.has(char)) {return eatClosingMarks(position + 1);}
+        if (char === '.' && text.slice(position, position + 3) === '...') {
+            return eatClosingMarks(position + 3);
+        }
+    }
+    return startPos;
+}
+
+function insertTavernImageMarker(content = '', image: Record<string, unknown> = {}) {
+    const slotId = String(image.slotId || '').trim();
+    if (!slotId) {return { content, inserted: false, appended: false };}
+    const marker = `[tavern-image:${slotId}]`;
+    const text = String(content || '');
+    if (text.includes(marker)) {return { content: text, inserted: false, appended: false };}
+    let position = findAnchorPosition(text, String(image.anchor || ''));
+    if (position >= 0) {
+        position = findNearestSentenceEnd(text, position);
+    }
+    if (position >= 0) {
+        const before = text.slice(0, position);
+        const after = text.slice(position);
+        let insertText = marker;
+        if (before.length > 0 && !before.endsWith('\n')) {insertText = `\n${insertText}`;}
+        if (after.length > 0 && !after.startsWith('\n')) {insertText = `${insertText}\n`;}
+        return {
+            content: `${before}${insertText}${after}`,
+            inserted: true,
+            appended: false,
+        };
+    }
+    const needNewline = text.length > 0 && !text.endsWith('\n');
+    return {
+        content: `${text}${needNewline ? '\n' : ''}${marker}`,
+        inserted: true,
+        appended: true,
+    };
+}
+
+function insertTavernImageMarkers(content = '', images: unknown[] = []) {
+    let nextContent = String(content || '');
+    let inserted = 0;
+    let appended = 0;
+    (Array.isArray(images) ? images : []).forEach((rawImage) => {
+        const image = rawImage && typeof rawImage === 'object' ? rawImage as Record<string, unknown> : {};
+        if (!image.slotId || image.success === false) {return;}
+        const result = insertTavernImageMarker(nextContent, image);
+        nextContent = result.content;
+        if (result.inserted) {inserted += 1;}
+        if (result.appended) {appended += 1;}
+    });
+    return { content: nextContent, inserted, appended };
+}
+
+function formatDrawProgress(stateName = '', data: Record<string, unknown> = {}) {
+    const current = Number(data.current) || 0;
+    const total = Number(data.total) || 0;
+    const countText = total ? ` ${current}/${total}` : '';
+    switch (stateName) {
+        case 'llm':
+            return '正在分析画面';
+        case 'gen':
+            return total ? `准备生成 ${total} 张图` : '准备生成图片';
+        case 'queued':
+            return Number(data.ahead) > 0 ? `画图排队中，前方 ${Number(data.ahead)} 个任务` : `画图排队中${countText}`;
+        case 'progress':
+            return `正在生成图片${countText}`;
+        case 'cooldown': {
+            const remainingMs = Number.isFinite(Number(data.remainingMs))
+                ? Number(data.remainingMs)
+                : Number(data.duration);
+            if (!Number.isFinite(remainingMs) || remainingMs <= 0) {return '等待画图冷却';}
+            return `等待下一张图片${total ? ` ${data.nextIndex || current}/${total}` : ''}，剩余 ${(remainingMs / 1000).toFixed(1)}s`;
+        }
+        case 'success': {
+            const success = Number(data.success) || 0;
+            const finalTotal = total || success;
+            if (finalTotal > 0 && success === 0) {
+                return `画图结束，${finalTotal} 张都失败`;
+            }
+            return `画图完成 ${success}/${finalTotal}`;
+        }
+        default:
+            return '正在处理画图';
+    }
+}
+
+async function refreshTavernDrawStatus() {
+    try {
+        const result = await requestHost('xb-tavern:draw-status', {});
+        tavernDrawStatus.value = {
+            provider: String(result.provider || 'disabled'),
+            enabled: result.enabled === true,
+            ready: result.ready === true,
+        };
+    } catch {
+        tavernDrawStatus.value = { provider: 'disabled', enabled: false, ready: false };
+    }
+    return tavernDrawStatus.value;
 }
 
 async function applyTavernRegex(items: TavernApplyRegexItem[]): Promise<TavernApplyRegexResult> {
@@ -2072,6 +2300,9 @@ function resolveHostRequest(payload: Record<string, unknown> = {}) {
     const pending = pendingHostRequests.get(requestId);
     if (!pending) {return;}
     window.clearTimeout(pending.timer);
+    if (pending.abort && pending.signal) {
+        pending.signal.removeEventListener('abort', pending.abort);
+    }
     pendingHostRequests.delete(requestId);
     if (payload.ok === false) {
         pending.reject(new Error(String(payload.error || 'host_request_failed')));
@@ -2220,6 +2451,15 @@ function onHostMessage(event: MessageEvent) {
         resolveHostRequest(data.payload || {});
         return;
     }
+    if (data.type === 'xb-tavern:draw-progress') {
+        const payload = data.payload || {};
+        if (drawingMessageKey.value) {
+            drawStatusMessageKey.value = drawingMessageKey.value;
+            drawStatusKind.value = payload.state === 'success' ? 'success' : 'running';
+            drawProgressText.value = formatDrawProgress(String(payload.state || ''), payload.data || {});
+        }
+        return;
+    }
     if (data.type === 'xb-tavern:config') {
         applyHostPayload(data.payload || {});
         return;
@@ -2352,16 +2592,19 @@ async function refreshManagerRecords(sessionId = selectedSessionId.value) {
         managerRuns.value = [];
         memoryFiles.value = [];
         memoryIndex.value = null;
+        mapStateDocument.value = null;
+        mapStatePatches.value = [];
         selectedMemoryFilePath.value = '';
         return;
     }
-    const [managerMessages, turns, episodes, runs, files, index] = await Promise.all([
+    const [managerMessages, turns, episodes, runs, files, index, mapState] = await Promise.all([
         listTavernManagerMessages(id),
         listTavernTurnSummaries(id),
         listTavernEpisodeSummaries(id),
         listTavernManagerRuns(id, { limit: 18 }),
         listTavernMemoryFiles(id, { includeStale: true }),
         getTavernMemoryIndex(id),
+        getTavernMapStateForSession(id),
     ]);
     if (id !== selectedSessionId.value) {return;}
     managerChatMessages.value = managerMessages;
@@ -2370,6 +2613,8 @@ async function refreshManagerRecords(sessionId = selectedSessionId.value) {
     managerRuns.value = runs;
     memoryFiles.value = files;
     memoryIndex.value = index;
+    mapStateDocument.value = mapState.document;
+    mapStatePatches.value = mapState.patches;
     if (!files.some((file) => file.path === selectedMemoryFilePath.value)) {
         if (memoryEditorDirty.value && selectedMemoryFilePath.value) {
             memoryEditorStatus.value = '当前档案已变化，草稿仍保留';
@@ -2816,9 +3061,11 @@ function roleLabel(role = '') {
     if (role === 'assistant') {
         return displayableTavernName(selectedSession.value?.characterName || effectiveCharacter.value.name || '', '角色');
     }
+    if (role === 'user') {
+        return displayableTavernName(userName.value || '', 'User');
+    }
     const labels: Record<string, string> = {
         system: '规则',
-        user: '我',
         tool: '工具结果',
     };
     return labels[role] || role || '未知';
@@ -2887,6 +3134,197 @@ function renderChatMarkdown(text = '') {
     return html;
 }
 
+const dialogueQuotePairs: Record<string, string> = {
+    '"': '"',
+    '“': '”',
+    '「': '」',
+    '『': '』',
+};
+
+const dialogueQuoteOpeners = new Set(Object.keys(dialogueQuotePairs));
+const dialogueSkipTags = new Set(['A', 'BUTTON', 'CODE', 'KBD', 'PRE', 'SCRIPT', 'STYLE', 'TEXTAREA']);
+const maxInlineDialogueLength = 600;
+
+function shouldSkipDialogueTextNode(node: Text) {
+    let parent = node.parentElement;
+    while (parent) {
+        if (dialogueSkipTags.has(parent.tagName) || parent.classList.contains('xb-rp-dialogue')) {
+            return true;
+        }
+        parent = parent.parentElement;
+    }
+    return false;
+}
+
+function collectDialogueRanges(text: string) {
+    const ranges: Array<{ start: number; end: number }> = [];
+    let cursor = 0;
+    while (cursor < text.length) {
+        const opener = text[cursor];
+        if (!dialogueQuoteOpeners.has(opener)) {
+            cursor += 1;
+            continue;
+        }
+        const closer = dialogueQuotePairs[opener];
+        let end = text.indexOf(closer, cursor + 1);
+        if (end < 0 || end === cursor + 1 || end - cursor > maxInlineDialogueLength) {
+            cursor += 1;
+            continue;
+        }
+        const segment = text.slice(cursor + 1, end);
+        if (segment.includes('\n') || !segment.trim()) {
+            cursor += 1;
+            continue;
+        }
+        ranges.push({ start: cursor, end: end + 1 });
+        cursor = end + 1;
+    }
+    return ranges;
+}
+
+function enhanceRoleplayDialogue(root: HTMLElement) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            const textNode = node as Text;
+            if (!textNode.data || shouldSkipDialogueTextNode(textNode)) {
+                return NodeFilter.FILTER_REJECT;
+            }
+            return collectDialogueRanges(textNode.data).length
+                ? NodeFilter.FILTER_ACCEPT
+                : NodeFilter.FILTER_SKIP;
+        },
+    });
+    const nodes: Text[] = [];
+    while (walker.nextNode()) {
+        nodes.push(walker.currentNode as Text);
+    }
+    nodes.forEach((textNode) => {
+        const ranges = collectDialogueRanges(textNode.data);
+        if (!ranges.length) {return;}
+        const fragment = document.createDocumentFragment();
+        let cursor = 0;
+        ranges.forEach((range) => {
+            if (range.start > cursor) {
+                fragment.append(document.createTextNode(textNode.data.slice(cursor, range.start)));
+            }
+            const span = document.createElement('span');
+            span.className = 'xb-rp-dialogue';
+            span.textContent = textNode.data.slice(range.start, range.end);
+            fragment.append(span);
+            cursor = range.end;
+        });
+        if (cursor < textNode.data.length) {
+            fragment.append(document.createTextNode(textNode.data.slice(cursor)));
+        }
+        textNode.replaceWith(fragment);
+    });
+}
+
+function canHydrateTavernFigure(figure: HTMLElement, slotId = '') {
+    return !!(
+        figure
+        && figure.isConnected !== false
+        && String(figure.dataset.tavernImageSlot || '').trim() === slotId
+    );
+}
+
+function hydrateTavernImageFigure(figure: HTMLElement) {
+    const slotId = String(figure.dataset.tavernImageSlot || '').trim();
+    if (!slotId || figure.dataset.tavernImageHydrating === 'true' || figure.dataset.tavernImageLoaded === 'true') {
+        return;
+    }
+    figure.dataset.tavernImageHydrating = 'true';
+    void requestHost('xb-tavern:draw-image', {
+        payload: { slotId },
+    }, { timeoutMs: HOST_REQUEST_TIMEOUT_MS * 2 })
+        .then((response) => {
+            if (!canHydrateTavernFigure(figure, slotId)) {return;}
+            const result = (response.result || response) as Record<string, unknown>;
+            figure.dataset.tavernImageHydrating = 'false';
+            if (!result.hasData || !result.url) {
+                figure.classList.add('is-failed');
+                const placeholder = document.createElement('span');
+                placeholder.className = 'xb-tavern-image-placeholder';
+                placeholder.textContent = result.isFailed
+                    ? String(result.errorMessage || '配图生成失败')
+                    : '配图未找到';
+                figure.replaceChildren(placeholder);
+                return;
+            }
+            figure.classList.add('is-loaded');
+            figure.dataset.tavernImageLoaded = 'true';
+            const image = document.createElement('img');
+            image.src = String(result.url || '');
+            image.alt = result.tags ? `配图：${String(result.tags)}` : '配图';
+            image.loading = 'lazy';
+            figure.replaceChildren(image);
+        })
+        .catch(() => {
+            if (!canHydrateTavernFigure(figure, slotId)) {return;}
+            figure.dataset.tavernImageHydrating = 'false';
+            figure.classList.add('is-failed');
+            const placeholder = document.createElement('span');
+            placeholder.className = 'xb-tavern-image-placeholder';
+            placeholder.textContent = '配图加载失败';
+            figure.replaceChildren(placeholder);
+        });
+}
+
+function createTavernImageFigure(slotId = '') {
+    const figure = document.createElement('span');
+    figure.className = 'xb-tavern-image';
+    figure.dataset.tavernImageSlot = slotId;
+    const placeholder = document.createElement('span');
+    placeholder.className = 'xb-tavern-image-placeholder';
+    placeholder.textContent = '配图加载中';
+    figure.append(placeholder);
+    return figure;
+}
+
+function enhanceTavernImageMarkers(root: HTMLElement) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            const textNode = node as Text;
+            if (!textNode.data || !TAVERN_IMAGE_MARKER_REGEX.test(textNode.data)) {
+                TAVERN_IMAGE_MARKER_REGEX.lastIndex = 0;
+                return NodeFilter.FILTER_SKIP;
+            }
+            TAVERN_IMAGE_MARKER_REGEX.lastIndex = 0;
+            const parent = textNode.parentElement;
+            if (parent?.closest?.('a, button, code, kbd, pre, script, style, textarea, .xb-tavern-image')) {
+                return NodeFilter.FILTER_REJECT;
+            }
+            return NodeFilter.FILTER_ACCEPT;
+        },
+    });
+    const nodes: Text[] = [];
+    while (walker.nextNode()) {
+        nodes.push(walker.currentNode as Text);
+    }
+    nodes.forEach((textNode) => {
+        const text = textNode.data;
+        TAVERN_IMAGE_MARKER_REGEX.lastIndex = 0;
+        let match: RegExpExecArray | null;
+        let lastIndex = 0;
+        let replaced = false;
+        const fragment = document.createDocumentFragment();
+        while ((match = TAVERN_IMAGE_MARKER_REGEX.exec(text)) !== null) {
+            replaced = true;
+            if (match.index > lastIndex) {
+                fragment.append(document.createTextNode(text.slice(lastIndex, match.index)));
+            }
+            fragment.append(createTavernImageFigure(match[1] || ''));
+            lastIndex = TAVERN_IMAGE_MARKER_REGEX.lastIndex;
+        }
+        if (!replaced) {return;}
+        if (lastIndex < text.length) {
+            fragment.append(document.createTextNode(text.slice(lastIndex)));
+        }
+        textNode.replaceWith(fragment);
+    });
+    root.querySelectorAll<HTMLElement>('[data-tavern-image-slot]').forEach((figure) => hydrateTavernImageFigure(figure));
+}
+
 function enhanceChatMarkdown() {
     const root = chatScrollRef.value;
     if (!root?.querySelectorAll) {return;}
@@ -2897,6 +3335,8 @@ function enhanceChatMarkdown() {
             codeBlockClassName: 'xb-tavern-codeblock',
             codeCopyClassName: 'xb-tavern-code-copy',
         });
+        enhanceTavernImageMarkers(node);
+        enhanceRoleplayDialogue(node);
         node.dataset.markdownEnhanced = signature;
     });
 }
@@ -2957,6 +3397,58 @@ function actionFeedback(message: TavernMessageRecord, action: string) {
     return messageActionFeedback.value[`${messageKey(message)}:${action}`] || '';
 }
 
+function isDrawingMessage(message: TavernMessageRecord) {
+    return drawingMessageKey.value === messageKey(message);
+}
+
+function showDrawMessageStatus(
+    message: TavernMessageRecord,
+    text = '',
+    kind: 'running' | 'success' | 'error' = 'running',
+    durationMs = 0,
+) {
+    drawStatusMessageKey.value = messageKey(message);
+    drawStatusKind.value = kind;
+    drawProgressText.value = text;
+    if (durationMs > 0) {
+        const key = messageKey(message);
+        window.setTimeout(() => {
+            if (drawStatusMessageKey.value !== key || drawingMessageKey.value === key) {return;}
+            drawStatusMessageKey.value = '';
+            drawStatusKind.value = 'idle';
+            drawProgressText.value = '';
+        }, durationMs);
+    }
+}
+
+function drawMessageStatusText(message: TavernMessageRecord) {
+    return drawStatusMessageKey.value === messageKey(message) ? drawProgressText.value : '';
+}
+
+function drawMessageStatusClass(message: TavernMessageRecord) {
+    return drawStatusMessageKey.value === messageKey(message) ? `is-${drawStatusKind.value}` : '';
+}
+
+function canDrawMessage(message: TavernMessageRecord) {
+    if (isRunning.value || isEditingMessage(message) || message.error) {return false;}
+    if (!['user', 'assistant'].includes(message.role)) {return false;}
+    if (drawingMessageKey.value && !isDrawingMessage(message)) {return false;}
+    return !!stripTavernImageMarkers(message.content || '');
+}
+
+function drawMessageTitle(message: TavernMessageRecord) {
+    if (isDrawingMessage(message)) {
+        return drawMessageStatusText(message) || '停止画图';
+    }
+    if (!canDrawMessage(message)) {
+        return drawingMessageKey.value ? '已有画图任务正在运行' : '这条消息暂不能画图';
+    }
+    if (tavernDrawStatus.value.enabled && tavernDrawStatus.value.ready) {
+        return '为这条消息画图';
+    }
+    return '为这条消息画图';
+}
+
 async function copyTextWithFallback(text = '') {
     const normalized = String(text || '');
     if (!normalized) {return false;}
@@ -2966,7 +3458,7 @@ async function copyTextWithFallback(text = '') {
             return true;
         }
     } catch {
-        // Fall through to the legacy path.
+        // Fall through to the DOM-based clipboard path.
     }
     try {
         const textarea = document.createElement('textarea');
@@ -2989,6 +3481,92 @@ async function copyTextWithFallback(text = '') {
 async function copyMessage(message: TavernMessageRecord) {
     const ok = await copyTextWithFallback(message.content || '');
     flashMessageAction(message, 'copy', ok);
+}
+
+async function drawMessage(message: TavernMessageRecord) {
+    if (isDrawingMessage(message)) {
+        tavernDrawController.value?.abort();
+        showDrawMessageStatus(message, '正在停止画图', 'running');
+        return;
+    }
+    if (!canDrawMessage(message)) {
+        flashMessageAction(message, 'draw', false);
+        return;
+    }
+    const status = await refreshTavernDrawStatus();
+    if (!status.enabled || !status.ready) {
+        const text = '请开启小白X画图模块';
+        showDrawMessageStatus(message, text, 'error', 3200);
+        flashMessageAction(message, 'draw', false);
+        return;
+    }
+    const controller = new AbortController();
+    tavernDrawController.value = controller;
+    drawingMessageKey.value = messageKey(message);
+    showDrawMessageStatus(message, '正在准备画图', 'running');
+    try {
+        const cleanText = stripTavernImageMarkers(message.content || '');
+        const resultPayload = await requestHost('xb-tavern:draw-generate', {
+            payload: {
+                source: 'tavern',
+                text: cleanText,
+                title: roleLabel(message.role),
+                sessionId: message.sessionId,
+                messageOrder: message.order,
+                role: message.role,
+                characterName: selectedSession.value?.characterName || effectiveCharacter.value.name || '',
+            },
+        }, {
+            timeoutMs: TAVERN_DRAW_REQUEST_TIMEOUT_MS,
+            signal: controller.signal,
+        });
+        if (controller.signal.aborted) {
+            flashMessageAction(message, 'draw', false);
+            return;
+        }
+        const result = (resultPayload.result || resultPayload) as Record<string, unknown>;
+        const insertion = insertTavernImageMarkers(message.content || '', Array.isArray(result.images) ? result.images : []);
+        if (!insertion.inserted) {
+            const success = Number(result.success) || 0;
+            const total = Number(result.total) || (Array.isArray(result.images) ? result.images.length : 0);
+            const text = total > 0 && success === 0
+                ? `画图任务结束：${total} 张都失败了，未插入图片。`
+                : success > 0
+                    ? `画图完成 ${success}/${total || success}，但没有返回可用图片占位。`
+                    : '画图任务结束，但没有返回可用图片。';
+            showDrawMessageStatus(message, text, 'error', 4200);
+            flashMessageAction(message, 'draw', false);
+            return;
+        }
+        const updated = await updateTavernMessage(message.sessionId, message.order, { content: insertion.content });
+        if (updated && selectedSessionId.value === message.sessionId) {
+            sessionMessages.value = await listTavernMessages(message.sessionId);
+        }
+        const fallbackText = insertion.appended ? `，${insertion.appended} 张追加到末尾` : '';
+        showDrawMessageStatus(message, `${DRAW_COMPLETION_NOTICE_TEXT}${fallbackText}`, 'success', 2600);
+        flashMessageAction(updated || message, 'draw', !!updated);
+        void nextTick(enhanceChatMarkdown);
+    } catch (error) {
+        const text = describeError(error);
+        if (/abort|已取消|request_aborted/i.test(text)) {
+            showDrawMessageStatus(message, '配图已取消', 'error', 1800);
+        } else {
+            const errorText = `配图失败：${text}`;
+            showDrawMessageStatus(message, errorText, 'error', 4200);
+        }
+        flashMessageAction(message, 'draw', false);
+    } finally {
+        if (tavernDrawController.value === controller) {
+            tavernDrawController.value = null;
+        }
+        if (drawingMessageKey.value === messageKey(message)) {
+            window.setTimeout(() => {
+                if (!tavernDrawController.value && drawingMessageKey.value === messageKey(message)) {
+                    drawingMessageKey.value = '';
+                }
+            }, 1200);
+        }
+    }
 }
 
 function startEditMessage(message: TavernMessageRecord) {
@@ -3619,9 +4197,11 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
         cancelActiveRun();
         return;
     }
+    clearComposeError();
     const messageText = String(options.messageText ?? currentUserMessage.value ?? '').trim();
     if (!messageText) {
         runtimeError.value = '先写一句话。';
+        showComposeError('先写一句话。');
         return;
     }
     if (!selectedSessionId.value) {
@@ -3631,6 +4211,7 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
     const controller = new AbortController();
     activeRunController.value = controller;
     runtimeError.value = '';
+    clearComposeError();
     runtimeText.value = '';
     runtimeThoughts.value = [];
     runtimeProvider.value = '';
@@ -3757,6 +4338,20 @@ watch([() => activeMemoryFiles.value.length, () => filteredChatSidebarSessionCou
     }
 });
 
+watch(runtimeError, (message) => {
+    if (message) {
+        showComposeError(message);
+    }
+});
+
+watch(latestSavedChatError, (signature) => {
+    if (!signature) {return;}
+    const errorText = signature.split(':').slice(2).join(':').trim();
+    if (errorText) {
+        showComposeError(errorText);
+    }
+});
+
 watch([
     () => activeSettingsWorkspace.value,
     () => activeView.value,
@@ -3831,6 +4426,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
     assistantPresetStatus,
     assistantPresetVisibleLimit,
     cancelEditMessage,
+    canDrawMessage,
     canEditMessage,
     canEditPromptOrder,
     canRerunMessage,
@@ -3853,6 +4449,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
     chatSidebarSessions,
     chatSidePanel,
     chatSubtitle,
+    chatWorkspacePanel,
     copyMessage,
     createRegexScript,
     currentUserMessage,
@@ -3863,6 +4460,11 @@ provide(TAVERN_APP_UI_CONTEXT, {
     discardMemoryDraft,
     discardPresetChanges,
     displayCharacterName,
+    drawMessage,
+    drawMessageStatusClass,
+    drawMessageStatusText,
+    drawMessageTitle,
+    drawProgressText,
     editingMessageDraft,
     enterMemoryEditMode,
     episodeSummaries,
@@ -3898,6 +4500,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
     hiddenWorldbookCount,
     hiddenWorldbookPreviewEntryCount,
     homeThemeDark,
+    isDrawingMessage,
     isEditingMessage,
     isEditingMessageDirty,
     isManagerAssistantRunning,
@@ -3935,6 +4538,8 @@ provide(TAVERN_APP_UI_CONTEXT, {
     memoryFileSearchText,
     memoryFileStatusLabel,
     memoryIndexStatusLine,
+    mapStateDocument,
+    mapStatePatches,
     messageKey,
     movePromptRow,
     normalizeTavernSessionState,
@@ -4030,6 +4635,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
     visibleManagerChatMessages,
     visibleManagerRuns,
     visiblePromptEditorRows,
+    visibleUserAvatar,
     visibleWorldbookOptions,
     WORLDBOOK_BATCH_SIZE,
     WORLDBOOK_PREVIEW_BATCH_SIZE,
@@ -4078,11 +4684,15 @@ onUnmounted(() => {
     setHostChatCompletionsRequestHeadersProvider(null);
     pendingHostRequests.forEach((request) => {
         window.clearTimeout(request.timer);
+        if (request.abort && request.signal) {
+            request.signal.removeEventListener('abort', request.abort);
+        }
         request.reject(new Error('tavern_unmounted'));
     });
     pendingHostRequests.clear();
     activeRunController.value?.abort();
     managerAssistantController.value?.abort();
+    tavernDrawController.value?.abort();
     if (chatScrollHideTimer) {
         window.clearTimeout(chatScrollHideTimer);
         chatScrollHideTimer = null;
@@ -4090,6 +4700,10 @@ onUnmounted(() => {
     if (managerScrollHideTimer) {
         window.clearTimeout(managerScrollHideTimer);
         managerScrollHideTimer = null;
+    }
+    if (composeErrorHideTimer) {
+        window.clearTimeout(composeErrorHideTimer);
+        composeErrorHideTimer = null;
     }
     clearManagerCompactionOverlayHideTimer();
     clearPendingCharacterSession();

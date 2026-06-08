@@ -20,11 +20,14 @@ import {
     deleteTavernManagerMessages,
     listTavernEpisodeSummaries,
     listTavernManagerMemorySnapshots,
+    listTavernManagerStateSnapshots,
     listTavernManagerMessages,
     listTavernMessages,
     listTavernTurnSummaries,
     rollbackManagerRunMemoryWrites,
+    rollbackManagerRunStateWrites,
     rollbackManagerRunsForMessageRange,
+    rollbackManagerStateRunsForMessageRange,
     updateTavernManagerRun,
     type TavernEpisodeSummaryRecord,
     type TavernManagerMessageRecord,
@@ -32,6 +35,7 @@ import {
     type TavernMessageRecord,
     type TavernTurnSummaryRecord,
 } from '../../shared/session-db';
+import { executeTavernStateTool, TAVERN_STATE_TOOL_NAMES, type TavernStateToolResult } from '../../shared/structured-state';
 import { getXbTavernProviderLabel } from './provider';
 
 const resolveConversationTokens = (contextTokens as unknown as {
@@ -80,6 +84,7 @@ export interface XbTavernManagerRunResult {
     turnSummary?: TavernTurnSummaryRecord;
     episodeSummary?: TavernEpisodeSummaryRecord;
     changedFiles?: string[];
+    changedStates?: string[];
     error?: string;
 }
 
@@ -109,6 +114,7 @@ export interface XbTavernManagerChatResult {
     provider: string;
     model: string;
     changedFiles: string[];
+    changedStates: string[];
     error?: string;
 }
 
@@ -280,7 +286,7 @@ async function runManagerOnce(options: XbTavernManagerOnceOptions): Promise<XbTa
 }
 
 function summarizeToolArguments(args: Record<string, unknown> = {}): string {
-    return ['filePath', 'path', 'pattern', 'mode', 'startOrder', 'endOrder']
+    return ['filePath', 'path', 'pattern', 'mode', 'docType', 'docId', 'elementId', 'startOrder', 'endOrder']
         .map((key) => {
             const value = normalizeText(args[key], 160);
             return value ? `${key}: ${value}` : '';
@@ -289,8 +295,12 @@ function summarizeToolArguments(args: Record<string, unknown> = {}): string {
         .join('; ');
 }
 
-function summarizeToolResult(result: TavernMemoryToolResult): string {
+function summarizeToolResult(result: TavernMemoryToolResult | TavernStateToolResult): string {
     return normalizeText(result.summary || result.error || '', 240);
+}
+
+function isStateToolName(name = ''): boolean {
+    return Object.values(TAVERN_STATE_TOOL_NAMES).includes(name as typeof TAVERN_STATE_TOOL_NAMES[keyof typeof TAVERN_STATE_TOOL_NAMES]);
 }
 
 function hasFailedMemoryTool(toolTrace: Array<Record<string, unknown>> = []): boolean {
@@ -316,13 +326,16 @@ async function rollbackManagerRunIfWroteMemory(managerRunId = ''): Promise<{
     conflicts: string[];
 } | null> {
     const snapshots = await listTavernManagerMemorySnapshots(managerRunId);
-    if (!snapshots.some((snapshot) => String(snapshot.afterHash || '').trim())) {
+    const stateSnapshots = await listTavernManagerStateSnapshots(managerRunId);
+    if (!snapshots.some((snapshot) => String(snapshot.afterHash || '').trim())
+        && !stateSnapshots.some((snapshot) => String(snapshot.afterHash || '').trim())) {
         return null;
     }
-    const result = await rollbackManagerRunMemoryWrites(managerRunId);
+    const memoryResult = await rollbackManagerRunMemoryWrites(managerRunId);
+    const stateResult = await rollbackManagerRunStateWrites(managerRunId);
     return {
         managerRun: await updateTavernManagerRun(managerRunId, {}),
-        conflicts: result.conflicts,
+        conflicts: [...memoryResult.conflicts, ...stateResult.conflicts],
     };
 }
 
@@ -339,6 +352,8 @@ async function runManagerAgentWithTools(input: {
     caller: 'auto' | 'chat';
     messages: XbTavernMessage[];
     managerRunId?: string;
+    userOrder?: number;
+    assistantOrder?: number;
     beforeWriteGuard?: () => Promise<void> | void;
     signal?: AbortSignal;
     executeManagerOnce?: (options: XbTavernManagerOnceOptions) => Promise<XbTavernManagerOnceResult>;
@@ -349,6 +364,7 @@ async function runManagerAgentWithTools(input: {
     model: string;
     toolTrace: Array<Record<string, unknown>>;
     changedFiles: string[];
+    changedStates: string[];
 }> {
     const executeManagerOnce = input.executeManagerOnce || runManagerOnce;
     const providerConfig = resolveActiveProviderConfig(input.agentConfig || {}, {
@@ -358,6 +374,7 @@ async function runManagerAgentWithTools(input: {
     const tools = getTavernManagerToolDefinitions();
     const toolTrace: Array<Record<string, unknown>> = [];
     const changedFiles = new Set<string>();
+    const changedStates = new Set<string>();
     let finalText = '';
     let resultProvider = '';
     let resultModel = '';
@@ -396,6 +413,7 @@ async function runManagerAgentWithTools(input: {
                 model: resultModel,
                 toolTrace,
                 changedFiles: [...changedFiles],
+                changedStates: [...changedStates],
             };
         }
 
@@ -406,20 +424,33 @@ async function runManagerAgentWithTools(input: {
         for (const toolCall of toolCalls) {
             const args = safeJsonParse(toolCall.arguments, {});
             throwIfManagerAborted(input.signal);
-            const toolResult = await executeTavernMemoryTool(input.sessionId, toolCall.name, args, {
-                caller: input.caller,
-                managerRunId: input.managerRunId,
-                beforeWriteGuard: input.beforeWriteGuard,
-            });
-            if (toolResult.changed && toolResult.path) {
-                changedFiles.add(toolResult.path);
+            const toolResult = isStateToolName(toolCall.name)
+                ? await executeTavernStateTool(input.sessionId, toolCall.name, args, {
+                    caller: input.caller,
+                    managerRunId: input.managerRunId,
+                    sourceUserOrder: input.userOrder,
+                    sourceAssistantOrder: input.assistantOrder,
+                    beforeWriteGuard: input.beforeWriteGuard,
+                })
+                : await executeTavernMemoryTool(input.sessionId, toolCall.name, args, {
+                    caller: input.caller,
+                    managerRunId: input.managerRunId,
+                    beforeWriteGuard: input.beforeWriteGuard,
+                });
+            const resultPath = 'path' in toolResult ? toolResult.path : '';
+            const resultStateKey = 'docType' in toolResult && toolResult.docType ? `${toolResult.docType}/${toolResult.docId || ''}` : '';
+            if (toolResult.changed && resultPath) {
+                changedFiles.add(resultPath);
+            }
+            if (toolResult.changed && resultStateKey) {
+                changedStates.add(resultStateKey);
             }
             toolTrace.push({
                 round,
                 name: toolCall.name,
                 ok: toolResult.ok,
                 args: summarizeToolArguments(args),
-                path: toolResult.path || '',
+                path: resultPath || resultStateKey,
                 summary: summarizeToolResult(toolResult),
                 error: toolResult.error || '',
             });
@@ -558,6 +589,7 @@ async function runManagerTask(input: {
     model: string;
     toolTrace: Array<Record<string, unknown>>;
     changedFiles: string[];
+    changedStates: string[];
     error?: string;
 }> {
     const managerRun = await createOrUpdateManagerRun({
@@ -576,6 +608,7 @@ async function runManagerTask(input: {
     let resultModel = managerRun.model || '';
     let toolTrace: Array<Record<string, unknown>> = [];
     let changedFiles: string[] = [];
+    let changedStates: string[] = [];
     try {
         const result = await runManagerAgentWithTools({
             sessionId: input.sessionId,
@@ -583,6 +616,8 @@ async function runManagerTask(input: {
             caller: input.caller,
             messages: input.messages,
             managerRunId: managerRun.id,
+            userOrder: input.userOrder,
+            assistantOrder: input.assistantOrder,
             beforeWriteGuard: input.beforeWriteGuard,
             signal: input.signal,
             executeManagerOnce: input.executeManagerOnce,
@@ -593,6 +628,7 @@ async function runManagerTask(input: {
         resultModel = result.model || resultModel;
         toolTrace = result.toolTrace;
         changedFiles = result.changedFiles;
+        changedStates = result.changedStates;
         if (hasFailedMemoryTool(toolTrace)) {
             throw new Error('manager_memory_tool_failed');
         }
@@ -604,10 +640,11 @@ async function runManagerTask(input: {
             status: 'completed',
             provider: resultProvider,
             model: resultModel,
-            outputText: resultText || (changedFiles.length ? `已维护 ${changedFiles.length} 个记忆文件。` : '已检查并回复。'),
-            parsedAction: changedFiles.length ? 'memory_files_updated' : 'memory_checked',
+            outputText: resultText || (changedFiles.length || changedStates.length ? `已维护 ${changedFiles.length} 个记忆文件、${changedStates.length} 份结构化状态。` : '已检查并回复。'),
+            parsedAction: changedFiles.length || changedStates.length ? 'manager_state_updated' : 'memory_checked',
             toolTrace,
             changedFiles,
+            changedStates,
             error: '',
         });
         return {
@@ -618,6 +655,7 @@ async function runManagerTask(input: {
             model: resultModel,
             toolTrace,
             changedFiles,
+            changedStates,
         };
     } catch (error) {
         const errorText = error instanceof Error ? error.message : String(error || 'manager_failed');
@@ -629,6 +667,7 @@ async function runManagerTask(input: {
             outputText: resultText,
             toolTrace,
             changedFiles,
+            changedStates,
             error: errorText,
         });
         const rolledBack = ['cancelled', 'superseded'].includes(status)
@@ -645,6 +684,7 @@ async function runManagerTask(input: {
             model: resultModel,
             toolTrace,
             changedFiles,
+            changedStates,
             error: errorText,
         };
     }
@@ -849,10 +889,15 @@ export async function runXbTavernManagerAfterTurn(input: XbTavernManagerRunInput
                 status: 'failed',
                 error,
                 changedFiles: result.changedFiles,
+                changedStates: result.changedStates,
             });
+            const rolledBack = await rollbackManagerRunIfWroteMemory(failed.id);
+            if (!rolledBack?.conflicts.length) {
+                await rebuildTavernMemoryDerivedIndex(sessionId);
+            }
             return {
                 ok: false,
-                managerRun: failed,
+                managerRun: rolledBack?.managerRun || failed,
                 error,
             };
         }
@@ -864,6 +909,7 @@ export async function runXbTavernManagerAfterTurn(input: XbTavernManagerRunInput
             turnSummary,
             episodeSummary,
             changedFiles: result.changedFiles,
+            changedStates: result.changedStates,
         };
     } catch (error) {
         const errorText = error instanceof Error ? error.message : String(error || 'manager_failed');
@@ -922,6 +968,7 @@ export async function runXbTavernManagerChat(input: XbTavernManagerChatInput): P
         provider: result.provider,
         model: result.model,
         changedFiles: result.changedFiles,
+        changedStates: result.changedStates,
         error: result.error,
     };
 }
@@ -1018,5 +1065,12 @@ export async function cancelAndRollbackXbTavernManagersForMessageRange(sessionId
             run.controller.abort();
         }
     });
-    return await rollbackManagerRunsForMessageRange(id, order);
+    const memory = await rollbackManagerRunsForMessageRange(id, order);
+    const state = await rollbackManagerStateRunsForMessageRange(id, order);
+    return {
+        runIds: [...new Set([...memory.runIds, ...state.runIds])],
+        rolledBack: memory.rolledBack + state.rolledBack,
+        conflicts: [...memory.conflicts, ...state.conflicts],
+        skipped: memory.skipped + state.skipped,
+    };
 }

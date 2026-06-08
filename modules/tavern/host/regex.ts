@@ -128,7 +128,7 @@ function normalizeRegexOptions(value: unknown): Record<string, unknown> {
 
 function fallbackScriptId(scriptType: number | null | undefined, index: number | null | undefined): string {
     if (Number.isFinite(Number(scriptType)) && Number.isInteger(Number(index)) && Number(index) >= 0) {
-        return `legacy-${Number(scriptType)}-${Number(index)}`;
+        return `native-${Number(scriptType)}-${Number(index)}`;
     }
     return createId();
 }

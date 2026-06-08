@@ -1,5 +1,19 @@
 /* Application shell foundations. */
 
+.xb-os-shell {
+    width: 100vw;
+    height: 100vh;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 72px minmax(0, 1fr);
+    background:
+        radial-gradient(ellipse at 72% -24%, rgba(166, 171, 200, 0.055), transparent 54%),
+        var(--xb-bg-deep);
+}
+
 .home-brand-panel,
 .home-command-panel {
     min-width: 0;
@@ -7,6 +21,19 @@
     align-content: end;
     background: transparent;
     padding: 0;
+}
+
+.home-command-panel {
+    position: relative;
+    align-content: center;
+    display: grid;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    border: 1px solid var(--xb-rule);
+    border-radius: 0;
+    background: var(--xb-rule);
+    box-shadow: none;
 }
 
 .home-brand-panel::before {
@@ -54,6 +81,14 @@
         inset: 0;
     }
 
+    .xb-os-shell {
+        grid-template-columns: 1fr;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+        grid-template-rows: 64px minmax(0, 1fr);
+    }
+
     .home-brand-panel,
     .home-command-panel {
         padding: 22px;
@@ -70,8 +105,7 @@
         line-height: 1.65;
     }
 
-    .chat-head,
-    .chat-compose {
+    .chat-head {
         padding-left: 16px;
         padding-right: 16px;
     }

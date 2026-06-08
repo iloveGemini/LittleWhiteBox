@@ -139,7 +139,7 @@
     justify-content: space-between;
     gap: 16px;
     border-bottom: 1px solid var(--xb-rule);
-    background: rgba(244, 243, 238, 0.94);
+    background: var(--xb-chat-head-bg);
     padding: 18px 34px 12px;
 }
 
@@ -174,49 +174,30 @@
     color: #141414;
 }
 
-.message-actions button:disabled,
-.message-edit-actions button:disabled,
-.chat-compose button.primary-action:disabled,
 .tavern-chat.xb-page .manager-compose button.primary-action:disabled {
     cursor: default;
     opacity: 0.38;
     transform: none;
 }
 
-.message-actions button:disabled:hover,
-.message-edit-actions button:disabled:hover,
-.chat-compose button.primary-action:disabled:hover,
 .tavern-chat.xb-page .manager-compose button.primary-action:disabled:hover {
     border-color: var(--xb-rule);
-    background: var(--xb-paper-plain);
+    background: transparent;
     color: var(--xb-ink-soft);
 }
 
-.chat-compose,
 .tavern-chat.xb-page .manager-compose {
-    border-top: 1px solid var(--xb-rule);
-    background: var(--xb-paper-warm);
-    padding: 16px 30px 18px;
-}
-
-.tavern-chat.xb-page .manager-compose {
-    flex: 0 0 auto;
-    border-top: 1px solid rgba(255, 255, 255, 0.045);
-    border-top-color: var(--xb-machine-line);
-    background: var(--xb-machine);
+    --xb-chat-compose-bg: var(--xb-machine);
+    --xb-chat-pop-bg: var(--xb-machine-panel);
 }
 
 .tavern-chat.xb-page .manager-compose textarea {
-    border-color: var(--xb-machine-line);
-    background: var(--xb-machine-panel);
     color: var(--xb-machine-text);
     font-family: var(--xb-font-mono);
 }
 
 .tavern-chat.xb-page .manager-compose button.primary-action {
-    border-color: #b95a50;
-    background: #b95a50;
-    color: #141414;
+    color: #b95a50;
 }
 
 .tavern-chat.xb-page .manager-chat-scroll .manager-message-archive-note {
@@ -297,7 +278,6 @@
 
     .tavern-chat.xb-page .chat-head,
     .tavern-chat.xb-page .manager-head,
-    .chat-compose,
     .tavern-chat.xb-page .manager-compose {
         padding-right: 16px;
         padding-left: 16px;
@@ -375,13 +355,12 @@
     font-size: 12px;
 }
 
-button,
-select,
-input,
-textarea,
-.panel,
-.chat-bubble,
-.manager-card {
+.tavern-chat.xb-page button,
+.tavern-chat.xb-page select,
+.tavern-chat.xb-page input,
+.tavern-chat.xb-page textarea,
+.tavern-chat.xb-page .panel,
+.tavern-chat.xb-page .manager-card {
     border-radius: var(--xb-radius);
 }
 
@@ -515,32 +494,21 @@ textarea,
 
 @media (max-width: 760px) {
 
-    .chat-compose,
     .tavern-chat.xb-page .manager-compose {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: end;
-        gap: 10px;
-        padding: 10px 12px 12px;
+        --xb-chat-pop-bg: var(--xb-machine-panel);
     }
 }
 
 @media (max-width: 760px) {
 
-    .chat-compose textarea,
     .tavern-chat.xb-page .manager-compose textarea {
-        min-height: 48px;
-        max-height: 132px;
         font-size: 16px;
     }
 }
 
 @media (max-width: 760px) {
 
-    .chat-compose button.primary-action,
     .tavern-chat.xb-page .manager-compose button.primary-action {
         min-width: 64px;
-        min-height: 44px;
-        padding: 0 14px;
     }
 }

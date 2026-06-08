@@ -1,63 +1,134 @@
-/* Tavern chat: layout *//* Roleplay and manager chat workbench. *//* Tavern paper theme variables. The root shell owns the theme; pages inherit it. */.tavern-chat.xb-page,
+/* Tavern chat: layout and chat-local theme surfaces. */
+
+.tavern-chat.xb-page,
 .tavern-chat.xb-page.chat-focus-chat,
 .tavern-chat.xb-page.chat-focus-manager {
     --xb-chat-scroll-padding: 34px min(7vw, 90px) 38px;
     --xb-manager-scroll-padding: 32px min(6vw, 74px) 38px;
+    --xb-chat-bg: var(--xb-paper-warm);
+    --xb-chat-panel-bg: var(--xb-paper);
+    --xb-chat-pop-bg: var(--xb-paper-plain);
+    --xb-chat-head-bg: linear-gradient(180deg, rgba(244, 243, 238, 0.94), rgba(244, 243, 238, 0.78));
+    --xb-chat-scroll-bg:
+        linear-gradient(180deg, rgba(234, 232, 223, 0.62), transparent 180px),
+        var(--xb-paper);
+    --xb-chat-editor-bg:
+        linear-gradient(180deg, rgba(234, 232, 223, 0.55), transparent 120px),
+        var(--xb-paper);
+    --xb-chat-map-head-bg:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.45), transparent),
+        var(--xb-paper);
+    --xb-chat-compose-bg: var(--xb-paper-warm);
+    --xb-chat-thought-bg: rgba(255, 255, 255, 0.36);
     position: relative;
     display: grid;
     grid-template-columns: 250px minmax(420px, 0.95fr) minmax(460px, 1.1fr);
     gap: 0;
     overflow: hidden;
-    background: var(--xb-paper-warm);
+    background: var(--xb-chat-bg);
     transition: grid-template-columns 0.72s var(--xb-fluid);
-}.tavern-chat.xb-page.chat-layout-chat {
+}
+
+.xb-os-shell.theme-dark .tavern-chat.xb-page {
+    --xb-chat-bg: #0c0b0a;
+    --xb-chat-panel-bg: #12110f;
+    --xb-chat-pop-bg: #1b1916;
+    --xb-chat-head-bg: linear-gradient(180deg, rgba(18, 17, 15, 0.98), rgba(18, 17, 15, 0.86));
+    --xb-chat-scroll-bg:
+        linear-gradient(180deg, rgba(184, 178, 166, 0.025), transparent 180px),
+        var(--xb-chat-panel-bg);
+    --xb-chat-editor-bg:
+        linear-gradient(180deg, rgba(184, 178, 166, 0.022), transparent 120px),
+        var(--xb-chat-panel-bg);
+    --xb-chat-map-head-bg:
+        linear-gradient(180deg, rgba(184, 178, 166, 0.030), transparent),
+        var(--xb-chat-panel-bg);
+    --xb-chat-compose-bg: #100f0d;
+    --xb-chat-thought-bg: rgba(184, 178, 166, 0.045);
+}
+
+.tavern-chat.xb-page.chat-layout-chat {
     --xb-chat-scroll-padding: 34px min(5vw, 64px) 38px;
     grid-template-columns: 250px minmax(520px, 1.26fr) minmax(340px, 0.74fr);
-}.tavern-chat.xb-page.chat-layout-balanced {
+}
+
+.tavern-chat.xb-page.chat-layout-balanced {
     grid-template-columns: 250px minmax(420px, 0.95fr) minmax(460px, 1.1fr);
-}.tavern-chat.xb-page.chat-layout-editor {
+}
+
+.tavern-chat.xb-page.chat-layout-editor {
     grid-template-columns: 250px minmax(340px, 0.68fr) minmax(560px, 1.32fr);
-}.tavern-chat.xb-page .chat-workbench {
+}
+
+.tavern-chat.xb-page .chat-workbench {
     position: relative;
     min-width: 0;
     min-height: 0;
     display: block;
     overflow: hidden;
-    background: var(--xb-paper-warm);
+    background: var(--xb-chat-bg);
     perspective: 2300px;
     transition: filter 0.42s ease, opacity 0.42s ease, box-shadow 0.42s ease;
-}.tavern-chat.xb-page.chat-layout-editor .chat-workbench {
+}
+
+.tavern-chat.xb-page.chat-layout-editor .chat-workbench {
     filter: brightness(0.985) saturate(0.995);
     box-shadow: inset -1px 0 0 rgba(26, 26, 26, 0.04);
-}.tavern-chat.xb-page .chat-flip-card {
+}
+
+.tavern-chat.xb-page .chat-flip-card {
     position: relative;
     width: 100%;
     height: 100%;
     transform-style: preserve-3d;
     transition: transform 0.72s cubic-bezier(0.16, 1, 0.3, 1);
     will-change: transform;
-}.tavern-chat.xb-page .chat-workbench.is-manager .chat-flip-card {
+}
+
+.tavern-chat.xb-page .chat-workbench.is-manager .chat-flip-card {
     transform: rotateY(180deg);
-}.tavern-chat.xb-page .chat-face {
+}
+
+.tavern-chat.xb-page .chat-face {
     position: absolute;
     inset: 0;
     backface-visibility: hidden;
     transform-style: preserve-3d;
-}.tavern-chat.xb-page .chat-face-back {
+}
+
+.tavern-chat.xb-page .chat-face-back {
     transform: rotateY(180deg);
-}.tavern-chat.xb-page .chat-main {
+}
+
+.tavern-chat.xb-page .chat-main {
     width: 100%;
     min-width: 0;
     min-height: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: var(--xb-paper);
+    background: var(--xb-chat-panel-bg);
     box-shadow: 0 0 30px rgba(26, 26, 26, 0.08);
-}.tavern-chat.xb-page .chat-workbench:not(.is-manager) .chat-face-back,
+}
+
+.xb-os-shell.theme-dark .tavern-chat.xb-page .chat-main {
+    box-shadow: none;
+}
+
+.tavern-chat.xb-page .chat-workbench:not(.is-manager) .chat-face-back,
 .tavern-chat.xb-page .chat-workbench.is-manager .chat-face-front {
     pointer-events: none;
-}.tavern-chat.xb-page .chat-flip-trigger::after {
+}
+
+.tavern-chat.xb-page .chat-flip-trigger {
+    position: relative;
+    overflow: hidden;
+    border-color: var(--xb-ink);
+    background: var(--xb-ink);
+    color: var(--xb-paper);
+}
+
+.tavern-chat.xb-page .chat-flip-trigger::after {
     content: "";
     position: absolute;
     inset: -60% -30%;
@@ -65,132 +136,58 @@
     background: linear-gradient(120deg, transparent 32%, rgba(255, 255, 255, 0.18), transparent 68%);
     transform: translateX(-120%) rotate(8deg);
     transition: transform 0.68s var(--xb-fluid);
-}.tavern-chat.xb-page .chat-flip-trigger:hover::after {
-    transform: translateX(120%) rotate(8deg);
-}.xb-os-shell.theme-light {
-    color-scheme: light;
-    --xb-paper: #f4f3ee;
-    --xb-paper-warm: #eae8df;
-    --xb-paper-plain: #fbfaf6;
-    --xb-ink: #1a1a1a;
-    --xb-ink-soft: #5c5a56;
-    --xb-ink-faint: #8a867d;
-    --xb-rule: #d8d4c7;
-    --xb-rule-strong: #bfb8a8;
-    --xb-stamp: #8c2a2a;
-    --xb-stamp-soft: rgba(140, 42, 42, 0.08);
-    --xb-accent-rgb: 140, 42, 42;
-    --xb-theme-split-bg: rgba(234, 232, 223, 0.72);
-    --xb-control-bg: rgba(255, 255, 255, 0.38);
-    --xb-machine: #141414;
-    --xb-machine-panel: #1d1d1b;
-    --xb-machine-line: #34322d;
-    --xb-machine-text: #e0daca;
-    --xb-bg-deep: var(--xb-paper);
-    --xb-bg-editor: var(--xb-paper-warm);
-    --xb-bg-agent: var(--xb-paper);
-    --xb-bg-card: var(--xb-paper-plain);
-    --xb-bg-soft: #ebe7da;
-    --xb-bg-glass: rgba(26, 26, 26, 0.035);
-    --xb-text-main: var(--xb-ink);
-    --xb-text-body: #302f2b;
-    --xb-text-muted: var(--xb-ink-soft);
-    --xb-text-dim: var(--xb-ink-faint);
-    --xb-line: var(--xb-rule);
-    --xb-line-strong: var(--xb-rule-strong);
-    --xb-cyan: var(--xb-stamp);
-    --xb-indigo: #4e5f75;
-    --xb-gold: #8b6f36;
-    --xb-danger: #9b2d2d;
-    --xb-ok: #3e7050;
-    --xb-warn: #8b6f36;
-    --xb-shadow: 4px 4px 0 rgba(26, 26, 26, 0.05);
-    --xb-radius: 8px;
-    --xb-font-ui: "Segoe UI Variable", "Segoe UI", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", "Noto Sans SC", sans-serif;
-    --xb-font-serif: Georgia, "Times New Roman", "Noto Serif SC", "Songti SC", serif;
-    --xb-font-mono: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
-}.xb-os-shell.theme-light,
-.xb-os-shell.theme-dark,
-.xb-os-shell.theme-light .xb-os-stage,
-.xb-os-shell.theme-dark .xb-os-stage {
-    background:
-        linear-gradient(90deg, transparent 50%, var(--xb-theme-split-bg) 50%),
-        var(--xb-paper);
-    color: var(--xb-ink);
-}button,
-select,
-input,
-textarea {
-    font: inherit;
-    border-color: var(--xb-rule);
-    background: var(--xb-control-bg);
-    color: var(--xb-ink);
-}button:hover:not(:disabled) {
-    transform: none;
-    border-color: var(--xb-stamp);
-    background: var(--xb-stamp-soft);
-    color: var(--xb-stamp);
-}.xb-os-shell {
-    width: 100vw;
-    height: 100vh;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-    display: grid;
-    grid-template-columns: 1fr;
-    background:
-        radial-gradient(ellipse at 72% -24%, rgba(166, 171, 200, 0.055), transparent 54%),
-        var(--xb-bg-deep);
-    grid-template-rows: 72px minmax(0, 1fr);
-}.home-command-panel {
-    position: relative;
-    align-content: center;
-    display: grid;
-    grid-template-rows: repeat(2, minmax(0, 1fr));
-    gap: 1px;
-    overflow: hidden;
-    border: 1px solid var(--xb-rule);
-    border-radius: 0;
-    background: var(--xb-rule);
-    box-shadow: none;
-}.tavern-chat.xb-page .chat-head p {
-    color: var(--xb-ink-soft);
-}.tavern-chat.xb-page .chat-flip-trigger {
-    position: relative;
-    overflow: hidden;
-    border-color: var(--xb-ink);
-    background: var(--xb-ink);
-    color: var(--xb-paper);
-}@media (max-width: 980px) {
-    .xb-os-shell {
-        grid-template-columns: 1fr;
-        width: 100%;
-        max-width: 100%;
-        overflow-x: hidden;
-        grid-template-rows: 64px minmax(0, 1fr);
-    }
-}@media (max-width: 980px) {
+}
 
-    .tavern-chat.xb-page {
-        --xb-chat-scroll-padding: 22px 18px 28px;
-        --xb-manager-scroll-padding: 22px 18px 28px;
-    }
-}.chat-head-actions {
+.tavern-chat.xb-page .chat-flip-trigger:hover::after {
+    transform: translateX(120%) rotate(8deg);
+}
+
+.tavern-chat.xb-page .chat-head p {
+    color: var(--xb-ink-soft);
+}
+
+.chat-head-actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     flex-wrap: wrap;
     gap: 8px;
-}.chat-head p:last-child {
+}
+
+.chat-head p:last-child {
     margin: 6px 0 0;
     font-size: 12px;
     color: var(--xb-text-dim);
-}@media (max-width: 980px) {
+}
+
+.chat-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    border-bottom-color: var(--xb-rule);
+    backdrop-filter: blur(18px);
+    min-height: 76px;
+    border-bottom: 1px solid var(--xb-rule);
+    background: var(--xb-chat-head-bg);
+    padding: 18px 34px 12px;
+}
+
+.chat-head h2 {
+    margin: 0;
+    color: var(--xb-text-main);
+    font: 780 24px/1.2 var(--xb-font-serif);
+}
+
+@media (max-width: 980px) {
+    .tavern-chat.xb-page {
+        --xb-chat-scroll-padding: 22px 18px 28px;
+        --xb-manager-scroll-padding: 22px 18px 28px;
+    }
 
     .chat-head > div:first-child {
         min-width: 0;
     }
-}@media (max-width: 980px) {
 
     .chat-head-actions {
         position: static;
@@ -198,7 +195,6 @@ textarea {
         flex-wrap: nowrap;
         gap: 5px;
     }
-}@media (max-width: 980px) {
 
     .chat-head-actions button {
         display: grid;
@@ -207,29 +203,10 @@ textarea {
         padding: 4px 8px;
         font-size: 12px;
     }
-}@media (max-width: 980px) {
 
     .chat-head-actions button:last-child {
         display: none;
     }
-}.chat-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    border-bottom-color: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(18px);
-    min-height: 76px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.035);
-    background: linear-gradient(180deg, rgba(28, 31, 42, 0.98), rgba(28, 31, 42, 0.72), transparent);
-    padding: 18px 34px 12px;
-}.chat-head h2 {
-    color: var(--xb-text-main);
-    font: 650 24px/1.2 var(--xb-font-serif);
-    margin: 0;
-    font-weight: 780;
-    font-size: 24px;
-}@media (max-width: 980px) {
 
     .chat-head {
         display: grid;
@@ -238,23 +215,16 @@ textarea {
         min-height: 92px;
         padding: 15px 18px 12px;
     }
-}@media (max-width: 980px) {
 
-    .chat-head h2 {
-        font-size: 24px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-}@media (max-width: 980px) {
-
+    .chat-head h2,
     .chat-head p:last-child {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-}@media (max-width: 760px) {
+}
 
+@media (max-width: 760px) {
     .tavern-chat.xb-page,
     .tavern-chat.xb-page.chat-focus-chat,
     .tavern-chat.xb-page.chat-focus-manager,
@@ -267,7 +237,6 @@ textarea {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: auto minmax(0, 1fr);
     }
-}@media (max-width: 760px) {
 
     .tavern-chat.xb-page.chat-layout-balanced {
         grid-template-rows: auto minmax(330px, 58vh) minmax(240px, 34vh);

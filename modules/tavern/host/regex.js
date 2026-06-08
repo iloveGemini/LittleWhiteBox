@@ -114,7 +114,7 @@ function normalizeRegexOptions(value) {
 }
 function fallbackScriptId(scriptType, index) {
   if (Number.isFinite(Number(scriptType)) && Number.isInteger(Number(index)) && Number(index) >= 0) {
-    return `legacy-${Number(scriptType)}-${Number(index)}`;
+    return `native-${Number(scriptType)}-${Number(index)}`;
   }
   return createId();
 }

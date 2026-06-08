@@ -22,6 +22,20 @@
     color: var(--xb-ink);
 }
 
+.xb-os-shell.theme-dark .xb-tavern-markdown,
+.xb-os-shell.theme-dark .xb-tavern-markdown * {
+    text-shadow: none;
+}
+
+.xb-os-shell.theme-dark .xb-tavern-markdown code,
+.xb-os-shell.theme-dark .xb-tavern-markdown pre {
+    border-color: var(--xb-line);
+    background: rgba(184, 178, 166, 0.055);
+    color: var(--xb-text-body);
+    box-shadow: none;
+    filter: none;
+}
+
 .xb-tavern-markdown > :first-child {
     margin-top: 0;
 }
@@ -49,6 +63,30 @@
     white-space: pre-wrap;
 }
 
+.xb-os-shell.theme-dark .xb-tavern-markdown blockquote {
+    border-left-color: rgba(184, 178, 166, 0.24);
+    color: var(--xb-text-muted);
+}
+
+.xb-os-shell.theme-dark .xb-tavern-markdown em,
+.xb-os-shell.theme-dark .xb-tavern-markdown i {
+    color: #7d786f;
+}
+
+.xb-os-shell.theme-dark .xb-tavern-markdown q,
+.xb-os-shell.theme-dark .xb-tavern-markdown .xb-rp-dialogue {
+    color: #86aab3;
+}
+
+.xb-os-shell.theme-dark .xb-tavern-markdown .xb-tavern-image {
+    border-color: rgba(184, 178, 166, 0.14);
+    background: rgba(184, 178, 166, 0.045);
+}
+
+.xb-os-shell.theme-dark .xb-tavern-markdown .xb-tavern-image img {
+    background: rgba(0, 0, 0, 0.20);
+}
+
 .xb-tavern-markdown h1,
 .xb-tavern-markdown h2,
 .xb-tavern-markdown h3,
@@ -68,9 +106,30 @@
 
 .xb-tavern-markdown h4 { font-size: 1.04rem; }
 
-.xb-tavern-markdown strong,
-.xb-tavern-markdown em {
+.xb-tavern-markdown strong {
     color: var(--xb-text-main);
+    font-weight: 700;
+}
+
+.xb-tavern-markdown em,
+.xb-tavern-markdown i {
+    color: #756b5f;
+    font-family: "Crimson Pro", "Palatino Linotype", "Book Antiqua", "KaiTi", "STKaiti", "Noto Serif SC", serif;
+    font-style: italic;
+    font-weight: 400;
+}
+
+.xb-tavern-markdown q,
+.xb-tavern-markdown .xb-rp-dialogue {
+    color: #5a1d1d;
+    font-style: normal;
+}
+
+.xb-tavern-markdown q em,
+.xb-tavern-markdown q i,
+.xb-tavern-markdown .xb-rp-dialogue em,
+.xb-tavern-markdown .xb-rp-dialogue i {
+    color: inherit;
 }
 
 .xb-tavern-markdown ul,
@@ -82,6 +141,37 @@
     padding-left: 12px;
     border-left: 2px solid rgba(143, 180, 189, 0.32);
     color: var(--xb-text-muted);
+}
+
+.xb-tavern-markdown .xb-tavern-image {
+    display: block;
+    width: min(100%, 520px);
+    margin: 14px 0;
+    border: 1px solid rgba(var(--xb-accent-rgb), 0.18);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.24);
+    overflow: hidden;
+}
+
+.xb-tavern-markdown .xb-tavern-image img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 620px;
+    object-fit: contain;
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.xb-tavern-markdown .xb-tavern-image-placeholder {
+    display: grid;
+    min-height: 120px;
+    place-items: center;
+    color: var(--xb-text-muted);
+    font: 13px/1.45 var(--xb-font-ui);
+}
+
+.xb-tavern-markdown .xb-tavern-image.is-failed {
+    border-color: rgba(216, 132, 144, 0.32);
 }
 
 .xb-tavern-markdown code {

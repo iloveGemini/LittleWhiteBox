@@ -42,17 +42,12 @@ const emit = defineEmits<{
     <button
       type="button"
       class="home-icon-button home-theme-button"
-      title="切换主题"
-      aria-label="切换主题"
+      :title="dark ? '切换到白天' : '切换到夜间'"
+      :aria-label="dark ? '切换到白天' : '切换到夜间'"
       @click="emit('toggleTheme')"
     >
-      <span
-        v-if="dark"
-        class="xb-theme-glyph"
-        aria-hidden="true"
-      >☾</span>
       <svg
-        v-else
+        v-if="dark"
         class="xb-theme-icon"
         viewBox="0 0 24 24"
         fill="none"
@@ -76,6 +71,11 @@ const emit = defineEmits<{
         <path d="m6.34 17.66-1.41 1.41" />
         <path d="m19.07 4.93-1.41 1.41" />
       </svg>
+      <span
+        v-else
+        class="xb-theme-glyph"
+        aria-hidden="true"
+      >☾</span>
     </button>
     <button
       type="button"

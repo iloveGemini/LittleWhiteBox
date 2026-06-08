@@ -35,6 +35,10 @@ let frameReady = false;
 let pendingMessages = [];
 let messageHandlerInstalled = false;
 let overlayResizeHandler = null;
+const pendingDrawRequests = /* @__PURE__ */ new Map();
+async function getDrawGalleryCacheModule() {
+  return await import("../draw/shared/gallery-cache.js");
+}
 function cloneFramePayload(value) {
   const seen = /* @__PURE__ */ new WeakSet();
   try {
@@ -185,6 +189,117 @@ function handleHostRequestHeaders(payload = {}) {
     ok: true,
     hostRequestHeaders: getRequestHeaders?.() || {}
   });
+}
+function getDrawStatus() {
+  const facade = window.xiaobaixDraw;
+  const status = typeof facade?.getStatus === "function" ? facade.getStatus() : {
+    provider: typeof facade?.getProvider === "function" ? facade.getProvider() : "disabled",
+    enabled: !!facade?.isEnabled?.(),
+    ready: !!facade?.generateImagesFromText
+  };
+  return {
+    provider: String(status?.provider || "disabled"),
+    enabled: !!status?.enabled,
+    ready: !!status?.ready
+  };
+}
+function handleDrawStatus(payload = {}) {
+  replyHostResult(String(payload.requestId || ""), {
+    ok: true,
+    ...getDrawStatus()
+  });
+}
+async function handleDrawGenerate(payload = {}) {
+  const requestId = String(payload.requestId || "");
+  const controller = new AbortController();
+  if (requestId) {
+    pendingDrawRequests.set(requestId, controller);
+  }
+  try {
+    const facade = window.xiaobaixDraw;
+    if (typeof facade?.generateImagesFromText !== "function") {
+      throw new Error("\u753B\u56FE\u6A21\u5757\u672A\u521D\u59CB\u5316");
+    }
+    const drawPayload = payload.payload && typeof payload.payload === "object" ? payload.payload : {};
+    const result = await facade.generateImagesFromText({
+      ...drawPayload,
+      signal: controller.signal,
+      onStateChange: (state, data = {}) => {
+        postToFrame("xb-tavern:draw-progress", {
+          requestId,
+          state,
+          data
+        });
+      }
+    });
+    replyHostResult(requestId, {
+      ok: true,
+      result
+    });
+  } catch (error) {
+    replyHostResult(requestId, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error || "draw_failed")
+    });
+  } finally {
+    if (requestId) {
+      pendingDrawRequests.delete(requestId);
+    }
+  }
+}
+function previewToTransferableUrl(preview = {}) {
+  const savedUrl = String(preview.savedUrl || "").trim();
+  if (savedUrl) {
+    return savedUrl;
+  }
+  const base64 = String(preview.base64 || "").trim();
+  if (!base64) {
+    return "";
+  }
+  if (/^data:[^;]+;base64,/i.test(base64)) {
+    return base64;
+  }
+  return `data:image/png;base64,${base64}`;
+}
+async function handleDrawImage(payload = {}) {
+  const requestId = String(payload.requestId || "");
+  const source = payload.payload && typeof payload.payload === "object" ? payload.payload : payload;
+  const slotId = String(source.slotId || "").trim();
+  try {
+    if (!slotId) {
+      throw new Error("slot_id_required");
+    }
+    const { getDisplayPreviewForSlot } = await getDrawGalleryCacheModule();
+    const result = await getDisplayPreviewForSlot(slotId);
+    const preview = result.preview || {};
+    const failedInfo = result.failedInfo || {};
+    replyHostResult(requestId, {
+      ok: true,
+      result: {
+        slotId,
+        hasData: !!result.hasData,
+        isFailed: !!result.isFailed,
+        historyCount: Number(result.historyCount) || 0,
+        url: result.hasData ? previewToTransferableUrl(preview) : "",
+        tags: preview.tags || failedInfo.tags || "",
+        positive: preview.positive || failedInfo.positive || "",
+        errorType: failedInfo.errorType || "",
+        errorMessage: failedInfo.errorMessage || ""
+      }
+    });
+  } catch (error) {
+    replyHostResult(requestId, {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error || "image_lookup_failed")
+    });
+  }
+}
+function handleCancelRequest(payload = {}) {
+  const requestId = String(payload.requestId || "").trim();
+  if (!requestId) {
+    return;
+  }
+  pendingDrawRequests.get(requestId)?.abort();
 }
 async function handleChatPresetRequest(type, payload = {}) {
   const requestId = String(payload.requestId || "");
@@ -378,6 +493,18 @@ function handleFrameMessage(event) {
       break;
     case "xb-tavern:get-host-request-headers":
       handleHostRequestHeaders(data.payload || {});
+      break;
+    case "xb-tavern:draw-status":
+      handleDrawStatus(data.payload || {});
+      break;
+    case "xb-tavern:draw-generate":
+      void handleDrawGenerate(data.payload || {});
+      break;
+    case "xb-tavern:draw-image":
+      void handleDrawImage(data.payload || {});
+      break;
+    case "xb-tavern:cancel-request":
+      handleCancelRequest(data.payload || {});
       break;
     case "xb-tavern:get-context":
       void handleContextRequest(data.type, data.payload || {});

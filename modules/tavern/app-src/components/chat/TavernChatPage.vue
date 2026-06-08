@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUpdate, onUpdated } from 'vue';
+import { computed, onBeforeUpdate, onUpdated } from 'vue';
 import { captureElementScrollState, restoreElementScrollState, type ElementScrollSnapshot } from '../../scroll-state';
 import TavernCornerActions from '../TavernCornerActions.vue';
+import TavernMapPanel from '../TavernMapPanel.vue';
 import TavernMemoryEditor from '../TavernMemoryEditor.vue';
 import TavernScrollControls from '../TavernScrollControls.vue';
 import { useTavernAppUiContext } from '../tavern-app-context';
@@ -13,6 +14,7 @@ const {
     activeMemoryFiles,
     activeView,
     cancelEditMessage,
+    canDrawMessage,
     canEditMessage,
     canRerunMessage,
     canSendManagerMessage,
@@ -26,9 +28,14 @@ const {
     chatScrollControlsActive,
     chatScrollRef,
     chatSubtitle,
+    chatWorkspacePanel,
     copyMessage,
     currentUserMessage,
     deleteMessageTurn,
+    drawMessage,
+    drawMessageStatusClass,
+    drawMessageStatusText,
+    drawMessageTitle,
     discardMemoryDraft,
     editingMessageDraft,
     enterMemoryEditMode,
@@ -56,6 +63,7 @@ const {
     hiddenManagerRunCount,
     homeThemeDark,
     isEditingMessage,
+    isDrawingMessage,
     isEditingMessageDirty,
     isManagerAssistantRunning,
     isRunning,
@@ -84,11 +92,14 @@ const {
     memoryFileDisplayName,
     memoryFiles,
     memoryIndexStatusLine,
+    mapStateDocument,
+    mapStatePatches,
     messageKey,
     openPromptInspector,
     postToHost,
     previewMemoryDraft,
     recentTurnSummaries,
+    rememberBrokenAvatar,
     renderChatMarkdown,
     rerunFromMessage,
     retryManagerRun,
@@ -117,12 +128,21 @@ const {
     updateChatScrollButtons,
     updateManagerScrollButtons,
     visibleChatMessages,
+    visibleCharacterAvatar,
     visibleManagerChatMessages,
     visibleManagerRuns,
+    visibleUserAvatar,
 } = ui;
 
 let pendingChatScrollSnapshot: ElementScrollSnapshot | null = null;
 let pendingManagerScrollSnapshot: ElementScrollSnapshot | null = null;
+
+const currentStateFile = computed(() => (
+    (memoryFiles.value || []).find((file: { path?: string }) => file.path === 'memory/state.md') || null
+));
+const currentStateContent = computed(() => String(currentStateFile.value?.content || '').trim());
+const currentStatePreviewHtml = computed(() => renderChatMarkdown(currentStateContent.value));
+const currentStatePreviewSignature = computed(() => markdownSignature(currentStateContent.value));
 
 function setChatScrollRef(element: Element | null) {
     chatScrollRef.value = element instanceof HTMLElement ? element : null;
@@ -201,6 +221,17 @@ onUpdated(() => {
           class="chat-face chat-face-front chat-main"
           :aria-hidden="chatFocus === 'manager'"
         >
+          <div
+            v-if="visibleCharacterAvatar"
+            class="chat-ambient-standee"
+            aria-hidden="true"
+          >
+            <img
+              :src="visibleCharacterAvatar"
+              alt=""
+              @error="rememberBrokenAvatar(visibleCharacterAvatar)"
+            >
+          </div>
           <header class="chat-head">
             <div>
               <h2>角色聊天</h2>
@@ -257,7 +288,24 @@ onUpdated(() => {
                 ]"
               >
                 <div class="bubble-meta">
-                  <span>{{ message.error ? '错误' : roleLabel(message.role) }}</span>
+                  <span class="bubble-nameplate">
+                    <span class="bubble-avatar-stamp">
+                      <img
+                        v-if="message.role === 'user' && visibleUserAvatar"
+                        :src="visibleUserAvatar"
+                        alt=""
+                        @error="rememberBrokenAvatar(visibleUserAvatar)"
+                      >
+                      <img
+                        v-else-if="message.role !== 'user' && visibleCharacterAvatar"
+                        :src="visibleCharacterAvatar"
+                        alt=""
+                        @error="rememberBrokenAvatar(visibleCharacterAvatar)"
+                      >
+                      <span v-else>{{ String(roleLabel(message.role)).slice(0, 1) }}</span>
+                    </span>
+                    <span class="bubble-role-name">{{ message.error ? '错误' : roleLabel(message.role) }}</span>
+                  </span>
                   <small>{{ formatMessageTime(message.createdAt) }}</small>
                 </div>
                 <div
@@ -321,7 +369,25 @@ onUpdated(() => {
                 <div
                   v-if="!isEditingMessage(message)"
                   class="message-actions"
+                  :class="{ 'has-status': !!drawMessageStatusText(message) }"
                 >
+                  <span
+                    v-if="drawMessageStatusText(message)"
+                    class="message-draw-status"
+                    :class="drawMessageStatusClass(message)"
+                  >
+                    {{ drawMessageStatusText(message) }}
+                  </span>
+                  <button
+                    type="button"
+                    :disabled="!canDrawMessage(message)"
+                    :class="[actionFeedback(message, 'draw'), { 'is-running': isDrawingMessage(message) }]"
+                    :title="drawMessageTitle(message)"
+                    :aria-label="drawMessageTitle(message)"
+                    @click="drawMessage(message)"
+                  >
+                    {{ isDrawingMessage(message) ? '■' : '🎨' }}
+                  </button>
                   <button
                     type="button"
                     :class="actionFeedback(message, 'copy')"
@@ -369,7 +435,18 @@ onUpdated(() => {
                 class="chat-bubble from-assistant streaming"
               >
                 <div class="bubble-meta">
-                  <span>{{ roleLabel('assistant') }}</span>
+                  <span class="bubble-nameplate">
+                    <span class="bubble-avatar-stamp">
+                      <img
+                        v-if="visibleCharacterAvatar"
+                        :src="visibleCharacterAvatar"
+                        alt=""
+                        @error="rememberBrokenAvatar(visibleCharacterAvatar)"
+                      >
+                      <span v-else>{{ String(roleLabel('assistant')).slice(0, 1) }}</span>
+                    </span>
+                    <span class="bubble-role-name">{{ roleLabel('assistant') }}</span>
+                  </span>
                   <small>生成中</small>
                 </div>
                 <details
@@ -402,7 +479,18 @@ onUpdated(() => {
                 class="chat-bubble from-assistant streaming thinking"
               >
                 <div class="bubble-meta">
-                  <span>{{ roleLabel('assistant') }}</span>
+                  <span class="bubble-nameplate">
+                    <span class="bubble-avatar-stamp">
+                      <img
+                        v-if="visibleCharacterAvatar"
+                        :src="visibleCharacterAvatar"
+                        alt=""
+                        @error="rememberBrokenAvatar(visibleCharacterAvatar)"
+                      >
+                      <span v-else>{{ String(roleLabel('assistant')).slice(0, 1) }}</span>
+                    </span>
+                    <span class="bubble-role-name">{{ roleLabel('assistant') }}</span>
+                  </span>
                   <small>生成中</small>
                 </div>
                 <p>正在组织回复...</p>
@@ -523,7 +611,7 @@ onUpdated(() => {
                 :class="message.role === 'user' ? 'manager-message-user' : 'manager-message-assistant'"
               >
                 <div class="manager-run-title">
-                  <strong>{{ message.role === 'user' ? '我' : '助手' }}</strong>
+                  <strong>{{ message.role === 'user' ? roleLabel('user') : '助手' }}</strong>
                   <small>{{ formatMessageTime(message.createdAt) }}</small>
                 </div>
                 <div
@@ -590,6 +678,9 @@ onUpdated(() => {
                   </p>
                   <p v-if="run.changedFiles?.length">
                     文件：{{ run.changedFiles.join('、') }}
+                  </p>
+                  <p v-if="run.changedStates?.length">
+                    状态：{{ run.changedStates.join('、') }}
                   </p>
                   <p v-if="run.outputText">
                     结论：{{ shortText(run.outputText, 220) }}
@@ -683,22 +774,69 @@ onUpdated(() => {
       </div>
     </section>
 
-    <TavernMemoryEditor
-      v-model:draft="memoryEditorDraft"
-      :document-available="memoryEditorDocumentAvailable"
-      :read-only="memoryEditorReadOnly"
-      :dirty="memoryEditorDirty"
-      :mode="memoryEditorMode"
-      :preview-html="renderChatMarkdown(memoryEditorDraft)"
-      :preview-signature="markdownSignature(memoryEditorDraft)"
-      :status="memoryEditorStatus"
-      :has-selected-file="!!selectedMemoryFile"
-      :loaded-path="memoryEditorLoadedPath"
-      :file-meta="selectedMemoryFile ? formatMemoryFileMeta(selectedMemoryFile) : ''"
-      @enter-edit="enterMemoryEditMode"
-      @preview="previewMemoryDraft"
-      @discard="discardMemoryDraft"
-      @save="saveSelectedMemoryFile"
-    />
+    <aside class="tavern-workspace-panel">
+      <div class="tavern-workspace-tabs">
+        <button
+          type="button"
+          :class="{ active: chatWorkspacePanel === 'state' }"
+          @click="chatWorkspacePanel = 'state'"
+        >
+          状态
+        </button>
+        <button
+          type="button"
+          :class="{ active: chatWorkspacePanel === 'memory' }"
+          @click="chatWorkspacePanel = 'memory'"
+        >
+          记忆
+        </button>
+      </div>
+      <section
+        v-if="chatWorkspacePanel === 'state'"
+        class="tavern-state-panel"
+      >
+        <TavernMapPanel
+          compact
+          :document="mapStateDocument"
+          :patches="mapStatePatches"
+        />
+        <article class="tavern-current-state">
+          <header>
+            <strong>状态栏</strong>
+            <small v-if="currentStateFile">{{ formatMemoryFileMeta(currentStateFile) }}</small>
+          </header>
+          <div
+            v-if="currentStateContent"
+            class="tavern-current-state-body xb-tavern-markdown"
+            :data-markdown-signature="currentStatePreviewSignature"
+            v-html="currentStatePreviewHtml"
+          />
+          <div
+            v-else
+            class="tavern-current-state-empty"
+          >
+            暂无当前状态。
+          </div>
+        </article>
+      </section>
+      <TavernMemoryEditor
+        v-else
+        v-model:draft="memoryEditorDraft"
+        :document-available="memoryEditorDocumentAvailable"
+        :read-only="memoryEditorReadOnly"
+        :dirty="memoryEditorDirty"
+        :mode="memoryEditorMode"
+        :preview-html="renderChatMarkdown(memoryEditorDraft)"
+        :preview-signature="markdownSignature(memoryEditorDraft)"
+        :status="memoryEditorStatus"
+        :has-selected-file="!!selectedMemoryFile"
+        :loaded-path="memoryEditorLoadedPath"
+        :file-meta="selectedMemoryFile ? formatMemoryFileMeta(selectedMemoryFile) : ''"
+        @enter-edit="enterMemoryEditMode"
+        @preview="previewMemoryDraft"
+        @discard="discardMemoryDraft"
+        @save="saveSelectedMemoryFile"
+      />
+    </aside>
   </section>
 </template>

@@ -35973,7 +35973,7 @@ function Yo(e, t, n = null, r = {}) {
       return;
     }
     if (r.preserveScrollTop) {
-      if (i.scrollTop = Math.min(Math.max(0, t.scrollTop), i.scrollHeight), t.anchorKey) {
+      if (i.scrollTop = Math.min(Math.max(0, t.scrollTop), i.scrollHeight), t.anchorKey && r.preserveAnchor !== !1) {
         const s = jw(o), l = typeof i.getBoundingClientRect == "function" ? i.getBoundingClientRect() : null, a = s ? Array.from(i.querySelectorAll?.(`[${s.attr}]`) || []).find((p) => p?.dataset?.[s.datasetKey] === t.anchorKey) : null, c = typeof a?.getBoundingClientRect == "function" ? a.getBoundingClientRect() : null;
         if (l && c) {
           const p = c.top - l.top;
@@ -36195,7 +36195,8 @@ function BU(e = {}) {
     return Yo(P, Ce, ".xb-agent-main", {
       forceBottom: K,
       defaultToBottom: K,
-      preserveScrollTop: !K
+      preserveScrollTop: !K,
+      preserveAnchor: !1
     }), r.agentForceScrollBottomOnce = !1, RU(P), c("agentSurface"), !0;
   }
   function I() {

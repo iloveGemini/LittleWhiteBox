@@ -4,6 +4,7 @@ import type {
 } from './message-assembler';
 import { extensionFolderPath } from '../../../core/constants.js';
 import { listTavernMemoryFiles } from './memory-files';
+import { listTavernStructuredStateDigests } from './structured-state';
 import * as stopwordsBase from '../../story-summary/vector/utils/stopwords-base.js';
 import * as stopwordsPatch from '../../story-summary/vector/utils/stopwords-patch.js';
 import {
@@ -637,18 +638,22 @@ export async function retrieveXbTavernMemoryContext(input: {
 }): Promise<XbTavernMemoryContext> {
     const sessionId = String(input.sessionId || '').trim();
     if (!sessionId) {return {};}
-    const [episodeSummaries, turnSummaries, memoryFiles] = await Promise.all([
+    const [episodeSummaries, turnSummaries, memoryFiles, structuredStates] = await Promise.all([
         listTavernEpisodeSummaries(sessionId),
         listTavernTurnSummaries(sessionId),
         listTavernMemoryFiles(sessionId),
+        listTavernStructuredStateDigests(sessionId),
     ]);
-    if (!episodeSummaries.length && !turnSummaries.length && !memoryFiles.some(isRecallMemoryFile)) {return {};}
+    if (!episodeSummaries.length && !turnSummaries.length && !memoryFiles.some(isRecallMemoryFile) && !structuredStates.length) {return {};}
     await ensureXbTavernMemoryTokenizerReady();
-    return selectXbTavernMemoryContext({
-        episodeSummaries,
-        turnSummaries,
-        memoryFiles,
-        queryText: input.queryText,
-        ignoredTerms: input.ignoredTerms,
-    });
+    return {
+        ...selectXbTavernMemoryContext({
+            episodeSummaries,
+            turnSummaries,
+            memoryFiles,
+            queryText: input.queryText,
+            ignoredTerms: input.ignoredTerms,
+        }),
+        structuredStates,
+    };
 }
