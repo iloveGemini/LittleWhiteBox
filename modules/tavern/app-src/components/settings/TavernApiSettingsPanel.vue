@@ -5,7 +5,6 @@ const ui = useTavernAppUiContext();
 const {
     activeSettingsWorkspace,
     apiSettingsRootRef,
-    apiReady,
 } = ui;
 
 function setApiSettingsRootRef(element: Element | null) {
@@ -22,12 +21,6 @@ function setApiSettingsRootRef(element: Element | null) {
       <div>
         <h2>API 配置</h2>
       </div>
-      <span
-        class="pill"
-        :class="{ warning: !apiReady }"
-      >
-        {{ apiReady ? '可发模' : '需配置' }}
-      </span>
     </div>
     <div
       class="api-scroll-body"

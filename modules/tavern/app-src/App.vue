@@ -37,6 +37,7 @@ import {
     createTavernSession,
     appendTavernMessage,
     appendTavernManagerMessage,
+    deleteTavernAssistantPreset,
     deleteTavernSession,
     deleteTavernManagerMessages,
     deleteTavernMessages,
@@ -82,6 +83,7 @@ import {
 } from '../shared/runtime-events';
 import {
     createDefaultTavernAssistantPreset,
+    DEFAULT_TAVERN_ASSISTANT_PRESET_ID,
     normalizeTavernAssistantPreset,
     type TavernAssistantPreset,
 } from '../shared/assistant-presets';
@@ -648,7 +650,7 @@ const settingsNavItems = computed<TavernSettingsNavItem[]>(() => [
     {
         key: 'chatPreset',
         label: '聊天预设',
-        mobileLabel: '聊天',
+        mobileLabel: '聊天预设',
         badge: presetDirty.value ? '未保存' : '',
     },
     {
@@ -1539,7 +1541,7 @@ function confirmDiscardDraft(label: string, action = '继续？') {
 
 async function refreshPresets() {
     if (assistantPresetDirty.value && !confirmDiscardDraft('助手预设', '刷新')) {
-        assistantPresetStatus.value = '已保留当前草稿';
+        assistantPresetStatus.value = '';
         return;
     }
     const [loadedAssistantPresets, activeAssistantId, loadedAssistantPreset] = await Promise.all([
@@ -1554,7 +1556,7 @@ async function refreshPresets() {
 
 async function syncChatPresetFromHost() {
     if (presetDirty.value) {
-        presetStatus.value = '当前草稿未保存，暂不自动同步';
+        presetStatus.value = '';
         return;
     }
     presetStatus.value = '正在同步';
@@ -1563,7 +1565,7 @@ async function syncChatPresetFromHost() {
         const payload = (result.result || result) as Record<string, unknown>;
         chatPresetList.value = payload;
         applyActiveChatPreset(payload.active as Partial<TavernChatPromptPresetBundle>);
-        presetStatus.value = '已同步';
+        presetStatus.value = '';
     } catch (error) {
         presetStatus.value = error instanceof Error ? error.message : String(error || '读取失败');
     }
@@ -1591,7 +1593,7 @@ async function selectChatPresetFromHost(name = selectedPresetSourceId.value) {
         });
         const nextPreset = (result.result || result) as Partial<TavernChatPromptPresetBundle>;
         applyActiveChatPreset(nextPreset);
-        presetStatus.value = '已切换';
+        presetStatus.value = '';
         postToHost('xb-tavern:refresh-context', {});
     } catch (error) {
         selectedPresetSourceId.value = currentName;
@@ -1605,7 +1607,6 @@ async function saveCurrentPreset() {
         return;
     }
     if (!presetDirty.value) {
-        presetStatus.value = '没有未保存修改';
         return;
     }
     presetStatus.value = '正在保存';
@@ -1617,7 +1618,7 @@ async function saveCurrentPreset() {
         return;
     }
     applyActiveChatPreset(result.result as Partial<TavernChatPromptPresetBundle>);
-    presetStatus.value = '已保存';
+    presetStatus.value = '';
     postToHost('xb-tavern:refresh-context', {});
 }
 
@@ -1640,7 +1641,7 @@ async function syncWorldbooksFromHost(options: { keepSelection?: boolean } = {})
         selectedWorldbookName.value = options.keepSelection && selectedStillExists
             ? selectedWorldbookName.value
             : preferredName;
-        worldbookStatus.value = '已同步';
+        worldbookStatus.value = '';
         void loadSelectedWorldbookPreview(selectedWorldbookName.value);
     } catch (error) {
         worldbookStatus.value = error instanceof Error ? error.message : String(error || '读取失败');
@@ -1687,7 +1688,7 @@ async function openSelectedWorldbookEditor(name = selectedWorldbookName.value) {
         await requestHost('xb-tavern:open-worldbook-editor', {
             payload: { name: targetName },
         });
-        worldbookStatus.value = '已打开酒馆编辑器';
+        worldbookStatus.value = '';
         postToHost('xb-tavern:close');
     } catch (error) {
         worldbookStatus.value = error instanceof Error ? error.message : String(error || '打开失败');
@@ -1696,7 +1697,7 @@ async function openSelectedWorldbookEditor(name = selectedWorldbookName.value) {
 
 async function refreshRegexFromHost() {
     if (regexDirty.value && !confirmDiscardDraft('正则', '刷新')) {
-        regexStatus.value = '已保留当前草稿';
+        regexStatus.value = '';
         return;
     }
     regexStatus.value = '正在读取';
@@ -1705,7 +1706,7 @@ async function refreshRegexFromHost() {
         regexList.value = (result.result || result) as Record<string, unknown>;
         const current = regexScriptRows.value.find((row) => row.key === selectedRegexKey.value);
         applyActiveRegexScript(current || regexScriptRows.value[0] || null);
-        regexStatus.value = '已刷新';
+        regexStatus.value = '';
     } catch (error) {
         regexStatus.value = error instanceof Error ? error.message : String(error || '读取失败');
     }
@@ -1762,7 +1763,6 @@ async function saveCurrentRegexScript() {
     const scriptType = selectedRegexRow.value?.scriptType || Number(selectedRegexKey.value.split(':')[0]);
     if (!Number.isFinite(scriptType)) {return;}
     if (!regexDirty.value) {
-        regexStatus.value = '没有未保存修改';
         return;
     }
     regexStatus.value = '正在保存';
@@ -1782,7 +1782,7 @@ async function saveCurrentRegexScript() {
             || regexScriptRows.value[0]
             || null;
         applyActiveRegexScript(nextRow);
-        regexStatus.value = '已保存';
+        regexStatus.value = '';
     } catch (error) {
         regexStatus.value = error instanceof Error ? error.message : String(error || '保存失败');
     }
@@ -1801,7 +1801,7 @@ async function deleteCurrentRegexScript() {
         });
         regexList.value = (result.result || result) as Record<string, unknown>;
         applyActiveRegexScript(regexScriptRows.value[0] || null);
-        regexStatus.value = '已删除';
+        regexStatus.value = '';
     } catch (error) {
         regexStatus.value = error instanceof Error ? error.message : String(error || '删除失败');
     }
@@ -1811,7 +1811,7 @@ async function discardPresetChanges() {
     if (!presetDirty.value) {return;}
     preset.value = normalizeTavernChatPromptPresetBundle(activeChatPreset.value);
     savedPresetJson.value = snapshotPreset(activeChatPreset.value);
-    presetStatus.value = '已放弃';
+    presetStatus.value = '';
 }
 
 function updateChatPresetComponent(
@@ -2005,15 +2005,14 @@ async function selectAssistantPreset(presetId: string) {
     await setActiveTavernAssistantPresetId(targetId);
     activeAssistantPresetId.value = targetId;
     applyActiveAssistantPreset(await loadActiveTavernAssistantPreset());
-    assistantPresetStatus.value = '已切换';
+    assistantPresetStatus.value = '';
 }
 
 async function saveCurrentAssistantPreset() {
     if (!assistantPresetDirty.value) {
-        assistantPresetStatus.value = '没有未保存修改';
         return;
     }
-    const savingBuiltIn = activeAssistantPresetRecord.value?.isBuiltIn === true;
+    const savingBuiltIn = String(activeAssistantPresetRecord.value?.id || '') === DEFAULT_TAVERN_ASSISTANT_PRESET_ID;
     const presetForSave = savingBuiltIn
         ? {
             ...assistantPreset.value,
@@ -2026,7 +2025,7 @@ async function saveCurrentAssistantPreset() {
     activeAssistantPresetId.value = record.id;
     applyActiveAssistantPreset(record.preset);
     assistantPresets.value = await listTavernAssistantPresets();
-    assistantPresetStatus.value = savingBuiltIn ? '已另存为自定义预设' : '已保存';
+    assistantPresetStatus.value = '';
 }
 
 async function deriveAssistantPreset() {
@@ -2039,14 +2038,70 @@ async function deriveAssistantPreset() {
     activeAssistantPresetId.value = record.id;
     applyActiveAssistantPreset(record.preset);
     assistantPresets.value = await listTavernAssistantPresets();
-    assistantPresetStatus.value = '已复制';
+    assistantPresetStatus.value = '';
+}
+
+async function createAssistantPreset() {
+    if (assistantPresetDirty.value && !confirmDiscardDraft('助手预设', '新建')) {
+        return;
+    }
+    const record = await saveTavernAssistantPreset({
+        ...createDefaultTavernAssistantPreset(),
+        id: `assistant-preset-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: '新助手预设',
+        description: '',
+    });
+    await setActiveTavernAssistantPresetId(record.id);
+    activeAssistantPresetId.value = record.id;
+    applyActiveAssistantPreset(record.preset);
+    assistantPresets.value = await listTavernAssistantPresets();
+    assistantPresetStatus.value = '';
+}
+
+async function importAssistantPreset(payload: unknown) {
+    if (assistantPresetDirty.value && !confirmDiscardDraft('助手预设', '导入')) {
+        return false;
+    }
+    const source = payload && typeof payload === 'object'
+        ? payload as Record<string, unknown>
+        : {};
+    const presetSource = source.preset && typeof source.preset === 'object'
+        ? source.preset as Record<string, unknown>
+        : source;
+    const record = await saveTavernAssistantPreset({
+        ...presetSource,
+        id: `assistant-preset-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: String(presetSource.name || source.name || '导入助手预设').trim() || '导入助手预设',
+        description: String(presetSource.description || source.description || '').trim(),
+    });
+    await setActiveTavernAssistantPresetId(record.id);
+    activeAssistantPresetId.value = record.id;
+    applyActiveAssistantPreset(record.preset);
+    assistantPresets.value = await listTavernAssistantPresets();
+    assistantPresetStatus.value = '';
+    return true;
+}
+
+async function deleteCurrentAssistantPreset() {
+    const targetId = String(activeAssistantPresetId.value || assistantPreset.value.id || '').trim();
+    const record = assistantPresets.value.find((item) => item.id === targetId) || null;
+    if (!record || record.id === DEFAULT_TAVERN_ASSISTANT_PRESET_ID) {return;}
+    if (assistantPresetDirty.value && !confirmDiscardDraft('助手预设', '删除')) {
+        return;
+    }
+    if (!window.confirm(`删除「${record.name || '当前助手预设'}」？`)) {return;}
+    await deleteTavernAssistantPreset(record.id);
+    assistantPresets.value = await listTavernAssistantPresets();
+    activeAssistantPresetId.value = await getActiveTavernAssistantPresetId();
+    applyActiveAssistantPreset(await loadActiveTavernAssistantPreset());
+    assistantPresetStatus.value = '';
 }
 
 async function discardAssistantPresetChanges() {
     if (!assistantPresetDirty.value) {return;}
     assistantPreset.value = { ...activeAssistantPreset.value };
     savedAssistantPresetJson.value = snapshotAssistantPreset(activeAssistantPreset.value);
-    assistantPresetStatus.value = '已放弃';
+    assistantPresetStatus.value = '';
 }
 
 function describeError(error: unknown) {
@@ -2447,7 +2502,7 @@ function completeApiConfigSave(requestId = '', result: { ok?: boolean; error?: s
         error: result.error || '',
     };
     apiSettingsPanelState.configSave = apiConfigSave.value;
-    apiConfigStatus.value = result.ok ? '共享 API 配置已保存。' : `保存失败：${result.error || 'unknown_error'}`;
+    apiConfigStatus.value = result.ok ? '' : `保存失败：${result.error || 'unknown_error'}`;
     window.setTimeout(() => {
         if (apiConfigSave.value.requestId !== requestId || apiConfigSave.value.status !== 'success') {return;}
         apiConfigSave.value = { status: 'idle', requestId: '', error: '' };
@@ -2533,7 +2588,7 @@ function applyHostPayload(payload: Record<string, unknown>) {
     }
     availableCharacters.value = payload.availableCharacters as TavernCharacterOption[] || availableCharacters.value;
     selectedCharacterId.value = String(payload.selectedCharacterId || context.value.character?.id || selectedCharacterId.value || '');
-    statusText.value = diagnostics.value.message || '已同步酒馆内容';
+    statusText.value = diagnostics.value.message || '';
     void finishPendingCharacterSession().catch((error) => {
         pendingCharacterError.value = error instanceof Error ? error.message : String(error || 'create_session_failed');
         clearPendingCharacterSession();
@@ -3253,10 +3308,7 @@ async function saveSelectedMemoryFile() {
         memoryEditorLoadedPath.value = file.path;
         memoryEditorBaseContent.value = memoryEditorDraft.value;
         memoryEditorMode.value = 'preview';
-        memoryEditorStatus.value = '已保存';
-        window.setTimeout(() => {
-            if (memoryEditorStatus.value === '已保存') {memoryEditorStatus.value = '';}
-        }, 1600);
+        memoryEditorStatus.value = '';
     } catch (error) {
         memoryEditorStatus.value = error instanceof Error ? error.message : String(error || '保存失败');
     }
@@ -3280,10 +3332,7 @@ function discardMemoryDraft() {
     if (!memoryEditorDocumentAvailable.value) {return;}
     memoryEditorDraft.value = memoryEditorBaseContent.value;
     memoryEditorMode.value = 'preview';
-    memoryEditorStatus.value = '已放弃修改';
-    window.setTimeout(() => {
-        if (memoryEditorStatus.value === '已放弃修改') {memoryEditorStatus.value = '';}
-    }, 1400);
+    memoryEditorStatus.value = '';
 }
 
 function toolTraceSummary(value: unknown) {
@@ -5330,6 +5379,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
     assistantPreset,
     assistantPresetDirty,
     assistantPresetItems,
+    assistantPresets,
     assistantPresetSearchText,
     assistantPresetStatus,
     assistantPresetVisibleLimit,
@@ -5350,6 +5400,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
     chatMessages,
     chatMessageWindow,
     chatComposeTextareaRef,
+    chatPresetOptions,
     chatPresetSourceSearchText,
     chatPresetSourceVisibleLimit,
     chatScrollControlsActive,
@@ -5363,8 +5414,10 @@ provide(TAVERN_APP_UI_CONTEXT, {
     copyMessage,
     copyManagerMessage,
     currentManagerWorkRun,
+    createAssistantPreset,
     createRegexScript,
     currentUserMessage,
+    deleteCurrentAssistantPreset,
     deleteCurrentRegexScript,
     deleteManagerMessageTurn,
     deleteMessageTurn,
@@ -5510,6 +5563,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
     runtimeText,
     runtimeThoughts,
     runtimeActionCheckEvents,
+    importAssistantPreset,
     saveCurrentAssistantPreset,
     saveCurrentPreset,
     saveCurrentRegexScript,

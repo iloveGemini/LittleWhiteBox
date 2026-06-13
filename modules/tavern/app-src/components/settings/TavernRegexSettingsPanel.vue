@@ -10,7 +10,6 @@ const {
     expandRegexGroup,
     linesFromList,
     listFromLines,
-    refreshRegexFromHost,
     REGEX_GROUP_BATCH_SIZE,
     regexDirty,
     regexDraft,
@@ -46,34 +45,59 @@ const {
         <span class="pill">{{ regexScriptRows.length }} 条</span>
       </div>
     </div>
-    <div class="preset-command-bar">
-      <label>
-        <span>当前类型</span>
-        <input
-          :value="regexDraftTypeLabel()"
-          readonly
-        >
-      </label>
-      <div class="preset-actions">
+    <div class="preset-command-bar regex-command-bar">
+      <div class="settings-toolstrip">
         <button
           type="button"
-          @click="refreshRegexFromHost"
-        >
-          刷新
-        </button>
-        <button
-          type="button"
+          class="settings-icon-tool"
+          title="放弃修改"
+          aria-label="放弃修改"
           :disabled="!regexDirty"
           @click="applyActiveRegexScript(selectedRegexRow)"
         >
-          放弃
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path d="M3 7v6h6" />
+            <path d="M21 17a8 8 0 0 0-13.7-5.7L3 15" />
+          </svg>
         </button>
         <button
           type="button"
+          class="settings-icon-tool"
+          title="保存"
+          aria-label="保存"
           :disabled="!regexDraft.scriptName || !regexDirty"
           @click="saveCurrentRegexScript"
         >
-          保存
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path d="M5 21h14a1 1 0 0 0 1-1V7.5L16.5 4H5a1 1 0 0 0-1 1v15a1 1 0 0 0 1 1Z" />
+            <path d="M8 21v-7h8v7" />
+            <path d="M8 4v5h7" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="settings-icon-tool"
+          title="删除"
+          aria-label="删除"
+          :disabled="!selectedRegexRow"
+          @click="deleteCurrentRegexScript"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+            <path d="M10 11v6" />
+            <path d="M14 11v6" />
+          </svg>
         </button>
       </div>
     </div>
@@ -125,9 +149,11 @@ const {
           <button
             type="button"
             class="native-add-row"
+            :title="`新增${group.label}`"
+            :aria-label="`新增${group.label}`"
             @click="createRegexScript(group)"
           >
-            新增{{ group.label }}
+            新增
           </button>
         </div>
         <div
@@ -282,15 +308,6 @@ const {
                 </label>
               </div>
             </section>
-          </div>
-          <div class="preset-actions native-danger-row">
-            <button
-              type="button"
-              :disabled="!selectedRegexRow"
-              @click="deleteCurrentRegexScript"
-            >
-              删除正则
-            </button>
           </div>
         </template>
         <div

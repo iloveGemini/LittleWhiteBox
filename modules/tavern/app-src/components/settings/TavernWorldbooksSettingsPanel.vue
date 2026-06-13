@@ -85,14 +85,6 @@ const {
             <strong>{{ item.name }}</strong>
             <small v-if="worldbookSourceSummary(item)">{{ worldbookSourceSummary(item) }}</small>
           </span>
-          <button
-            type="button"
-            class="worldbook-row-open"
-            title="打开酒馆编辑器"
-            @click.stop="openSelectedWorldbookEditor(item.name)"
-          >
-            打开
-          </button>
         </div>
         <button
           v-if="hiddenWorldbookCount"
@@ -120,10 +112,21 @@ const {
               <strong>{{ selectedWorldbook.name }}</strong>
               <span v-if="worldbookSourceSummary(selectedWorldbook)">{{ worldbookSourceSummary(selectedWorldbook) }}</span>
             </div>
-            <span
-              v-if="selectedWorldbook.globalActive"
-              class="worldbook-link-badge"
-            >全局世界书</span>
+            <div class="worldbook-selected-actions">
+              <span
+                v-if="selectedWorldbook.globalActive"
+                class="worldbook-link-badge"
+              >全局世界书</span>
+              <button
+                type="button"
+                class="worldbook-row-open"
+                title="打开酒馆编辑器"
+                aria-label="打开酒馆编辑器"
+                @click="openSelectedWorldbookEditor(selectedWorldbook.name)"
+              >
+                打开
+              </button>
+            </div>
           </div>
           <div
             v-if="worldbookPreviewStatus"

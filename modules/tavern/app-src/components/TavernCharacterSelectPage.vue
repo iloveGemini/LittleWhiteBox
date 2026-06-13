@@ -85,6 +85,7 @@ defineExpose({ scrollSelectedIntoView });
 <template>
   <section class="xb-page character-select-page">
     <TavernCornerActions
+      compact
       :dark="dark"
       @toggle-theme="$emit('toggle-theme')"
       @exit="$emit('exit')"
@@ -107,16 +108,10 @@ defineExpose({ scrollSelectedIntoView });
           </p>
           <h2>角色档案库</h2>
         </div>
-        <div class="head-right">
-          <button
-            type="button"
-            class="os-sys-button primary"
-            @click="$emit('refresh')"
-          >
-            <span class="icon">⟳</span>
-            同步
-          </button>
-        </div>
+        <div
+          class="head-balance"
+          aria-hidden="true"
+        />
       </header>
 
       <div
@@ -129,6 +124,7 @@ defineExpose({ scrollSelectedIntoView });
       <section
         v-if="characters.length"
         class="character-archive"
+        :class="{ 'has-character-selection': !!selectedCharacter }"
       >
         <aside class="character-index-panel">
           <div class="index-panel-toolbar">

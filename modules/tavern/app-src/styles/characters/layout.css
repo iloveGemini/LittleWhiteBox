@@ -20,11 +20,23 @@
 }
 
 .character-select-head {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
+    gap: 16px;
     border-bottom: 2px solid var(--xb-rule-strong);
     padding-bottom: 16px;
+}
+
+.head-left,
+.head-balance {
+    min-width: 0;
+}
+
+.head-balance {
+    width: 82px;
+    height: 32px;
+    pointer-events: none;
 }
 
 .character-title-copy {
@@ -231,7 +243,7 @@
     }
 
     .head-left,
-    .head-right {
+    .head-balance {
         flex: 0 0 auto;
     }
 
@@ -251,6 +263,11 @@
         white-space: nowrap;
         font-size: 17px;
         letter-spacing: 0;
+    }
+
+    .head-balance {
+        width: 58px;
+        height: 34px;
     }
 
     .character-select-page .os-sys-button {
@@ -275,6 +292,14 @@
     .character-index-panel {
         flex: 0 0 clamp(196px, 32vh, 260px);
         border-bottom-color: var(--xb-rule);
+    }
+
+    .character-archive:not(.has-character-selection) .character-index-panel {
+        flex: 1 1 auto;
+    }
+
+    .character-archive:not(.has-character-selection) .dossier-empty {
+        display: none;
     }
 
     .index-panel-toolbar {

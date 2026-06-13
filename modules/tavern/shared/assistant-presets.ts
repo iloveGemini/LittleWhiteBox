@@ -210,49 +210,123 @@ function buildDefaultAssistantPresetSections() {
 
 export function buildDefaultStoryArcPrompt(): string {
     return joinLines([
-        'Use `memory/session.md` for why the story has reached the current point.',
-        'Keep long-running direction, current pressure, and unresolved threads that still matter later.',
-        'Do not turn it into a turn-by-turn log.',
+        '职责：维护“故事为什么走到现在”的长期脉络，只记录会影响后续剧情理解的内容。',
+        '',
+        '推荐格式：',
+        '# 剧情脉络',
+        '## 当前主线',
+        '- 主角/角色正在围绕什么目标、危机或矛盾行动。',
+        '## 长期压力',
+        '- 仍在逼近、尚未解除、会改变后续选择的压力。',
+        '## 未解伏笔',
+        '- 已经出现但尚未解决的线索、承诺、秘密或隐患。',
+        '## 关系变化',
+        '- 角色之间已经形成的信任、敌意、亏欠、误会或依赖。',
+        '',
+        '规则：',
+        '- 只在主线方向、核心矛盾、长期伏笔、关键关系发生变化时更新。',
+        '- 不写逐轮流水账，不重复临时动作，不记录已经失去后续意义的细节。',
     ]);
 }
 
 export function buildDefaultStatePrompt(): string {
     return joinLines([
-        'Use `memory/state.md` for facts and states that are still true right now.',
-        'Keep character state, relationships, places, time, possessions, and ongoing constraints.',
-        'Do not keep transient events after they stop being true.',
+        '职责：维护“此刻仍然成立”的当前事实，让下一轮对话能自然接上现场。',
+        '',
+        '推荐格式：',
+        '# 状态栏',
+        '## 当前局面',
+        '- 时间/地点：',
+        '- 正在发生：',
+        '## 角色状态',
+        '- 角色名：身体、情绪、立场、可见目标。',
+        '## 关系与约定',
+        '- 谁和谁之间存在明确关系、承诺、敌意、误会或共同秘密。',
+        '## 持有物与限制',
+        '- 物品、资源、权限、伤势、规则、风险、倒计时。',
+        '',
+        '规则：',
+        '- 只保留现在仍为真的事实；事实变化时改写旧状态，不在后面追加矛盾说法。',
+        '- 临时事件结束后删除或降级，不让过期状态污染后续判断。',
     ]);
 }
 
 export function buildDefaultTurnPrompt(): string {
     return joinLines([
-        'Use `memory/turns/*.md` for lightweight per-turn notes and history fallback.',
-        'Capture what this turn changed, revealed, or set up, so very long stories remain recoverable even if chat history becomes inaccessible.',
-        'Do not duplicate durable facts that already belong in `memory/session.md` or `memory/state.md`.',
+        '职责：为本轮剧情写轻量小记，方便长篇故事在很久以后仍能回溯。',
+        '',
+        '推荐格式：',
+        '# 楼层小记',
+        '## 本轮变化',
+        '- 本轮真正改变了什么。',
+        '## 新信息',
+        '- 新揭示的事实、线索、人物态度或世界设定。',
+        '## 后续钩子',
+        '- 下一轮可能继续影响剧情的问题、风险、承诺或机会。',
+        '',
+        '规则：',
+        '- 每轮只写 3-6 条高价值信息，短句优先。',
+        '- 已经写进剧情脉络或状态栏的长期信息，不要在楼层小记里再堆一遍。',
     ]);
 }
 
-const SECTION_RESET_BASELINES = {
-    storyArcPrompt: joinLines([
-        '`memory/session.md` writes why the story has reached the current point.',
-        'Keep long-running direction, current pressure, and unresolved threads that still matter later.',
-        'This is not a turn log. Update it when higher-level continuity changes instead of stuffing all long-term information into turns.',
-    ]),
-    statePrompt: joinLines([
-        '`memory/state.md` writes facts and states that are still true right now.',
-        'Include character state, relationships, places, time, possessions, constraints, and clear changes that still affect later turns.',
-        'This answers "what is true now." Do not keep transient events after they stop being true.',
-    ]),
-    turnPrompt: joinLines([
-        '`memory/turns/*.md` writes lightweight per-turn notes.',
-        'Use it as long-story history fallback: what changed, what was revealed, and what was set up this turn.',
-        'Do not turn turn notes into a second durable summary layer, and do not repeat settled facts already captured in session or state.',
-    ]),
+const SECTION_RESET_BASELINES: Record<keyof ReturnType<typeof buildDefaultAssistantPresetSections>, string[]> = {
+    storyArcPrompt: [
+        joinLines([
+            'Use `memory/session.md` for why the story has reached the current point.',
+            'Keep long-running direction, current pressure, and unresolved threads that still matter later.',
+            'Do not turn it into a turn-by-turn log.',
+        ]),
+        joinLines([
+            '`memory/session.md` writes why the story has reached the current point.',
+            'Keep long-running direction, current pressure, and unresolved threads that still matter later.',
+            'This is not a turn log. Update it when higher-level continuity changes instead of stuffing all long-term information into turns.',
+        ]),
+        joinLines([
+            '记录故事为什么走到现在，而不是复述每一轮聊天。',
+            '保留长期方向、当前压力、仍会影响后续的未解线索和关系变化。',
+            '只在剧情走向、核心矛盾、长期伏笔发生变化时更新，避免堆成流水账。',
+        ]),
+    ],
+    statePrompt: [
+        joinLines([
+            'Use `memory/state.md` for facts and states that are still true right now.',
+            'Keep character state, relationships, places, time, possessions, and ongoing constraints.',
+            'Do not keep transient events after they stop being true.',
+        ]),
+        joinLines([
+            '`memory/state.md` writes facts and states that are still true right now.',
+            'Include character state, relationships, places, time, possessions, constraints, and clear changes that still affect later turns.',
+            'This answers "what is true now." Do not keep transient events after they stop being true.',
+        ]),
+        joinLines([
+            '记录此刻仍然成立的事实和状态，让后续对话能直接接上当前局面。',
+            '保留角色状态、关系、地点、时间、持有物、限制条件、正在生效的约定和风险。',
+            '临时事件结束后要移除或改写，不要把已经失效的状态留在这里。',
+        ]),
+    ],
+    turnPrompt: [
+        joinLines([
+            'Use `memory/turns/*.md` for lightweight per-turn notes and history fallback.',
+            'Capture what this turn changed, revealed, or set up, so very long stories remain recoverable even if chat history becomes inaccessible.',
+            'Do not duplicate durable facts that already belong in `memory/session.md` or `memory/state.md`.',
+        ]),
+        joinLines([
+            '`memory/turns/*.md` writes lightweight per-turn notes.',
+            'Use it as long-story history fallback: what changed, what was revealed, and what was set up this turn.',
+            'Do not turn turn notes into a second durable summary layer, and do not repeat settled facts already captured in session or state.',
+        ]),
+        joinLines([
+            '记录本轮发生了什么关键变化，作为长篇剧情的轻量回溯。',
+            '重点写新揭示的信息、做出的选择、状态变化、埋下的后续钩子。',
+            '已经进入剧情脉络或状态栏的长期信息，不要在这里重复堆一遍。',
+        ]),
+    ],
 };
 
-function normalizeAssistantSectionText(value: unknown, fallback: string, resetDefaultText = ''): string {
+function normalizeAssistantSectionText(value: unknown, fallback: string, resetDefaultTexts: string[] = []): string {
     const text = normalizeText(value);
-    if (!text || text === resetDefaultText) {return fallback;}
+    if (!text || resetDefaultTexts.includes(text)) {return fallback;}
     return text;
 }
 

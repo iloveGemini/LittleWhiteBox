@@ -90,7 +90,7 @@ function handleDraftInput(event: Event) {
       </div>
     </div>
     <footer class="tavern-editor-foot xb-editor-foot">
-      <span>{{ readOnly ? '只读' : dirty ? '有未保存修改' : '已同步' }}</span>
+      <span v-if="readOnly || dirty">{{ readOnly ? '只读' : '有未保存修改' }}</span>
       <span v-if="status">{{ status }}</span>
       <span v-if="!hasSelectedFile && loadedPath">原档案暂不可用</span>
       <span v-if="hasSelectedFile">{{ fileMeta }}</span>

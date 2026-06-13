@@ -45,7 +45,7 @@
 }
 
 .settings-layout .worldbook-overview-grid .native-list-row {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
     cursor: pointer;
 }
 
@@ -83,6 +83,15 @@
 }
 
 .worldbook-selected-head > div {
+    min-width: 0;
+}
+
+.worldbook-selected-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
     min-width: 0;
 }
 
@@ -231,6 +240,11 @@
 
     .worldbook-selected-head {
         gap: 10px;
+    }
+
+    .worldbook-selected-actions {
+        justify-content: flex-start;
+        flex-wrap: wrap;
     }
 
     .worldbook-selected-head strong {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue';
 import { useTavernAppUiContext } from '../tavern-app-context';
 
 const ui = useTavernAppUiContext();
@@ -6,12 +7,9 @@ const {
     activePromptOrderLabel,
     activeSettingsWorkspace,
     canEditPromptOrder,
-    CHAT_PRESET_SOURCE_BATCH_SIZE,
-    chatPresetSourceSearchText,
-    chatPresetSourceVisibleLimit,
+    chatPresetOptions,
     discardPresetChanges,
     filteredPromptEditorRows,
-    hiddenChatPresetOptionCount,
     hiddenPromptCount,
     movePromptRow,
     preset,
@@ -32,15 +30,38 @@ const {
     selectedPromptRow,
     togglePromptRow,
     updatePromptByIdentifier,
-    visibleChatPresetOptions,
     visiblePromptEditorRows,
 } = ui;
+
+const selectedChatPresetName = computed(() => String(
+    selectedPresetSourceId.value
+    || preset.value.promptManager?.name
+    || preset.value.name
+    || '',
+).trim());
+const mobileEditorOpen = ref(false);
+
+function openPromptEditor(identifier: string) {
+    selectedPromptIdentifier.value = identifier;
+    mobileEditorOpen.value = true;
+}
+
+function closePromptEditor() {
+    mobileEditorOpen.value = false;
+}
+
+function promptRoleLetter(role: string) {
+    if (role === 'assistant') return 'A';
+    if (role === 'user') return 'U';
+    return 'S';
+}
 </script>
 
 <template>
   <div
     v-show="activeSettingsWorkspace === 'chatPreset'"
     class="panel step-panel preset-workspace"
+    :class="{ 'is-mobile-editor-open': mobileEditorOpen }"
   >
     <div class="panel-head preset-page-head">
       <div>
@@ -55,57 +76,59 @@ const {
       </div>
     </div>
     <div class="preset-command-bar">
-      <div class="preset-source-field">
-        <label class="archive-search preset-source-search">
-          <span>酒馆预设</span>
-          <input
-            v-model="chatPresetSourceSearchText"
-            type="search"
-            placeholder="搜索可用预设"
-          >
-        </label>
-        <div class="preset-source-list">
-          <div
-            v-if="!visibleChatPresetOptions.length"
-            class="inline-empty-note"
-          >
-            没有匹配的酒馆预设。
-          </div>
-          <button
-            v-for="item in visibleChatPresetOptions"
-            :key="item.name"
-            type="button"
-            class="preset-source-row"
-            :class="{ selected: selectedPresetSourceId === item.name }"
-            @click="selectChatPresetFromHost(item.name)"
-          >
-            <strong>{{ item.label }}</strong>
-            <small>{{ selectedPresetSourceId === item.name ? '当前使用' : '酒馆原生' }}</small>
-          </button>
-        </div>
-        <button
-          v-if="hiddenChatPresetOptionCount"
-          type="button"
-          class="archive-load-more preset-source-more"
-          @click="chatPresetSourceVisibleLimit += CHAT_PRESET_SOURCE_BATCH_SIZE"
+      <label class="preset-source-select">
+        <select
+          :value="selectedChatPresetName"
+          @change="selectChatPresetFromHost(($event.target as HTMLSelectElement).value)"
         >
-          再显示 {{ Math.min(hiddenChatPresetOptionCount, CHAT_PRESET_SOURCE_BATCH_SIZE) }} 个
-        </button>
-      </div>
-      <div class="preset-actions">
+          <option
+            v-if="!chatPresetOptions.length"
+            value=""
+          >
+            没有可用预设
+          </option>
+          <option
+            v-for="item in chatPresetOptions"
+            :key="item.name"
+            :value="item.name"
+          >
+            {{ item.label }}
+          </option>
+        </select>
+      </label>
+      <div class="settings-toolstrip">
         <button
           type="button"
+          class="settings-icon-tool"
+          title="放弃修改"
+          aria-label="放弃修改"
           :disabled="!presetDirty"
           @click="discardPresetChanges"
         >
-          放弃
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path d="M3 7v6h6" />
+            <path d="M21 17a8 8 0 0 0-13.7-5.7L3 15" />
+          </svg>
         </button>
         <button
           type="button"
+          class="settings-icon-tool"
+          title="保存"
+          aria-label="保存"
           :disabled="!canEditPromptOrder || !presetDirty"
           @click="saveCurrentPreset"
         >
-          保存
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path d="M5 21h14a1 1 0 0 0 1-1V7.5L16.5 4H5a1 1 0 0 0-1 1v15a1 1 0 0 0 1 1Z" />
+            <path d="M8 21v-7h8v7" />
+            <path d="M8 4v5h7" />
+          </svg>
         </button>
       </div>
     </div>
@@ -174,9 +197,32 @@ const {
               <small>{{ promptRoleDisplay(row.role) }}</small>
             </div>
             <div class="prompt-row-actions">
+              <span
+                class="prompt-role-badge"
+                :title="promptRoleDisplay(row.role)"
+                :aria-label="promptRoleDisplay(row.role)"
+              >
+                {{ promptRoleLetter(row.role) }}
+              </span>
+              <button
+                type="button"
+                class="prompt-edit-button"
+                title="编辑"
+                aria-label="编辑"
+                @click.stop="openPromptEditor(row.identifier)"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </button>
               <button
                 type="button"
                 title="上移"
+                class="prompt-move-button"
                 :disabled="!canEditPromptOrder || !!promptSearchText || promptRowIndex(row.identifier) === 0"
                 @click.stop="movePromptRow(row.identifier, -1)"
               >
@@ -185,6 +231,7 @@ const {
               <button
                 type="button"
                 title="下移"
+                class="prompt-move-button"
                 :disabled="!canEditPromptOrder || !!promptSearchText || promptRowIndex(row.identifier) === promptEditorRows.length - 1"
                 @click.stop="movePromptRow(row.identifier, 1)"
               >
@@ -219,6 +266,21 @@ const {
         <div class="preset-preview-head">
           <strong>{{ selectedPromptRow?.name || '提示词条目' }}</strong>
           <span>{{ promptRoleDisplay(String(selectedPromptRow?.role || 'system')) }}</span>
+          <button
+            type="button"
+            class="prompt-editor-close"
+            title="关闭"
+            aria-label="关闭"
+            @click="closePromptEditor"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="M6 6l12 12" />
+              <path d="M18 6 6 18" />
+            </svg>
+          </button>
         </div>
         <div
           v-if="selectedPromptRow"

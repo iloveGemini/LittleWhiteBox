@@ -1,20 +1,21 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue';
 import { useTavernAppUiContext } from '../tavern-app-context';
+import { DEFAULT_TAVERN_ASSISTANT_PRESET_ID } from '../../../shared/assistant-presets';
+import type { TavernAssistantPresetRecord } from '../../../shared/session-db';
 
 const ui = useTavernAppUiContext();
 const {
     activeAssistantPresetId,
     activeSettingsWorkspace,
-    ASSISTANT_PRESET_BATCH_SIZE,
     assistantPreset,
     assistantPresetDirty,
     assistantPresetItems,
-    assistantPresetSearchText,
+    assistantPresets,
     assistantPresetStatus,
-    assistantPresetVisibleLimit,
-    deriveAssistantPreset,
-    discardAssistantPresetChanges,
-    hiddenAssistantPresetCount,
+    createAssistantPreset,
+    deleteCurrentAssistantPreset,
+    importAssistantPreset,
     saveCurrentAssistantPreset,
     selectAssistantPreset,
     selectAssistantPresetItem,
@@ -22,8 +23,60 @@ const {
     shortText,
     updateAssistantPresetPatch,
     updateSelectedAssistantPresetItem,
-    visibleAssistantPresetRecords,
 } = ui;
+
+const selectedAssistantPresetId = computed(() => String(activeAssistantPresetId.value || assistantPreset.value.id || '').trim());
+const currentAssistantPresetRecord = computed(() => assistantPresets.value.find((item: TavernAssistantPresetRecord) => item.id === selectedAssistantPresetId.value) || null);
+const importInputRef = ref<HTMLInputElement | null>(null);
+
+function renameCurrentPreset() {
+    const currentName = String(assistantPreset.value.name || '').trim() || '助手预设';
+    const nextName = window.prompt('输入预设名称：', currentName);
+    if (nextName === null) {return;}
+    const normalized = String(nextName || '').trim();
+    if (!normalized || normalized === currentName) {return;}
+    updateAssistantPresetPatch({ name: normalized });
+}
+
+function triggerImportPreset() {
+    importInputRef.value?.click();
+}
+
+async function handleImportPreset(event: Event) {
+    const input = event.target as HTMLInputElement | null;
+    const file = input?.files?.[0];
+    if (!file) {return;}
+    try {
+        const text = await file.text();
+        await importAssistantPreset(JSON.parse(text));
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error || '导入失败');
+        window.alert(message || '导入失败');
+    } finally {
+        if (input) {
+            input.value = '';
+        }
+    }
+}
+
+function exportCurrentPreset() {
+    const name = String(assistantPreset.value.name || 'assistant-preset').trim() || 'assistant-preset';
+    const payload = {
+        kind: 'littlewhitebox-assistant-preset',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        preset: assistantPreset.value,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${name.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim() || 'assistant-preset'}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+}
 </script>
 
 <template>
@@ -40,68 +93,118 @@ const {
           v-if="assistantPresetDirty"
           class="pill warning"
         >未保存</span>
-        <span class="pill">{{ assistantPreset.name || '未命名' }}</span>
       </div>
     </div>
-    <div class="preset-command-bar">
-      <div class="preset-source-field">
-        <label class="archive-search preset-source-search">
-          <span>助手预设</span>
-          <input
-            v-model="assistantPresetSearchText"
-            type="search"
-            placeholder="搜索管理员口径"
+    <div class="preset-command-bar assistant-preset-command-bar">
+      <label class="assistant-preset-picker">
+        <select
+          :value="selectedAssistantPresetId"
+          @change="selectAssistantPreset(($event.target as HTMLSelectElement).value)"
+        >
+          <option
+            v-if="!assistantPresets.length"
+            value=""
           >
-        </label>
-        <div class="preset-source-list">
-          <div
-            v-if="!visibleAssistantPresetRecords.length"
-            class="inline-empty-note"
-          >
-            没有匹配的助手预设。
-          </div>
-          <button
-            v-for="item in visibleAssistantPresetRecords"
+            没有可用助手预设
+          </option>
+          <option
+            v-for="item in assistantPresets"
             :key="item.id"
-            type="button"
-            class="preset-source-row"
-            :class="{ selected: activeAssistantPresetId === item.id }"
-            @click="selectAssistantPreset(item.id)"
+            :value="item.id"
           >
-            <strong>{{ item.name }}</strong>
-            <small>{{ item.isBuiltIn ? '内置' : '自定义' }}{{ item.description ? ` · ${item.description}` : '' }}</small>
-          </button>
-        </div>
-        <button
-          v-if="hiddenAssistantPresetCount"
-          type="button"
-          class="archive-load-more preset-source-more"
-          @click="assistantPresetVisibleLimit += ASSISTANT_PRESET_BATCH_SIZE"
-        >
-          再显示 {{ Math.min(hiddenAssistantPresetCount, ASSISTANT_PRESET_BATCH_SIZE) }} 个
-        </button>
-      </div>
-      <div class="preset-actions">
+            {{ item.name }}{{ item.isBuiltIn ? ' · 内置' : '' }}
+          </option>
+        </select>
+      </label>
+      <div class="assistant-preset-toolstrip">
         <button
           type="button"
-          @click="deriveAssistantPreset"
+          class="assistant-preset-tool icon-button"
+          title="改名"
+          aria-label="改名"
+          @click="renameCurrentPreset"
         >
-          另存副本
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+          </svg>
         </button>
         <button
           type="button"
-          :disabled="!assistantPresetDirty"
-          @click="discardAssistantPresetChanges"
-        >
-          放弃
-        </button>
-        <button
-          type="button"
+          class="assistant-preset-tool icon-button"
+          title="保存"
+          aria-label="保存"
           :disabled="!assistantPresetDirty"
           @click="saveCurrentAssistantPreset"
         >
-          保存
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 21h14a1 1 0 0 0 1-1V7.5L16.5 4H5a1 1 0 0 0-1 1v15a1 1 0 0 0 1 1Z" />
+            <path d="M8 21v-7h8v7" />
+            <path d="M8 4v5h7" />
+          </svg>
         </button>
+        <button
+          type="button"
+          class="assistant-preset-tool icon-button"
+          title="删除"
+          aria-label="删除"
+          :disabled="!currentAssistantPresetRecord || currentAssistantPresetRecord.id === DEFAULT_TAVERN_ASSISTANT_PRESET_ID"
+          @click="deleteCurrentAssistantPreset"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+            <path d="M10 11v6" />
+            <path d="M14 11v6" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="assistant-preset-tool icon-button"
+          title="新增"
+          aria-label="新增"
+          @click="createAssistantPreset"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="assistant-preset-tool icon-button"
+          title="导入"
+          aria-label="导入"
+          @click="triggerImportPreset"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 4v11" />
+            <path d="m7 11 5 5 5-5" />
+            <path d="M4 20h16" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="assistant-preset-tool icon-button"
+          title="导出"
+          aria-label="导出"
+          :disabled="!selectedAssistantPresetId"
+          @click="exportCurrentPreset"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 20V9" />
+            <path d="m17 13-5-5-5 5" />
+            <path d="M4 20h16" />
+          </svg>
+        </button>
+        <input
+          ref="importInputRef"
+          class="assistant-preset-import-input"
+          type="file"
+          accept="application/json,.json"
+          @change="handleImportPreset"
+        >
       </div>
     </div>
     <div
@@ -110,27 +213,10 @@ const {
     >
       <span>{{ assistantPresetStatus }}</span>
     </div>
-    <div class="preset-meta-strip">
-      <label>
-        <span>名称</span>
-        <input
-          :value="assistantPreset.name"
-          @input="updateAssistantPresetPatch({ name: ($event.target as HTMLInputElement).value })"
-        >
-      </label>
-      <label>
-        <span>说明</span>
-        <input
-          :value="assistantPreset.description || ''"
-          @input="updateAssistantPresetPatch({ description: ($event.target as HTMLInputElement).value })"
-        >
-      </label>
-    </div>
     <div class="assistant-preset-studio">
       <aside class="assistant-preset-item-list archive-item-list">
         <div class="assistant-preset-nav-head">
           <strong>记忆档案</strong>
-          <span>一档一项</span>
         </div>
         <button
           v-for="item in assistantPresetItems"
@@ -140,7 +226,6 @@ const {
           :class="{ selected: selectedAssistantPresetItem?.id === item.id }"
           @click="selectAssistantPresetItem(item.id)"
         >
-          <span>{{ item.summary }}</span>
           <strong>{{ item.label }}</strong>
           <small>{{ shortText(item.content || '未填写职责。', 54) }}</small>
         </button>
@@ -150,7 +235,6 @@ const {
         <div class="assistant-preset-line-head">
           <div>
             <strong>{{ selectedAssistantPresetItem?.label || '记忆档案' }}</strong>
-            <span>{{ selectedAssistantPresetItem?.summary || '选择左侧一项后编辑。' }}</span>
           </div>
         </div>
         <div

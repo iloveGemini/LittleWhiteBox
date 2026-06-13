@@ -2,6 +2,7 @@
 defineProps<{
   dark: boolean;
   includeHome?: boolean;
+  compact?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -14,7 +15,7 @@ const emit = defineEmits<{
 <template>
   <div
     class="home-corner-actions"
-    :class="{ 'page-corner-actions': includeHome }"
+    :class="{ 'page-corner-actions': includeHome || compact }"
   >
     <button
       v-if="includeHome"

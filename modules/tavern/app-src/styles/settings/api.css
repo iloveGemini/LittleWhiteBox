@@ -98,7 +98,7 @@
 .tavern-api-settings .xb-assistant-inline-input {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
+    align-items: end;
     gap: 8px;
     min-width: 0;
 }
@@ -111,6 +111,8 @@
 .tavern-api-settings .xb-assistant-inline-input > select {
     min-width: 0;
     width: 100%;
+    min-height: 40px;
+    height: 40px;
 }
 
 .tavern-api-settings .xb-assistant-config select {
@@ -139,14 +141,16 @@
 
 .tavern-api-settings .xb-assistant-inline-input button,
 .tavern-api-settings .xb-assistant-actions button {
-    min-height: 38px;
+    min-height: 40px;
     border-radius: 12px;
     padding: 0 14px;
 }
 
 .tavern-api-settings .xb-assistant-inline-input.xb-assistant-model-row > button {
     align-self: end;
-    min-height: 44px;
+    min-height: 40px;
+    height: 40px;
+    line-height: 1;
 }
 
 .tavern-api-settings .xb-assistant-temperature-row {
@@ -160,11 +164,12 @@
 .tavern-api-settings .xb-assistant-checkbox-row {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    min-height: 42px;
+    min-height: 40px;
+    height: 40px;
     border: 1px solid var(--xb-line);
     border-radius: 14px;
     background: var(--xb-settings-subtle-bg);
-    padding: 9px 12px;
+    padding: 8px 12px;
 }
 
 .tavern-api-settings .xb-assistant-checkbox-control {
@@ -385,12 +390,13 @@
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 8px;
-        align-items: center;
+        align-items: end;
     }
 
     .settings-layout .tavern-api-settings .xb-assistant-inline-input > button {
         min-width: 58px;
-        min-height: 42px;
+        min-height: 40px;
+        height: 40px;
         border-radius: 12px;
         padding: 0 12px;
     }
@@ -407,14 +413,18 @@
     }
 
     .settings-layout .tavern-api-settings .xb-assistant-temperature-row .xb-assistant-checkbox-row {
-        min-height: 42px;
+        align-items: center;
+        min-height: 40px;
+        height: 40px;
     }
 
     .settings-layout .tavern-api-settings .xb-assistant-checkbox-row {
+        align-items: center;
+        height: 40px;
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px;
         background: rgba(255, 255, 255, 0.035);
-        padding: 9px 11px;
+        padding: 8px 11px;
     }
 
     .xb-os-shell.theme-light .settings-layout .tavern-api-settings .xb-assistant-checkbox-row {

@@ -101,6 +101,84 @@
     margin: 0;
 }
 
+.settings-layout .preset-source-select {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    min-width: 0;
+}
+
+.settings-layout .preset-source-select span {
+    color: var(--xb-text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.settings-layout .preset-source-select select {
+    width: min(420px, 100%);
+    min-height: 40px;
+    border: 1px solid var(--xb-line);
+    border-radius: 12px;
+    background: var(--xb-settings-control-bg);
+    color: var(--xb-text-main);
+    padding: 0 12px;
+}
+
+.settings-toolstrip {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    min-width: 0;
+    overflow-x: auto;
+    padding-bottom: 1px;
+    scrollbar-width: none;
+}
+
+.settings-toolstrip::-webkit-scrollbar {
+    display: none;
+}
+
+.settings-icon-tool {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    border: 1px solid var(--xb-line);
+    border-radius: 10px;
+    background: var(--xb-settings-control-bg);
+    color: var(--xb-text-muted);
+    padding: 0;
+    box-shadow: none;
+}
+
+.settings-icon-tool svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    vector-effect: non-scaling-stroke;
+}
+
+.settings-icon-tool:hover:not(:disabled),
+.settings-icon-tool:focus-visible {
+    outline: none;
+    border-color: rgba(var(--xb-accent-rgb), 0.34);
+    background: rgba(var(--xb-accent-rgb), 0.09);
+    color: var(--xb-text-main);
+    transform: none;
+}
+
+.settings-icon-tool:disabled {
+    opacity: 0.48;
+}
+
 .settings-layout .preset-source-field {
     position: relative;
     display: flex;
@@ -258,6 +336,10 @@
     gap: 4px;
 }
 
+.preset-workspace .prompt-role-badge {
+    display: none;
+}
+
 .preset-workspace .prompt-row-actions button,
 .preset-workspace .prompt-toggle {
     display: grid;
@@ -271,6 +353,26 @@
     background: transparent;
     color: var(--xb-text-muted);
     padding: 0;
+}
+
+.preset-workspace .prompt-edit-button svg,
+.preset-workspace .prompt-editor-close svg {
+    width: 15px;
+    height: 15px;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    vector-effect: non-scaling-stroke;
+}
+
+.preset-workspace .prompt-edit-button {
+    display: none;
+}
+
+.preset-workspace .prompt-editor-close {
+    display: none;
 }
 
 .preset-workspace .prompt-detail-form {
@@ -398,8 +500,27 @@
     .settings-layout .preset-command-bar,
     .preset-meta-strip {
         gap: 8px;
-        border-bottom-color: rgba(255, 255, 255, 0.06);
+        border-bottom-color: var(--xb-line);
         padding: 8px 14px;
+    }
+
+    .settings-layout .preset-source-select select {
+        width: 100%;
+        min-height: 36px;
+        border-radius: 10px;
+    }
+
+    .settings-toolstrip {
+        justify-content: flex-start;
+        gap: 7px;
+    }
+
+    .settings-icon-tool {
+        width: 32px;
+        min-width: 32px;
+        height: 32px;
+        min-height: 32px;
+        border-radius: 9px;
     }
 
     .settings-layout .preset-source-field {

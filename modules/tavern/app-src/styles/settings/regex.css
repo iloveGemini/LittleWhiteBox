@@ -143,6 +143,11 @@
     margin: 0;
 }
 
+.settings-layout .regex-command-bar {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: end;
+}
+
 .regex-studio .regex-group-block {
     flex: 0 0 auto;
     display: grid;
@@ -392,6 +397,7 @@
 
     .settings-layout.is-regex-workspace .preset-command-bar {
         grid-template-columns: minmax(0, 1fr);
+        justify-items: start;
     }
 
     .settings-layout.is-regex-workspace .preset-command-bar > label {
@@ -473,7 +479,7 @@
     }
 
     .settings-layout .worldbook-overview-grid .native-list-row {
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .worldbook-overview-grid .worldbook-source-lights {

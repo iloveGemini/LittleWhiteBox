@@ -1665,6 +1665,19 @@ export async function saveTavernAssistantPreset(
     return record;
 }
 
+export async function deleteTavernAssistantPreset(
+    presetId = '',
+): Promise<boolean> {
+    const id = String(presetId || '').trim();
+    if (!id || id === DEFAULT_TAVERN_ASSISTANT_PRESET_ID) {return false;}
+    await tavernAssistantPresetsTable.delete(id);
+    const activeId = await getActiveTavernAssistantPresetId();
+    if (activeId === id) {
+        await setActiveTavernAssistantPresetId(DEFAULT_TAVERN_ASSISTANT_PRESET_ID);
+    }
+    return true;
+}
+
 export async function ensureDefaultTavernAssistantPreset(): Promise<TavernAssistantPresetRecord> {
     const existing = await tavernAssistantPresetsTable.get(DEFAULT_TAVERN_ASSISTANT_PRESET_ID);
     if (existing) {return existing;}

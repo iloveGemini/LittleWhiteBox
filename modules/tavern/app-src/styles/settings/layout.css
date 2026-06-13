@@ -18,6 +18,7 @@
     --xb-settings-soft-bg: rgba(240, 238, 232, 0.045);
     --xb-settings-subtle-bg: rgba(240, 238, 232, 0.025);
     --xb-settings-float-bg: rgba(16, 17, 21, 0.97);
+    --xb-settings-sheet-bg: var(--xb-bg-editor);
     --xb-font-serif: var(--xb-font-ui);
     position: relative;
     min-height: 0;
@@ -48,6 +49,7 @@
     --xb-settings-soft-bg: rgba(251, 250, 246, 0.58);
     --xb-settings-subtle-bg: rgba(251, 250, 246, 0.36);
     --xb-settings-float-bg: rgba(251, 250, 246, 0.97);
+    --xb-settings-sheet-bg: var(--xb-paper-plain);
 }
 
 .settings-layout .page-corner-actions {
@@ -372,17 +374,6 @@
     }
 
     .settings-layout .settings-sidebar {
-        flex: 0 0 auto;
-        padding: calc(10px + env(safe-area-inset-top, 0px)) 10px 8px;
-        background: var(--xb-settings-head-bg);
-        backdrop-filter: blur(18px);
-    }
-
-    .settings-layout .guide-card {
-        gap: 0;
-    }
-
-    .settings-layout .guide-card h2 {
         display: none;
     }
 
@@ -419,7 +410,6 @@
         display: inline;
     }
 
-    .settings-layout .guide-step span,
     .settings-layout .guide-step em {
         display: none;
     }
