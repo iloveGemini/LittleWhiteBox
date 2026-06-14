@@ -31,9 +31,12 @@ test('tavern message window matches ebook defaults and expands older messages in
 });
 
 test('tavern scroll handlers collapse expanded message windows when returning to bottom', () => {
-    const source = readFileSync(resolve(root, 'modules/tavern/app-src/App.vue'), 'utf8');
-    assert.match(source, /function handleChatScroll\(\)[\s\S]*collapseChatMessageWindowIfBottom\(\);/);
-    assert.match(source, /function handleManagerScroll\(\)[\s\S]*collapseManagerMessageWindowIfBottom\(\);/);
-    assert.match(source, /function scrollChatToBottom\([\s\S]*options\.collapseWindow \|\| chatAutoScroll\.value[\s\S]*collapseChatMessageWindowIfBottom\(true\);/);
-    assert.match(source, /function scrollManagerToBottom\([\s\S]*options\.collapseWindow \|\| managerAutoScroll\.value[\s\S]*collapseManagerMessageWindowIfBottom\(true\);/);
+    const appSource = readFileSync(resolve(root, 'modules/tavern/app-src/App.vue'), 'utf8');
+    const scrollPaneSource = readFileSync(resolve(root, 'modules/tavern/app-src/components/chat/useTavernScrollPane.ts'), 'utf8');
+    assert.match(appSource, /const chatScrollPane = useTavernScrollPane/);
+    assert.match(appSource, /const managerScrollPane = useTavernScrollPane/);
+    assert.doesNotMatch(appSource, /function handleChatScroll\(\)/);
+    assert.doesNotMatch(appSource, /function handleManagerScroll\(\)/);
+    assert.match(scrollPaneSource, /function handleScroll\(\)[\s\S]*collapseMessageWindowIfBottom\(\);/);
+    assert.match(scrollPaneSource, /function scrollToBottom\([\s\S]*scrollOptions\.collapseWindow \|\| autoScroll\.value[\s\S]*collapseMessageWindowIfBottom\(true\);/);
 });

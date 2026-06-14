@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { useTavernAppUiContext } from '../tavern-app-context';
+import { useTavernSettingsContext } from '../tavern-app-context';
 
-const ui = useTavernAppUiContext();
+const settings = useTavernSettingsContext();
 const {
     activeSettingsWorkspace,
     applyActiveRegexScript,
@@ -25,7 +25,7 @@ const {
     selectRegexScript,
     toggleRegexPlacement,
     updateRegexPatch,
-} = ui;
+} = settings;
 </script>
 
 <template>

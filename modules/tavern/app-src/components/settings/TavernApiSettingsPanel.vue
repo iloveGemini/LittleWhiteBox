@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { useTavernAppUiContext } from '../tavern-app-context';
+import { useTavernSettingsContext } from '../tavern-app-context';
 
-const ui = useTavernAppUiContext();
+const settings = useTavernSettingsContext();
 const {
     activeSettingsWorkspace,
     apiSettingsRootRef,
-} = ui;
+} = settings;
 
 function setApiSettingsRootRef(element: Element | null) {
     apiSettingsRootRef.value = element instanceof HTMLElement ? element : null;

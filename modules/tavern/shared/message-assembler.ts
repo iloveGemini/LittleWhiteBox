@@ -1566,10 +1566,6 @@ function buildSingleCharacterFieldBlock(title: string, content: unknown): string
     return text ? `## ${title}\n${text}` : '';
 }
 
-function formatMemoryList(items: unknown[] = []): string {
-    return items.map((item) => normalizeText(item)).filter(Boolean).map((item) => `- ${item}`).join('\n');
-}
-
 function buildMemoryBlock(memoryContext: XbTavernMemoryContext = {}): string {
     const memoryFiles = Array.isArray(memoryContext.memoryFiles) ? memoryContext.memoryFiles : [];
     const structuredStates = Array.isArray(memoryContext.structuredStates) ? memoryContext.structuredStates : [];

@@ -490,7 +490,6 @@ async function runManagerAgentWithTools(input: {
     const protocolMessages: XbTavernMessage[] = [];
     const changedFiles = new Set<string>();
     const changedStates = new Set<string>();
-    let finalText = '';
     let resultProvider = '';
     let resultModel = '';
     let reminded = false;
@@ -538,7 +537,6 @@ async function runManagerAgentWithTools(input: {
         throwIfManagerAborted(input.signal);
         const roundVisibleText = String(result.text || streamText || '');
         const normalizedRoundText = roundVisibleText.trim();
-        finalText = normalizedRoundText;
         resultProvider = String(result.provider || resultProvider || providerConfig.provider || '');
         resultModel = String(result.model || resultModel || providerConfig.model || '');
         const resultRecord = result as unknown as Record<string, unknown>;

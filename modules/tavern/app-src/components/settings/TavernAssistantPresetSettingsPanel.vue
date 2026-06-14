@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useTavernAppUiContext } from '../tavern-app-context';
+import { useTavernSettingsContext } from '../tavern-app-context';
 import { DEFAULT_TAVERN_ASSISTANT_PRESET_ID } from '../../../shared/assistant-presets';
 import type { TavernAssistantPresetRecord } from '../../../shared/session-db';
 
-const ui = useTavernAppUiContext();
+const settings = useTavernSettingsContext();
 const {
     activeAssistantPresetId,
     activeSettingsWorkspace,
@@ -23,7 +23,7 @@ const {
     shortText,
     updateAssistantPresetPatch,
     updateSelectedAssistantPresetItem,
-} = ui;
+} = settings;
 
 const selectedAssistantPresetId = computed(() => String(activeAssistantPresetId.value || assistantPreset.value.id || '').trim());
 const currentAssistantPresetRecord = computed(() => assistantPresets.value.find((item: TavernAssistantPresetRecord) => item.id === selectedAssistantPresetId.value) || null);
@@ -124,7 +124,10 @@ function exportCurrentPreset() {
           aria-label="改名"
           @click="renameCurrentPreset"
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path d="M12 20h9" />
             <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
           </svg>
@@ -137,7 +140,10 @@ function exportCurrentPreset() {
           :disabled="!assistantPresetDirty"
           @click="saveCurrentAssistantPreset"
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path d="M5 21h14a1 1 0 0 0 1-1V7.5L16.5 4H5a1 1 0 0 0-1 1v15a1 1 0 0 0 1 1Z" />
             <path d="M8 21v-7h8v7" />
             <path d="M8 4v5h7" />
@@ -151,7 +157,10 @@ function exportCurrentPreset() {
           :disabled="!currentAssistantPresetRecord || currentAssistantPresetRecord.id === DEFAULT_TAVERN_ASSISTANT_PRESET_ID"
           @click="deleteCurrentAssistantPreset"
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path d="M3 6h18" />
             <path d="M8 6V4h8v2" />
             <path d="M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
@@ -166,7 +175,10 @@ function exportCurrentPreset() {
           aria-label="新增"
           @click="createAssistantPreset"
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path d="M12 5v14" />
             <path d="M5 12h14" />
           </svg>
@@ -178,7 +190,10 @@ function exportCurrentPreset() {
           aria-label="导入"
           @click="triggerImportPreset"
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path d="M12 4v11" />
             <path d="m7 11 5 5 5-5" />
             <path d="M4 20h16" />
@@ -192,7 +207,10 @@ function exportCurrentPreset() {
           :disabled="!selectedAssistantPresetId"
           @click="exportCurrentPreset"
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path d="M12 20V9" />
             <path d="m17 13-5-5-5 5" />
             <path d="M4 20h16" />

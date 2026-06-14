@@ -85,17 +85,17 @@ test('tavern character select page keeps a dense index and selected-card preview
 });
 
 test('tavern worldbook sync uses native source overview with current context', () => {
-    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
     assert.match(
-        appSource,
-        /requestHost\('xb-tavern:list-worldbook-sources', \{\s*payload: \{\s*context: effectiveContext\.value,/,
+        settingsControllerSource,
+        /requestHost\('xb-tavern:list-worldbook-sources', \{\s*payload: \{\s*context: options\.effectiveContext\.value,/,
     );
-    assert.match(appSource, /requestHost\('xb-tavern:get-worldbook-preview'/);
-    assert.match(appSource, /limit: worldbookPreviewVisibleLimit\.value/);
-    assert.match(appSource, /function showMoreWorldbookPreviewEntries/);
-    assert.match(appSource, /async function openSelectedWorldbookEditor/);
-    assert.match(appSource, /requestHost\('xb-tavern:open-worldbook-editor'/);
-    assert.match(appSource, /postToHost\('xb-tavern:close'\)/);
+    assert.match(settingsControllerSource, /requestHost\('xb-tavern:get-worldbook-preview'/);
+    assert.match(settingsControllerSource, /limit: worldbookPreviewVisibleLimit\.value/);
+    assert.match(settingsControllerSource, /function showMoreWorldbookPreviewEntries/);
+    assert.match(settingsControllerSource, /async function openSelectedWorldbookEditor/);
+    assert.match(settingsControllerSource, /requestHost\('xb-tavern:open-worldbook-editor'/);
+    assert.match(settingsControllerSource, /postToHost\('xb-tavern:close'\)/);
 });
 
 test('tavern worldbook host bridge exposes native runtime result instead of edit endpoints', () => {

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { useTavernAppUiContext } from '../tavern-app-context';
+import { useTavernChatContext, useTavernMemoryContext, useTavernShellContext } from '../tavern-app-context';
 
-const ui = useTavernAppUiContext();
+const shell = useTavernShellContext();
+const chat = useTavernChatContext();
+const memory = useTavernMemoryContext();
 const {
-    activeMemoryFiles,
     CHAT_SIDEBAR_BATCH_SIZE,
     chatLayout,
     chatSidebarSessionLimit,
@@ -11,26 +12,31 @@ const {
     chatSidePanel,
     chatSubtitle,
     displayCharacterName,
-    expandMemoryFileGroup,
     filteredChatSidebarSessionCount,
     hiddenChatSidebarSessionCount,
+    normalizeTavernSessionState,
+    removeSession,
+    selectedSessionId,
+    selectSession,
+    sessionDisplayTitle,
+    sessions,
+    visibleCharacterAvatar,
+} = chat;
+const {
+    activeMemoryFiles,
+    expandMemoryFileGroup,
     MEMORY_FILE_BATCH_SIZE,
     MEMORY_TURN_BATCH_SIZE,
     memoryDirectoryGroups,
     memoryFileDisplayName,
     memoryFiles,
     memoryFileSearchText,
-    normalizeTavernSessionState,
-    rememberBrokenAvatar,
-    removeSession,
     selectedMemoryFilePath,
-    selectedSessionId,
     selectMemoryFile,
-    selectSession,
-    sessionDisplayTitle,
-    sessions,
-    visibleCharacterAvatar,
-} = ui;
+} = memory;
+const {
+    rememberBrokenAvatar,
+} = shell;
 </script>
 
 <template>

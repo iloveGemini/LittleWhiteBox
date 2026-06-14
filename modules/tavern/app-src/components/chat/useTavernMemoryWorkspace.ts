@@ -1,0 +1,131 @@
+import { nextTick, type ComputedRef, type Ref } from 'vue';
+import { getTavernMemoryFile, writeTavernMemoryFile } from '../../../shared/memory-files';
+import type {
+    TavernMemoryFileListEntry,
+    TavernMemoryFileRecord,
+    TavernMemoryIndexFileEntry,
+} from '../../../shared/session-db';
+
+export interface TavernMemoryWorkspaceOptions {
+    memoryEditorBaseContent: Ref<string>;
+    memoryEditorDocumentAvailable: ComputedRef<boolean>;
+    memoryEditorDraft: Ref<string>;
+    memoryEditorDirty: ComputedRef<boolean>;
+    memoryEditorLoadedPath: Ref<string>;
+    memoryEditorMode: Ref<'preview' | 'edit'>;
+    memoryEditorStatus: Ref<string>;
+    selectedMemoryFileEntry: ComputedRef<TavernMemoryIndexFileEntry | null>;
+    selectedMemoryFilePath: Ref<string>;
+    selectedMemoryFileRecord: Ref<TavernMemoryFileRecord | null>;
+    selectedSessionId: Ref<string>;
+    refreshRecords: (sessionId?: string) => Promise<void>;
+}
+
+export function useTavernMemoryWorkspace(options: TavernMemoryWorkspaceOptions) {
+    let memoryFileLoadToken = 0;
+
+    function memoryFileStatusLabel(status = '') {
+        return status === 'stale' ? '过期' : '可用';
+    }
+
+    function memoryFileContentLength(file: TavernMemoryFileListEntry | TavernMemoryFileRecord | null | undefined): number {
+        if (!file) {return 0;}
+        if ('contentLength' in file && Number.isFinite(Number(file.contentLength))) {
+            return Math.max(0, Number(file.contentLength) || 0);
+        }
+        return 'content' in file ? Math.max(0, String(file.content || '').length) : 0;
+    }
+
+    function formatMemoryFileMeta(file: TavernMemoryFileListEntry | TavernMemoryFileRecord) {
+        return `${memoryFileStatusLabel(file.status)} · ${memoryFileContentLength(file)} 字`;
+    }
+
+    function loadMemoryFileIntoEditor(file: TavernMemoryFileRecord | null | undefined) {
+        const content = String(file?.content || '');
+        options.memoryEditorLoadedPath.value = String(file?.path || '');
+        options.memoryEditorBaseContent.value = content;
+        options.memoryEditorDraft.value = content;
+        options.memoryEditorMode.value = 'preview';
+        options.memoryEditorStatus.value = '';
+    }
+
+    function invalidateMemoryFileRecordLoad(clearRecord = true) {
+        memoryFileLoadToken += 1;
+        if (clearRecord) {
+            options.selectedMemoryFileRecord.value = null;
+        }
+    }
+
+    async function loadSelectedMemoryFileRecord(path = '') {
+        const sessionId = String(options.selectedSessionId.value || '').trim();
+        const nextPath = String(path || '').trim();
+        const loadToken = ++memoryFileLoadToken;
+        if (!sessionId || !nextPath) {
+            invalidateMemoryFileRecordLoad();
+            return null;
+        }
+        const file = await getTavernMemoryFile(sessionId, nextPath);
+        if (loadToken !== memoryFileLoadToken) {return null;}
+        options.selectedMemoryFileRecord.value = file;
+        return file;
+    }
+
+    function selectMemoryFile(path = '') {
+        const nextPath = String(path || '').trim();
+        if (!nextPath || nextPath === options.selectedMemoryFilePath.value) {return;}
+        if (options.memoryEditorDirty.value && !window.confirm('当前记忆档案有未保存修改，切换后会放弃这份草稿。继续切换？')) {
+            return;
+        }
+        options.selectedMemoryFilePath.value = nextPath;
+    }
+
+    async function saveSelectedMemoryFile() {
+        const file = options.selectedMemoryFileEntry.value;
+        if (!options.selectedSessionId.value || !file) {return;}
+        options.memoryEditorStatus.value = '保存中';
+        try {
+            await writeTavernMemoryFile(options.selectedSessionId.value, file.path, options.memoryEditorDraft.value, { source: 'user' });
+            await options.refreshRecords(options.selectedSessionId.value);
+            options.memoryEditorLoadedPath.value = file.path;
+            options.memoryEditorBaseContent.value = options.memoryEditorDraft.value;
+            options.memoryEditorMode.value = 'preview';
+            options.memoryEditorStatus.value = '';
+        } catch (error) {
+            options.memoryEditorStatus.value = error instanceof Error ? error.message : String(error || '保存失败');
+        }
+    }
+
+    function enterMemoryEditMode() {
+        if (!options.memoryEditorDocumentAvailable.value) {return;}
+        options.memoryEditorMode.value = 'edit';
+        void nextTick(() => {
+            const textarea = document.querySelector<HTMLTextAreaElement>('[data-memory-editor-textarea="true"]');
+            textarea?.focus();
+        });
+    }
+
+    function previewMemoryDraft() {
+        if (!options.memoryEditorDocumentAvailable.value) {return;}
+        options.memoryEditorMode.value = 'preview';
+    }
+
+    function discardMemoryDraft() {
+        if (!options.memoryEditorDocumentAvailable.value) {return;}
+        options.memoryEditorDraft.value = options.memoryEditorBaseContent.value;
+        options.memoryEditorMode.value = 'preview';
+        options.memoryEditorStatus.value = '';
+    }
+
+    return {
+        discardMemoryDraft,
+        enterMemoryEditMode,
+        formatMemoryFileMeta,
+        invalidateMemoryFileRecordLoad,
+        loadMemoryFileIntoEditor,
+        loadSelectedMemoryFileRecord,
+        memoryFileStatusLabel,
+        previewMemoryDraft,
+        saveSelectedMemoryFile,
+        selectMemoryFile,
+    };
+}

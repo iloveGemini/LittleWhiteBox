@@ -6,17 +6,20 @@ import TavernChatPresetSettingsPanel from './TavernChatPresetSettingsPanel.vue';
 import TavernWorldbooksSettingsPanel from './TavernWorldbooksSettingsPanel.vue';
 import TavernRegexSettingsPanel from './TavernRegexSettingsPanel.vue';
 import TavernAssistantPresetSettingsPanel from './TavernAssistantPresetSettingsPanel.vue';
-import { useTavernAppUiContext } from '../tavern-app-context';
+import { useTavernSettingsContext, useTavernShellContext } from '../tavern-app-context';
 
-const ui = useTavernAppUiContext();
+const settings = useTavernSettingsContext();
+const shell = useTavernShellContext();
 const {
     activeSettingsWorkspace,
+    selectSettingsWorkspace,
+    settingsNavItems,
+} = settings;
+const {
     activeView,
     homeThemeDark,
     postToHost,
-    selectSettingsWorkspace,
-    settingsNavItems,
-} = ui;
+} = shell;
 </script>
 
 <template>

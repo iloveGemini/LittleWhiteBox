@@ -95,10 +95,11 @@ test('tavern request log is sourced from runtime request snapshots', () => {
 
 test('tavern split UI keeps App-owned DOM refs explicitly wired', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
-    const chatPageSource = readRepoFile('modules/tavern/app-src/components/chat/TavernChatPage.vue');
+    const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
+    const conversationPanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
+    const managerPanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernManagerPanel.vue');
     const apiPanelSource = readRepoFile('modules/tavern/app-src/components/settings/TavernApiSettingsPanel.vue');
     for (const refName of [
-        'apiSettingsRootRef',
         'chatScrollRef',
         'chatComposeTextareaRef',
         'managerScrollRef',
@@ -106,28 +107,130 @@ test('tavern split UI keeps App-owned DOM refs explicitly wired', () => {
     ]) {
         assert.match(appSource, new RegExp(`\\b${refName},`));
     }
+    assert.match(settingsControllerSource, /\bapiSettingsRootRef,/);
     assert.match(apiPanelSource, /function setApiSettingsRootRef/);
     assert.match(apiPanelSource, /:ref="setApiSettingsRootRef"/);
-    assert.match(chatPageSource, /function setChatScrollRef/);
-    assert.match(chatPageSource, /function setChatComposeTextareaRef/);
-    assert.match(chatPageSource, /function setManagerScrollRef/);
-    assert.match(chatPageSource, /function setManagerComposeTextareaRef/);
-    assert.doesNotMatch(`${chatPageSource}\n${apiPanelSource}`, /ref="(?:apiSettingsRootRef|chatScrollRef|chatComposeTextareaRef|managerScrollRef|managerComposeTextareaRef)"/);
+    assert.match(conversationPanelSource, /function setChatScrollRef/);
+    assert.match(conversationPanelSource, /function setChatComposeTextareaRef/);
+    assert.match(managerPanelSource, /function setManagerScrollRef/);
+    assert.match(managerPanelSource, /function setManagerComposeTextareaRef/);
+    assert.doesNotMatch(`${conversationPanelSource}\n${managerPanelSource}\n${apiPanelSource}`, /ref="(?:apiSettingsRootRef|chatScrollRef|chatComposeTextareaRef|managerScrollRef|managerComposeTextareaRef)"/);
+});
+
+test('tavern UI context is grouped by page responsibility instead of one flat bag', () => {
+    const contextSource = readRepoFile('modules/tavern/app-src/components/tavern-app-context.ts');
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const chatPageSource = readRepoFile('modules/tavern/app-src/components/chat/TavernChatPage.vue');
+    const conversationPanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
+    const managerPanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernManagerPanel.vue');
+    const workspacePanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernWorkspacePanel.vue');
+    const settingsPageSource = readRepoFile('modules/tavern/app-src/components/settings/TavernSettingsPage.vue');
+    const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
+
+    assert.doesNotMatch(contextSource, /TavernContextBucket/);
+    assert.doesNotMatch(contextSource, /Record<string,\s*any>/);
+    assert.doesNotMatch(contextSource, /\[key:\s*string\]:\s*any/);
+    for (const bucket of ['Shell', 'Chat', 'Manager', 'Memory', 'Workspace', 'Settings']) {
+        assert.match(contextSource, new RegExp(`interface Tavern${bucket}Context`));
+    }
+    for (const bucket of ['shell', 'chat', 'manager', 'memory', 'workspace']) {
+        assert.match(contextSource, new RegExp(`${bucket}: Tavern${bucket[0].toUpperCase()}${bucket.slice(1)}Context`));
+        assert.match(appSource, new RegExp(`${bucket}: \\{`));
+    }
+    assert.match(contextSource, /settings: TavernSettingsContext/);
+    assert.match(appSource, /useTavernSettingsController/);
+    assert.match(appSource, /settings: settingsContext/);
+    assert.match(settingsControllerSource, /settingsContext = \{/);
+    assert.doesNotMatch(`${chatPageSource}\n${conversationPanelSource}\n${managerPanelSource}\n${workspacePanelSource}\n${settingsPageSource}`, /useTavernAppUiContext\(/);
+    assert.match(conversationPanelSource, /useTavernChatContext/);
+    assert.match(managerPanelSource, /useTavernManagerContext/);
+    assert.match(workspacePanelSource, /useTavernWorkspaceContext/);
+    assert.doesNotMatch(workspacePanelSource, /useTavernChatContext/);
+    assert.match(settingsPageSource, /useTavernSettingsContext/);
+});
+
+test('tavern settings controller owns settings page state and host sync', () => {
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
+
+    assert.match(settingsControllerSource, /export function useTavernSettingsController/);
+    for (const forbidden of [
+        'function saveCurrentPreset',
+        'function selectChatPresetFromHost',
+        'function syncWorldbooksFromHost',
+        'function refreshRegexFromHost',
+        'function saveCurrentAssistantPreset',
+        'function renderApiSettingsPanel',
+    ]) {
+        assert.doesNotMatch(appSource, new RegExp(forbidden));
+        assert.match(settingsControllerSource, new RegExp(forbidden));
+    }
+    assert.match(appSource, /applyHostChatPreset\(payload\)/);
+    assert.doesNotMatch(appSource, /chatPresetList\.value/);
+    assert.doesNotMatch(appSource, /apiSettingsPanelState/);
+});
+
+test('tavern manager display projection stays out of the app controller', () => {
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const managerDisplaySource = readRepoFile('modules/tavern/app-src/components/chat/useTavernManagerDisplay.ts');
+
+    assert.match(appSource, /useTavernManagerDisplay/);
+    for (const helper of [
+        'formatRunActivityLine',
+        'formatRunIssueLine',
+        'formatRunInputLine',
+        'formatRunMapLine',
+        'formatRunMemoryLine',
+        'formatRunModelLine',
+        'managerRunTone',
+        'managerToolTraceItems',
+        'toolTraceSummary',
+    ]) {
+        assert.doesNotMatch(appSource, new RegExp(`function ${helper}`));
+        assert.match(managerDisplaySource, new RegExp(`function ${helper}`));
+    }
+    assert.doesNotMatch(managerDisplaySource, /thoughtBlocks/);
+    assert.doesNotMatch(managerDisplaySource, /managerStatusLine/);
+});
+
+test('tavern markdown enhancement lives outside the app controller', () => {
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const markdownToolsSource = readRepoFile('modules/tavern/app-src/components/chat/useTavernMarkdownTools.ts');
+    assert.match(appSource, /useTavernMarkdownTools/);
+    assert.doesNotMatch(appSource, /function renderChatMarkdown/);
+    assert.doesNotMatch(appSource, /function enhanceChatMarkdown/);
+    assert.match(markdownToolsSource, /function renderChatMarkdown/);
+    assert.match(markdownToolsSource, /function enhanceChatMarkdown/);
+    assert.match(markdownToolsSource, /function enhanceActionCheckMarkers/);
+    assert.match(markdownToolsSource, /function enhanceTavernImageMarkers/);
+});
+
+test('tavern memory editor actions live outside the app controller', () => {
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const memoryWorkspaceSource = readRepoFile('modules/tavern/app-src/components/chat/useTavernMemoryWorkspace.ts');
+    assert.match(appSource, /useTavernMemoryWorkspace/);
+    assert.doesNotMatch(appSource, /async function saveSelectedMemoryFile/);
+    assert.doesNotMatch(appSource, /async function loadSelectedMemoryFileRecord/);
+    assert.doesNotMatch(appSource, /function enterMemoryEditMode/);
+    assert.match(memoryWorkspaceSource, /async function saveSelectedMemoryFile/);
+    assert.match(memoryWorkspaceSource, /async function loadSelectedMemoryFileRecord/);
+    assert.match(memoryWorkspaceSource, /function enterMemoryEditMode/);
 });
 
 test('tavern streaming action-check UI renders from live runtime events and keeps dark card styling aligned', () => {
-    const chatPageSource = readRepoFile('modules/tavern/app-src/components/chat/TavernChatPage.vue');
+    const conversationPanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
     const cssSource = readRepoFile('modules/tavern/app-src/styles/chat/messages.css');
-    assert.match(chatPageSource, /hasRenderableLiveAssistantContent/);
-    assert.match(chatPageSource, /hasRenderableLiveAssistantMarkdown/);
-    assert.match(chatPageSource, /runtimeActionCheckEvents/);
+    assert.match(conversationPanelSource, /hasRenderableLiveAssistantContent/);
+    assert.match(conversationPanelSource, /hasRenderableLiveAssistantMarkdown/);
+    assert.match(conversationPanelSource, /runtimeActionCheckEvents/);
     assert.match(cssSource, /\.xb-os-shell\.theme-dark \.action-check-card-grid>span/);
     assert.doesNotMatch(cssSource, /\.xb-os-shell\.theme-dark \.action-check-card-grid>div/);
 });
 
 test('tavern memory sidebar keeps session-scoped lazy file loading and index-backed search text', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const memoryWorkspaceSource = readRepoFile('modules/tavern/app-src/components/chat/useTavernMemoryWorkspace.ts');
     assert.match(appSource, /selectedMemoryFileRecord\.value\?\.sessionId === selectedSessionId\.value/);
-    assert.match(appSource, /function invalidateMemoryFileRecordLoad/);
+    assert.match(memoryWorkspaceSource, /function invalidateMemoryFileRecordLoad/);
     assert.match(appSource, /file\.searchText \|\| file\.preview \|\| ''/);
 });

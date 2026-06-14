@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useTavernAppUiContext } from '../tavern-app-context';
+import { useTavernSettingsContext } from '../tavern-app-context';
 
-const ui = useTavernAppUiContext();
+const settings = useTavernSettingsContext();
 const {
     activePromptOrderLabel,
     activeSettingsWorkspace,
@@ -31,7 +31,7 @@ const {
     togglePromptRow,
     updatePromptByIdentifier,
     visiblePromptEditorRows,
-} = ui;
+} = settings;
 
 const selectedChatPresetName = computed(() => String(
     selectedPresetSourceId.value
@@ -51,8 +51,8 @@ function closePromptEditor() {
 }
 
 function promptRoleLetter(role: string) {
-    if (role === 'assistant') return 'A';
-    if (role === 'user') return 'U';
+    if (role === 'assistant') {return 'A';}
+    if (role === 'user') {return 'U';}
     return 'S';
 }
 </script>
