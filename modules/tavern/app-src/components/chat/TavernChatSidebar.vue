@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { useTavernChatContext, useTavernMemoryContext, useTavernShellContext } from '../tavern-app-context';
+import { useMobileSheetDrag } from './useMobileSheetDrag';
+
+const emit = defineEmits<{
+    (event: 'close'): void;
+}>();
 
 const shell = useTavernShellContext();
 const chat = useTavernChatContext();
@@ -37,6 +42,18 @@ const {
 const {
     rememberBrokenAvatar,
 } = shell;
+
+function closeMobileChatPanel() {
+    emit('close');
+}
+
+const {
+    dragging: sheetHandleDragging,
+    handleSheetHandlePointerCancel,
+    handleSheetHandlePointerDown,
+    handleSheetHandlePointerMove,
+    handleSheetHandlePointerUp,
+} = useMobileSheetDrag(closeMobileChatPanel);
 </script>
 
 <template>
@@ -44,8 +61,14 @@ const {
     <button
       type="button"
       class="chat-mobile-sheet-handle"
+      :class="{ 'is-dragging': sheetHandleDragging }"
       title="收起目录"
       aria-label="收起目录"
+      @click="closeMobileChatPanel"
+      @pointercancel="handleSheetHandlePointerCancel"
+      @pointerdown="handleSheetHandlePointerDown"
+      @pointermove="handleSheetHandlePointerMove"
+      @pointerup="handleSheetHandlePointerUp"
     />
     <section class="chat-profile xb-brand">
       <div class="avatar-orb">

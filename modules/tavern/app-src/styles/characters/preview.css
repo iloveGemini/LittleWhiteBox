@@ -321,12 +321,13 @@
     .character-preview-panel.dossier-view {
         position: absolute;
         z-index: 8;
+        top: 0;
         left: 0;
         right: 0;
         bottom: 0;
-        height: min(62dvh, calc(100% - 136px));
-        min-height: 280px;
-        max-height: calc(100% - 112px);
+        height: auto;
+        min-height: 0;
+        max-height: none;
         border-top: 1px solid var(--xb-rule-strong);
         border-radius: 18px 18px 0 0;
         box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.22);

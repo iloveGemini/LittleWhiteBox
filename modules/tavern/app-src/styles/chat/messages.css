@@ -303,98 +303,171 @@
 
 .assistant-runtime-event-stack {
     display: block;
-    margin: 14px 0;
+    margin: 18px 0;
 }
 
 .action-check-card {
-    display: grid;
-    gap: 10px;
-    border: 1px solid rgba(120, 112, 98, 0.22);
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 500px);
+    overflow: hidden;
+    border: 1px solid rgba(120, 112, 98, 0.24);
+    border-left-width: 6px;
     border-radius: 8px;
     background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.14)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0.18)),
         var(--xb-chat-panel-bg);
-    padding: 14px 16px;
+    box-shadow: 0 4px 14px rgba(30, 24, 17, 0.04);
     color: var(--xb-ink-soft);
+    font-family: var(--xb-font-ui);
 }
 
 .action-check-card + .action-check-card {
-    margin-top: 10px;
+    margin-top: 12px;
 }
 
 .action-check-card.is-success {
-    border-color: rgba(62, 112, 80, 0.30);
+    border-color: rgba(55, 112, 75, 0.32);
+    border-left-color: #37704b;
     background:
-        linear-gradient(180deg, rgba(62, 112, 80, 0.12), rgba(62, 112, 80, 0.04)),
+        linear-gradient(180deg, rgba(55, 112, 75, 0.08), rgba(55, 112, 75, 0.025)),
         var(--xb-chat-panel-bg);
 }
 
 .action-check-card.is-failure {
-    border-color: rgba(216, 132, 144, 0.30);
+    border-color: rgba(163, 51, 51, 0.30);
+    border-left-color: #a33333;
     background:
-        linear-gradient(180deg, rgba(216, 132, 144, 0.10), rgba(216, 132, 144, 0.03)),
+        linear-gradient(180deg, rgba(163, 51, 51, 0.075), rgba(163, 51, 51, 0.02)),
         var(--xb-chat-panel-bg);
 }
 
 .action-check-card-head {
     display: flex;
-    align-items: baseline;
+    align-items: flex-start;
     justify-content: space-between;
-    gap: 14px;
+    gap: 16px;
+    order: 1;
+    border-bottom: 1px dashed rgba(120, 112, 98, 0.22);
+    background: rgba(30, 24, 17, 0.025);
+    padding: 12px 16px 9px;
 }
 
 .action-check-card-head strong {
-    font: 700 13px/1.2 var(--xb-font-ui);
+    min-width: 0;
     color: var(--xb-ink);
+    font: 760 14px/1.25 var(--xb-font-ui);
+    overflow-wrap: anywhere;
 }
 
-.action-check-card-head span {
+.action-check-card-outcome {
+    flex: 0 0 auto;
     white-space: nowrap;
-    font: 700 10px/1 var(--xb-font-mono);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--xb-ink-faint);
+    margin-top: -4px;
+    border: 2px solid currentColor;
+    border-radius: 4px;
+    box-shadow: 0 0 10px rgba(30, 24, 17, 0.045);
+    padding: 4px 10px;
+    font: 800 11px/1 var(--xb-font-ui);
+    transform: rotate(-3deg);
+}
+
+.action-check-card.is-success .action-check-card-outcome {
+    background: rgba(55, 112, 75, 0.055);
+    color: #37704b;
+}
+
+.action-check-card.is-failure .action-check-card-outcome {
+    background: rgba(163, 51, 51, 0.055);
+    color: #a33333;
+    transform: rotate(3deg);
 }
 
 .action-check-card-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    order: 3;
+    padding: 4px 16px 16px;
 }
 
 .action-check-card-grid>span {
-    display: grid;
-    gap: 5px;
-    border: 1px solid rgba(120, 112, 98, 0.16);
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.26);
-    padding: 8px 10px;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.action-check-card-grid::after {
+    content: "VS";
+    order: 2;
+    margin: 0 2px;
+    color: rgba(120, 112, 98, 0.42);
+    font: italic 700 15px/1 var(--xb-font-ui);
+}
+
+.action-check-card-roll {
+    order: 1;
+}
+
+.action-check-card-dc {
+    order: 3;
+    opacity: 0.62;
 }
 
 .action-check-card-grid small {
-    font: 700 10px/1 var(--xb-font-mono);
-    letter-spacing: 0.08em;
     color: var(--xb-ink-faint);
+    font: 750 11px/1 var(--xb-font-ui);
 }
 
 .action-check-card-grid strong {
-    font: 700 18px/1 var(--xb-font-ui);
     color: var(--xb-ink);
+    font: 800 25px/1 var(--xb-font-mono);
+}
+
+.action-check-card.is-success .action-check-card-roll strong {
+    color: #37704b;
+}
+
+.action-check-card.is-failure .action-check-card-roll strong {
+    color: #a33333;
 }
 
 .action-check-card-copy {
     display: block;
+    order: 2;
+    padding: 12px 16px 5px;
     color: var(--xb-text-body);
+    font: 16px/1.55 var(--xb-font-serif);
+}
+
+.action-check-card-copy::before {
+    content: "行动意图：";
+    color: var(--xb-ink-faint);
+    font: 760 12px/1 var(--xb-font-ui);
 }
 
 .xb-os-shell.theme-dark .action-check-card {
     background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012)),
         var(--xb-chat-panel-bg);
 }
 
+.xb-os-shell.theme-dark .action-check-card-head {
+    background: rgba(255, 255, 255, 0.018);
+}
+
 .xb-os-shell.theme-dark .action-check-card-grid>span {
-    background: rgba(255, 255, 255, 0.03);
+    background: transparent;
+}
+
+.xb-os-shell.theme-dark .action-check-card.is-success .action-check-card-outcome,
+.xb-os-shell.theme-dark .action-check-card.is-success .action-check-card-roll strong {
+    color: #78c08f;
+}
+
+.xb-os-shell.theme-dark .action-check-card.is-failure .action-check-card-outcome,
+.xb-os-shell.theme-dark .action-check-card.is-failure .action-check-card-roll strong {
+    color: #d88490;
 }
 
 .chat-bubble.from-user .xb-tavern-markdown {

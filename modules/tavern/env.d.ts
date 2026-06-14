@@ -58,6 +58,7 @@ declare module '*.js' {
     export const chat_metadata: Record<string, unknown>;
     export const characters: Array<Record<string, unknown>>;
     export const this_chid: string | number | undefined;
+    export function unshallowCharacter(characterId?: string | number): Promise<void>;
     export const name2: string;
     export function setCharacterId(value?: string | number | null): void;
     export function setCharacterName(value: string): void;

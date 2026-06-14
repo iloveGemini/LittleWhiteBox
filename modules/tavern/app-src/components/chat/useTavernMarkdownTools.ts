@@ -249,13 +249,13 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
     }
 
     function buildActionCheckAriaLabel(event: TavernActionCheckRuntimeEvent) {
-        const outcome = event.success ? 'Success' : 'Failure';
+        const outcome = event.success ? '判定成功' : '判定失败';
         const action = String(event.action || '').trim();
         return [
-            `Action check: ${event.stat}.`,
-            `Roll ${event.roll} versus DC ${event.difficulty}.`,
+            `行动判定：${event.stat}。`,
+            `掷骰 ${event.roll} 对抗难度 ${event.difficulty}。`,
             `${outcome}.`,
-            action ? `Action: ${action}.` : '',
+            action ? `行动意图：${action}。` : '',
         ].filter(Boolean).join(' ');
     }
 
@@ -273,19 +273,23 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
         head.append(title);
 
         const outcome = document.createElement('span');
-        outcome.textContent = event.success ? 'Success' : 'Failure';
+        outcome.className = 'action-check-card-outcome';
+        outcome.textContent = event.success ? '判定成功' : '判定失败';
         head.append(outcome);
 
         const grid = document.createElement('span');
         grid.className = 'action-check-card-grid';
         [{
-            label: 'DC',
-            value: String(event.difficulty),
-        }, {
-            label: 'Roll',
+            className: 'action-check-card-roll',
+            label: '掷骰',
             value: String(event.roll),
+        }, {
+            className: 'action-check-card-dc',
+            label: '难度',
+            value: String(event.difficulty),
         }].forEach((item) => {
             const cell = document.createElement('span');
+            cell.className = item.className;
             const label = document.createElement('small');
             label.textContent = item.label;
             const value = document.createElement('strong');

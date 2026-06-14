@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import TavernMapPanel from '../TavernMapPanel.vue';
 import TavernMemoryEditor from '../TavernMemoryEditor.vue';
 import { useTavernMemoryContext, useTavernWorkspaceContext } from '../tavern-app-context';
+import { useMobileSheetDrag } from './useMobileSheetDrag';
 
 defineProps<{
     mobileMemoryDirectoryOpen: boolean;
@@ -60,6 +61,14 @@ function closeMobileChatPanel() {
     emit('close');
 }
 
+const {
+    dragging: sheetHandleDragging,
+    handleSheetHandlePointerCancel,
+    handleSheetHandlePointerDown,
+    handleSheetHandlePointerMove,
+    handleSheetHandlePointerUp,
+} = useMobileSheetDrag(closeMobileChatPanel);
+
 function toggleMobileMemoryDirectory() {
     emit('toggle-memory-directory');
 }
@@ -75,9 +84,14 @@ function selectMobileMemoryFile(path: string) {
     <button
       type="button"
       class="chat-mobile-sheet-handle"
+      :class="{ 'is-dragging': sheetHandleDragging }"
       title="收起记忆面板"
       aria-label="收起记忆面板"
       @click="closeMobileChatPanel"
+      @pointercancel="handleSheetHandlePointerCancel"
+      @pointerdown="handleSheetHandlePointerDown"
+      @pointermove="handleSheetHandlePointerMove"
+      @pointerup="handleSheetHandlePointerUp"
     />
     <div class="tavern-workspace-tabs">
       <button

@@ -370,7 +370,10 @@ onUpdated(() => {
       aria-label="收起面板"
       @click="closeMobileChatPanel"
     />
-    <TavernChatSidebar @click="handleMobileDirectoryClick" />
+    <TavernChatSidebar
+      @click="handleMobileDirectoryClick"
+      @close="closeMobileChatPanel"
+    />
 
     <section
       class="chat-workbench"

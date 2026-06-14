@@ -50,6 +50,11 @@
             color: rgba(184, 178, 166, 0.72);
         }
 
+        .xb-frame-boot-hint {
+            color: rgba(184, 178, 166, 0.48);
+            font-size: 12px;
+        }
+
         @keyframes xb-frame-boot-spin {
             to {
                 transform: rotate(360deg);
@@ -63,6 +68,7 @@
         <div class="xb-frame-boot-core">
             <div class="xb-frame-boot-ring" aria-hidden="true"></div>
             <div class="xb-frame-boot-text">正在加载</div>
+            <div class="xb-frame-boot-hint">首次加载需约30s</div>
         </div>
     </div>
     <script>
@@ -77,7 +83,9 @@
         script.src = `./dist/tavern-app.js${suffix}`;
         script.onerror = () => {
             const text = document.querySelector('#xb-frame-boot .xb-frame-boot-text');
+            const hint = document.querySelector('#xb-frame-boot .xb-frame-boot-hint');
             if (text) text.textContent = '加载失败，请刷新重试';
+            if (hint) hint.textContent = '';
         };
         document.body.appendChild(script);
     </script>

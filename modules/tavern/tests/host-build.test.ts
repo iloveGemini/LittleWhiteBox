@@ -79,11 +79,31 @@ test('tavern character select page keeps a dense index and selected-card preview
     assert.match(previewCss, /\.dossier-header/);
     assert.match(appSource, /activeView === 'home' \|\| activeView === 'about'/);
     assert.match(appSource, /const previewId = String\(selectedCharacterPreviewId\.value \|\| ''\)\.trim\(\);/);
+    assert.match(appSource, /async function selectCharacterForPreview/);
+    assert.match(appSource, /getHostContext\(\s*\{\s*characterId: targetId,\s*includeHistory: false,\s*includeWorldbooks: false\s*\}/);
+    assert.match(appSource, /timeoutMs: CHARACTER_CONTEXT_TIMEOUT_MS/);
+    assert.match(appSource, /function hasCharacterPreviewDetails/);
+    assert.match(appSource, /pendingCharacterPreviewId/);
     assert.doesNotMatch(panelSource, /刷新列表/);
     assert.doesNotMatch(panelSource, /这里不重写角色卡/);
     assert.doesNotMatch(panelSource, /archive-toolbar/);
     assert.doesNotMatch(panelSource, /character-archive-browser/);
     assert.doesNotMatch(layoutCss, /linear-gradient\(90deg, transparent 50%, var\(--xb-theme-split-bg\) 50%\)/);
+});
+
+test('tavern character list merges native character records when extension context is sparse', () => {
+    const hostSource = readRepoFile('modules/tavern/host/sillytavern-context.ts');
+    assert.match(hostSource, /characters as sillyTavernCharacters/);
+    assert.match(hostSource, /unshallowCharacter/);
+    assert.match(hostSource, /shallow: boolean/);
+    assert.match(hostSource, /shallow: character\.shallow === true/);
+    assert.match(hostSource, /function hydrateCharacterAt/);
+    assert.match(hostSource, /await hydrateSelectedCharacter\(ctx, options\);/);
+    assert.doesNotMatch(hostSource, /hydrateAvailableCharacters/);
+    assert.match(hostSource, /function mergeCharacterRecord/);
+    assert.match(hostSource, /const runtimeCharacters = asArray<Record<string, unknown>>\(sillyTavernCharacters\);/);
+    assert.match(hostSource, /Math\.max\(contextCharacters\.length, runtimeCharacters\.length\)/);
+    assert.match(hostSource, /mergeCharacterRecord\(asRecord\(contextCharacters\[index\]\), asRecord\(runtimeCharacters\[index\]\)\)/);
 });
 
 test('tavern worldbook sync uses native source overview with current context', () => {

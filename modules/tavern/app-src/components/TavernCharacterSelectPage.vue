@@ -7,6 +7,7 @@ interface TavernCharacterOption {
     id: string;
     name: string;
     avatar?: string;
+    shallow?: boolean;
     description?: string;
     personality?: string;
     scenario?: string;
@@ -26,6 +27,7 @@ const props = defineProps<{
     liveCharacterId: string;
     selectedCharacter: TavernCharacterOption | null | undefined;
     selectedGreetingIndex: number;
+    pendingPreviewCharacterId: string;
     pendingCharacterSessionId: string;
     searchText: string;
     hiddenCount: number;
@@ -60,6 +62,11 @@ const greetingOptions = computed(() => {
         ...(selected.alternateGreetings || []),
     ].filter(Boolean);
 });
+
+const selectedCharacterPreviewLoading = computed(() => (
+    !!props.selectedCharacter
+    && String(props.pendingPreviewCharacterId || '') === String(props.selectedCharacter.id || '')
+));
 
 function scrollSelectedIntoView() {
     void nextTick(() => {
@@ -201,6 +208,10 @@ defineExpose({ scrollSelectedIntoView });
                     v-if="character.id === pendingCharacterSessionId"
                     class="tag loading"
                   >LOADING...</small>
+                  <small
+                    v-else-if="character.id === pendingPreviewCharacterId"
+                    class="tag loading"
+                  >READING...</small>
                 </span>
               </span>
             </button>
@@ -244,7 +255,7 @@ defineExpose({ scrollSelectedIntoView });
                 </button>
               </div>
               <div class="dossier-summary">
-                {{ selectedCharacter.description || selectedCharacter.personality || selectedCharacter.scenario || '暂无角色描述。' }}
+                {{ selectedCharacterPreviewLoading ? '正在读取角色卡...' : selectedCharacter.description || selectedCharacter.personality || selectedCharacter.scenario || '暂无角色描述。' }}
               </div>
             </div>
           </div>
@@ -270,6 +281,12 @@ defineExpose({ scrollSelectedIntoView });
                       <span class="greeting-choice-name">{{ index === 0 ? '主开场白' : `备用 ${index}` }}</span>
                       <span class="greeting-choice-text">{{ greeting }}</span>
                     </button>
+                  </div>
+                  <div
+                    v-else-if="selectedCharacterPreviewLoading"
+                    class="data-block"
+                  >
+                    正在读取角色卡...
                   </div>
                   <div
                     v-else

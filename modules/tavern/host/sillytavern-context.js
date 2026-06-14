@@ -4,7 +4,7 @@ import { getTagKeyForEntity, tag_map } from "../../../../../../tags.js";
 import { getCharaFilename } from "../../../../../../utils.js";
 import { getWorldInfoSettings, METADATA_KEY, selected_world_info, world_info, world_info_position } from "../../../../../../world-info.js";
 import { power_user } from "../../../../../../power-user.js";
-import { chat_metadata, getRequestHeaders, getThumbnailUrl } from "../../../../../../../script.js";
+import { chat_metadata, characters as sillyTavernCharacters, getRequestHeaders, getThumbnailUrl, unshallowCharacter } from "../../../../../../../script.js";
 function normalizeText(value = "") {
   return String(value || "").trim();
 }
@@ -79,6 +79,12 @@ function asArray(value) {
 }
 function asRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function mergeCharacterRecord(primary = {}, fallback = {}) {
+  const primaryData = asRecord(primary.data);
+  const fallbackData = asRecord(fallback.data);
+  const data = Object.keys(primaryData).length || Object.keys(fallbackData).length ? { ...fallbackData, ...primaryData } : void 0;
+  return data ? { ...fallback, ...primary, data } : { ...fallback, ...primary };
 }
 function readEntryList(value) {
   if (Array.isArray(value)) {
@@ -164,24 +170,51 @@ function getWindowRecord() {
 function readGlobalString(name = "") {
   return normalizeText(getWindowRecord()[name]);
 }
+async function hydrateCharacterAt(index) {
+  if (!Number.isInteger(index) || index < 0) {
+    return;
+  }
+  const character = asRecord(sillyTavernCharacters?.[index]);
+  if (character.shallow !== true) {
+    return;
+  }
+  try {
+    await unshallowCharacter(String(index));
+  } catch (error) {
+    console.warn("[LittleWhiteBox/tavern] Failed to hydrate character card", index, error);
+  }
+}
+async function hydrateSelectedCharacter(ctx, options) {
+  const index = Number(resolveCharacterId(ctx, options));
+  if (Number.isInteger(index)) {
+    await hydrateCharacterAt(index);
+  }
+}
 function resolveCharacterId(ctx = getContext?.() || {}, options = {}) {
   return options.characterId ?? ctx.characterId ?? ctx.this_chid;
 }
 function getCurrentCharacter(ctx = getContext?.() || {}, options = {}) {
   const id = resolveCharacterId(ctx, options);
+  const index = Number(id);
+  const fallback = Number.isInteger(index) ? asRecord(sillyTavernCharacters?.[index]) : {};
   const getCharacter = typeof ctx.getCharacter === "function" ? ctx.getCharacter : null;
   if (getCharacter && id !== void 0 && id !== null) {
     try {
       const character = getCharacter(id);
       if (character && typeof character === "object") {
-        return character;
+        return mergeCharacterRecord(character, fallback);
       }
     } catch {
     }
   }
   if (Array.isArray(ctx.characters) && id !== void 0 && id !== null) {
-    const character = ctx.characters[Number(id)];
-    return character && typeof character === "object" ? character : null;
+    const character = ctx.characters[index];
+    if (character && typeof character === "object") {
+      return mergeCharacterRecord(character, fallback);
+    }
+  }
+  if (Object.keys(fallback).length) {
+    return fallback;
   }
   return null;
 }
@@ -362,7 +395,11 @@ function buildWorldSettings(ctx = getContext?.() || {}) {
   };
 }
 function listCharacters(ctx = getContext?.() || {}) {
-  return asArray(ctx.characters).map((character, index) => {
+  const contextCharacters = asArray(ctx.characters);
+  const runtimeCharacters = asArray(sillyTavernCharacters);
+  const count = Math.max(contextCharacters.length, runtimeCharacters.length);
+  return Array.from({ length: count }, (_, index) => {
+    const character = mergeCharacterRecord(asRecord(contextCharacters[index]), asRecord(runtimeCharacters[index]));
     const data = asRecord(character?.data) || character || {};
     const extensions = asRecord(data.extensions);
     const depthPrompt = asRecord(extensions.depth_prompt);
@@ -370,6 +407,7 @@ function listCharacters(ctx = getContext?.() || {}) {
       id: String(index),
       name: normalizeText(character?.name || data.name || `Character ${index + 1}`),
       avatar: normalizeCharacterAvatar(character?.avatar || data.avatar || readGlobalString("default_avatar")),
+      shallow: character.shallow === true,
       description: normalizeText(data.description || character.description),
       personality: normalizeText(data.personality || character.personality),
       scenario: normalizeText(data.scenario || character.scenario),
@@ -409,9 +447,11 @@ async function fetchWorldbook(source) {
 }
 async function buildTavernContext(options = {}) {
   const ctx = getContext?.() || {};
+  await hydrateSelectedCharacter(ctx, options);
   const useCurrentHistory = options.includeHistory !== false && isCurrentCharacterSelection(ctx, options);
-  const embeddedBook = normalizeEmbeddedCharacterBook(ctx, options);
-  const worldbookSources = collectWorldbookSources(ctx, options);
+  const includeWorldbooks = options.includeWorldbooks !== false;
+  const embeddedBook = includeWorldbooks ? normalizeEmbeddedCharacterBook(ctx, options) : null;
+  const worldbookSources = includeWorldbooks ? collectWorldbookSources(ctx, options) : [];
   const worldbookNames = worldbookSources.map((source) => source.name);
   const fetchedWorldBooks = await Promise.all(worldbookSources.map(async (source) => {
     try {

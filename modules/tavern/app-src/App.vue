@@ -121,6 +121,7 @@ interface TavernCharacterOption {
     id: string;
     name: string;
     avatar?: string;
+    shallow?: boolean;
     description?: string;
     personality?: string;
     scenario?: string;
@@ -152,6 +153,7 @@ const availableCharacters = ref<TavernCharacterOption[]>([]);
 const selectedCharacterId = ref('');
 const selectedCharacterPreviewId = ref('');
 const selectedCharacterGreetingIndex = ref(0);
+const pendingCharacterPreviewId = ref('');
 const pendingCharacterSessionId = ref('');
 const pendingCharacterGreetingIndex = ref(0);
 const pendingCharacterError = ref('');
@@ -336,6 +338,7 @@ const {
 const characterOptionCache = new Map<string, { signature: string; option: TavernCharacterOption }>();
 const memoryFileSearchCorpusCache = new WeakMap<TavernMemoryIndexFileEntry, string>();
 let pendingCharacterSessionTimer: number | null = null;
+let characterPreviewRequestSequence = 0;
 let simulateRequestSequence = 0;
 let managerCompactionOverlayHideTimer: number | null = null;
 let composeErrorHideTimer: number | null = null;
@@ -418,6 +421,7 @@ function normalizeCharacterOption(character: Record<string, unknown>, idFallback
     if (!id) {return null;}
     const name = String(character.name || '').trim() || `角色 ${id}`;
     const avatar = String(character.avatar || '').trim();
+    const shallow = character.shallow === true;
     const description = String(character.description || '').trim();
     const personality = String(character.personality || '').trim();
     const scenario = String(character.scenario || '').trim();
@@ -426,13 +430,14 @@ function normalizeCharacterOption(character: Record<string, unknown>, idFallback
     const mesExample = String(character.mesExample || character.mes_example || '').trim();
     const creatorNotes = String(character.creatorNotes || character.creator_notes || '').trim();
     const characterDepthPrompt = String(character.characterDepthPrompt || character.character_depth_prompt || '').trim();
-    const signature = JSON.stringify([id, name, avatar, description, personality, scenario, firstMessage, alternateGreetings, mesExample, creatorNotes, characterDepthPrompt]);
+    const signature = JSON.stringify([id, name, avatar, shallow, description, personality, scenario, firstMessage, alternateGreetings, mesExample, creatorNotes, characterDepthPrompt]);
     const cached = characterOptionCache.get(id);
     if (cached?.signature === signature) {return cached.option;}
     const option: TavernCharacterOption = {
         id,
         name,
         avatar,
+        shallow,
         description,
         personality,
         scenario,
@@ -1110,13 +1115,15 @@ async function getNativeWorldbookRuntime(input: {
 async function getHostContext(input: {
     characterId?: string;
     includeHistory?: boolean;
-} = {}): Promise<Record<string, unknown>> {
+    includeWorldbooks?: boolean;
+} = {}, options: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<Record<string, unknown>> {
     const response = await requestHost('xb-tavern:get-context', {
         payload: {
             characterId: input.characterId,
             includeHistory: input.includeHistory,
+            includeWorldbooks: input.includeWorldbooks,
         },
-    });
+    }, options);
     return (response.result || response) as Record<string, unknown>;
 }
 
@@ -1231,6 +1238,26 @@ function applyHostPayload(payload: Record<string, unknown>) {
     void nextTick(renderApiSettingsPanel);
 }
 
+function applyCharacterListPayload(payload: Record<string, unknown>) {
+    const characters = payload.availableCharacters;
+    if (Array.isArray(characters)) {
+        availableCharacters.value = characters as TavernCharacterOption[];
+    }
+}
+
+function hasCharacterPreviewDetails(character: TavernCharacterOption | null | undefined) {
+    return !!character && !!(
+        character.description
+        || character.personality
+        || character.scenario
+        || character.firstMessage
+        || character.mesExample
+        || character.creatorNotes
+        || character.characterDepthPrompt
+        || character.alternateGreetings?.length
+    );
+}
+
 function onHostMessage(event: MessageEvent) {
     if (event.origin !== window.location.origin) {return;}
     const data = event.data || {};
@@ -1274,10 +1301,30 @@ function refreshCharacterList() {
     postToHost('xb-tavern:refresh-context', {});
 }
 
-function selectCharacterForPreview(characterId: string) {
+async function selectCharacterForPreview(characterId: string) {
     const targetId = String(characterId || '').trim();
     if (!targetId || pendingCharacterSessionId.value) {return;}
     selectedCharacterPreviewId.value = targetId;
+    const current = characterCards.value.find((character) => character.id === targetId);
+    if (current && current.shallow !== true && (current.shallow === false || hasCharacterPreviewDetails(current))) {return;}
+    const sequence = ++characterPreviewRequestSequence;
+    pendingCharacterPreviewId.value = targetId;
+    pendingCharacterError.value = '';
+    try {
+        const payload = await getHostContext(
+            { characterId: targetId, includeHistory: false, includeWorldbooks: false },
+            { timeoutMs: CHARACTER_CONTEXT_TIMEOUT_MS },
+        );
+        if (sequence !== characterPreviewRequestSequence || selectedCharacterPreviewId.value !== targetId) {return;}
+        applyCharacterListPayload(payload);
+    } catch (error) {
+        if (sequence !== characterPreviewRequestSequence || selectedCharacterPreviewId.value !== targetId) {return;}
+        pendingCharacterError.value = error instanceof Error ? error.message : String(error || 'character_preview_failed');
+    } finally {
+        if (sequence === characterPreviewRequestSequence && pendingCharacterPreviewId.value === targetId) {
+            pendingCharacterPreviewId.value = '';
+        }
+    }
 }
 
 function selectCharacterGreeting(index: number) {
@@ -3430,6 +3477,7 @@ onUnmounted(() => {
         :live-character-id="liveCharacterId"
         :selected-character="selectedCharacterPreview"
         :selected-greeting-index="selectedCharacterGreetingIndex"
+        :pending-preview-character-id="pendingCharacterPreviewId"
         :pending-character-session-id="pendingCharacterSessionId"
         :hidden-count="hiddenCharacterCount"
         :batch-size="CHARACTER_ARCHIVE_BATCH_SIZE"
