@@ -266,7 +266,7 @@ test('xb tavern rerun reuses an existing chance encounter without rerolling', as
     assert.match(rerunRawMessages, /Chance Encounter Triggered/);
 });
 
-test('xb tavern random encounter cooldown skips the next new user turn and allows the one after', async () => {
+test('xb tavern random encounter cooldown skips the next two new user turns and allows the one after', async () => {
     await resetDb();
     const preset = createDefaultXbTavernPreset();
     const runtimeState = {
@@ -318,11 +318,27 @@ test('xb tavern random encounter cooldown skips the next new user turn and allow
             requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
         }),
     });
+    await runXbTavernTurn({
+        sessionId: first.sessionId,
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot: {
+            character: { id: 'char-1', name: 'Aster' },
+        },
+        preset,
+        currentUserMessage: 'Turn four.',
+        runtimeState,
+        randomEncounterRoll: () => 0.05,
+        executeRunOnce: async (options: TavernRunOnceOptions) => ({
+            text: 'Fourth answer.',
+            requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
+        }),
+    });
 
     const userMessages = (await listTavernMessages(first.sessionId)).filter((message) => message.role === 'user');
     assert.equal(userMessages[0]?.runtimeEvents?.length, 1);
     assert.equal(userMessages[1]?.runtimeEvents?.length, 0);
-    assert.equal(userMessages[2]?.runtimeEvents?.length, 1);
+    assert.equal(userMessages[2]?.runtimeEvents?.length, 0);
+    assert.equal(userMessages[3]?.runtimeEvents?.length, 1);
 });
 
 test('xb tavern edited rerun can reroll runtime events on the reused user message', async () => {
@@ -1319,7 +1335,9 @@ test('xb tavern run turn can trigger manager summary with delegate config', asyn
     assert.match(managerPrompt, /initialize it with one `meta \+ add` transaction/i);
     assert.match(managerPrompt, /always start with StateRead summary and inspect `meta\.status`/i);
     assert.match(managerPrompt, /Do not decide whether to read based only on your own guess about/i);
-    assert.match(managerPrompt, /When a map already exists, use incremental `add` \/ `modify` \/ `remove` \/ `meta` updates/i);
+    assert.match(managerPrompt, /prefer growing the same map for connected space/i);
+    assert.match(managerPrompt, /Let `meta\.name` grow with the map scope/i);
+    assert.match(managerPrompt, /Replace the whole map only when the story moves to a clearly separate place/i);
     assert.match(managerPrompt, /First appearance does not require a prior/i);
     assert.match(managerPrompt, /what defines the boundary, where are the entrances and exits, where is the current player or viewpoint focus/i);
     assert.match(managerPrompt, /For indoor scenes, use an outer-wall rect as the anchor/i);

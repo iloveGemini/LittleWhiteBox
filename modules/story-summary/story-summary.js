@@ -1413,6 +1413,7 @@ function buildFramePayload(store) {
     const json = store?.json || {};
     const facts = json.facts || [];
     return {
+        chatId: getContext().chatId || '',
         keywords: json.keywords || [],
         events: json.events || [],
         characters: {

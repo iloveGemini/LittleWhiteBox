@@ -888,6 +888,7 @@ test('StatePatch creates and updates tavern map documents with semantic ops', as
     });
     assert.equal(read.ok, true);
     assert.match(read.digest || '', /Rusty Flagon - North Door/);
+    assert.equal(read.meta?.hint, undefined);
 
     const doors = await executeTavernStateTool(session.id, 'StateRead', {
         docType: 'tavern.map',

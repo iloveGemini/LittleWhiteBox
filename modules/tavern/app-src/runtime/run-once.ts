@@ -119,8 +119,10 @@ function lastUserMessage(messages: TavernMessageRecord[] = []): TavernMessageRec
 
 function isRandomEncounterCooldownActive(messages: TavernMessageRecord[] = []): boolean {
     if (RANDOM_ENCOUNTER_COOLDOWN_TURNS <= 0) {return false;}
-    const latestUser = lastUserMessage(messages);
-    return !!latestUser && hasChanceEncounterEvent(latestUser.runtimeEvents);
+    const recentUsers = messages
+        .filter((message) => message.role === 'user')
+        .slice(-RANDOM_ENCOUNTER_COOLDOWN_TURNS);
+    return recentUsers.some((message) => hasChanceEncounterEvent(message.runtimeEvents));
 }
 
 function shouldTriggerRandomEncounter(roll: number): boolean {

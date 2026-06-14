@@ -86,6 +86,7 @@ const mapDocument = computed<TavernMapDocument | null>(() => {
 });
 
 const latestPatch = computed(() => props.patches.at(-1) || null);
+const mapBadgeExpanded = ref(true);
 const timelineFrames = computed<MapReplayFrame[]>(() => {
     const sorted = [...props.patches].sort((left, right) => Number(left.revision || 0) - Number(right.revision || 0));
     let document = defaultDisplayMap();
@@ -145,17 +146,26 @@ const revisionLabel = computed(() => activeTimelineFrame.value && replayMode.val
     ? `revision ${activeTimelineFrame.value.revision}`
     : props.document ? `revision ${props.document.revision}` : 'no map');
 const patchLabel = computed(() => activePatch.value?.summary || (activePatch.value ? `revision ${activePatch.value.revision}` : '等待空间变化'));
+const badgeModeLabel = computed(() => (
+    replayMode.value === 'full'
+        ? '完整重绘'
+        : replayMode.value === 'timeline'
+            ? `回合 ${timelineLabel.value}`
+            : '地图更新'
+));
 const digestLines = computed(() => digest.value.split('\n').map((line) => line.trim()).filter(Boolean).slice(0, 4));
 const elementCount = computed(() => activeMapDocument.value?.elements.length || 0);
 const totalPatchCount = computed(() => props.patches.length);
 const timelineLabel = computed(() => activeTimelineFrame.value ? `${activeTimelineFrame.value.index + 1} / ${timelineFrames.value.length}` : '0 / 0');
 const hasRenderableMap = computed(() => isRenderableMapDocument(activeMapDocument.value));
+const showMapBadge = computed(() => !!activePatch.value);
 
 watch(() => props.document?.revision, () => {
     replayMode.value = 'patch';
     clearTimelineTimer();
     timelineIndex.value = Math.max(0, timelineFrames.value.length - 1);
     replayKey.value += 1;
+    mapBadgeExpanded.value = true;
 });
 
 watch(() => props.patches.length, () => {
@@ -165,6 +175,9 @@ watch(() => props.patches.length, () => {
     if (replayMode.value === 'timeline' && !canReplayTimeline.value) {
         replayMode.value = 'patch';
         clearTimelineTimer();
+    }
+    if (props.patches.length) {
+        mapBadgeExpanded.value = true;
     }
 });
 
@@ -487,6 +500,14 @@ function stepTimeline(offset: number) {
     timelineIndex.value = (timelineIndex.value + offset + length) % length;
     replayKey.value += 1;
 }
+
+function toggleMapBadge() {
+    mapBadgeExpanded.value = !mapBadgeExpanded.value;
+}
+
+function collapseMapBadge() {
+    mapBadgeExpanded.value = false;
+}
 </script>
 
 <template>
@@ -533,15 +554,11 @@ function stepTimeline(offset: number) {
         </button>
       </div>
     </header>
-
     <div
       v-if="hasRenderableMap"
       class="tavern-map-canvas"
       :class="[`theme-${theme}`, `mode-${replayMode}`]"
     >
-      <div class="tavern-map-stage-title">
-        {{ title }}
-      </div>
       <svg
         :key="replayKey"
         :viewBox="viewBox"
@@ -677,9 +694,31 @@ function stepTimeline(offset: number) {
         class="tavern-map-progress"
         :style="progressStyle"
       />
-      <div class="tavern-map-badge">
-        <span>{{ replayMode === 'full' ? '完整重绘' : replayMode === 'timeline' ? `回合 ${timelineLabel}` : '地图更新' }}</span>
-        <strong>{{ patchLabel }}</strong>
+      <div
+        v-if="showMapBadge"
+        class="tavern-map-badge-shell"
+        :class="{ 'is-open': mapBadgeExpanded }"
+      >
+        <button
+          type="button"
+          class="tavern-map-badge-toggle"
+          :aria-expanded="mapBadgeExpanded"
+          :title="mapBadgeExpanded ? '收起地图更新提示' : '显示地图更新提示'"
+          aria-label="切换地图更新提示"
+          @click="toggleMapBadge"
+        >
+          !
+        </button>
+        <button
+          v-if="mapBadgeExpanded"
+          type="button"
+          class="tavern-map-badge"
+          title="收起地图更新提示"
+          @click="collapseMapBadge"
+        >
+          <span>{{ badgeModeLabel }}</span>
+          <strong>{{ patchLabel }}</strong>
+        </button>
       </div>
       <div
         v-if="replayMode === 'timeline' && canReplayTimeline && timelineFrames.length > 1"

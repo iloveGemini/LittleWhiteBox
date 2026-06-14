@@ -308,7 +308,7 @@ function normalizeMapMeta(value: unknown, fallback: Partial<TavernMapDocumentMet
         status,
         ...(status === 'uninitialized'
             ? { hint: normalizeText(hintSource ?? buildSeedMapHint(), 1200) || buildSeedMapHint() }
-            : (normalizeText(hintSource, 1200) ? { hint: normalizeText(hintSource, 1200) } : {})),
+            : {}),
     };
 }
 

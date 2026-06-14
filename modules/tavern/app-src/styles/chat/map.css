@@ -143,28 +143,6 @@
         inset 0 0 90px rgba(0, 0, 0, 0.38);
 }
 
-.tavern-chat.xb-page .tavern-map-stage-title {
-    position: absolute;
-    top: 18px;
-    left: 50%;
-    z-index: 5;
-    max-width: min(70%, 420px);
-    overflow: hidden;
-    transform: translateX(-50%);
-    color: rgba(47, 36, 24, 0.74);
-    font: italic 21px/1.1 Georgia, var(--xb-font-serif);
-    pointer-events: none;
-    text-align: center;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    animation: tavern-map-title-reveal 1.6s ease both;
-}
-
-.tavern-chat.xb-page .theme-dark .tavern-map-stage-title,
-.tavern-chat.xb-page .theme-blueprint .tavern-map-stage-title {
-    color: rgba(196, 214, 234, 0.78);
-}
-
 .tavern-chat.xb-page .map-fill-layer path {
     opacity: 0.9;
 }
@@ -240,11 +218,42 @@
     --map-accent: rgba(190, 62, 54, 0.78);
 }
 
-.tavern-chat.xb-page .tavern-map-badge {
+.tavern-chat.xb-page .tavern-map-badge-shell {
     position: absolute;
     top: 14px;
     right: 16px;
     z-index: 6;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: 8px;
+    max-width: min(320px, calc(100% - 32px));
+}
+
+.tavern-chat.xb-page .tavern-map-badge-toggle {
+    width: 24px;
+    height: 24px;
+    border: 1px solid rgba(38, 30, 20, 0.14);
+    border-radius: 999px;
+    background: rgba(248, 244, 231, 0.26);
+    box-shadow: 0 10px 24px rgba(45, 33, 18, 0.08);
+    color: rgba(77, 58, 37, 0.86);
+    font: 12px/1 var(--xb-font-mono);
+    padding: 0;
+    backdrop-filter: blur(10px);
+}
+
+.tavern-chat.xb-page .tavern-map-badge-toggle:hover {
+    background: rgba(248, 244, 231, 0.42);
+    color: #3f2f20;
+}
+
+.tavern-chat.xb-page .tavern-map-badge-shell.is-open .tavern-map-badge-toggle {
+    background: rgba(248, 244, 231, 0.58);
+}
+
+.tavern-chat.xb-page .tavern-map-badge {
+    width: min(280px, calc(100vw - 112px));
     max-width: min(280px, calc(100% - 32px));
     overflow: hidden;
     border: 1px solid rgba(38, 30, 20, 0.16);
@@ -254,6 +263,7 @@
     color: #4d3a25;
     font: 11px/1.25 var(--xb-font-mono);
     padding: 8px 10px;
+    text-align: left;
     text-overflow: ellipsis;
 }
 
@@ -269,6 +279,24 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.tavern-chat.xb-page .tavern-map-badge:hover {
+    background: rgba(248, 244, 231, 0.86);
+}
+
+.tavern-chat.xb-page .theme-dark .tavern-map-badge-toggle,
+.tavern-chat.xb-page .theme-blueprint .tavern-map-badge-toggle {
+    border-color: rgba(184, 208, 230, 0.16);
+    background: rgba(13, 18, 27, 0.30);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+    color: rgba(214, 229, 245, 0.92);
+}
+
+.tavern-chat.xb-page .theme-dark .tavern-map-badge-toggle:hover,
+.tavern-chat.xb-page .theme-blueprint .tavern-map-badge-toggle:hover {
+    background: rgba(13, 18, 27, 0.48);
+    color: #edf6ff;
 }
 
 .tavern-chat.xb-page .theme-dark .tavern-map-badge,
@@ -419,17 +447,6 @@
     }
     100% {
         filter: none;
-    }
-}
-
-@keyframes tavern-map-title-reveal {
-    0% {
-        opacity: 0;
-        transform: translate(-50%, -5px);
-    }
-    100% {
-        opacity: 1;
-        transform: translate(-50%, 0);
     }
 }
 
