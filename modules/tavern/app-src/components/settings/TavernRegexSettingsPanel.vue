@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue';
 import { useTavernSettingsContext } from '../tavern-app-context';
+import { useTavernMediaQuery } from '../useTavernMediaQuery';
 
 const settings = useTavernSettingsContext();
 const {
@@ -26,12 +28,49 @@ const {
     toggleRegexPlacement,
     updateRegexPatch,
 } = settings;
+
+type RegexRow = (typeof regexScriptRows)['value'][number];
+type RegexGroup = (typeof regexGroupsForDisplay)['value'][number];
+
+const mobileRegexEditorOpen = ref(false);
+const isMobileSettingsViewport = useTavernMediaQuery('(max-width: 560px)');
+const selectedRegexGroupKey = ref('');
+const activeRegexGroupsForDisplay = computed(() => {
+    const key = selectedRegexGroupKey.value;
+    if (!key) {return regexGroupsForDisplay.value;}
+    return regexGroupsForDisplay.value.filter((group) => group.key === key);
+});
+const shouldMountRegexEditor = computed(() => (
+    activeSettingsWorkspace.value === 'regex'
+    && (!isMobileSettingsViewport.value || mobileRegexEditorOpen.value)
+));
+
+function openRegexEditor(row: RegexRow) {
+    selectRegexScript(row);
+    mobileRegexEditorOpen.value = true;
+}
+
+function createMobileRegexScript(group: RegexGroup) {
+    createRegexScript(group);
+    mobileRegexEditorOpen.value = true;
+}
+
+function closeRegexEditor() {
+    mobileRegexEditorOpen.value = false;
+}
+
+watch(activeSettingsWorkspace, (workspace) => {
+    if (workspace !== 'regex') {
+        mobileRegexEditorOpen.value = false;
+    }
+});
 </script>
 
 <template>
   <div
     v-show="activeSettingsWorkspace === 'regex'"
     class="panel step-panel native-workspace"
+    :class="{ 'is-mobile-editor-open': mobileRegexEditorOpen }"
   >
     <div class="panel-head preset-page-head">
       <div>
@@ -46,6 +85,28 @@ const {
       </div>
     </div>
     <div class="preset-command-bar regex-command-bar">
+      <label class="preset-source-select regex-group-select">
+        <select v-model="selectedRegexGroupKey">
+          <option value="">
+            全部正则
+          </option>
+          <option
+            v-for="group in regexGroupsForDisplay"
+            :key="group.key"
+            :value="group.key"
+          >
+            {{ group.label }}
+          </option>
+        </select>
+      </label>
+      <label class="archive-search native-search regex-search-field">
+        <input
+          v-model="regexSearchText"
+          type="search"
+          aria-label="筛选正则"
+          placeholder="名称、匹配式或替换文本"
+        >
+      </label>
       <div class="settings-toolstrip">
         <button
           type="button"
@@ -109,16 +170,8 @@ const {
     </div>
     <div class="native-settings-studio regex-studio">
       <aside class="native-list-panel regex-group-panel regex-library-panel">
-        <label class="archive-search native-search">
-          <span>检索正则</span>
-          <input
-            v-model="regexSearchText"
-            type="search"
-            placeholder="名称、匹配式或替换文本"
-          >
-        </label>
         <div
-          v-for="group in regexGroupsForDisplay"
+          v-for="group in activeRegexGroupsForDisplay"
           :key="group.key"
           class="regex-group-block"
         >
@@ -132,11 +185,24 @@ const {
             type="button"
             class="native-list-row"
             :class="{ selected: selectedRegexKey === row.key, disabled: row.script.disabled }"
-            @click="selectRegexScript(row)"
+            title="编辑"
+            aria-label="编辑"
+            @click="openRegexEditor(row)"
           >
-            <span>{{ row.script.disabled ? '停' : '用' }}</span>
-            <strong>{{ row.script.scriptName || '未命名正则' }}</strong>
-            <small>{{ row.script.findRegex || '空匹配式' }}</small>
+            <span class="regex-row-state">{{ row.script.disabled ? '停' : '用' }}</span>
+            <span class="regex-row-copy">
+              <strong>{{ row.script.scriptName || '未命名正则' }}</strong>
+              <small>{{ row.script.findRegex || '空匹配式' }}</small>
+            </span>
+            <span class="regex-row-edit-icon">
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </span>
           </button>
           <button
             v-if="group.hiddenCount"
@@ -151,24 +217,42 @@ const {
             class="native-add-row"
             :title="`新增${group.label}`"
             :aria-label="`新增${group.label}`"
-            @click="createRegexScript(group)"
+            @click="createMobileRegexScript(group)"
           >
             新增
           </button>
         </div>
         <div
-          v-if="regexSearchText && !regexGroupsForDisplay.length"
+          v-if="regexSearchText && !activeRegexGroupsForDisplay.length"
           class="inline-empty-note"
         >
           没有匹配的正则。
         </div>
       </aside>
 
-      <section class="native-detail-panel regex-detail-panel">
+      <section
+        v-if="shouldMountRegexEditor"
+        class="native-detail-panel regex-detail-panel"
+      >
         <template v-if="selectedRegexKey || regexDraft.scriptName">
           <div class="preset-preview-head">
             <strong>{{ regexDraft.scriptName || '新正则' }}</strong>
             <span>{{ regexDraftTypeLabel() }}</span>
+            <button
+              type="button"
+              class="regex-editor-close"
+              title="关闭"
+              aria-label="关闭"
+              @click="closeRegexEditor"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M6 6l12 12" />
+                <path d="M18 6 6 18" />
+              </svg>
+            </button>
           </div>
           <div class="regex-editor-grid">
             <section class="regex-editor-section regex-pattern-section">

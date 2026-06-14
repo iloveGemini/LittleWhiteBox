@@ -36,7 +36,9 @@ test('tavern host can return a fresh live context on demand', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     assert.match(tavernSource, /async function handleContextRequest/);
     assert.match(tavernSource, /case 'xb-tavern:get-context':/);
+    assert.match(tavernSource, /case 'xb-tavern:run-slash-command':/);
     assert.match(appSource, /requestHost\('xb-tavern:get-context'/);
+    assert.match(appSource, /requestHost\('xb-tavern:run-slash-command'/);
 });
 
 test('tavern app requests sanitize payload before postMessage', () => {
@@ -122,6 +124,21 @@ test('tavern worldbook host bridge exposes native runtime result instead of edit
     assert.doesNotMatch(tavernSource, /case 'xb-tavern:list-worldbooks':/);
     assert.doesNotMatch(tavernSource, /case 'xb-tavern:get-worldbook':/);
     assert.doesNotMatch(tavernSource, /case 'xb-tavern:save-worldbook':/);
+});
+
+test('tavern slash command bridge executes through native SillyTavern STscript', () => {
+    const tavernSource = readRepoFile('modules/tavern/tavern.ts');
+    const slashSource = readRepoFile('modules/tavern/host/slash-commands.ts');
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+
+    assert.match(tavernSource, /runTavernSlashCommand/);
+    assert.match(slashSource, /executeSlashCommandsWithOptions/);
+    assert.match(slashSource, /source: 'littlewhitebox-tavern'/);
+    assert.match(slashSource, /pipe/);
+    assert.match(appSource, /function shouldRunTavernSlashCommand/);
+    assert.match(appSource, /async function resolveSlashCommandMessageText/);
+    assert.match(appSource, /messageText = await resolveSlashCommandMessageText\(messageText, options\);/);
+    assert.match(appSource, /reuseUserMessageOrder/);
 });
 
 test('tavern message assembler can render native worldbook prompt blocks directly', () => {

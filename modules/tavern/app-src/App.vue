@@ -61,7 +61,7 @@ import {
 } from '../shared/session-contract';
 import type { TavernActionCheckRuntimeEvent } from '../shared/runtime-events';
 import type { TavernApplyRegexItem, TavernApplyRegexResult } from '../shared/regex';
-import type { TavernSubstituteParamsItem, TavernSubstituteParamsResult } from '../shared/substitute-params';
+import type { TavernSubstituteParamsItem, TavernSubstituteParamsOptions, TavernSubstituteParamsResult } from '../shared/substitute-params';
 import {
     buildContextHistory,
     deriveTavernSessionStateFromMessagesAsync,
@@ -280,6 +280,10 @@ function normalizeTextList(value: unknown): string[] {
 const selectedSession = computed(() => sessions.value.find((item) => item.id === selectedSessionId.value) || null);
 const sessionRuntimeState = computed(() => normalizeTavernSessionState(selectedSession.value?.state || {}));
 const sessionContract = computed<TavernSessionContract>(() => normalizeTavernSessionContract(sessionRuntimeState.value.contract));
+const canResumeSelectedSession = computed(() => !!(
+    selectedSession.value
+    && String(selectedSession.value.characterId || '').trim()
+));
 const activeView = ref<AppView>(readInitialView());
 const activeSettingsWorkspace = ref<TavernSettingsWorkspaceKey>(readInitialSettingsWorkspace());
 const homeThemeDark = ref(readInitialTavernThemeDark());
@@ -1334,10 +1338,12 @@ async function enterSelectedCharacter() {
 
 async function refreshSessions() {
     sessions.value = await listTavernSessions();
-    selectedSessionId.value = await getSelectedTavernSessionId();
-    if (!selectedSessionId.value && sessions.value[0]) {
-        selectedSessionId.value = sessions.value[0].id;
-        await setSelectedTavernSessionId(selectedSessionId.value);
+    const storedSessionId = String(await getSelectedTavernSessionId() || '').trim();
+    selectedSessionId.value = sessions.value.some((session) => session.id === storedSessionId)
+        ? storedSessionId
+        : '';
+    if (storedSessionId && !selectedSessionId.value) {
+        await setSelectedTavernSessionId('');
     }
     sessionMessages.value = selectedSessionId.value ? await listTavernMessages(selectedSessionId.value) : [];
     await refreshManagerRecords(selectedSessionId.value);
@@ -1535,7 +1541,7 @@ async function createSessionAndOpenChat(options: { contextSnapshot?: XbTavernCon
 }
 
 async function handleHomePrimaryAction() {
-    if (selectedSessionId.value) {
+    if (canResumeSelectedSession.value) {
         openChatView();
         return;
     }
@@ -2159,8 +2165,9 @@ async function saveEditMessage(message: TavernMessageRecord, options: { rerun?: 
         await rerunFromMessage(message);
         return;
     }
+    const substitutedContent = await substituteEditedMessageContent(message, content);
     const updated = await updateTavernMessage(message.sessionId, message.order, {
-        content,
+        content: substitutedContent,
         ...(message.role === 'user' ? { runtimeEvents: [] } : {}),
     });
     if (updated) {
@@ -2475,6 +2482,68 @@ function createLiveManagerMessage(
         toolName: patch.toolName,
         toolDisplay: patch.toolDisplay,
     };
+}
+
+function shouldRunTavernSlashCommand(text: string, options: { reuseUserMessageOrder?: number } = {}) {
+    return !Number.isFinite(Number(options.reuseUserMessageOrder)) && text.trim().startsWith('/');
+}
+
+function normalizeSlashPipeForMessage(value: unknown): string {
+    if (value === undefined || value === null) {return '';}
+    if (typeof value === 'string') {return value.trim();}
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+        return String(value);
+    }
+    try {
+        return JSON.stringify(value, null, 2);
+    } catch {
+        return String(value);
+    }
+}
+
+async function resolveSlashCommandMessageText(messageText: string, options: { reuseUserMessageOrder?: number } = {}): Promise<string> {
+    if (!shouldRunTavernSlashCommand(messageText, options)) {
+        return messageText;
+    }
+    const response = await requestHost('xb-tavern:run-slash-command', {
+        payload: { command: messageText },
+    });
+    const result = (response.result || response) as Record<string, unknown>;
+    const execution = result.execution && typeof result.execution === 'object'
+        ? result.execution as Record<string, unknown>
+        : {};
+    if (result.ok === false || execution.isError === true || execution.isAborted === true) {
+        throw new Error(String(result.error || execution.errorMessage || execution.abortReason || 'slash_command_failed'));
+    }
+    const pipe = normalizeSlashPipeForMessage(result.pipe);
+    if (!pipe) {
+        currentUserMessage.value = '';
+        void nextTick(() => resetTextareaHeight(chatComposeTextareaRef.value));
+        showComposeError('斜杠命令已执行，没有输出。', 2600);
+        return '';
+    }
+    return pipe;
+}
+
+function buildUiSubstituteParamsOptions(contextSnapshot: XbTavernContext = {}): TavernSubstituteParamsOptions {
+    const options: TavernSubstituteParamsOptions = {};
+    const userName = String(contextSnapshot.user?.name || '').trim();
+    const characterName = String(contextSnapshot.character?.name || '').trim();
+    if (userName) {options.name1Override = userName;}
+    if (characterName) {options.name2Override = characterName;}
+    return options;
+}
+
+async function substituteEditedMessageContent(message: TavernMessageRecord, content: string): Promise<string> {
+    const session = sessions.value.find((item) => item.id === message.sessionId)
+        || (selectedSessionId.value === message.sessionId ? selectedSession.value : null);
+    const contextSnapshot = (session?.contextSnapshot || context.value || {}) as XbTavernContext;
+    const result = await applyTavernSubstituteParams([{
+        id: `edit:${message.sessionId}:${message.order}`,
+        text: content,
+        options: buildUiSubstituteParamsOptions(contextSnapshot),
+    }]);
+    return result.items[0]?.text ?? content;
 }
 
 function ensureManagerLiveProtocolState(sessionId: string) {
@@ -2831,10 +2900,21 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
         return;
     }
     clearComposeError();
-    const messageText = String(options.messageText ?? currentUserMessage.value ?? '').trim();
+    let messageText = String(options.messageText ?? currentUserMessage.value ?? '').trim();
     if (!messageText) {
         runtimeError.value = '先写一句话。';
         showComposeError('先写一句话。');
+        return;
+    }
+    try {
+        messageText = await resolveSlashCommandMessageText(messageText, options);
+    } catch (error) {
+        const errorText = describeError(error);
+        runtimeError.value = errorText;
+        showComposeError(errorText);
+        return;
+    }
+    if (!messageText) {
         return;
     }
     const controller = new AbortController();
@@ -3307,7 +3387,7 @@ onUnmounted(() => {
       <TavernHomePage
         v-if="activeView === 'home'"
         :dark="homeThemeDark"
-        :has-session="!!selectedSessionId"
+        :has-session="canResumeSelectedSession"
         :subtitle="chatSubtitle"
         :character-count="characterCards.length"
         @toggle-theme="homeThemeDark = !homeThemeDark"

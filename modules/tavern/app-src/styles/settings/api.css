@@ -95,6 +95,15 @@
     line-height: 1.35;
 }
 
+.tavern-api-settings .xb-assistant-config input:not([type="checkbox"]):not([type="radio"]),
+.tavern-api-settings .xb-assistant-config select {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 40px;
+    height: 40px;
+    padding: 0 12px;
+}
+
 .tavern-api-settings .xb-assistant-inline-input {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -104,7 +113,8 @@
 }
 
 .tavern-api-settings .xb-assistant-inline-input.xb-assistant-model-row {
-    align-items: end;
+    align-items: start;
+    grid-template-rows: auto 40px;
 }
 
 .tavern-api-settings .xb-assistant-inline-input > input,
@@ -147,7 +157,13 @@
 }
 
 .tavern-api-settings .xb-assistant-inline-input.xb-assistant-model-row > button {
-    align-self: end;
+    grid-column: 2;
+    grid-row: 2;
+    align-self: stretch;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-height: 40px;
     height: 40px;
     line-height: 1;
@@ -162,34 +178,66 @@
 }
 
 .tavern-api-settings .xb-assistant-checkbox-row {
+    box-sizing: border-box;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     min-height: 40px;
     height: 40px;
+    overflow: hidden;
     border: 1px solid var(--xb-line);
     border-radius: 14px;
     background: var(--xb-settings-subtle-bg);
-    padding: 8px 12px;
+    padding: 0 12px;
+}
+
+.tavern-api-settings .xb-assistant-checkbox-row > span:first-child {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    line-height: 1;
+}
+
+.tavern-api-settings .xb-assistant-checkbox-row > span:first-child small {
+    margin-top: 3px;
+    line-height: 1.1;
 }
 
 .tavern-api-settings .xb-assistant-checkbox-control {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
+    height: 20px;
     color: var(--xb-text-muted);
     font-size: 12px;
+    line-height: 1;
 }
 
 .tavern-api-settings .xb-assistant-checkbox-control input {
+    display: block;
+    flex: 0 0 auto;
     width: 16px;
     height: 16px;
+    margin: 0;
     accent-color: rgb(var(--xb-accent-rgb));
 }
 
 .tavern-api-settings .xb-assistant-model-row label {
-    display: grid;
-    gap: 7px;
+    display: contents;
     min-width: 0;
+}
+
+.tavern-api-settings .xb-assistant-model-row label > span:first-child {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.tavern-api-settings .xb-assistant-model-row label > select {
+    grid-column: 1;
+    grid-row: 2;
 }
 
 .tavern-api-settings .xb-assistant-inline-status {

@@ -1,17 +1,16 @@
 <script setup lang="ts">
+import { computed, watch } from 'vue';
 import { useTavernSettingsContext } from '../tavern-app-context';
+import { useTavernEphemeralDisclosureScope } from '../useTavernEphemeralDisclosureScope';
 
 const settings = useTavernSettingsContext();
 const {
     activeSettingsWorkspace,
-    hiddenWorldbookCount,
     hiddenWorldbookPreviewEntryCount,
     openSelectedWorldbookEditor,
     selectedWorldbook,
     selectedWorldbookName,
     showMoreWorldbookPreviewEntries,
-    visibleWorldbookOptions,
-    WORLDBOOK_BATCH_SIZE,
     WORLDBOOK_PREVIEW_BATCH_SIZE,
     worldbookGlobalCount,
     worldbookOptions,
@@ -20,8 +19,31 @@ const {
     worldbookSearchText,
     worldbookSourceSummary,
     worldbookStatus,
-    worldbookVisibleLimit,
 } = settings;
+
+const worldbookSelectOptions = computed(() => {
+    const query = String(worldbookSearchText.value || '').trim().toLocaleLowerCase();
+    const selectedName = String(selectedWorldbookName.value || '').trim();
+    const selected = worldbookOptions.value.find((item) => item.name === selectedName);
+    const filtered = query
+        ? worldbookOptions.value.filter((item) => item.name.toLocaleLowerCase().includes(query))
+        : worldbookOptions.value;
+    if (selected && !filtered.some((item) => item.name === selected.name)) {
+        return [selected, ...filtered];
+    }
+    return filtered;
+});
+
+const worldbookDisclosure = useTavernEphemeralDisclosureScope();
+
+function worldbookEntryDisclosureId(entry: { uid?: string; name: string; order?: number }) {
+    return `worldbook:${selectedWorldbookName.value}:${entry.uid || entry.order || entry.name}`;
+}
+
+watch(
+    [activeSettingsWorkspace, selectedWorldbookName, () => worldbookPreview.value?.name],
+    () => worldbookDisclosure.reset(),
+);
 </script>
 
 <template>
@@ -47,61 +69,37 @@ const {
     >
       <span>{{ worldbookStatus }}</span>
     </div>
+    <div class="preset-command-bar worldbook-command-bar">
+      <label class="preset-source-select worldbook-source-select">
+        <select
+          :value="selectedWorldbookName"
+          @change="selectedWorldbookName = ($event.target as HTMLSelectElement).value"
+        >
+          <option
+            v-if="!worldbookSelectOptions.length"
+            value=""
+          >
+            没有世界书
+          </option>
+          <option
+            v-for="item in worldbookSelectOptions"
+            :key="item.name"
+            :value="item.name"
+          >
+            {{ item.name }}
+          </option>
+        </select>
+      </label>
+      <label class="archive-search native-search worldbook-search-field">
+        <input
+          v-model="worldbookSearchText"
+          type="search"
+          aria-label="筛选世界书"
+          placeholder="筛选世界书"
+        >
+      </label>
+    </div>
     <div class="native-settings-studio worldbook-overview-grid">
-      <aside class="native-list-panel worldbook-index-panel">
-        <div class="assistant-preset-nav-head">
-          <strong>世界书</strong>
-        </div>
-        <label class="archive-search native-search">
-          <span>检索世界书</span>
-          <input
-            v-model="worldbookSearchText"
-            type="search"
-            placeholder="输入书名"
-          >
-        </label>
-        <div
-          v-for="item in visibleWorldbookOptions"
-          :key="item.name"
-          role="button"
-          tabindex="0"
-          class="native-list-row"
-          :class="{ selected: selectedWorldbookName === item.name }"
-          @click="selectedWorldbookName = item.name"
-          @keydown.enter.prevent="selectedWorldbookName = item.name"
-          @keydown.space.prevent="selectedWorldbookName = item.name"
-        >
-          <span
-            class="worldbook-source-lights"
-            :aria-label="worldbookSourceSummary(item)"
-          >
-            <i
-              class="source-light source-global"
-              :class="{ active: item.globalActive }"
-              title="全局世界书"
-            >全</i>
-          </span>
-          <span class="native-row-copy">
-            <strong>{{ item.name }}</strong>
-            <small v-if="worldbookSourceSummary(item)">{{ worldbookSourceSummary(item) }}</small>
-          </span>
-        </div>
-        <button
-          v-if="hiddenWorldbookCount"
-          type="button"
-          class="native-add-row"
-          @click="worldbookVisibleLimit += WORLDBOOK_BATCH_SIZE"
-        >
-          再显示 {{ Math.min(hiddenWorldbookCount, WORLDBOOK_BATCH_SIZE) }} 本
-        </button>
-        <div
-          v-if="!visibleWorldbookOptions.length"
-          class="inline-empty-note"
-        >
-          没有匹配的世界书。
-        </div>
-      </aside>
-
       <section class="native-detail-panel worldbook-overview-detail worldbook-gateway-panel">
         <div
           v-if="selectedWorldbook"
@@ -161,24 +159,38 @@ const {
               v-if="worldbookPreview.entries.length"
               class="worldbook-entry-preview-list"
             >
-              <article
+              <details
                 v-for="entry in worldbookPreview.entries"
                 :key="entry.uid || entry.name"
                 class="worldbook-entry-preview"
                 :class="{ disabled: !entry.enabled }"
+                :open="worldbookDisclosure.isOpen(worldbookEntryDisclosureId(entry))"
+                @toggle="worldbookDisclosure.setOpenFromEvent(worldbookEntryDisclosureId(entry), $event)"
               >
-                <header>
-                  <strong>{{ entry.name }}</strong>
-                  <span>{{ entry.constant ? '常驻' : entry.enabled ? '启用' : '关闭' }}</span>
-                </header>
-                <p
-                  v-if="entry.keys.length || entry.secondaryKeys.length"
-                  class="worldbook-entry-keys"
+                <summary>
+                  <span class="worldbook-entry-title">
+                    <strong>{{ entry.name }}</strong>
+                  </span>
+                  <span class="worldbook-entry-state">{{ entry.constant ? '常驻' : entry.enabled ? '启用' : '关闭' }}</span>
+                </summary>
+                <div
+                  v-if="worldbookDisclosure.isOpen(worldbookEntryDisclosureId(entry))"
+                  class="worldbook-entry-body"
                 >
-                  {{ [...entry.keys, ...entry.secondaryKeys].slice(0, 8).join(' / ') }}
-                </p>
-                <p>{{ entry.contentPreview || '没有正文预览。' }}</p>
-              </article>
+                  <p
+                    v-if="entry.keys.length || entry.secondaryKeys.length"
+                    class="worldbook-entry-keys"
+                  >
+                    {{ [...entry.keys, ...entry.secondaryKeys].join(' / ') }}
+                  </p>
+                  <p
+                    v-if="entry.contentPreview"
+                    class="worldbook-entry-content"
+                  >
+                    {{ entry.contentPreview }}
+                  </p>
+                </div>
+              </details>
               <button
                 v-if="hiddenWorldbookPreviewEntryCount"
                 type="button"

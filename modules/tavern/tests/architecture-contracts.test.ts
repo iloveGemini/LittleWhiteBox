@@ -93,6 +93,25 @@ test('tavern request log is sourced from runtime request snapshots', () => {
     assert.match(runtimeSource, /requestSnapshot = \(await inspectTavernRequest\(/);
 });
 
+test('tavern home only resumes an explicitly selected character session', () => {
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    assert.match(appSource, /const canResumeSelectedSession = computed/);
+    assert.match(appSource, /String\(selectedSession\.value\.characterId \|\| ''\)\.trim\(\)/);
+    assert.match(appSource, /:has-session="canResumeSelectedSession"/);
+    assert.match(appSource, /if \(canResumeSelectedSession\.value\) \{\s*openChatView\(\);/);
+    assert.doesNotMatch(appSource, /selectedSessionId\.value = sessions\.value\[0\]\.id/);
+    assert.doesNotMatch(appSource, /setSelectedTavernSessionId\(selectedSessionId\.value\)/);
+});
+
+test('tavern mobile character archive keeps the card list as the scroll container', () => {
+    const layoutSource = readRepoFile('modules/tavern/app-src/styles/characters/layout.css');
+    const cardsSource = readRepoFile('modules/tavern/app-src/styles/characters/cards.css');
+    assert.match(layoutSource, /\.character-index-panel \{[\s\S]*min-height: 0;/);
+    assert.match(cardsSource, /\.character-card-grid \{[\s\S]*flex: 1 1 auto;[\s\S]*min-height: 0;[\s\S]*overflow-y: auto;[\s\S]*-webkit-overflow-scrolling: touch;/);
+    assert.match(cardsSource, /@media \(max-width: 640px\) \{[\s\S]*\.character-card-grid \{[\s\S]*touch-action: pan-y;/);
+    assert.match(cardsSource, /@media \(max-width: 640px\) \{[\s\S]*\.character-card-option \{[\s\S]*content-visibility: visible;/);
+});
+
 test('tavern split UI keeps App-owned DOM refs explicitly wired', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
@@ -233,4 +252,78 @@ test('tavern memory sidebar keeps session-scoped lazy file loading and index-bac
     assert.match(appSource, /selectedMemoryFileRecord\.value\?\.sessionId === selectedSessionId\.value/);
     assert.match(memoryWorkspaceSource, /function invalidateMemoryFileRecordLoad/);
     assert.match(appSource, /file\.searchText \|\| file\.preview \|\| ''/);
+});
+
+test('tavern worldbook preview keeps summary lean and expanded content ephemeral', () => {
+    const helperSource = readRepoFile('modules/tavern/app-src/components/useTavernEphemeralDisclosureScope.ts');
+    const worldbookSource = readRepoFile('modules/tavern/app-src/components/settings/TavernWorldbooksSettingsPanel.vue');
+    const worldbookCss = readRepoFile('modules/tavern/app-src/styles/settings/worldbooks.css');
+    const mobileCss = readRepoFile('modules/tavern/app-src/styles/settings/mobile.css');
+
+    assert.match(helperSource, /export function useTavernEphemeralDisclosureScope/);
+    assert.match(worldbookSource, /useTavernEphemeralDisclosureScope/);
+    assert.match(worldbookSource, /aria-label="筛选世界书"/);
+    assert.doesNotMatch(worldbookSource, />检索世界书</);
+    const worldbookSummaries = [...worldbookSource.matchAll(/<summary>[\s\S]*?<\/summary>/g)].map((match) => match[0]);
+    assert.ok(worldbookSummaries.length > 0);
+    for (const summary of worldbookSummaries) {
+        assert.doesNotMatch(summary, /entry\.(?:keys|secondaryKeys)/);
+    }
+    assert.match(worldbookSource, /v-if="worldbookDisclosure\.isOpen[\s\S]*class="worldbook-entry-body"/);
+    assert.match(worldbookCss, /\.worldbook-entry-body \{[\s\S]*max-height: 460px;[\s\S]*overflow: auto;/);
+    assert.match(mobileCss, /\.settings-layout\.is-worldbooks-workspace \.worldbook-entry-preview summary \{[\s\S]*min-height: 42px;/);
+});
+
+test('tavern heavy disclosure details bind to ephemeral state instead of keeping bodies mounted', () => {
+    const detailFiles = sourceFiles
+        .filter((path) => path.includes(`${join('modules', 'tavern', 'app-src', 'components')}`))
+        .map((path) => ({
+            path: relative(root, path).replace(/\\/g, '/'),
+            source: readFileSync(path, 'utf8'),
+        }));
+    const unboundDetails = detailFiles.flatMap(({ path, source }) => (
+        [...source.matchAll(/<details\b[\s\S]*?>/g)]
+            .filter((match) => !match[0].includes(':open='))
+            .map((match) => ({ path, tag: match[0].replace(/\s+/g, ' ').trim() }))
+    ));
+
+    assert.deepEqual(unboundDetails, []);
+
+    const characterSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterSelectPage.vue');
+    const conversationSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
+    const managerSource = readRepoFile('modules/tavern/app-src/components/chat/TavernManagerPanel.vue');
+    assert.match(characterSource, /useTavernEphemeralDisclosureScope/);
+    assert.match(characterSource, /<template\s+v-if="advancedDefinitionDisclosure\.isOpen/);
+    assert.match(conversationSource, /useTavernEphemeralDisclosureScope/);
+    assert.match(conversationSource, /class="tavern-thought-details"[\s\S]*:open="thoughtDisclosure\.isOpen/);
+    assert.match(conversationSource, /v-if="thoughtDisclosure\.isOpen\(messageThoughtDisclosureId\(message\)\)"/);
+    assert.match(managerSource, /useTavernEphemeralDisclosureScope/);
+    assert.match(managerSource, /v-if="managerDisclosure\.isOpen[\s\S]*class="manager-tool-turn-body"/);
+    assert.match(managerSource, /class="manager-work-drawer"[\s\S]*:open="managerDisclosure\.isOpen/);
+});
+
+test('tavern settings and chat pages reset ephemeral expanded DOM on scope changes', () => {
+    const worldbookSource = readRepoFile('modules/tavern/app-src/components/settings/TavernWorldbooksSettingsPanel.vue');
+    const chatPresetSource = readRepoFile('modules/tavern/app-src/components/settings/TavernChatPresetSettingsPanel.vue');
+    const regexSource = readRepoFile('modules/tavern/app-src/components/settings/TavernRegexSettingsPanel.vue');
+    const conversationSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
+    const managerSource = readRepoFile('modules/tavern/app-src/components/chat/TavernManagerPanel.vue');
+
+    assert.match(worldbookSource, /watch\(\s*\[\s*activeSettingsWorkspace,\s*selectedWorldbookName/);
+    assert.match(chatPresetSource, /const shouldMountPromptEditor = computed/);
+    assert.match(chatPresetSource, /v-if="shouldMountPromptEditor"/);
+    assert.match(chatPresetSource, /watch\(activeSettingsWorkspace[\s\S]*workspace !== 'chatPreset'[\s\S]*mobileEditorOpen\.value = false/);
+    assert.match(regexSource, /const shouldMountRegexEditor = computed/);
+    assert.match(regexSource, /v-if="shouldMountRegexEditor"/);
+    assert.match(regexSource, /watch\(activeSettingsWorkspace[\s\S]*workspace !== 'regex'[\s\S]*mobileRegexEditorOpen\.value = false/);
+    assert.match(conversationSource, /watch\(\s*\[\s*activeView,\s*chatFocus,\s*selectedSessionId\s*\][\s\S]*thoughtDisclosure\.reset\(\)/);
+    assert.match(managerSource, /watch\(\s*\[\s*activeView,\s*chatFocus\s*\][\s\S]*managerDisclosure\.reset\(\)/);
+});
+
+test('tavern edited RP messages use native macro substitution before saving', () => {
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    assert.match(appSource, /function buildUiSubstituteParamsOptions/);
+    assert.match(appSource, /async function substituteEditedMessageContent/);
+    assert.match(appSource, /applyTavernSubstituteParams\(\[\{\s*id: `edit:\$\{message\.sessionId\}:\$\{message\.order\}`,[\s\S]*buildUiSubstituteParamsOptions/);
+    assert.match(appSource, /const substitutedContent = await substituteEditedMessageContent\(message, content\);[\s\S]*updateTavernMessage\(message\.sessionId, message\.order, \{\s*content: substitutedContent,/);
 });

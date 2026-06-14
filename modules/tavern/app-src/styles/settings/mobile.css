@@ -361,59 +361,240 @@
         min-height: 54vh;
     }
 
-    .settings-layout.is-regex-workspace .regex-studio .native-list-panel,
-    .settings-layout.is-worldbooks-workspace .worldbook-overview-grid .native-list-panel {
-        max-height: 106px;
-        gap: 5px;
+    .settings-layout.is-worldbooks-workspace .worldbook-command-bar {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 6px;
+        min-height: 0;
         padding: 6px 12px 8px;
     }
 
-    .settings-layout.is-regex-workspace .regex-studio .native-search,
-    .settings-layout.is-worldbooks-workspace .worldbook-overview-grid .native-search {
-        flex-basis: 128px;
-        min-width: 128px;
-        padding: 6px;
+    .settings-layout.is-regex-workspace .regex-command-bar {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 6px;
+        min-height: 0;
+        padding: 6px 12px 8px;
     }
 
-    .settings-layout.is-regex-workspace .regex-studio .native-search input,
-    .settings-layout.is-worldbooks-workspace .worldbook-overview-grid .native-search input {
-        min-height: 32px;
-        padding: 7px 9px;
+    .settings-layout.is-regex-workspace .regex-group-select {
+        grid-column: 1;
+        grid-row: 1;
+        height: 34px;
     }
 
-    .settings-layout.is-regex-workspace .regex-studio .regex-group-block {
-        gap: 5px;
+    .settings-layout.is-regex-workspace .regex-command-bar .settings-toolstrip {
+        grid-column: 2;
+        grid-row: 1;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+        height: 34px;
+        overflow: visible;
+        padding-bottom: 0;
     }
 
-    .settings-layout.is-regex-workspace .regex-studio .native-list-row,
-    .settings-layout.is-worldbooks-workspace .worldbook-overview-grid .native-list-row {
-        flex-basis: 154px;
-        min-height: 44px;
-        border-radius: 9px;
-        padding: 6px 8px;
+    .settings-layout.is-regex-workspace .regex-search-field {
+        display: none !important;
     }
 
-    .settings-layout.is-regex-workspace .regex-studio .native-list-row small,
-    .settings-layout.is-worldbooks-workspace .worldbook-overview-grid .native-list-row small {
+    .settings-layout.is-worldbooks-workspace .worldbook-source-select,
+    .settings-layout.is-regex-workspace .regex-group-select,
+    .settings-layout.is-worldbooks-workspace .worldbook-search-field {
+        display: grid;
+        gap: 0;
+        margin: 0;
+    }
+
+    .settings-layout.is-regex-workspace .preset-command-bar > .regex-group-select {
+        display: grid;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-source-select > span,
+    .settings-layout.is-regex-workspace .regex-group-select > span,
+    .settings-layout.is-worldbooks-workspace .worldbook-search-field > span,
+    .settings-layout.is-regex-workspace .regex-search-field > span {
         display: none;
     }
 
-    .settings-layout.is-regex-workspace .regex-studio .native-list-row > span:first-child {
+    .settings-layout.is-worldbooks-workspace .worldbook-source-select select,
+    .settings-layout.is-worldbooks-workspace .worldbook-search-field input,
+    .settings-layout.is-regex-workspace .regex-group-select select,
+    .settings-layout.is-regex-workspace .regex-search-field input,
+    .settings-layout.is-regex-workspace .settings-icon-tool {
+        box-sizing: border-box;
+        height: 34px;
+        min-height: 34px;
+        border-radius: 9px;
+        padding: 0 10px;
+    }
+
+    .settings-layout.is-regex-workspace .settings-icon-tool {
+        width: 34px;
+        min-width: 34px;
+        padding: 0;
+    }
+
+    .settings-layout.is-regex-workspace .regex-studio,
+    .settings-layout.is-worldbooks-workspace .worldbook-overview-grid {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .settings-layout.is-regex-workspace .regex-studio .native-list-panel {
+        flex: 1 1 auto;
+        max-height: none;
+        display: flex;
+        flex-direction: column;
+        overflow: auto;
+        border-right: 0;
+        border-bottom: 0;
+        background: var(--xb-settings-subtle-bg);
+        padding: 0;
+    }
+
+    .settings-layout.is-regex-workspace .regex-studio .regex-group-block {
+        flex: 0 0 auto;
+        display: grid;
+        gap: 0;
+        border-bottom: 1px solid var(--xb-line);
+        padding: 0;
+    }
+
+    .settings-layout.is-regex-workspace .regex-studio .regex-group-block .assistant-preset-nav-head {
+        min-height: 36px;
+        border-bottom: 1px solid var(--xb-line);
+        padding: 0 12px;
+    }
+
+    .settings-layout.is-regex-workspace .regex-studio .regex-group-block .assistant-preset-nav-head strong {
+        font-size: 13px;
+    }
+
+    .settings-layout.is-regex-workspace .regex-studio .regex-group-block .assistant-preset-nav-head span {
+        display: none;
+    }
+
+    .settings-layout.is-regex-workspace .regex-studio .native-list-row {
+        width: 100%;
+        min-height: 48px;
+        grid-template-columns: 24px minmax(0, 1fr) 28px;
+        gap: 8px;
+        border: 0;
+        border-left: 2px solid transparent;
+        border-bottom: 1px solid var(--xb-line);
+        border-radius: 0;
+        padding: 7px 12px;
+    }
+
+    .settings-layout.is-regex-workspace .regex-row-state {
         width: 22px;
         min-width: 22px;
         height: 22px;
+        font-size: 11px;
     }
 
-    .settings-layout.is-regex-workspace .regex-studio .native-add-row,
-    .settings-layout.is-worldbooks-workspace .worldbook-overview-grid .native-add-row {
-        min-width: 94px;
+    .settings-layout.is-regex-workspace .regex-row-copy small {
+        display: block;
+    }
+
+    .settings-layout.is-regex-workspace .regex-studio .native-add-row {
+        width: calc(100% - 24px);
+        min-height: 32px;
+        justify-self: center;
+        align-self: center;
+        border: 1px dashed var(--xb-line);
+        border-radius: 9px;
+        margin: 8px 12px;
+        padding: 0 9px;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-overview-detail {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-preview-surface {
+        height: 100%;
+        overflow: auto;
+        padding: 0 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-selected-head,
+    .settings-layout.is-worldbooks-workspace .worldbook-metric-grid {
+        display: none;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-entry-preview-list {
+        border-top: 0;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-entry-preview summary {
+        min-height: 42px;
+        gap: 8px;
+        padding: 5px 0;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-entry-title strong {
+        font-size: 14px;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-entry-state {
+        font-size: 11px;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-preview-more {
+        width: calc(100% - 24px);
         min-height: 32px;
         border-radius: 9px;
-        padding: 0 9px;
+        margin: 8px 12px 0;
+    }
+
+    .settings-layout.is-regex-workspace .regex-detail-panel {
+        position: fixed;
+        z-index: 70;
+        inset: auto 0 0;
+        height: min(82vh, 660px);
+        display: flex;
+        flex-direction: column;
+        border-top: 1px solid var(--xb-line);
+        background: var(--xb-settings-sheet-bg);
+        box-shadow: 0 -22px 70px rgba(0, 0, 0, 0.42);
+        transform: translateY(110%);
+        transition: transform 180ms ease;
+    }
+
+    .xb-os-shell.theme-light .settings-layout.is-regex-workspace .regex-detail-panel {
+        box-shadow: 0 -18px 44px rgba(26, 26, 26, 0.13);
+    }
+
+    .settings-layout.is-regex-workspace .native-workspace.is-mobile-editor-open .regex-detail-panel {
+        transform: translateY(0);
+    }
+
+    .settings-layout.is-regex-workspace .regex-studio .preset-preview-head {
+        min-height: 46px;
+        padding: 0 12px;
+    }
+
+    .settings-layout.is-regex-workspace .regex-studio .preset-preview-head strong {
+        font-size: 17px;
+    }
+
+    .settings-layout.is-regex-workspace .regex-studio .preset-preview-head span {
+        display: none;
+    }
+
+    .settings-layout.is-regex-workspace .regex-editor-close {
+        display: inline-grid;
     }
 
     .settings-layout.is-regex-workspace .regex-editor-grid {
         gap: 8px;
+        overflow: auto;
         padding: 12px;
     }
 

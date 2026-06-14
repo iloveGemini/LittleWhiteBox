@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { watch } from 'vue';
 import TavernScrollControls from '../TavernScrollControls.vue';
 import { useTavernChatContext, useTavernManagerContext, useTavernShellContext } from '../tavern-app-context';
+import { useTavernEphemeralDisclosureScope } from '../useTavernEphemeralDisclosureScope';
 
 const emit = defineEmits<{
     (event: 'open-contract'): void;
@@ -10,6 +12,7 @@ const shell = useTavernShellContext();
 const chat = useTavernChatContext();
 const manager = useTavernManagerContext();
 const {
+    activeView,
     shortText,
 } = shell;
 const {
@@ -98,6 +101,26 @@ function setManagerComposeTextareaRef(element: Element | null) {
 function openContractModal() {
     emit('open-contract');
 }
+
+const managerDisclosure = useTavernEphemeralDisclosureScope();
+
+function managerDisclosureId(kind: string, ...parts: Array<string | number | undefined>) {
+    return `manager:${kind}:${parts.map((part) => String(part ?? '')).join(':')}`;
+}
+
+watch(
+    [activeView, chatFocus],
+    ([view, focus]) => {
+        if (view !== 'chat' || focus !== 'manager') {
+            managerDisclosure.reset();
+        }
+    },
+);
+
+watch(
+    () => `${managerMessageWindow.value.startIndex}:${managerMessageWindow.value.visibleCount}`,
+    () => managerDisclosure.reset(),
+);
 </script>
 
 <template>
@@ -268,13 +291,18 @@ function openContractModal() {
             v-else
             class="manager-tool-turn manager-tool-turn-history"
             :data-manager-anchor-key="item.anchorKey"
+            :open="managerDisclosure.isOpen(managerDisclosureId('tool-turn', item.key))"
+            @toggle="managerDisclosure.setOpenFromEvent(managerDisclosureId('tool-turn', item.key), $event)"
           >
             <summary>
               <span>{{ item.rounds.length > 1 ? `工具轮 ${item.rounds.length} 轮` : '工具轮' }}</span>
               <small>{{ managerToolTurnSummary(item) }}</small>
               <em>{{ managerToolTurnPreview(item) }}</em>
             </summary>
-            <div class="manager-tool-turn-body">
+            <div
+              v-if="managerDisclosure.isOpen(managerDisclosureId('tool-turn', item.key))"
+              class="manager-tool-turn-body"
+            >
               <div
                 v-for="(round, roundIndex) in item.rounds"
                 :key="`${item.key}-round-${round.assistantMessage.order}`"
@@ -287,16 +315,22 @@ function openContractModal() {
                 <details
                   v-if="thoughtBlocks(round.assistantMessage.thoughts).length"
                   class="manager-tool-thoughts"
+                  :open="managerDisclosure.isOpen(managerDisclosureId('tool-thoughts', item.key, roundIndex, round.assistantMessage.order))"
+                  @toggle="managerDisclosure.setOpenFromEvent(managerDisclosureId('tool-thoughts', item.key, roundIndex, round.assistantMessage.order), $event)"
                 >
                   <summary>{{ thoughtSummaryLabel(thoughtBlocks(round.assistantMessage.thoughts), false) }}</summary>
-                  <div
-                    v-for="(thought, thoughtIndex) in thoughtBlocks(round.assistantMessage.thoughts)"
-                    :key="`${item.key}-round-${roundIndex}-thought-${thoughtIndex}`"
-                    class="chat-thought-block"
+                  <template
+                    v-if="managerDisclosure.isOpen(managerDisclosureId('tool-thoughts', item.key, roundIndex, round.assistantMessage.order))"
                   >
-                    <strong>{{ thought.label }}</strong>
-                    <pre>{{ thought.text }}</pre>
-                  </div>
+                    <div
+                      v-for="(thought, thoughtIndex) in thoughtBlocks(round.assistantMessage.thoughts)"
+                      :key="`${item.key}-round-${roundIndex}-thought-${thoughtIndex}`"
+                      class="chat-thought-block"
+                    >
+                      <strong>{{ thought.label }}</strong>
+                      <pre>{{ thought.text }}</pre>
+                    </div>
+                  </template>
                 </details>
                 <div
                   v-if="round.assistantMessage.content"
@@ -347,14 +381,18 @@ function openContractModal() {
             v-else
             class="manager-tool-turn manager-tool-turn-live"
             :data-manager-anchor-key="`live:${item.anchorKey}`"
-            open
+            :open="managerDisclosure.isOpen(managerDisclosureId('live-tool-turn', item.key), true)"
+            @toggle="managerDisclosure.setOpenFromEvent(managerDisclosureId('live-tool-turn', item.key), $event)"
           >
             <summary>
               <span>{{ item.rounds.length > 1 ? `工具轮 ${item.rounds.length} 轮` : '工具轮' }}</span>
               <small>{{ managerToolTurnSummary(item) }}</small>
               <em>{{ managerToolTurnPreview(item) }}</em>
             </summary>
-            <div class="manager-tool-turn-body">
+            <div
+              v-if="managerDisclosure.isOpen(managerDisclosureId('live-tool-turn', item.key), true)"
+              class="manager-tool-turn-body"
+            >
               <div
                 v-for="(round, roundIndex) in item.rounds"
                 :key="`live:${item.key}-round-${round.assistantMessage.order}`"
@@ -367,17 +405,22 @@ function openContractModal() {
                 <details
                   v-if="thoughtBlocks(round.assistantMessage.thoughts).length"
                   class="manager-tool-thoughts"
-                  open
+                  :open="managerDisclosure.isOpen(managerDisclosureId('live-tool-thoughts', item.key, roundIndex, round.assistantMessage.order), true)"
+                  @toggle="managerDisclosure.setOpenFromEvent(managerDisclosureId('live-tool-thoughts', item.key, roundIndex, round.assistantMessage.order), $event)"
                 >
                   <summary>{{ thoughtSummaryLabel(thoughtBlocks(round.assistantMessage.thoughts), true) }}</summary>
-                  <div
-                    v-for="(thought, thoughtIndex) in thoughtBlocks(round.assistantMessage.thoughts)"
-                    :key="`live:${item.key}-round-${roundIndex}-thought-${thoughtIndex}`"
-                    class="chat-thought-block"
+                  <template
+                    v-if="managerDisclosure.isOpen(managerDisclosureId('live-tool-thoughts', item.key, roundIndex, round.assistantMessage.order), true)"
                   >
-                    <strong>{{ thought.label }}</strong>
-                    <pre>{{ thought.text }}</pre>
-                  </div>
+                    <div
+                      v-for="(thought, thoughtIndex) in thoughtBlocks(round.assistantMessage.thoughts)"
+                      :key="`live:${item.key}-round-${roundIndex}-thought-${thoughtIndex}`"
+                      class="chat-thought-block"
+                    >
+                      <strong>{{ thought.label }}</strong>
+                      <pre>{{ thought.text }}</pre>
+                    </div>
+                  </template>
                 </details>
                 <div
                   v-if="round.assistantMessage.content"
@@ -419,134 +462,153 @@ function openContractModal() {
           v-if="memoryFiles.length || managerRuns.length"
           class="manager-work-drawer"
           data-manager-anchor-key="meta:work"
+          :open="managerDisclosure.isOpen(managerDisclosureId('work-drawer'))"
+          @toggle="managerDisclosure.setOpenFromEvent(managerDisclosureId('work-drawer'), $event)"
         >
           <summary>
             <strong>工作记录</strong>
             <span v-if="currentManagerWorkRun">{{ managerStatusLabel(currentManagerWorkRun.status) }} · {{ formatRunInputLine(currentManagerWorkRun) }}</span>
             <span v-else>{{ activeMemoryFiles.length }}/{{ memoryFiles.length }} 份档案</span>
           </summary>
-          <article
-            v-if="currentManagerWorkRun"
-            :data-manager-anchor-key="`run:${currentManagerWorkRun.id}`"
-            class="manager-card manager-message manager-message-run manager-work-current"
-            :class="[`is-${currentManagerWorkRun.status}`, `tone-${managerRunTone(currentManagerWorkRun)}`]"
-          >
-            <div class="manager-run-title">
-              <strong>本次后台工作</strong>
-              <small>{{ managerStatusLabel(currentManagerWorkRun.status) }}</small>
-            </div>
-            <p class="manager-work-source">
-              {{ formatRunInputLine(currentManagerWorkRun) }}
-            </p>
-            <small>{{ formatRunModelLine(currentManagerWorkRun) }}</small>
-            <small class="manager-run-activity">{{ formatRunActivityLine(currentManagerWorkRun) }}</small>
-            <div class="manager-work-status-grid">
-              <p>{{ formatRunMemoryLine(currentManagerWorkRun) }}</p>
-              <p>{{ formatRunMapLine(currentManagerWorkRun) }}</p>
-            </div>
-            <p v-if="currentManagerWorkRun.outputText">
-              结果：{{ shortText(currentManagerWorkRun.outputText, 180) }}
-            </p>
-            <p
-              v-if="formatRunIssueLine(currentManagerWorkRun)"
-              class="manager-work-issue-line"
+          <template v-if="managerDisclosure.isOpen(managerDisclosureId('work-drawer'))">
+            <article
+              v-if="currentManagerWorkRun"
+              :data-manager-anchor-key="`run:${currentManagerWorkRun.id}`"
+              class="manager-card manager-message manager-message-run manager-work-current"
+              :class="[`is-${currentManagerWorkRun.status}`, `tone-${managerRunTone(currentManagerWorkRun)}`]"
             >
-              {{ formatRunIssueLine(currentManagerWorkRun) }}
-            </p>
-            <details
-              v-if="managerToolTraceItems(currentManagerWorkRun.toolTrace).length"
-              class="manager-work-debug"
-            >
-              <summary>{{ toolTraceSummary(currentManagerWorkRun.toolTrace) }}</summary>
-              <div class="manager-tool-list">
+              <div class="manager-run-title">
+                <strong>本次后台工作</strong>
+                <small>{{ managerStatusLabel(currentManagerWorkRun.status) }}</small>
+              </div>
+              <p class="manager-work-source">
+                {{ formatRunInputLine(currentManagerWorkRun) }}
+              </p>
+              <small>{{ formatRunModelLine(currentManagerWorkRun) }}</small>
+              <small class="manager-run-activity">{{ formatRunActivityLine(currentManagerWorkRun) }}</small>
+              <div class="manager-work-status-grid">
+                <p>{{ formatRunMemoryLine(currentManagerWorkRun) }}</p>
+                <p>{{ formatRunMapLine(currentManagerWorkRun) }}</p>
+              </div>
+              <p v-if="currentManagerWorkRun.outputText">
+                结果：{{ shortText(currentManagerWorkRun.outputText, 180) }}
+              </p>
+              <p
+                v-if="formatRunIssueLine(currentManagerWorkRun)"
+                class="manager-work-issue-line"
+              >
+                {{ formatRunIssueLine(currentManagerWorkRun) }}
+              </p>
+              <details
+                v-if="managerToolTraceItems(currentManagerWorkRun.toolTrace).length"
+                class="manager-work-debug"
+                :open="managerDisclosure.isOpen(managerDisclosureId('work-debug', currentManagerWorkRun.id))"
+                @toggle="managerDisclosure.setOpenFromEvent(managerDisclosureId('work-debug', currentManagerWorkRun.id), $event)"
+              >
+                <summary>{{ toolTraceSummary(currentManagerWorkRun.toolTrace) }}</summary>
                 <div
-                  v-for="tool in managerToolTraceItems(currentManagerWorkRun.toolTrace)"
-                  :key="tool.id"
-                  class="manager-tool-item"
-                  :class="managerToolTone(tool)"
+                  v-if="managerDisclosure.isOpen(managerDisclosureId('work-debug', currentManagerWorkRun.id))"
+                  class="manager-tool-list"
                 >
-                  <div class="manager-tool-head">
-                    <span>{{ tool.name }}</span>
-                    <em>{{ managerToolStatusLabel(tool) }}<template v-if="tool.elapsedLabel"> · {{ tool.elapsedLabel }}</template></em>
-                  </div>
-                  <details
-                    v-if="tool.thoughts.length"
-                    class="manager-tool-thoughts"
-                  >
-                    <summary>{{ thoughtSummaryLabel(tool.thoughts, false) }}</summary>
-                    <div
-                      v-for="(thought, thoughtIndex) in tool.thoughts"
-                      :key="`${tool.id}-stored-thought-${thoughtIndex}`"
-                      class="chat-thought-block"
-                    >
-                      <strong>{{ thought.label }}</strong>
-                      <pre>{{ thought.text }}</pre>
-                    </div>
-                  </details>
                   <div
-                    v-if="tool.preface"
-                    class="manager-tool-preface xb-tavern-markdown"
-                    :data-markdown-signature="markdownSignature(tool.preface)"
-                    v-html="renderChatMarkdown(tool.preface)"
-                  />
-                  <small v-if="tool.args">{{ tool.args }}</small>
-                  <p v-if="tool.summary">
-                    {{ tool.summary }}
-                  </p>
-                  <p v-if="tool.path">
-                    {{ tool.path }}
-                  </p>
+                    v-for="tool in managerToolTraceItems(currentManagerWorkRun.toolTrace)"
+                    :key="tool.id"
+                    class="manager-tool-item"
+                    :class="managerToolTone(tool)"
+                  >
+                    <div class="manager-tool-head">
+                      <span>{{ tool.name }}</span>
+                      <em>{{ managerToolStatusLabel(tool) }}<template v-if="tool.elapsedLabel"> · {{ tool.elapsedLabel }}</template></em>
+                    </div>
+                    <details
+                      v-if="tool.thoughts.length"
+                      class="manager-tool-thoughts"
+                      :open="managerDisclosure.isOpen(managerDisclosureId('work-tool-thoughts', currentManagerWorkRun.id, tool.id))"
+                      @toggle="managerDisclosure.setOpenFromEvent(managerDisclosureId('work-tool-thoughts', currentManagerWorkRun.id, tool.id), $event)"
+                    >
+                      <summary>{{ thoughtSummaryLabel(tool.thoughts, false) }}</summary>
+                      <template
+                        v-if="managerDisclosure.isOpen(managerDisclosureId('work-tool-thoughts', currentManagerWorkRun.id, tool.id))"
+                      >
+                        <div
+                          v-for="(thought, thoughtIndex) in tool.thoughts"
+                          :key="`${tool.id}-stored-thought-${thoughtIndex}`"
+                          class="chat-thought-block"
+                        >
+                          <strong>{{ thought.label }}</strong>
+                          <pre>{{ thought.text }}</pre>
+                        </div>
+                      </template>
+                    </details>
+                    <div
+                      v-if="tool.preface"
+                      class="manager-tool-preface xb-tavern-markdown"
+                      :data-markdown-signature="markdownSignature(tool.preface)"
+                      v-html="renderChatMarkdown(tool.preface)"
+                    />
+                    <small v-if="tool.args">{{ tool.args }}</small>
+                    <p v-if="tool.summary">
+                      {{ tool.summary }}
+                    </p>
+                    <p v-if="tool.path">
+                      {{ tool.path }}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </details>
-            <button
-              v-if="currentManagerWorkRun.status === 'failed'"
-              type="button"
-              :disabled="managerBusy"
-              @click="retryManagerRun(currentManagerWorkRun)"
+              </details>
+              <button
+                v-if="currentManagerWorkRun.status === 'failed'"
+                type="button"
+                :disabled="managerBusy"
+                @click="retryManagerRun(currentManagerWorkRun)"
+              >
+                重试
+              </button>
+            </article>
+            <article
+              v-else
+              class="manager-card manager-message manager-message-system"
+              data-manager-anchor-key="meta:memory"
             >
-              重试
-            </button>
-          </article>
-          <article
-            v-else
-            class="manager-card manager-message manager-message-system"
-            data-manager-anchor-key="meta:memory"
-          >
-            <div class="manager-run-title">
-              <strong>记忆档案</strong>
-              <small>{{ activeMemoryFiles.length }}/{{ memoryFiles.length }}</small>
-            </div>
-            <p>{{ memoryIndexStatusLine }}</p>
-            <p v-if="selectedMemoryFile">
-              当前打开：{{ memoryFileDisplayName(selectedMemoryFile) }}
-            </p>
-          </article>
+              <div class="manager-run-title">
+                <strong>记忆档案</strong>
+                <small>{{ activeMemoryFiles.length }}/{{ memoryFiles.length }}</small>
+              </div>
+              <p>{{ memoryIndexStatusLine }}</p>
+              <p v-if="selectedMemoryFile">
+                当前打开：{{ memoryFileDisplayName(selectedMemoryFile) }}
+              </p>
+            </article>
 
-          <details
-            v-if="archivedManagerRuns.length || hiddenManagerRunCount"
-            class="manager-work-history"
-          >
-            <summary>
-              <strong>历史记录</strong>
-              <span>{{ archivedManagerRuns.length + hiddenManagerRunCount }} 条</span>
-            </summary>
-            <div
-              v-for="run in archivedManagerRuns"
-              :key="run.id"
-              class="manager-history-row"
-              :class="[`tone-${managerRunTone(run)}`]"
+            <details
+              v-if="archivedManagerRuns.length || hiddenManagerRunCount"
+              class="manager-work-history"
+              :open="managerDisclosure.isOpen(managerDisclosureId('work-history'))"
+              @toggle="managerDisclosure.setOpenFromEvent(managerDisclosureId('work-history'), $event)"
             >
-              <div>
-                <strong>{{ managerStatusLabel(run.status) }}</strong>
-                <small>{{ formatRunInputLine(run) }}</small>
-              </div>
-              <span>{{ toolTraceSummary(run.toolTrace) || formatRunActivityLine(run) }}</span>
-            </div>
-            <p v-if="hiddenManagerRunCount">
-              更早 {{ hiddenManagerRunCount }} 条已收起。
-            </p>
-          </details>
+              <summary>
+                <strong>历史记录</strong>
+                <span>{{ archivedManagerRuns.length + hiddenManagerRunCount }} 条</span>
+              </summary>
+              <template v-if="managerDisclosure.isOpen(managerDisclosureId('work-history'))">
+                <div
+                  v-for="run in archivedManagerRuns"
+                  :key="run.id"
+                  class="manager-history-row"
+                  :class="[`tone-${managerRunTone(run)}`]"
+                >
+                  <div>
+                    <strong>{{ managerStatusLabel(run.status) }}</strong>
+                    <small>{{ formatRunInputLine(run) }}</small>
+                  </div>
+                  <span>{{ toolTraceSummary(run.toolTrace) || formatRunActivityLine(run) }}</span>
+                </div>
+                <p v-if="hiddenManagerRunCount">
+                  更早 {{ hiddenManagerRunCount }} 条已收起。
+                </p>
+              </template>
+            </details>
+          </template>
         </details>
 
         <p

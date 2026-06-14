@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import TavernCornerActions from './TavernCornerActions.vue';
+import { useTavernEphemeralDisclosureScope } from './useTavernEphemeralDisclosureScope';
 
 interface TavernCharacterOption {
     id: string;
@@ -49,6 +50,7 @@ const emit = defineEmits<{
 }>();
 
 const listRef = ref<HTMLElement | null>(null);
+const advancedDefinitionDisclosure = useTavernEphemeralDisclosureScope();
 
 const greetingOptions = computed(() => {
     const selected = props.selectedCharacter;
@@ -74,9 +76,16 @@ function handleSearchInput(event: Event) {
     emit('update:searchText', (event.target as HTMLInputElement).value);
 }
 
+function characterAdvancedDisclosureId() {
+    return `character-advanced:${props.selectedCharacter?.id || 'none'}`;
+}
+
 watch(
     () => props.selectedCharacter?.id,
-    () => scrollSelectedIntoView(),
+    () => {
+        advancedDefinitionDisclosure.reset();
+        scrollSelectedIntoView();
+    },
 );
 
 defineExpose({ scrollSelectedIntoView });
@@ -270,42 +279,50 @@ defineExpose({ scrollSelectedIntoView });
                   </div>
                 </dd>
               </div>
-              <details class="data-section">
+              <details
+                class="data-section"
+                :open="advancedDefinitionDisclosure.isOpen(characterAdvancedDisclosureId())"
+                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterAdvancedDisclosureId(), $event)"
+              >
                 <summary class="data-section-title">
                   高级定义
                 </summary>
-                <div class="data-row">
-                  <dt>性格摘要 <span>Personality summary</span></dt>
-                  <dd>
-                    <div class="data-block">
-                      {{ selectedCharacter.personality || '未填写' }}
-                    </div>
-                  </dd>
-                </div>
-                <div class="data-row">
-                  <dt>情景 <span>Scenario</span></dt>
-                  <dd>
-                    <div class="data-block">
-                      {{ selectedCharacter.scenario || '未填写' }}
-                    </div>
-                  </dd>
-                </div>
-                <div class="data-row">
-                  <dt>角色备注 <span>Character's Note</span></dt>
-                  <dd>
-                    <div class="data-block">
-                      {{ selectedCharacter.characterDepthPrompt || '未填写' }}
-                    </div>
-                  </dd>
-                </div>
-                <div class="data-row">
-                  <dt>制作者备注 <span>Creator's Notes</span></dt>
-                  <dd>
-                    <div class="data-block">
-                      {{ selectedCharacter.creatorNotes || '未填写' }}
-                    </div>
-                  </dd>
-                </div>
+                <template
+                  v-if="advancedDefinitionDisclosure.isOpen(characterAdvancedDisclosureId())"
+                >
+                  <div class="data-row">
+                    <dt>性格摘要 <span>Personality summary</span></dt>
+                    <dd>
+                      <div class="data-block">
+                        {{ selectedCharacter.personality || '未填写' }}
+                      </div>
+                    </dd>
+                  </div>
+                  <div class="data-row">
+                    <dt>情景 <span>Scenario</span></dt>
+                    <dd>
+                      <div class="data-block">
+                        {{ selectedCharacter.scenario || '未填写' }}
+                      </div>
+                    </dd>
+                  </div>
+                  <div class="data-row">
+                    <dt>角色备注 <span>Character's Note</span></dt>
+                    <dd>
+                      <div class="data-block">
+                        {{ selectedCharacter.characterDepthPrompt || '未填写' }}
+                      </div>
+                    </dd>
+                  </div>
+                  <div class="data-row">
+                    <dt>制作者备注 <span>Creator's Notes</span></dt>
+                    <dd>
+                      <div class="data-block">
+                        {{ selectedCharacter.creatorNotes || '未填写' }}
+                      </div>
+                    </dd>
+                  </div>
+                </template>
               </details>
             </dl>
           </div>

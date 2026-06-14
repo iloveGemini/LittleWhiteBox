@@ -2671,6 +2671,7 @@
 
         // Notify parent
         postMsg('FRAME_READY');
+        document.body.classList.remove('xb-frame-loading');
     }
 
     // Start

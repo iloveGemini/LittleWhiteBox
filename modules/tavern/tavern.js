@@ -17,6 +17,7 @@ import {
   saveTavernRegexScript
 } from "./host/regex.js";
 import { applyTavernSubstituteParams } from "./host/substitute-params.js";
+import { runTavernSlashCommand } from "./host/slash-commands.js";
 import { buildTavernContext } from "./host/sillytavern-context.js";
 import {
   getTavernWorldbookPreview,
@@ -407,6 +408,21 @@ async function handleSubstituteParamsRequest(type, payload = {}) {
     replyHostResult(requestId, hostErrorPayload(error, "substitute_params_failed"));
   }
 }
+async function handleSlashCommandRequest(type, payload = {}) {
+  const requestId = String(payload.requestId || "");
+  try {
+    let result;
+    if (type === "xb-tavern:run-slash-command") {
+      result = await runTavernSlashCommand(payload.payload);
+    }
+    replyHostResult(requestId, {
+      ok: true,
+      result
+    });
+  } catch (error) {
+    replyHostResult(requestId, hostErrorPayload(error, "slash_command_failed"));
+  }
+}
 async function createOverlay() {
   const overlay = await createFirstPartyIframeOverlay({
     overlayId: OVERLAY_ID,
@@ -524,6 +540,9 @@ function handleFrameMessage(event) {
       break;
     case "xb-tavern:substitute-params":
       void handleSubstituteParamsRequest(data.type, data.payload || {});
+      break;
+    case "xb-tavern:run-slash-command":
+      void handleSlashCommandRequest(data.type, data.payload || {});
       break;
     default:
       break;

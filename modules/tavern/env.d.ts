@@ -65,6 +65,7 @@ declare module '*.js' {
     export function getTagKeyForEntity(entityId?: string | number | null): string;
     export function getCurrentChatId(): string | null;
     export function substituteParams(content: unknown, options?: Record<string, unknown>): string;
+    export function executeSlashCommandsWithOptions(command: string, options?: Record<string, unknown>): Promise<Record<string, unknown>>;
     export const world_info: Record<string, unknown>;
     export const world_info_position: Record<string, number>;
     export const world_names: string[];

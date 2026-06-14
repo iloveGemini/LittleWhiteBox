@@ -158,7 +158,7 @@ function listTavernRegexScripts() {
     groups: [
       buildGroup(SCRIPT_TYPES.GLOBAL, "global", "\u5168\u5C40"),
       buildGroup(SCRIPT_TYPES.SCOPED, "scoped", "\u5F53\u524D\u89D2\u8272"),
-      buildGroup(SCRIPT_TYPES.PRESET, "preset", "\u5F53\u524D\u9884\u8BBE")
+      buildGroup(SCRIPT_TYPES.PRESET, "preset", "\u9884\u8BBE\u6B63\u5219")
     ],
     placements: {
       userInput: regex_placement.USER_INPUT,

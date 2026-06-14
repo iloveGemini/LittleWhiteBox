@@ -2062,6 +2062,46 @@ test('after-turn tavern manager emits the same segmented protocol events and sto
     ]);
 });
 
+test('after-turn tavern manager receives derived turn-note coverage gaps without a separate queue', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Turn note coverage' });
+    const firstUser = await appendTavernMessage(session.id, { role: 'user', content: '第一轮。' });
+    const firstAssistant = await appendTavernMessage(session.id, { role: 'assistant', content: '第一轮回复。' });
+    const coveredPath = turnMemoryPathFor(firstUser, firstAssistant);
+    await writeTavernMemoryFile(session.id, coveredPath, '# 第一轮\n\n已经有小记。', { source: 'manager' });
+
+    const missingUser = await appendTavernMessage(session.id, { role: 'user', content: '第二轮。' });
+    const missingAssistant = await appendTavernMessage(session.id, { role: 'assistant', content: '第二轮回复。' });
+    const missingPath = turnMemoryPathFor(missingUser, missingAssistant);
+
+    const currentUser = await appendTavernMessage(session.id, { role: 'user', content: '第三轮。' });
+    const currentAssistant = await appendTavernMessage(session.id, { role: 'assistant', content: '第三轮回复。' });
+    const currentPath = turnMemoryPathFor(currentUser, currentAssistant);
+    let managerPrompt = '';
+
+    const result = await runXbTavernManagerAfterTurn({
+        sessionId: session.id,
+        agentConfig: {},
+        userMessage: currentUser,
+        assistantMessage: currentAssistant,
+        turn: 3,
+        executeManagerOnce: async (options) => {
+            managerPrompt = String(options.messages?.[1]?.content || '');
+            return { text: '已检查小记覆盖。' };
+        },
+    });
+
+    assert.equal(result.ok, true);
+    assert.match(managerPrompt, /楼层小记覆盖/);
+    assert.match(managerPrompt, /ChatHistory range/);
+    assert.match(managerPrompt, /不要因此无证据改写剧情脉络、状态栏或地图/);
+    assert.equal(managerPrompt.includes(coveredPath), false);
+    assert.equal(managerPrompt.includes(missingPath), true);
+    assert.equal(managerPrompt.includes(`${currentPath}（当前楼层）`), true);
+});
+
 test('tavern manager accepts arbitrary turn markdown without schema parsing', async () => {
     await db.delete();
     await db.open();

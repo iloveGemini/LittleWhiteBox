@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import TavernScrollControls from '../TavernScrollControls.vue';
 import { useTavernChatContext, useTavernShellContext } from '../tavern-app-context';
+import { useTavernEphemeralDisclosureScope } from '../useTavernEphemeralDisclosureScope';
 import {
     hasRenderableLiveAssistantContent,
     hasRenderableLiveAssistantMarkdown,
@@ -19,6 +20,7 @@ const emit = defineEmits<{
 const shell = useTavernShellContext();
 const chat = useTavernChatContext();
 const {
+    activeView,
     homeThemeDark,
     openPromptInspector,
     rememberBrokenAvatar,
@@ -72,6 +74,7 @@ const {
     saveEditMessage,
     scrollChatToBottom,
     scrollChatToTop,
+    selectedSessionId,
     showChatScrollBottom,
     showChatScrollTop,
     startEditMessage,
@@ -131,6 +134,26 @@ const liveAssistantMarkdownVisible = computed(() => hasRenderableLiveAssistantMa
     text: runtimeText.value,
     actionCheckEvents: runtimeActionCheckEvents.value,
 }));
+const thoughtDisclosure = useTavernEphemeralDisclosureScope();
+const runtimeThoughtDisclosureId = 'chat:runtime-thoughts';
+
+function messageThoughtDisclosureId(message: TavernMessageRecord) {
+    return `chat:thought:${messageKey(message)}`;
+}
+
+watch(
+    [activeView, chatFocus, selectedSessionId],
+    ([view, focus]) => {
+        if (view !== 'chat' || focus !== 'chat') {
+            thoughtDisclosure.reset();
+        }
+    },
+);
+
+watch(
+    () => `${selectedSessionId.value}:${chatMessageWindow.value.startIndex}:${chatMessageWindow.value.visibleCount}`,
+    () => thoughtDisclosure.reset(),
+);
 </script>
 
 <template>
@@ -275,18 +298,24 @@ const liveAssistantMarkdownVisible = computed(() => hasRenderableLiveAssistantMa
             <details
               v-if="!isEditingMessage(message) && thoughtBlocks(message).length"
               class="tavern-thought-details"
+              :open="thoughtDisclosure.isOpen(messageThoughtDisclosureId(message))"
+              @toggle="thoughtDisclosure.setOpenFromEvent(messageThoughtDisclosureId(message), $event)"
             >
               <summary>{{ thoughtSummaryLabel(message) }}</summary>
-              <div
-                v-for="(thought, thoughtIndex) in thoughtBlocks(message)"
-                :key="`${message.sessionId}-${message.order}-thought-${thoughtIndex}`"
-                class="tavern-thought-block"
+              <template
+                v-if="thoughtDisclosure.isOpen(messageThoughtDisclosureId(message))"
               >
-                <div class="tavern-thought-label">
-                  {{ thought.label }}
+                <div
+                  v-for="(thought, thoughtIndex) in thoughtBlocks(message)"
+                  :key="`${message.sessionId}-${message.order}-thought-${thoughtIndex}`"
+                  class="tavern-thought-block"
+                >
+                  <div class="tavern-thought-label">
+                    {{ thought.label }}
+                  </div>
+                  <pre>{{ thought.text }}</pre>
                 </div>
-                <pre>{{ thought.text }}</pre>
-              </div>
+              </template>
             </details>
             <template v-if="!isEditingMessage(message)">
               <template
@@ -398,19 +427,24 @@ const liveAssistantMarkdownVisible = computed(() => hasRenderableLiveAssistantMa
           <details
             v-if="thoughtBlocks(runtimeThoughts).length"
             class="tavern-thought-details"
-            open
+            :open="thoughtDisclosure.isOpen(runtimeThoughtDisclosureId, true)"
+            @toggle="thoughtDisclosure.setOpenFromEvent(runtimeThoughtDisclosureId, $event)"
           >
             <summary>{{ thoughtSummaryLabel(runtimeThoughts, true) }}</summary>
-            <div
-              v-for="(thought, thoughtIndex) in thoughtBlocks(runtimeThoughts)"
-              :key="`runtime-thought-${thoughtIndex}`"
-              class="tavern-thought-block"
+            <template
+              v-if="thoughtDisclosure.isOpen(runtimeThoughtDisclosureId, true)"
             >
-              <div class="tavern-thought-label">
-                {{ thought.label }}
+              <div
+                v-for="(thought, thoughtIndex) in thoughtBlocks(runtimeThoughts)"
+                :key="`runtime-thought-${thoughtIndex}`"
+                class="tavern-thought-block"
+              >
+                <div class="tavern-thought-label">
+                  {{ thought.label }}
+                </div>
+                <pre>{{ thought.text }}</pre>
               </div>
-              <pre>{{ thought.text }}</pre>
-            </div>
+            </template>
           </details>
           <div
             v-if="liveAssistantMarkdownVisible"

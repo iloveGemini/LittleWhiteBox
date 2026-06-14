@@ -1,8 +1,11 @@
 /* Tavern characters: searchable index */
 
 .character-card-grid {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     padding: 8px;
 }
 
@@ -173,6 +176,7 @@
 
 @media (max-width: 640px) {
     .character-card-grid {
+        touch-action: pan-y;
         padding: 4px 8px 8px;
     }
 
@@ -180,6 +184,7 @@
         min-height: 56px;
         gap: 10px;
         padding: 8px 10px;
+        content-visibility: visible;
         contain-intrinsic-size: 56px;
     }
 

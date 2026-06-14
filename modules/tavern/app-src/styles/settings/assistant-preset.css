@@ -15,8 +15,7 @@
 }
 
 .preset-workspace .preset-studio,
-.assistant-preset-studio,
-.worldbook-overview-grid {
+.assistant-preset-studio {
     flex: 1 1 auto;
     min-height: 0;
     display: grid;
@@ -286,10 +285,6 @@
     font-size: 15px;
     line-height: 1.78;
     resize: none;
-}
-
-.worldbook-overview-grid .native-list-panel .assistant-preset-nav-head {
-    min-height: 58px;
 }
 
 @media (max-width: 560px) {

@@ -43,6 +43,13 @@
     color: var(--xb-ink-soft);
 }
 
+.xb-os-shell.theme-dark.is-home-view .home-corner-actions .home-icon-button {
+    border-color: rgba(184, 178, 166, 0.18);
+    background: rgba(12, 11, 10, 0.34);
+    color: var(--xb-ink);
+    backdrop-filter: blur(10px);
+}
+
 .home-corner-actions .home-icon-button:hover:not(:disabled),
 .home-corner-actions .home-icon-button:focus-visible,
 .page-corner-actions .home-icon-button:hover:not(:disabled),

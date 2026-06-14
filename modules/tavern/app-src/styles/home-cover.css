@@ -174,7 +174,7 @@
         display: flex;
         padding: calc(6vh + env(safe-area-inset-top, 0px)) 6vw calc(4vh + env(safe-area-inset-bottom, 0px));
         background:
-            linear-gradient(180deg, rgba(234, 232, 223, 0.72), transparent 34%),
+            linear-gradient(180deg, var(--xb-theme-split-bg), transparent 34%),
             var(--xb-paper);
     }
 

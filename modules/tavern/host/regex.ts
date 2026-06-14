@@ -180,7 +180,7 @@ export function listTavernRegexScripts(): Record<string, unknown> {
         groups: [
             buildGroup(SCRIPT_TYPES.GLOBAL, 'global', '全局'),
             buildGroup(SCRIPT_TYPES.SCOPED, 'scoped', '当前角色'),
-            buildGroup(SCRIPT_TYPES.PRESET, 'preset', '当前预设'),
+            buildGroup(SCRIPT_TYPES.PRESET, 'preset', '预设正则'),
         ],
         placements: {
             userInput: regex_placement.USER_INPUT,

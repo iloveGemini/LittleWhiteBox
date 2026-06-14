@@ -169,6 +169,7 @@ export const TAVERN_MANAGER_MAX_CONTEXT_TOKENS = 188000;
 export const TAVERN_MANAGER_SUMMARY_TRIGGER_TOKENS = 158000;
 export const TAVERN_MANAGER_DEFAULT_PRESERVED_TURNS = 2;
 export const TAVERN_MANAGER_MIN_PRESERVED_TURNS = 1;
+const AUTO_MANAGER_TURN_NOTE_BACKLOG_LIMIT = 5;
 
 const managerQueues = new Map<string, Promise<unknown>>();
 const activeAutoManagerRuns = new Map<string, {
@@ -230,6 +231,7 @@ function buildResidentMemoryBlock(memoryFiles: Array<{ path: string; status: str
 function buildAutoManagerUserPrompt(input: {
     turn: number;
     turnMemoryPath: string;
+    turnNoteCoverageBlock?: string;
     userMessage: TavernMessageRecord;
     assistantMessage: TavernMessageRecord;
     memoryFiles: Array<{ path: string; status: string; updatedAt: number; content: string }>;
@@ -268,6 +270,7 @@ function buildAutoManagerUserPrompt(input: {
         ...(allowMemory ? [buildResidentMemoryBlock(input.memoryFiles), ''] : []),
         '[本轮 RP 原文]',
         ...(allowMemory ? [`建议流水路径：${input.turnMemoryPath}`, ''] : []),
+        ...(allowMemory && input.turnNoteCoverageBlock ? [input.turnNoteCoverageBlock, ''] : []),
         '[用户消息]',
         input.userMessage.content,
         '',
@@ -304,6 +307,124 @@ function resolveTurnMemoryPath(input: Pick<XbTavernManagerRunInput, 'userMessage
         input.userMessage.order,
         Number(input.assistantMessage.createdAt) || Number(input.userMessage.createdAt) || Date.now(),
     );
+}
+
+function parseTurnMemoryOrder(path = ''): number | null {
+    const match = String(path || '').match(/^memory\/turns\/\d{8}-(\d+)\.md$/);
+    if (!match) {return null;}
+    const order = Number(match[1]);
+    return Number.isFinite(order) ? order : null;
+}
+
+function isUsableAssistantTurnMessage(message?: TavernMessageRecord | null): message is TavernMessageRecord {
+    if (!message || message.role !== 'assistant' || message.error === true) {return false;}
+    const finishReason = String(message.finishReason || '').trim();
+    return !['aborted', 'error'].includes(finishReason);
+}
+
+function collectCompletedRpTurns(messages: TavernMessageRecord[] = []): Array<{
+    userMessage: TavernMessageRecord;
+    assistantMessage: TavernMessageRecord;
+}> {
+    const sorted = [...messages].sort((left, right) => left.order - right.order);
+    const turns: Array<{ userMessage: TavernMessageRecord; assistantMessage: TavernMessageRecord }> = [];
+    for (let index = 0; index < sorted.length; index += 1) {
+        const userMessage = sorted[index];
+        if (!userMessage || userMessage.role !== 'user' || userMessage.error === true) {continue;}
+        for (let nextIndex = index + 1; nextIndex < sorted.length; nextIndex += 1) {
+            const candidate = sorted[nextIndex];
+            if (!candidate) {continue;}
+            if (candidate.role === 'user') {break;}
+            if (isUsableAssistantTurnMessage(candidate)) {
+                turns.push({ userMessage, assistantMessage: candidate });
+                break;
+            }
+        }
+    }
+    return turns;
+}
+
+async function buildTurnNoteCoverage(input: Pick<XbTavernManagerRunInput, 'sessionId' | 'userMessage' | 'assistantMessage'>): Promise<{
+    totalTurns: number;
+    activeTurnNotes: number;
+    missing: Array<{
+        userOrder: number;
+        assistantOrder: number;
+        path: string;
+        current: boolean;
+    }>;
+    omittedMissingCount: number;
+}> {
+    const [messages, memoryFiles] = await Promise.all([
+        listTavernMessages(input.sessionId),
+        listTavernMemoryFiles(input.sessionId, { includeStale: true }),
+    ]);
+    const activeTurnOrders = new Set<number>();
+    const activeTurnPaths = new Set<string>();
+    memoryFiles.forEach((file) => {
+        if (!file.path.startsWith('memory/turns/') || file.status === 'stale') {return;}
+        activeTurnPaths.add(file.path);
+        const order = parseTurnMemoryOrder(file.path);
+        if (order !== null) {
+            activeTurnOrders.add(order);
+        }
+    });
+    const turns = collectCompletedRpTurns(messages);
+    const missing = turns
+        .map((turn) => {
+            const path = buildTurnMemoryPath(
+                turn.userMessage.order,
+                Number(turn.assistantMessage.createdAt) || Number(turn.userMessage.createdAt) || Date.now(),
+            );
+            const covered = activeTurnPaths.has(path) || activeTurnOrders.has(turn.userMessage.order);
+            return {
+                userOrder: turn.userMessage.order,
+                assistantOrder: turn.assistantMessage.order,
+                path,
+                current: turn.userMessage.order === input.userMessage.order
+                    && turn.assistantMessage.order === input.assistantMessage.order,
+                covered,
+            };
+        })
+        .filter((item) => !item.covered)
+        .map(({ covered: _covered, ...item }) => item);
+    const current = missing.find((item) => item.current);
+    const olderMissing = missing.filter((item) => !item.current);
+    const olderLimit = current ? AUTO_MANAGER_TURN_NOTE_BACKLOG_LIMIT - 1 : AUTO_MANAGER_TURN_NOTE_BACKLOG_LIMIT;
+    const recentOlder = olderMissing.slice(Math.max(0, olderMissing.length - olderLimit));
+    const visibleMissing = [...recentOlder, ...(current ? [current] : [])]
+        .sort((left, right) => left.userOrder - right.userOrder);
+    return {
+        totalTurns: turns.length,
+        activeTurnNotes: turns.length - missing.length,
+        missing: visibleMissing,
+        omittedMissingCount: Math.max(0, missing.length - visibleMissing.length),
+    };
+}
+
+function buildTurnNoteCoverageBlock(input: {
+    turnMemoryPath: string;
+    coverage: Awaited<ReturnType<typeof buildTurnNoteCoverage>>;
+}): string {
+    const lines = [
+        '[楼层小记覆盖]',
+        `当前建议路径：${input.turnMemoryPath}`,
+        `已覆盖：${input.coverage.activeTurnNotes}/${input.coverage.totalTurns} 个完整 RP 楼层。`,
+    ];
+    if (input.coverage.missing.length) {
+        lines.push('缺失或需重写的小记（优先当前楼层，再按最近缺口补）：');
+        input.coverage.missing.forEach((item) => {
+            lines.push(`- order ${item.userOrder}-${item.assistantOrder} -> ${item.path}${item.current ? '（当前楼层）' : ''}`);
+        });
+        if (input.coverage.omittedMissingCount > 0) {
+            lines.push(`- 另有 ${input.coverage.omittedMissingCount} 个更早缺口，本轮不强制补。`);
+        }
+        lines.push('补漏规则：优先写当前建议路径；若仍有余力，可补最近 1-3 个缺失小记。补旧楼层前先用 ChatHistory range 读取对应 order 原文，避免凭记忆补写。');
+        lines.push('缺失小记只代表 memory/turns 覆盖缺口；不要因此无证据改写剧情脉络、状态栏或地图。');
+    } else {
+        lines.push('楼层小记没有发现缺口；本轮只按当前楼层正常维护。');
+    }
+    return lines.join('\n');
 }
 
 async function runManagerOnceWithAdapter(
@@ -759,6 +880,9 @@ async function buildAutoManagerMessages(input: XbTavernManagerRunInput): Promise
         ? await listTavernMemoryFiles(input.sessionId, { includeStale: true })
         : [];
     const turnMemoryPath = resolveTurnMemoryPath(input);
+    const turnNoteCoverage = contractRuntime.includeMemoryFiles
+        ? await buildTurnNoteCoverage(input)
+        : null;
     return [
         {
             role: 'system',
@@ -769,6 +893,9 @@ async function buildAutoManagerMessages(input: XbTavernManagerRunInput): Promise
             content: buildAutoManagerUserPrompt({
                 turn: input.turn,
                 turnMemoryPath,
+                turnNoteCoverageBlock: turnNoteCoverage
+                    ? buildTurnNoteCoverageBlock({ turnMemoryPath, coverage: turnNoteCoverage })
+                    : '',
                 userMessage: input.userMessage,
                 assistantMessage: input.assistantMessage,
                 memoryFiles,

@@ -267,6 +267,26 @@
     box-shadow: none;
 }
 
+.settings-layout select {
+    color-scheme: dark;
+}
+
+.settings-layout select option,
+.settings-layout select optgroup {
+    background: #161a22;
+    color: rgba(244, 247, 255, 0.96);
+}
+
+.xb-os-shell.theme-light .settings-layout select {
+    color-scheme: light;
+}
+
+.xb-os-shell.theme-light .settings-layout select option,
+.xb-os-shell.theme-light .settings-layout select optgroup {
+    background: #ffffff;
+    color: #17202c;
+}
+
 .settings-layout textarea {
     line-height: 1.72;
     resize: vertical;

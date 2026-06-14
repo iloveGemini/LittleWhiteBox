@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useTavernSettingsContext } from '../tavern-app-context';
+import { useTavernMediaQuery } from '../useTavernMediaQuery';
 
 const settings = useTavernSettingsContext();
 const {
@@ -40,6 +41,11 @@ const selectedChatPresetName = computed(() => String(
     || '',
 ).trim());
 const mobileEditorOpen = ref(false);
+const isMobileSettingsViewport = useTavernMediaQuery('(max-width: 560px)');
+const shouldMountPromptEditor = computed(() => (
+    activeSettingsWorkspace.value === 'chatPreset'
+    && (!isMobileSettingsViewport.value || mobileEditorOpen.value)
+));
 
 function openPromptEditor(identifier: string) {
     selectedPromptIdentifier.value = identifier;
@@ -55,6 +61,12 @@ function promptRoleLetter(role: string) {
     if (role === 'user') {return 'U';}
     return 'S';
 }
+
+watch(activeSettingsWorkspace, (workspace) => {
+    if (workspace !== 'chatPreset') {
+        mobileEditorOpen.value = false;
+    }
+});
 </script>
 
 <template>
@@ -262,7 +274,10 @@ function promptRoleLetter(role: string) {
         </button>
       </section>
 
-      <aside class="preset-preview-panel prompt-detail-panel prompt-editor-panel">
+      <aside
+        v-if="shouldMountPromptEditor"
+        class="preset-preview-panel prompt-detail-panel prompt-editor-panel"
+      >
         <div class="preset-preview-head">
           <strong>{{ selectedPromptRow?.name || '提示词条目' }}</strong>
           <span>{{ promptRoleDisplay(String(selectedPromptRow?.role || 'system')) }}</span>
