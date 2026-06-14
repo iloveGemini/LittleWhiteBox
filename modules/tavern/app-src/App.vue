@@ -190,6 +190,7 @@ const chatWorkspacePanel = ref<'state' | 'memory'>('state');
 const mapStateDocument = ref<TavernStructuredStateDocumentRecord | null>(null);
 const mapStatePatches = ref<TavernStructuredStatePatchRecord[]>([]);
 const managerActionStatus = ref('');
+const retryingManagerRunId = ref('');
 const managerInputDraft = ref('');
 const managerInputStatus = ref('');
 const managerChatMessages = ref<TavernManagerMessageRecord[]>([]);
@@ -1726,17 +1727,19 @@ const {
 });
 
 async function retryManagerRun(run: TavernManagerRunRecord) {
-    if (!selectedSessionId.value || managerBusy.value) {return;}
-    const messages = await listTavernMessages(selectedSessionId.value);
-    const userMessage = messages.find((message) => message.order === run.userOrder && message.role === 'user');
-    const assistantMessage = messages.find((message) => message.order === run.assistantOrder && message.role === 'assistant' && !message.error);
-    if (!userMessage || !assistantMessage) {
-        managerActionStatus.value = '原文楼层不存在，无法重试。';
-        await refreshManagerRecords();
-        return;
-    }
+    const runId = String(run.id || '');
+    if (!runId || !selectedSessionId.value || managerBusy.value || retryingManagerRunId.value) {return;}
+    retryingManagerRunId.value = runId;
     managerActionStatus.value = '记忆正在重试。';
     try {
+        const messages = await listTavernMessages(selectedSessionId.value);
+        const userMessage = messages.find((message) => message.order === run.userOrder && message.role === 'user');
+        const assistantMessage = messages.find((message) => message.order === run.assistantOrder && message.role === 'assistant' && !message.error);
+        if (!userMessage || !assistantMessage) {
+            managerActionStatus.value = '原文楼层不存在，无法重试。';
+            await refreshManagerRecords();
+            return;
+        }
         const result = await runXbTavernManagerAfterTurn({
             sessionId: selectedSessionId.value,
             agentConfig: agentConfig.value,
@@ -1751,8 +1754,16 @@ async function retryManagerRun(run: TavernManagerRunRecord) {
     } catch (error) {
         managerActionStatus.value = error instanceof Error ? error.message : String(error || 'manager_retry_failed');
     } finally {
-        await refreshManagerRecords();
+        try {
+            await refreshManagerRecords();
+        } finally {
+            retryingManagerRunId.value = '';
+        }
     }
+}
+
+function isManagerRunRetrying(run: TavernManagerRunRecord | null | undefined) {
+    return !!run && !!retryingManagerRunId.value && String(run.id || '') === retryingManagerRunId.value;
 }
 
 function roleLabel(role = '') {
@@ -3232,6 +3243,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
         hiddenManagerRunCount,
         isEditingManagerMessage,
         isEditingManagerMessageDirty,
+        isManagerRunRetrying,
         isManagerAssistantCancelling,
         isManagerAssistantRunning,
         liveManagerChatDisplayItems,

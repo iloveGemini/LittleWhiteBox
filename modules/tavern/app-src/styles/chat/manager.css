@@ -626,6 +626,11 @@
     background: rgba(143, 183, 202, 0.055);
 }
 
+.manager-card.is-retrying {
+    border-color: rgba(143, 183, 202, 0.38);
+    background: rgba(143, 183, 202, 0.07);
+}
+
 .manager-card.tone-warn {
     border-color: rgba(206, 179, 122, 0.34);
     background: rgba(206, 179, 122, 0.055);
@@ -709,6 +714,14 @@
     border-radius: 999px;
     padding: 4px 10px;
     font-size: 12px;
+}
+
+.manager-card .manager-run-retry-button:disabled {
+    border-color: rgba(143, 183, 202, 0.26);
+    background: rgba(143, 183, 202, 0.08);
+    color: var(--xb-text-main);
+    cursor: wait;
+    opacity: 0.88;
 }
 
 .manager-card .message-actions button {

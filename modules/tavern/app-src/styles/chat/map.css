@@ -65,6 +65,27 @@
     border-top: 0;
 }
 
+.tavern-chat.xb-page .tavern-map-canvas-title {
+    position: absolute;
+    top: 9px;
+    left: 50%;
+    z-index: 5;
+    max-width: calc(100% - 86px);
+    overflow: hidden;
+    color: rgba(47, 36, 24, 0.74);
+    font: 720 12px/1.2 var(--xb-font-ui);
+    pointer-events: none;
+    text-align: center;
+    text-overflow: ellipsis;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+
+.tavern-chat.xb-page .theme-dark .tavern-map-canvas-title,
+.tavern-chat.xb-page .theme-blueprint .tavern-map-canvas-title {
+    color: rgba(221, 235, 245, 0.72);
+}
+
 .tavern-chat.xb-page .tavern-map-canvas svg {
     position: relative;
     z-index: 2;

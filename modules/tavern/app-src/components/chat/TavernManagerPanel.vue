@@ -55,6 +55,7 @@ const {
     isEditingManagerMessageDirty,
     isManagerAssistantCancelling,
     isManagerAssistantRunning,
+    isManagerRunRetrying,
     liveManagerChatDisplayItems,
     managerActionFeedback,
     managerBusy,
@@ -467,7 +468,7 @@ watch(
         >
           <summary>
             <strong>工作记录</strong>
-            <span v-if="currentManagerWorkRun">{{ managerStatusLabel(currentManagerWorkRun.status) }} · {{ formatRunInputLine(currentManagerWorkRun) }}</span>
+            <span v-if="currentManagerWorkRun">{{ isManagerRunRetrying(currentManagerWorkRun) ? '重试中' : managerStatusLabel(currentManagerWorkRun.status) }} · {{ formatRunInputLine(currentManagerWorkRun) }}</span>
             <span v-else>{{ activeMemoryFiles.length }}/{{ memoryFiles.length }} 份档案</span>
           </summary>
           <template v-if="managerDisclosure.isOpen(managerDisclosureId('work-drawer'))">
@@ -475,17 +476,18 @@ watch(
               v-if="currentManagerWorkRun"
               :data-manager-anchor-key="`run:${currentManagerWorkRun.id}`"
               class="manager-card manager-message manager-message-run manager-work-current"
-              :class="[`is-${currentManagerWorkRun.status}`, `tone-${managerRunTone(currentManagerWorkRun)}`]"
+              :class="[`is-${currentManagerWorkRun.status}`, `tone-${managerRunTone(currentManagerWorkRun)}`, { 'is-retrying': isManagerRunRetrying(currentManagerWorkRun) }]"
+              :aria-busy="isManagerRunRetrying(currentManagerWorkRun) ? 'true' : 'false'"
             >
               <div class="manager-run-title">
                 <strong>本次后台工作</strong>
-                <small>{{ managerStatusLabel(currentManagerWorkRun.status) }}</small>
+                <small>{{ isManagerRunRetrying(currentManagerWorkRun) ? '重试中' : managerStatusLabel(currentManagerWorkRun.status) }}</small>
               </div>
               <p class="manager-work-source">
                 {{ formatRunInputLine(currentManagerWorkRun) }}
               </p>
               <small>{{ formatRunModelLine(currentManagerWorkRun) }}</small>
-              <small class="manager-run-activity">{{ formatRunActivityLine(currentManagerWorkRun) }}</small>
+              <small class="manager-run-activity">{{ isManagerRunRetrying(currentManagerWorkRun) ? '重试已开始 · 正在等 API/工具返回' : formatRunActivityLine(currentManagerWorkRun) }}</small>
               <div class="manager-work-status-grid">
                 <p>{{ formatRunMemoryLine(currentManagerWorkRun) }}</p>
                 <p>{{ formatRunMapLine(currentManagerWorkRun) }}</p>
@@ -559,10 +561,11 @@ watch(
               <button
                 v-if="currentManagerWorkRun.status === 'failed'"
                 type="button"
-                :disabled="managerBusy"
+                class="manager-run-retry-button"
+                :disabled="managerBusy || isManagerRunRetrying(currentManagerWorkRun)"
                 @click="retryManagerRun(currentManagerWorkRun)"
               >
-                重试
+                {{ isManagerRunRetrying(currentManagerWorkRun) ? '重试中' : '重试' }}
               </button>
             </article>
             <article

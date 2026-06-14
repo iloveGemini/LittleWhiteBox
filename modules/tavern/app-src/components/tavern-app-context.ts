@@ -273,6 +273,7 @@ export interface TavernManagerContext {
     isEditingManagerMessageDirty: TavernCommand<[message: TavernManagerMessageRecord], boolean>;
     isManagerAssistantCancelling: Ref<boolean>;
     isManagerAssistantRunning: Ref<boolean>;
+    isManagerRunRetrying: TavernCommand<[run: TavernManagerRunRecord | null | undefined], boolean>;
     liveManagerChatDisplayItems: TavernReadable<ManagerChatDisplayItem[]>;
     managerActionFeedback: TavernCommand<[message: TavernManagerMessageRecord, action: string], string>;
     managerAutoScroll: Ref<boolean>;

@@ -8,7 +8,7 @@ import type { TavernMapDocument, TavernMapElement } from '../../shared/structure
 import { isRenderableMapDocument } from '../../shared/map-state-content';
 import { createSeedMapDocument } from '../../shared/map-state-seed';
 import { applyTrustedMapPatchOps } from '../../shared/map-state-ops';
-import { getTavernMapDisplayViewBox, getTavernMapElementBounds } from '../map-display';
+import { getTavernMapDisplayViewBox, getTavernMapElementBounds, type TavernMapBounds } from '../map-display';
 
 type MapReplayMode = 'full' | 'patch' | 'timeline';
 type MapRenderLayer = 'fill' | 'line' | 'label';
@@ -327,6 +327,58 @@ function opKindFor(element: TavernMapElement): MapOpKind {
     return latestOpById.value.get(element.id) || (latestChangedIds.value.has(element.id) ? 'modify' : 'stable');
 }
 
+function mergeBounds(left: TavernMapBounds | null, right: TavernMapBounds | null): TavernMapBounds | null {
+    if (!left) {return right;}
+    if (!right) {return left;}
+    const minX = Math.min(left.minX, right.minX);
+    const minY = Math.min(left.minY, right.minY);
+    const maxX = Math.max(left.maxX, right.maxX);
+    const maxY = Math.max(left.maxY, right.maxY);
+    return {
+        minX,
+        minY,
+        maxX,
+        maxY,
+        width: Math.max(0, maxX - minX),
+        height: Math.max(0, maxY - minY),
+    };
+}
+
+function mapBodyBounds(): TavernMapBounds | null {
+    return (activeMapDocument.value?.elements || []).reduce<TavernMapBounds | null>((bounds, item) => {
+        if (item.text || String(item.cat || '') === 'label') {return bounds;}
+        return mergeBounds(bounds, getTavernMapElementBounds(item));
+    }, null);
+}
+
+function labelPosition(element: TavernMapElement): [number, number] {
+    if (!element.text || String(element.cat || '') !== 'label') {return element.at;}
+    const id = String(element.id || '').trim().toLowerCase();
+    if (id.startsWith('__label__')) {return element.at;}
+    const [viewX, viewY, viewWidth, viewHeight] = viewBoxArray.value;
+    const topGuard = viewY + Math.max(72, viewHeight * 0.26);
+    if (!['label', 'room-label', 'scene-label', 'place-label', 'map-label'].includes(id) || element.at[1] >= topGuard) {
+        return element.at;
+    }
+    const bodyBounds = mapBodyBounds();
+    const left = (bodyBounds?.minX ?? viewX) + 24;
+    const right = (bodyBounds?.maxX ?? viewX + viewWidth) - 24;
+    const bodyTop = bodyBounds ? bodyBounds.minY + Math.min(90, Math.max(42, bodyBounds.height * 0.22)) : topGuard;
+    const y = Math.max(topGuard, bodyTop);
+    return [
+        Math.min(right, Math.max(left, element.at[0])),
+        Math.min(viewY + viewHeight - 24, y),
+    ];
+}
+
+function labelFontSize(element: TavernMapElement): number {
+    if (!element.text || String(element.cat || '') !== 'label') {return 14;}
+    const id = String(element.id || '').trim().toLowerCase();
+    if (id.startsWith('__label__')) {return 14;}
+    if (['label', 'room-label', 'scene-label', 'place-label', 'map-label'].includes(id)) {return 13;}
+    return 14;
+}
+
 function buildRenderItemsForElement(element: TavernMapElement, index: number, forcedOpKind?: MapOpKind): MapRenderItem[] {
     if (!getTavernMapElementBounds(element)) {return [];}
     const opKind = forcedOpKind || opKindFor(element);
@@ -337,6 +389,7 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             : opKind === 'stable' ? 0 : index * 30;
 
     if (element.text) {
+        const [labelX, labelY] = labelPosition(element);
         return [{
             element,
             id: `${element.id}-label`,
@@ -351,9 +404,9 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             length: 60,
             opKind,
             text: element.text,
-            x: element.at[0],
-            y: element.at[1],
-            fontSize: 14,
+            x: labelX,
+            y: labelY,
+            fontSize: labelFontSize(element),
             anchor: 'middle',
         }];
     }
@@ -559,6 +612,12 @@ function collapseMapBadge() {
       class="tavern-map-canvas"
       :class="[`theme-${theme}`, `mode-${replayMode}`]"
     >
+      <div
+        v-if="compact"
+        class="tavern-map-canvas-title"
+      >
+        {{ title }}
+      </div>
       <svg
         :key="replayKey"
         :viewBox="viewBox"
