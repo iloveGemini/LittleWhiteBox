@@ -179,6 +179,8 @@ test('tavern worldbook host bridge exposes native runtime result instead of edit
     assert.match(hostSource, /export function openTavernWorldbookEditor/);
     assert.match(hostSource, /sessionMeta\.worldbookSources/);
     assert.match(hostSource, /sessionMeta\.worldbookNames/);
+    assert.match(hostSource, /function isNativeRuntimeSource/);
+    assert.match(hostSource, /sourceType\) !== 'embedded'/);
     assert.match(hostSource, /await checkWorldInfo\(chatLines, maxContext, false, globalScanData\)/);
     assert.match(hostSource, /worldInfoBefore:/);
     assert.match(hostSource, /worldInfoAfter:/);
@@ -221,5 +223,6 @@ test('tavern message assembler can render native worldbook prompt blocks directl
     assert.match(assemblerSource, /anBefore\?: string\[\];/);
     assert.match(assemblerSource, /anAfter\?: string\[\];/);
     assert.match(assemblerSource, /outlets\?: Record<string, string\[\]>;/);
-    assert.match(assemblerSource, /activatedWorldEntries: nativePromptEntries\.length \? nativePromptEntries : nativeActivatedEntries/);
+    assert.match(assemblerSource, /allWorldEntries\.filter\(\(entry\) => normalizeText\(entry\.worldSourceType\) === 'embedded'\)/);
+    assert.match(assemblerSource, /\.\.\.nativeWorldEntries,[\s\S]*\.\.\.localActivatedWorldEntries/);
 });

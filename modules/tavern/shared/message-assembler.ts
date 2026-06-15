@@ -1934,6 +1934,7 @@ interface PreparedXbTavernMessageBuild {
     worldSettings: XbTavernWorldSettings;
     worldEntryCandidates: XbTavernWorldEntryCandidate[];
     activatedWorldEntries: ActivatedWorldEntry[];
+    localStateWorldEntries: ActivatedWorldEntry[];
     budgetDebug: ReturnType<typeof buildWorldBudgetDebug>;
     promptConversationMessages?: XbTavernMessage[];
 }
@@ -1965,8 +1966,17 @@ function prepareXbTavernMessageBuild(
         turn: runtimeState.turn ?? runtimeState.worldSettings?.turn,
         entryStates: runtimeState.entryStates ?? runtimeState.worldSettings?.entryStates,
     };
+    const allWorldEntries = collectContextWorldEntries(context);
+    const localWorldEntries = context.nativeWorldInfo
+        ? allWorldEntries.filter((entry) => normalizeText(entry.worldSourceType) === 'embedded')
+        : allWorldEntries;
+    const activation = runWorldActivation(localWorldEntries, worldSettings);
+    const activatedBeforeBudget = activation.activatedBeforeBudget;
+    const budgetDebug = activation.budgetDebug;
+    const localWorldEntryCandidates = buildWorldEntryCandidates(localWorldEntries, activatedBeforeBudget, worldSettings, budgetDebug);
+    const localActivatedWorldEntries = activation.activatedEntries;
     if (nativeActivatedEntries.length || nativePromptEntries.length || context.nativeWorldInfo) {
-        const budgetDebug = buildWorldBudgetDebug([], { budgetChars: 0 });
+        const nativeWorldEntries = nativePromptEntries.length ? nativePromptEntries : nativeActivatedEntries;
         return {
             character,
             user,
@@ -1978,17 +1988,18 @@ function prepareXbTavernMessageBuild(
             presetSections,
             scanText,
             worldSettings,
-            worldEntryCandidates: buildNativeWorldEntryCandidates(nativeActivatedEntries),
-            activatedWorldEntries: nativePromptEntries.length ? nativePromptEntries : nativeActivatedEntries,
+            worldEntryCandidates: [
+                ...buildNativeWorldEntryCandidates(nativeActivatedEntries),
+                ...localWorldEntryCandidates,
+            ],
+            activatedWorldEntries: [
+                ...nativeWorldEntries,
+                ...localActivatedWorldEntries,
+            ],
+            localStateWorldEntries: localActivatedWorldEntries,
             budgetDebug,
         };
     }
-    const worldEntries = collectContextWorldEntries(context);
-    const activation = runWorldActivation(worldEntries, worldSettings);
-    const activatedBeforeBudget = activation.activatedBeforeBudget;
-    const budgetDebug = activation.budgetDebug;
-    const worldEntryCandidates = buildWorldEntryCandidates(worldEntries, activatedBeforeBudget, worldSettings, budgetDebug);
-    const activatedWorldEntries = activation.activatedEntries;
     return {
         character,
         user,
@@ -2000,8 +2011,9 @@ function prepareXbTavernMessageBuild(
         presetSections,
         scanText,
         worldSettings,
-        worldEntryCandidates,
-        activatedWorldEntries,
+        worldEntryCandidates: localWorldEntryCandidates,
+        activatedWorldEntries: localActivatedWorldEntries,
+        localStateWorldEntries: localActivatedWorldEntries,
         budgetDebug,
     };
 }
@@ -2131,7 +2143,7 @@ function buildXbTavernMessagesFromPrepared(
                 skippedChars: budgetDebug.skippedChars,
             },
             worldPositionCounts: countWorldPositions(activatedWorldEntries),
-            worldEntryStateUpdates: buildWorldEntryStateUpdates(activatedWorldEntries, worldSettings),
+            worldEntryStateUpdates: buildWorldEntryStateUpdates(prepared.localStateWorldEntries, worldSettings),
         },
     };
 }
@@ -2195,6 +2207,10 @@ export async function buildXbTavernMessagesAsync(
                 content: normalizeText(entry.content),
                 contentChars: normalizeText(entry.content).length,
             }))
+            .filter((entry) => !!entry.content);
+        const transformedByKey = new Map(prepared.activatedWorldEntries.map((entry) => [entry.activationKey, entry]));
+        prepared.localStateWorldEntries = prepared.localStateWorldEntries
+            .map((entry) => transformedByKey.get(entry.activationKey) || entry)
             .filter((entry) => !!entry.content);
     }
     if (options.transformConversationMessages) {

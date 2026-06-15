@@ -13,6 +13,7 @@ import {
     type XbTavernMessageBuildResult,
     type XbTavernNativeWorldInfoRuntime,
     type XbTavernNativeWorldInfoTimedState,
+    type ActivatedWorldEntry,
     type TavernChatPromptPresetBundle,
     type XbTavernRuntimeState,
     XBTavernWorldPosition,
@@ -879,6 +880,22 @@ async function injectNativeWorldInfoRuntime(input: {
     };
 }
 
+function shouldApplyWorldInfoRegexToEntry(entry: ActivatedWorldEntry, hasNativeWorldInfo = false): boolean {
+    return !hasNativeWorldInfo || String(entry.worldSourceType || '').trim() === 'embedded';
+}
+
+function mergeBuildWorldEntryStateUpdates(
+    sessionState: TavernSessionState = {},
+    buildResult: XbTavernMessageBuildResult,
+    shouldReplaceSessionState = false,
+): NonNullable<TavernSessionState['worldEntryStates']> {
+    const current = sessionState.worldEntryStates || {};
+    const updates = buildResult.meta.worldEntryStateUpdates || {};
+    return shouldReplaceSessionState
+        ? mergeWorldEntryStates(current, updates)
+        : updates;
+}
+
 export function buildTavernRequestSnapshot(
     agentConfig: Record<string, unknown> = {},
     messages: XbTavernMessage[] = [],
@@ -1138,12 +1155,10 @@ export async function deriveTavernSessionStateFromMessagesAsync(input: {
                 entryStates: worldEntryStates,
                 diagnostics: input.diagnostics || {},
             });
-            worldEntryStates = input.getNativeWorldInfoRuntime
-                ? {}
-                : mergeWorldEntryStates(
-                    worldEntryStates,
-                    brain.buildResult.meta.worldEntryStateUpdates,
-                );
+            worldEntryStates = mergeWorldEntryStates(
+                worldEntryStates,
+                brain.buildResult.meta.worldEntryStateUpdates,
+            );
             turn += 1;
             lastBuildSnapshot = brain.buildSnapshot;
             lastRequestSnapshot = assistant.requestSnapshot || message.requestSnapshot;
@@ -1360,8 +1375,10 @@ export async function simulateXbTavernRequest(input: XbTavernSimulateRequestInpu
             messages,
             options: substituteOptions,
         }),
-        transformWorldEntries: contextForBuild.nativeWorldInfo ? undefined : async (entries) => {
-            const applied = await applyTavernRegexItems(input.applyRegex, entries.map((entry) => ({
+        transformWorldEntries: async (entries) => {
+            const hasNativeWorldInfo = !!contextForBuild.nativeWorldInfo;
+            const regexEntries = entries.filter((entry) => shouldApplyWorldInfoRegexToEntry(entry, hasNativeWorldInfo));
+            const applied = await applyTavernRegexItems(input.applyRegex, regexEntries.map((entry) => ({
                 id: `worldInfo:${entry.activationKey}`,
                 text: entry.content,
                 placement: 'worldInfo',
@@ -1812,8 +1829,10 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
             messages,
             options: substituteOptions,
         }),
-        transformWorldEntries: contextForBuild.nativeWorldInfo ? undefined : async (entries) => {
-            const applied = await applyTavernRegexItems(input.applyRegex, entries.map((entry) => ({
+        transformWorldEntries: async (entries) => {
+            const hasNativeWorldInfo = !!contextForBuild.nativeWorldInfo;
+            const regexEntries = entries.filter((entry) => shouldApplyWorldInfoRegexToEntry(entry, hasNativeWorldInfo));
+            const applied = await applyTavernRegexItems(input.applyRegex, regexEntries.map((entry) => ({
                 id: `worldInfo:${entry.activationKey}`,
                 text: entry.content,
                 placement: 'worldInfo',
@@ -1977,11 +1996,7 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
         await persistRunSessionState(session.id, {
             turn: nextTurn,
             contextWindowStartOrder: contextWindow.contextWindowStartOrder,
-            worldEntryStates: contextForBuild.nativeWorldInfo
-                ? (shouldReplaceSessionState ? sessionState.worldEntryStates || {} : sessionState.worldEntryStates || {})
-                : (shouldReplaceSessionState
-                    ? mergeWorldEntryStates(sessionState.worldEntryStates || {}, buildResult.meta.worldEntryStateUpdates)
-                    : buildResult.meta.worldEntryStateUpdates),
+            worldEntryStates: mergeBuildWorldEntryStateUpdates(sessionState, buildResult, shouldReplaceSessionState),
             nativeWorldInfoTimedState: contextForBuild.nativeWorldInfo
                 ? nativeContext.timedState
                 : normalizeNativeWorldInfoTimedState(sessionState.nativeWorldInfoTimedState),
@@ -2078,11 +2093,7 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
             await persistRunSessionState(session.id, {
                 turn: nextTurn,
                 contextWindowStartOrder: contextWindow.contextWindowStartOrder,
-                worldEntryStates: contextForBuild.nativeWorldInfo
-                    ? (shouldReplaceSessionState ? sessionState.worldEntryStates || {} : sessionState.worldEntryStates || {})
-                    : (shouldReplaceSessionState
-                        ? mergeWorldEntryStates(sessionState.worldEntryStates || {}, buildResult.meta.worldEntryStateUpdates)
-                        : buildResult.meta.worldEntryStateUpdates),
+                worldEntryStates: mergeBuildWorldEntryStateUpdates(sessionState, buildResult, shouldReplaceSessionState),
                 nativeWorldInfoTimedState: contextForBuild.nativeWorldInfo
                     ? nativeContext.timedState
                     : normalizeNativeWorldInfoTimedState(sessionState.nativeWorldInfoTimedState),

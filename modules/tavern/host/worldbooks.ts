@@ -180,6 +180,10 @@ function dedupeSources(sources: XbTavernNativeWorldInfoSource[] = []): XbTavernN
     return result;
 }
 
+function isNativeRuntimeSource(source: XbTavernNativeWorldInfoSource = { name: '' }): boolean {
+    return normalizeText(source.sourceType) !== 'embedded';
+}
+
 function collectRuntimeSources(context: XbTavernContext = {}): XbTavernNativeWorldInfoSource[] {
     const sessionMeta = asRecord(context.sessionMeta);
     const metaSources = Array.isArray(sessionMeta.worldbookSources)
@@ -206,7 +210,8 @@ function collectRuntimeSources(context: XbTavernContext = {}): XbTavernNativeWor
             sourceIndex: Number.isFinite(Number(book.worldSourceIndex)) ? Number(book.worldSourceIndex) : index,
         }))
         : [];
-    return dedupeSources([...metaSources, ...legacyMetaSources, ...bookSources]);
+    return dedupeSources([...metaSources, ...legacyMetaSources, ...bookSources])
+        .filter((source) => isNativeRuntimeSource(source));
 }
 
 function buildHistoryScanLines(context: XbTavernContext = {}, currentUserMessage = '', includeNames = false): string[] {

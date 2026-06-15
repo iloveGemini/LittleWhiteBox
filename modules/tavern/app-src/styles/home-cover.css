@@ -197,7 +197,7 @@
         gap: 0;
         min-height: 0;
         position: relative;
-        margin: 0 0 4vh;
+        margin: -0.8vh 0 4vh;
         border-bottom: 2px solid var(--xb-ink);
         padding: 0 80px 1.5vh 0;
     }
@@ -207,7 +207,7 @@
         min-width: 0;
         max-width: 100%;
         margin: 0;
-        font-size: clamp(21px, 6vw, 26px);
+        font-size: clamp(23px, 6.6vw, 29px);
         line-height: 1;
         letter-spacing: 0;
         text-wrap: auto;
@@ -323,13 +323,14 @@
     }
 
     .xb-os-shell.is-home-view .home-command-hero .home-menu-icon {
-        width: 21px;
-        height: 21px;
+        width: 25px;
+        height: 25px;
         display: block;
         border: 1px solid var(--xb-rule);
         border-radius: 999px;
         color: var(--xb-ink-soft);
         padding: 4px;
+        stroke-width: 1.8;
     }
 
     .xb-os-shell.is-home-view .home-menu-item strong {

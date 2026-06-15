@@ -116,6 +116,10 @@ function renderRoleplayMarkdown(text = '') {
     return renderChatMarkdown(text, roleplayMarkdownOptions());
 }
 
+function messageFloorLabel(message: TavernMessageRecord) {
+    return `#${Math.max(1, Number(message.order) + 1)}`;
+}
+
 function buildAssistantRenderState(text: string, events: ReturnType<typeof getActionCheckEvents> = []) {
     const payload = injectActionCheckRenderMarkers(text, events);
     const actionCheckGroups = payload.groups.length ? JSON.stringify(payload.groups) : '';
@@ -323,6 +327,13 @@ watch(
               class="message-actions"
               :class="{ 'has-status': !!drawMessageStatusText(message) }"
             >
+              <span
+                class="message-floor-label"
+                :title="`第 ${messageFloorLabel(message).slice(1)} 楼`"
+                :aria-label="`第 ${messageFloorLabel(message).slice(1)} 楼`"
+              >
+                {{ messageFloorLabel(message) }}
+              </span>
               <span
                 v-if="drawMessageStatusText(message)"
                 class="message-draw-status"

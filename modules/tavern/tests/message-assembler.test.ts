@@ -160,6 +160,49 @@ test('xb tavern assembler uses native worldbook prompt blocks as the rendered tr
     assert.equal(result.worldEntryCandidates[0]?.sourceWorldBook, 'Lore');
 });
 
+test('xb tavern assembler still activates embedded character book when native world info exists', () => {
+    const result = buildXbTavernMessages({
+        character: { name: 'Aster', description: 'Pilot.' },
+        user: { name: 'Player' },
+        nativeWorldInfo: {
+            trigger: 'normal',
+            worldInfoBefore: 'Native bound lore.',
+        },
+        worldBooks: [
+            {
+                name: 'Bound Character Book',
+                worldSourceType: 'character',
+                entries: [{
+                    uid: 'bound-book',
+                    content: 'Bound book lore should not be duplicated locally.',
+                    constant: true,
+                    worldSourceType: 'character',
+                }],
+            },
+            {
+                name: 'Embedded Character Book',
+                worldSourceType: 'embedded',
+                entries: [{
+                    uid: 'embedded-book',
+                    key: ['embedded-key'],
+                    content: 'Embedded card lore.',
+                    worldSourceType: 'embedded',
+                }],
+            },
+        ],
+    }, {}, {
+        currentUserMessage: 'embedded-key',
+    });
+
+    const joined = result.messages.map((message) => message.content).join('\n');
+    assert.match(joined, /Native bound lore\./);
+    assert.match(joined, /Embedded card lore\./);
+    assert.doesNotMatch(joined, /Bound book lore should not be duplicated locally\./);
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), ['native:0:0', 'embedded-book']);
+    assert.equal(result.worldEntryCandidates.find((entry) => entry.uid === 'embedded-book')?.status, 'activated');
+    assert.equal(result.worldEntryCandidates.find((entry) => entry.uid === 'bound-book'), undefined);
+});
+
 test('xb tavern disabled preset sections stay out of model messages', () => {
     const result = buildXbTavernMessages({}, {
         sections: [

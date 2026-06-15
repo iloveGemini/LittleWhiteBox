@@ -1610,6 +1610,85 @@ test('xb tavern simulated request applies regex without saving messages', async 
     assert.deepEqual(await listTavernMessages(session.id), []);
 });
 
+test('xb tavern native world info still applies WORLD_INFO regex only to embedded entries', async () => {
+    await resetDb();
+    const preset = createDefaultXbTavernPreset();
+    const worldInfoTexts: string[] = [];
+    const applyRegex = async (items: TavernApplyRegexItem[]) => ({
+        items: items.map((item) => {
+            if (item.placement === 'worldInfo') {
+                worldInfoTexts.push(item.text);
+            }
+            return {
+                id: item.id,
+                text: item.text
+                    .replace(/RAW_USER/g, 'REGEX_USER')
+                    .replace(/RAW_EMBEDDED/g, 'REGEX_EMBEDDED')
+                    .replace(/RAW_BOUND/g, 'REGEX_BOUND')
+                    .replace(/RAW_NATIVE/g, 'REGEX_NATIVE'),
+                changed: /RAW_(USER|EMBEDDED|BOUND|NATIVE)/.test(item.text),
+            };
+        }),
+        changedCount: items.filter((item) => /RAW_(USER|EMBEDDED|BOUND|NATIVE)/.test(item.text)).length,
+    });
+
+    const result = await simulateXbTavernRequest({
+        agentConfig: {
+            currentPresetName: '酒馆 OpenAI',
+            presets: {
+                '酒馆 OpenAI': {
+                    provider: 'sillytavern-openai-compatible',
+                    modelConfigs: {
+                        'sillytavern-openai-compatible': {
+                            model: 'gpt-test',
+                        },
+                    },
+                },
+            },
+        },
+        contextSnapshot: {
+            character: { id: 'char-1', name: 'Aster' },
+            worldBooks: [
+                {
+                    name: 'Bound Character Book',
+                    worldSourceType: 'character',
+                    entries: [{
+                        uid: 'bound-book',
+                        content: 'RAW_BOUND bound lore.',
+                        constant: true,
+                        worldSourceType: 'character',
+                    }],
+                },
+                {
+                    name: 'Embedded Character Book',
+                    worldSourceType: 'embedded',
+                    entries: [{
+                        uid: 'embedded-book',
+                        content: 'RAW_EMBEDDED embedded lore.',
+                        constant: true,
+                        worldSourceType: 'embedded',
+                    }],
+                },
+            ],
+        },
+        preset,
+        currentUserMessage: 'RAW_USER simulate.',
+        applyRegex,
+        getNativeWorldInfoRuntime: async () => ({
+            trigger: 'normal',
+            worldInfoBefore: 'RAW_NATIVE native lore.',
+            timedState: { sticky: {}, cooldown: {} },
+        }),
+    });
+
+    assert.deepEqual(worldInfoTexts, ['RAW_EMBEDDED embedded lore.']);
+    assert.match(result.requestSnapshot.rawRequestJson, /REGEX_USER simulate/);
+    assert.match(result.requestSnapshot.rawRequestJson, /RAW_NATIVE native lore/);
+    assert.match(result.requestSnapshot.rawRequestJson, /REGEX_EMBEDDED embedded lore/);
+    assert.doesNotMatch(result.requestSnapshot.rawRequestJson, /RAW_EMBEDDED|RAW_BOUND|REGEX_NATIVE|REGEX_BOUND/);
+    assert.equal((result.requestSnapshot.regexApplications as { worldInfo?: number } | undefined)?.worldInfo, 1);
+});
+
 test('xb tavern simulated request applies prompt-stage regex to history without rewriting saved text', async () => {
     await resetDb();
     const preset = createDefaultXbTavernPreset();
