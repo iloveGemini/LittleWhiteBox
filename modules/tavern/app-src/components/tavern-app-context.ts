@@ -192,6 +192,10 @@ export interface TavernChatContext {
     copyMessage: TavernCommand<[message: TavernMessageRecord], Promise<void>>;
     currentUserMessage: Ref<string>;
     deleteMessageTurn: TavernCommand<[message: TavernMessageRecord], Promise<void>>;
+    displayMessageContent: TavernCommand<[message: TavernMessageRecord], string>;
+    displayMessageThoughtBlocks: TavernCommand<[message: TavernMessageRecord], Array<{ label?: string; text?: string }>>;
+    displayRuntimeContent: TavernCommand<[text?: string], string>;
+    displayRuntimeThoughtBlocks: TavernCommand<[thoughts?: Array<{ label?: string; text?: string }>], Array<{ label?: string; text?: string }>>;
     displayCharacterName: TavernReadable<string>;
     drawMessage: TavernCommand<[message: TavernMessageRecord], Promise<void>>;
     drawMessageStatusClass: TavernCommand<[message: TavernMessageRecord], string>;

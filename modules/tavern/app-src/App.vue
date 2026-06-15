@@ -146,6 +146,8 @@ const MANAGER_RUN_VISIBLE_LIMIT = 12;
 const MEMORY_TURN_INITIAL_LIMIT = 36;
 const MEMORY_TURN_BATCH_SIZE = 48;
 const MEMORY_FILE_BATCH_SIZE = 24;
+const DISPLAY_REGEX_CACHE_LIMIT = 480;
+const RUNTIME_DISPLAY_REGEX_DEBOUNCE_MS = 200;
 
 const context = ref<XbTavernContext>({});
 const diagnostics = ref<TavernDiagnostics>({});
@@ -260,6 +262,17 @@ interface PendingHostRequest {
     abort?: () => void;
     signal?: AbortSignal;
 }
+interface DisplayRegexTextRequest {
+    key: string;
+    text: string;
+    placement: TavernApplyRegexItem['placement'];
+    options: TavernApplyRegexItem['options'];
+}
+interface PendingRuntimeDisplayRegexRequest {
+    timer: number;
+    key: string;
+    input: DisplayRegexTextRequest;
+}
 const pendingHostRequests = new Map<string, PendingHostRequest>();
 const TAVERN_DRAW_REQUEST_TIMEOUT_MS = 1000 * 60 * 20;
 const DRAW_COMPLETION_NOTICE_TEXT = '配图已生成';
@@ -338,6 +351,7 @@ const simulateRequestJson = ref('');
 const simulateRequestStatus = ref('');
 const simulateRequestError = ref('');
 const messageActionFeedback = ref<Record<string, 'success' | 'error'>>({});
+const displayRegexCache = ref<Record<string, string>>({});
 const activeRunController = ref<AbortController | null>(null);
 const managerAssistantController = ref<AbortController | null>(null);
 const tavernDrawController = ref<AbortController | null>(null);
@@ -368,6 +382,10 @@ let composeErrorHideTimer: number | null = null;
 let managerRecordsPollTimer: number | null = null;
 let managerRecordsPollRunning = false;
 let sessionContextSyncSequence = 0;
+const pendingDisplayRegexKeys = new Set<string>();
+const pendingRuntimeDisplayRegexRequests = new Map<string, PendingRuntimeDisplayRegexRequest>();
+const latestRuntimeDisplayRegexKeys = new Map<string, string>();
+let displayRegexCacheGeneration = 0;
 const effectiveContext = computed<XbTavernContext>(() => ({
     ...context.value,
     history: selectedSessionId.value
@@ -816,6 +834,15 @@ const memoryIndexStatusLine = computed(() => {
 const visibleChatMarkdownSignature = computed(() => visibleChatMessages.value
     .map((message) => `${message.sessionId}:${message.order}:${message.error ? 1 : 0}:${markdownSignature(message.content)}`)
     .join('|'));
+const messageDisplayDepthByKey = computed(() => {
+    const sorted = [...sessionMessages.value]
+        .filter((message) => isNormalRoleplayDisplayMessage(message))
+        .sort((left, right) => left.order - right.order);
+    return sorted.reduce<Record<string, number>>((depthByKey, message, index) => {
+        depthByKey[messageKey(message)] = Math.max(0, sorted.length - index - 1);
+        return depthByKey;
+    }, {});
+});
 const runtimeThoughtsSignature = computed(() => runtimeThoughts.value
     .map((thought, index) => `${index}:${markdownSignature(String(thought.label || ''))}:${markdownSignature(String(thought.text || ''))}`)
     .join('|'));
@@ -1161,6 +1188,287 @@ async function applyTavernRegex(items: TavernApplyRegexItem[]): Promise<TavernAp
     };
 }
 
+function clearRuntimeDisplayRegexRequests() {
+    pendingRuntimeDisplayRegexRequests.forEach((request) => window.clearTimeout(request.timer));
+    pendingRuntimeDisplayRegexRequests.clear();
+    latestRuntimeDisplayRegexKeys.clear();
+}
+
+function clearDisplayRegexCache() {
+    displayRegexCacheGeneration += 1;
+    pendingDisplayRegexKeys.clear();
+    clearRuntimeDisplayRegexRequests();
+    displayRegexCache.value = {};
+}
+
+function rememberDisplayRegexText(key: string, text: string) {
+    const next = { ...displayRegexCache.value, [key]: text };
+    const keys = Object.keys(next);
+    if (keys.length > DISPLAY_REGEX_CACHE_LIMIT) {
+        keys.slice(0, keys.length - DISPLAY_REGEX_CACHE_LIMIT).forEach((staleKey) => {
+            delete next[staleKey];
+        });
+    }
+    displayRegexCache.value = next;
+    if (activeView.value === 'chat' && chatFocus.value === 'chat') {
+        void nextTick(() => {
+            enhanceChatMarkdown();
+            updateChatScrollButtons();
+        });
+    }
+}
+
+function messageRegexPlacement(message: TavernMessageRecord): TavernApplyRegexItem['placement'] | null {
+    if (message.role === 'user') {return 'userInput';}
+    if (message.role === 'assistant') {return 'aiOutput';}
+    return null;
+}
+
+function isNormalRoleplayDisplayMessage(message: TavernMessageRecord): boolean {
+    return ['user', 'assistant'].includes(message.role)
+        && !message.error
+        && !!String(message.content || '').trim();
+}
+
+function messageDisplayDepth(message: TavernMessageRecord): number {
+    const depth = Number(messageDisplayDepthByKey.value[messageKey(message)]);
+    return Number.isFinite(depth) && depth >= 0 ? depth : 0;
+}
+
+function messageCharacterOverride(message: TavernMessageRecord): string {
+    return String(message.name || roleLabel(message.role) || '').trim();
+}
+
+function displayRegexCacheKey(
+    kind: 'message' | 'reasoning',
+    message: TavernMessageRecord,
+    input: {
+        placement: TavernApplyRegexItem['placement'];
+        text: string;
+        depth: number;
+        index?: number;
+        label?: string;
+        characterOverride?: string;
+    },
+) {
+    return [
+        kind,
+        message.sessionId,
+        String(message.order),
+        message.role,
+        String(message.name || ''),
+        String(input.index ?? ''),
+        input.placement,
+        String(input.depth),
+        input.characterOverride || '',
+        markdownSignature(String(input.label || '')),
+        markdownSignature(input.text),
+    ].join('\u0001');
+}
+
+function runtimeDisplayRegexCacheKey(
+    kind: 'message' | 'reasoning',
+    input: {
+        placement: TavernApplyRegexItem['placement'];
+        text: string;
+        depth: number;
+        index?: number;
+        label?: string;
+        characterOverride?: string;
+    },
+) {
+    const latestOrder = [...sessionMessages.value].sort((left, right) => left.order - right.order).at(-1)?.order ?? -1;
+    return [
+        'runtime',
+        kind,
+        selectedSessionId.value,
+        String(latestOrder),
+        'assistant',
+        String(input.index ?? ''),
+        input.placement,
+        String(input.depth),
+        input.characterOverride || '',
+        markdownSignature(String(input.label || '')),
+        markdownSignature(input.text),
+    ].join('\u0001');
+}
+
+async function resolveDisplayRegexText(input: DisplayRegexTextRequest) {
+    if (pendingDisplayRegexKeys.has(input.key)) {return;}
+    const generation = displayRegexCacheGeneration;
+    pendingDisplayRegexKeys.add(input.key);
+    try {
+        const result = await applyTavernRegex([{
+            id: input.key,
+            text: input.text,
+            placement: input.placement,
+            options: input.options,
+        }]);
+        if (generation !== displayRegexCacheGeneration) {return;}
+        const item = result.items.find((candidate) => candidate.id === input.key) || result.items[0];
+        rememberDisplayRegexText(input.key, item?.text ?? input.text);
+    } catch (error) {
+        console.warn('[小白酒馆] 显示正则应用失败', error);
+    } finally {
+        pendingDisplayRegexKeys.delete(input.key);
+    }
+}
+
+async function resolveRuntimeDisplayRegexText(slot: string, input: DisplayRegexTextRequest) {
+    if (pendingDisplayRegexKeys.has(input.key)) {return;}
+    const generation = displayRegexCacheGeneration;
+    pendingDisplayRegexKeys.add(input.key);
+    try {
+        const result = await applyTavernRegex([{
+            id: input.key,
+            text: input.text,
+            placement: input.placement,
+            options: input.options,
+        }]);
+        if (generation !== displayRegexCacheGeneration || latestRuntimeDisplayRegexKeys.get(slot) !== input.key) {return;}
+        const item = result.items.find((candidate) => candidate.id === input.key) || result.items[0];
+        rememberDisplayRegexText(input.key, item?.text ?? input.text);
+    } catch (error) {
+        console.warn('[小白酒馆] 生成中显示正则应用失败', error);
+    } finally {
+        pendingDisplayRegexKeys.delete(input.key);
+    }
+}
+
+function scheduleRuntimeDisplayRegexText(slot: string, input: DisplayRegexTextRequest) {
+    latestRuntimeDisplayRegexKeys.set(slot, input.key);
+    const current = pendingRuntimeDisplayRegexRequests.get(slot);
+    if (current) {
+        window.clearTimeout(current.timer);
+    }
+    const timer = window.setTimeout(() => {
+        const pending = pendingRuntimeDisplayRegexRequests.get(slot);
+        if (!pending || pending.key !== input.key) {return;}
+        pendingRuntimeDisplayRegexRequests.delete(slot);
+        void resolveRuntimeDisplayRegexText(slot, pending.input);
+    }, RUNTIME_DISPLAY_REGEX_DEBOUNCE_MS);
+    pendingRuntimeDisplayRegexRequests.set(slot, {
+        timer,
+        key: input.key,
+        input,
+    });
+}
+
+function displayMessageContent(message: TavernMessageRecord): string {
+    const text = String(message.content || '');
+    if (!text) {return '';}
+    if (!isNormalRoleplayDisplayMessage(message)) {return text;}
+    const placement = messageRegexPlacement(message);
+    if (!placement) {return text;}
+    const depth = messageDisplayDepth(message);
+    const characterOverride = messageCharacterOverride(message);
+    const key = displayRegexCacheKey('message', message, {
+        placement,
+        text,
+        depth,
+        characterOverride,
+    });
+    const cached = displayRegexCache.value[key];
+    if (cached !== undefined) {return cached;}
+    void resolveDisplayRegexText({
+        key,
+        text,
+        placement,
+        options: {
+            isMarkdown: true,
+            depth,
+            characterOverride,
+        },
+    });
+    return text;
+}
+
+function displayMessageThoughtBlocks(message: TavernMessageRecord): Array<{ label?: string; text?: string }> {
+    const depth = messageDisplayDepth(message);
+    return thoughtBlocks(message).map((thought, index) => {
+        const text = String(thought.text || '');
+        if (!text) {return thought;}
+        const key = displayRegexCacheKey('reasoning', message, {
+            placement: 'reasoning',
+            text,
+            depth,
+            index,
+            label: thought.label,
+        });
+        const cached = displayRegexCache.value[key];
+        if (cached !== undefined) {
+            return { ...thought, text: cached };
+        }
+        void resolveDisplayRegexText({
+            key,
+            text,
+            placement: 'reasoning',
+            options: {
+                isMarkdown: true,
+                depth,
+            },
+        });
+        return thought;
+    }).filter((thought) => String(thought.text || '').trim());
+}
+
+function displayRuntimeContent(textInput = ''): string {
+    const text = String(textInput || '');
+    if (!text) {return '';}
+    const depth = 0;
+    const characterOverride = String(roleLabel('assistant') || '').trim();
+    const key = runtimeDisplayRegexCacheKey('message', {
+        placement: 'aiOutput',
+        text,
+        depth,
+        characterOverride,
+    });
+    const cached = displayRegexCache.value[key];
+    if (cached !== undefined) {return cached;}
+    const request: DisplayRegexTextRequest = {
+        key,
+        text,
+        placement: 'aiOutput',
+        options: {
+            isMarkdown: true,
+            depth,
+            characterOverride,
+        },
+    };
+    scheduleRuntimeDisplayRegexText('runtime:message', request);
+    return text;
+}
+
+function displayRuntimeThoughtBlocks(thoughts: Array<{ label?: string; text?: string }> = []): Array<{ label?: string; text?: string }> {
+    const depth = 0;
+    return thoughtBlocks(thoughts).map((thought, index) => {
+        const text = String(thought.text || '');
+        if (!text) {return thought;}
+        const key = runtimeDisplayRegexCacheKey('reasoning', {
+            placement: 'reasoning',
+            text,
+            depth,
+            index,
+            label: thought.label,
+        });
+        const cached = displayRegexCache.value[key];
+        if (cached !== undefined) {
+            return { ...thought, text: cached };
+        }
+        const request: DisplayRegexTextRequest = {
+            key,
+            text,
+            placement: 'reasoning',
+            options: {
+                isMarkdown: true,
+                depth,
+            },
+        };
+        scheduleRuntimeDisplayRegexText(`runtime:reasoning:${index}`, request);
+        return thought;
+    }).filter((thought) => String(thought.text || '').trim());
+}
+
 async function applyTavernSubstituteParams(items: TavernSubstituteParamsItem[]): Promise<TavernSubstituteParamsResult> {
     if (!items.length) {
         return { items: [], changedCount: 0 };
@@ -1280,6 +1588,9 @@ function resolveHostRequest(payload: Record<string, unknown> = {}) {
         return;
     }
     pending.resolve(payload);
+    if (['xb-tavern:list-regex-scripts', 'xb-tavern:save-regex-script', 'xb-tavern:delete-regex-script'].includes(pending.type)) {
+        clearDisplayRegexCache();
+    }
 }
 
 function installHostRequestHeadersProvider(payload: Record<string, unknown> = {}) {
@@ -2296,8 +2607,9 @@ async function saveEditMessage(message: TavernMessageRecord, options: { rerun?: 
         return;
     }
     const substitutedContent = await substituteEditedMessageContent(message, content);
+    const regexedContent = await applyEditRegexToMessageContent(message, substitutedContent);
     const updated = await updateTavernMessage(message.sessionId, message.order, {
-        content: substitutedContent,
+        content: regexedContent,
         ...(message.role === 'user' ? { runtimeEvents: [] } : {}),
     });
     if (updated) {
@@ -2664,6 +2976,21 @@ async function substituteEditedMessageContent(message: TavernMessageRecord, cont
     return result.items[0]?.text ?? content;
 }
 
+async function applyEditRegexToMessageContent(message: TavernMessageRecord, content: string): Promise<string> {
+    const placement = messageRegexPlacement(message);
+    if (!placement) {return content;}
+    const result = await applyTavernRegex([{
+        id: `edit:${message.sessionId}:${message.order}`,
+        text: content,
+        placement,
+        options: {
+            isEdit: true,
+            characterOverride: messageCharacterOverride(message),
+        },
+    }]);
+    return result.items[0]?.text ?? content;
+}
+
 function ensureManagerLiveProtocolState(sessionId: string) {
     const id = String(sessionId || '').trim();
     if (!id) {return null;}
@@ -2753,6 +3080,7 @@ function applyManagerProtocolEvent(sessionId: string, event: TavernManagerProtoc
 }
 
 function clearRuntimeAssistantLiveState() {
+    clearRuntimeDisplayRegexRequests();
     runtimeText.value = '';
     runtimeThoughts.value = [];
     runtimeActionCheckEvents.value = [];
@@ -3272,6 +3600,10 @@ provide(TAVERN_APP_UI_CONTEXT, {
         copyMessage,
         currentUserMessage,
         deleteMessageTurn,
+        displayMessageContent,
+        displayMessageThoughtBlocks,
+        displayRuntimeContent,
+        displayRuntimeThoughtBlocks,
         displayCharacterName,
         drawMessage,
         drawMessageStatusClass,
@@ -3491,6 +3823,7 @@ onUnmounted(() => {
         window.clearInterval(managerRecordsPollTimer);
         managerRecordsPollTimer = null;
     }
+    clearDisplayRegexCache();
     clearManagerCompactionOverlayHideTimer();
     clearPendingCharacterSession();
 });

@@ -328,5 +328,43 @@ test('tavern edited RP messages use native macro substitution before saving', ()
     assert.match(appSource, /function buildUiSubstituteParamsOptions/);
     assert.match(appSource, /async function substituteEditedMessageContent/);
     assert.match(appSource, /applyTavernSubstituteParams\(\[\{\s*id: `edit:\$\{message\.sessionId\}:\$\{message\.order\}`,[\s\S]*buildUiSubstituteParamsOptions/);
-    assert.match(appSource, /const substitutedContent = await substituteEditedMessageContent\(message, content\);[\s\S]*updateTavernMessage\(message\.sessionId, message\.order, \{\s*content: substitutedContent,/);
+    assert.match(appSource, /const substitutedContent = await substituteEditedMessageContent\(message, content\);[\s\S]*const regexedContent = await applyEditRegexToMessageContent\(message, substitutedContent\);[\s\S]*updateTavernMessage\(message\.sessionId, message\.order, \{\s*content: regexedContent,/);
+});
+
+test('tavern RP display and edit save use native regex phases without slash command placement', () => {
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const contextSource = readRepoFile('modules/tavern/app-src/components/tavern-app-context.ts');
+    const conversationSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
+    const sharedRegexSource = readRepoFile('modules/tavern/shared/regex.ts');
+
+    assert.match(contextSource, /displayMessageContent: TavernCommand/);
+    assert.match(contextSource, /displayMessageThoughtBlocks: TavernCommand/);
+    assert.match(contextSource, /displayRuntimeContent: TavernCommand/);
+    assert.match(contextSource, /displayRuntimeThoughtBlocks: TavernCommand/);
+    assert.match(conversationSource, /const text = displayMessageContent\(message\);/);
+    assert.match(conversationSource, /v-for="rawThoughts in \[thoughtBlocks\(message\)\]"/);
+    assert.match(conversationSource, /v-for="displayThoughts in \[displayMessageThoughtBlocks\(message\)\]"/);
+    assert.match(conversationSource, /v-for="\(thought, thoughtIndex\) in displayThoughts"/);
+    assert.match(conversationSource, /displayRuntimeContent\(runtimeText\.value\)/);
+    assert.match(conversationSource, /v-for="rawRuntimeThoughts in \[thoughtBlocks\(runtimeThoughts\)\]"/);
+    assert.match(conversationSource, /v-for="displayRuntimeThoughts in \[displayRuntimeThoughtBlocks\(rawRuntimeThoughts\)\]"/);
+    assert.doesNotMatch(conversationSource, /displayMessageThoughtBlocks\(message\)\.length/);
+    assert.doesNotMatch(conversationSource, /displayRuntimeThoughtBlocks\(runtimeThoughts\)\.length/);
+    assert.match(appSource, /function displayMessageContent\(message: TavernMessageRecord\): string/);
+    assert.match(appSource, /function displayRuntimeContent\(textInput = ''\): string/);
+    assert.match(appSource, /const RUNTIME_DISPLAY_REGEX_DEBOUNCE_MS = 200/);
+    assert.match(appSource, /function clearRuntimeDisplayRegexRequests\(\)[\s\S]*pendingRuntimeDisplayRegexRequests\.forEach\(\(request\) => window\.clearTimeout\(request\.timer\)\)/);
+    assert.match(appSource, /function clearDisplayRegexCache\(\)[\s\S]*clearRuntimeDisplayRegexRequests\(\)/);
+    assert.match(appSource, /function clearRuntimeAssistantLiveState\(\) \{[\s\S]*clearRuntimeDisplayRegexRequests\(\)/);
+    assert.match(appSource, /function scheduleRuntimeDisplayRegexText\(slot: string, input: DisplayRegexTextRequest\)/);
+    assert.match(appSource, /window\.clearTimeout\(current\.timer\)/);
+    assert.match(appSource, /latestRuntimeDisplayRegexKeys\.get\(slot\) !== input\.key/);
+    assert.match(appSource, /placement: 'reasoning'[\s\S]*options: \{\s*isMarkdown: true,\s*depth,/);
+    assert.match(appSource, /options: \{\s*isMarkdown: true,\s*depth,\s*characterOverride,/);
+    assert.match(appSource, /const sorted = \[\.\.\.sessionMessages\.value\]\s*\.filter\(\(message\) => isNormalRoleplayDisplayMessage\(message\)\)/);
+    assert.match(appSource, /function isNormalRoleplayDisplayMessage\(message: TavernMessageRecord\): boolean[\s\S]*&& !message\.error[\s\S]*String\(message\.content \|\| ''\)\.trim\(\)/);
+    assert.doesNotMatch(appSource, /catch \(error\) \{[\s\S]{0,160}rememberDisplayRegexText\(input\.key, input\.text\)/);
+    assert.match(appSource, /async function applyEditRegexToMessageContent/);
+    assert.match(appSource, /options: \{\s*isEdit: true,\s*characterOverride: messageCharacterOverride\(message\),\s*\}/);
+    assert.doesNotMatch(sharedRegexSource, /slash/i);
 });

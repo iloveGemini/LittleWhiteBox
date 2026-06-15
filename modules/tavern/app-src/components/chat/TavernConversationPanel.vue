@@ -42,6 +42,10 @@ const {
     copyMessage,
     currentUserMessage,
     deleteMessageTurn,
+    displayMessageContent,
+    displayMessageThoughtBlocks,
+    displayRuntimeContent,
+    displayRuntimeThoughtBlocks,
     drawMessage,
     drawMessageStatusClass,
     drawMessageStatusText,
@@ -131,7 +135,7 @@ function buildAssistantRenderState(text: string, events: ReturnType<typeof getAc
 }
 
 function assistantMessageRenderState(message: TavernMessageRecord) {
-    const text = String(message.content || '');
+    const text = displayMessageContent(message);
     if (message.role !== 'assistant') {
         return {
             text,
@@ -143,7 +147,7 @@ function assistantMessageRenderState(message: TavernMessageRecord) {
 }
 
 const liveAssistantRenderState = computed(() => buildAssistantRenderState(
-    String(runtimeText.value || ''),
+    displayRuntimeContent(runtimeText.value),
     Array.isArray(runtimeActionCheckEvents.value) ? runtimeActionCheckEvents.value : [],
 ));
 const liveAssistantVisible = computed(() => hasRenderableLiveAssistantContent({
@@ -287,28 +291,38 @@ watch(
               @cancel="cancelEditMessage"
               @save="saveEditMessage(message, $event)"
             />
-            <details
-              v-if="!isEditingMessage(message) && thoughtBlocks(message).length"
-              class="tavern-thought-details"
-              :open="thoughtDisclosure.isOpen(messageThoughtDisclosureId(message))"
-              @toggle="thoughtDisclosure.setOpenFromEvent(messageThoughtDisclosureId(message), $event)"
+            <template
+              v-for="rawThoughts in [thoughtBlocks(message)]"
+              :key="`${messageKey(message)}:raw-thoughts:${rawThoughts.length}`"
             >
-              <summary>{{ thoughtSummaryLabel(message) }}</summary>
-              <template
-                v-if="thoughtDisclosure.isOpen(messageThoughtDisclosureId(message))"
+              <details
+                v-if="!isEditingMessage(message) && rawThoughts.length"
+                class="tavern-thought-details"
+                :open="thoughtDisclosure.isOpen(messageThoughtDisclosureId(message))"
+                @toggle="thoughtDisclosure.setOpenFromEvent(messageThoughtDisclosureId(message), $event)"
               >
-                <div
-                  v-for="(thought, thoughtIndex) in thoughtBlocks(message)"
-                  :key="`${message.sessionId}-${message.order}-thought-${thoughtIndex}`"
-                  class="tavern-thought-block"
+                <summary>{{ thoughtSummaryLabel(rawThoughts) }}</summary>
+                <template
+                  v-if="thoughtDisclosure.isOpen(messageThoughtDisclosureId(message))"
                 >
-                  <div class="tavern-thought-label">
-                    {{ thought.label }}
-                  </div>
-                  <pre>{{ thought.text }}</pre>
-                </div>
-              </template>
-            </details>
+                  <template
+                    v-for="displayThoughts in [displayMessageThoughtBlocks(message)]"
+                    :key="`${messageKey(message)}:display-thoughts:${displayThoughts.length}`"
+                  >
+                    <div
+                      v-for="(thought, thoughtIndex) in displayThoughts"
+                      :key="`${message.sessionId}-${message.order}-thought-${thoughtIndex}`"
+                      class="tavern-thought-block"
+                    >
+                      <div class="tavern-thought-label">
+                        {{ thought.label }}
+                      </div>
+                      <pre>{{ thought.text }}</pre>
+                    </div>
+                  </template>
+                </template>
+              </details>
+            </template>
             <template v-if="!isEditingMessage(message)">
               <template
                 v-for="render in [assistantMessageRenderState(message)]"
@@ -423,28 +437,38 @@ watch(
             </span>
             <small>生成中</small>
           </div>
-          <details
-            v-if="thoughtBlocks(runtimeThoughts).length"
-            class="tavern-thought-details"
-            :open="thoughtDisclosure.isOpen(runtimeThoughtDisclosureId, true)"
-            @toggle="thoughtDisclosure.setOpenFromEvent(runtimeThoughtDisclosureId, $event)"
+          <template
+            v-for="rawRuntimeThoughts in [thoughtBlocks(runtimeThoughts)]"
+            :key="`${runtimeThoughtDisclosureId}:${rawRuntimeThoughts.length}`"
           >
-            <summary>{{ thoughtSummaryLabel(runtimeThoughts, true) }}</summary>
-            <template
-              v-if="thoughtDisclosure.isOpen(runtimeThoughtDisclosureId, true)"
+            <details
+              v-if="rawRuntimeThoughts.length"
+              class="tavern-thought-details"
+              :open="thoughtDisclosure.isOpen(runtimeThoughtDisclosureId, true)"
+              @toggle="thoughtDisclosure.setOpenFromEvent(runtimeThoughtDisclosureId, $event)"
             >
-              <div
-                v-for="(thought, thoughtIndex) in thoughtBlocks(runtimeThoughts)"
-                :key="`runtime-thought-${thoughtIndex}`"
-                class="tavern-thought-block"
+              <summary>{{ thoughtSummaryLabel(rawRuntimeThoughts, true) }}</summary>
+              <template
+                v-if="thoughtDisclosure.isOpen(runtimeThoughtDisclosureId, true)"
               >
-                <div class="tavern-thought-label">
-                  {{ thought.label }}
-                </div>
-                <pre>{{ thought.text }}</pre>
-              </div>
-            </template>
-          </details>
+                <template
+                  v-for="displayRuntimeThoughts in [displayRuntimeThoughtBlocks(rawRuntimeThoughts)]"
+                  :key="`${runtimeThoughtDisclosureId}:display:${displayRuntimeThoughts.length}`"
+                >
+                  <div
+                    v-for="(thought, thoughtIndex) in displayRuntimeThoughts"
+                    :key="`runtime-thought-${thoughtIndex}`"
+                    class="tavern-thought-block"
+                  >
+                    <div class="tavern-thought-label">
+                      {{ thought.label }}
+                    </div>
+                    <pre>{{ thought.text }}</pre>
+                  </div>
+                </template>
+              </template>
+            </details>
+          </template>
           <div
             v-if="liveAssistantMarkdownVisible"
             class="xb-tavern-markdown"
