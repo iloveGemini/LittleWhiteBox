@@ -1251,7 +1251,7 @@ async function syncSessionCharacterContext(options: { sessionId?: string; force?
 async function resolveRuntimeContextForSession(sessionId = selectedSessionId.value): Promise<XbTavernContext> {
     const targetSessionId = String(sessionId || '').trim();
     if (!targetSessionId) {return context.value;}
-    return await syncSessionCharacterContext({ sessionId: targetSessionId });
+    return await syncSessionCharacterContext({ sessionId: targetSessionId, force: true });
 }
 
 function resolveHostRequest(payload: Record<string, unknown> = {}) {
@@ -1994,10 +1994,6 @@ function isEditingManagerMessage(message: TavernManagerMessageRecord) {
     return editingMessageKey.value === managerMessageKey(message);
 }
 
-function isEditingMessageDirty(message: TavernMessageRecord) {
-    return isEditingMessage(message) && editingMessageDraft.value.trim() !== String(message.content || '').trim();
-}
-
 function isEditingManagerMessageDirty(message: TavernManagerMessageRecord) {
     return isEditingManagerMessage(message) && editingMessageDraft.value.trim() !== String(message.content || '').trim();
 }
@@ -2216,14 +2212,6 @@ async function drawMessage(message: TavernMessageRecord) {
 function startEditMessage(message: TavernMessageRecord) {
     if (!canEditMessage(message)) {return;}
     editingMessageKey.value = messageKey(message);
-    editingMessageDraft.value = message.content || '';
-    void nextTick(() => {
-        const textarea = chatScrollRef.value?.querySelector<HTMLTextAreaElement>(`[data-message-editor="${messageKey(message)}"]`);
-        if (!textarea) {return;}
-        autoSizeTextarea(textarea);
-        textarea.focus();
-        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-    });
 }
 
 function startEditManagerMessage(message: TavernManagerMessageRecord) {
@@ -2264,18 +2252,6 @@ function resetTextareaHeight(textarea: HTMLTextAreaElement | null) {
     textarea.style.height = '';
 }
 
-function handleEditKeydown(event: KeyboardEvent, message: TavernMessageRecord) {
-    if (event.key === 'Escape') {
-        event.preventDefault();
-        cancelEditMessage();
-        return;
-    }
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        void saveEditMessage(message);
-    }
-}
-
 function handleManagerEditKeydown(event: KeyboardEvent, message: TavernManagerMessageRecord) {
     if (event.key === 'Escape') {
         event.preventDefault();
@@ -2300,14 +2276,17 @@ function handleComposeInput(event: Event) {
         : { minHeight: 36, maxHeight: 99 });
 }
 
-async function saveEditMessage(message: TavernMessageRecord, options: { rerun?: boolean } = {}) {
+async function saveEditMessage(message: TavernMessageRecord, options: { rerun?: boolean; content?: string } = {}) {
     if (!canEditMessage(message)) {return;}
-    const content = editingMessageDraft.value.trim();
+    const draft = 'content' in options
+        ? String(options.content || '')
+        : String(message.content || '');
+    const content = draft.trim();
     if (!content) {
         flashMessageAction(message, 'edit', false);
         return;
     }
-    if (!options.rerun && !isEditingMessageDirty(message)) {
+    if (!options.rerun && content === String(message.content || '').trim()) {
         cancelEditMessage();
         return;
     }
@@ -3299,7 +3278,6 @@ provide(TAVERN_APP_UI_CONTEXT, {
         drawMessageStatusText,
         drawMessageTitle,
         drawProgressText,
-        editingMessageDraft,
         filteredChatSidebarSessionCount,
         formatMessageTime,
         handleChatScroll,
@@ -3309,12 +3287,9 @@ provide(TAVERN_APP_UI_CONTEXT, {
         handleChatWheel,
         handleComposeInput,
         handleComposeKeydown,
-        handleEditInput,
-        handleEditKeydown,
         hiddenChatSidebarSessionCount,
         isDrawingMessage,
         isEditingMessage,
-        isEditingMessageDirty,
         isCancellingRun,
         isRunning,
         latestErrorMessage,
@@ -3356,12 +3331,14 @@ provide(TAVERN_APP_UI_CONTEXT, {
         copyManagerMessage,
         currentManagerWorkRun,
         deleteManagerMessageTurn,
+        editingMessageDraft,
         formatRunActivityLine,
         formatRunIssueLine,
         formatRunInputLine,
         formatRunMapLine,
         formatRunMemoryLine,
         formatRunModelLine,
+        handleEditInput,
         handleManagerComposeKeydown,
         handleManagerEditKeydown,
         handleManagerScroll,

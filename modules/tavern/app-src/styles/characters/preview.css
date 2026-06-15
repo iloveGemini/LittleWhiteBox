@@ -82,13 +82,28 @@
 }
 
 .dossier-summary {
+    max-height: min(360px, 34vh);
+    overflow-y: auto;
     margin-top: 12px;
     border-left: 2px solid var(--xb-rule-strong);
     background: var(--xb-paper-plain);
     color: var(--xb-ink-soft);
     font-size: 14px;
     line-height: 1.6;
+    overscroll-behavior: contain;
     padding: 16px;
+    white-space: pre-wrap;
+    -webkit-overflow-scrolling: touch;
+}
+
+.dossier-summary::-webkit-scrollbar,
+.data-block::-webkit-scrollbar {
+    width: 4px;
+}
+
+.dossier-summary::-webkit-scrollbar-thumb,
+.data-block::-webkit-scrollbar-thumb {
+    background: var(--xb-rule-strong);
 }
 
 .dossier-details {
@@ -112,6 +127,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
     cursor: pointer;
     list-style: none;
     color: var(--xb-ink);
@@ -119,6 +135,13 @@
     font-size: 18px;
     font-weight: 600;
     user-select: none;
+}
+
+.data-section-title span {
+    color: var(--xb-ink-faint);
+    font-family: var(--xb-font-mono);
+    font-size: 11px;
+    font-weight: 400;
 }
 
 .data-section-title::-webkit-details-marker {
@@ -161,7 +184,7 @@
 }
 
 .data-block {
-    max-height: 200px;
+    max-height: min(560px, 52vh);
     overflow-y: auto;
     border: 1px solid var(--xb-rule);
     border-radius: 4px;
@@ -170,16 +193,71 @@
     font-family: var(--xb-font-serif);
     font-size: 14px;
     line-height: 1.7;
+    overscroll-behavior: contain;
     white-space: pre-wrap;
     padding: 20px;
+    -webkit-overflow-scrolling: touch;
 }
 
-.data-block::-webkit-scrollbar {
-    width: 4px;
+.character-data-list {
+    display: grid;
+    gap: 0;
+    border-top: 1px solid var(--xb-rule);
 }
 
-.data-block::-webkit-scrollbar-thumb {
-    background: var(--xb-rule-strong);
+.character-data-section {
+    border-bottom: 1px solid var(--xb-rule);
+    border-top: 0;
+    padding: 0;
+}
+
+.character-data-section .data-section-title {
+    min-height: 52px;
+    padding: 9px 0;
+}
+
+.character-data-section[open] .data-section-title {
+    margin-bottom: 12px;
+}
+
+.character-data-section .data-block {
+    margin-bottom: 16px;
+}
+
+.greeting-current-card {
+    display: grid;
+    gap: 10px;
+}
+
+.greeting-current-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--xb-ink);
+    font-family: var(--xb-font-mono);
+    font-size: 11px;
+}
+
+.greeting-current-head strong {
+    font-weight: 600;
+}
+
+.greeting-current-head span {
+    color: var(--xb-ink-faint);
+}
+
+.greeting-current-text {
+    max-height: min(560px, 48vh);
+}
+
+.greeting-picker {
+    border-top: 1px solid var(--xb-rule);
+    padding-top: 12px;
+}
+
+.greeting-picker.is-empty {
+    display: none;
 }
 
 .greeting-choice-list {
@@ -222,12 +300,11 @@
 }
 
 .greeting-choice-text {
-    display: -webkit-box;
+    display: block;
     overflow: hidden;
     font-size: 13px;
     line-height: 1.55;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 4;
+    max-height: 4.7em;
     white-space: pre-wrap;
 }
 
@@ -290,6 +367,7 @@
     }
 
     .dossier-summary {
+        max-height: 220px;
         margin-top: 10px;
         padding: 12px;
         font-size: 13px;
@@ -307,13 +385,18 @@
     }
 
     .data-block {
-        max-height: 150px;
+        max-height: min(420px, 48vh);
         padding: 14px;
+    }
+
+    .greeting-current-text {
+        max-height: min(420px, 46vh);
     }
 
     .greeting-choice {
         grid-template-columns: 1fr;
         gap: 6px;
+        min-height: 0;
     }
 }
 

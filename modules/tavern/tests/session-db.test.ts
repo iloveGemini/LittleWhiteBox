@@ -372,6 +372,7 @@ test('tavern session state stores turn and merges world entry states', async () 
 
     assert.deepEqual(normalizeTavernSessionState(session.state), {
         turn: 2,
+        contextWindowStartOrder: 0,
         contract: DEFAULT_TAVERN_SESSION_CONTRACT,
         worldEntryStates: {
             'Lore\u0000gate': { stickyUntilTurn: 4 },
@@ -454,6 +455,7 @@ test('replaceTavernSessionState preserves stored contract when runtime rebuild o
     const replaced = await getTavernSession(session.id);
     assert.deepEqual(normalizeTavernSessionState(replaced?.state), {
         turn: 5,
+        contextWindowStartOrder: 0,
         contract: {
             memoryArchiving: false,
             cartographyEngine: false,

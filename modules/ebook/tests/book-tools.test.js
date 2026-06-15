@@ -6080,6 +6080,47 @@ test('Shared markdown renderer does not mount raw HTML directly', () => {
     }
 });
 
+test('Shared markdown renderer does not fold non-document raw tags into HTML preview blocks', () => {
+    const previousShowdown = globalThis.showdown;
+    const previousDOMPurify = globalThis.DOMPurify;
+    globalThis.showdown = {
+        Converter: class {
+            makeHtml(text) {
+                return `<p>${String(text).replace(/\n/g, '<br>')}</p>`;
+            }
+        },
+    };
+    globalThis.DOMPurify = {
+        sanitize(html) {
+            return html;
+        },
+    };
+
+    try {
+        const html = renderMarkdownToHtml([
+            '<note>',
+            'Keep this as ordinary prose.',
+            '<marker>inline marker</marker>',
+            '</note>',
+            '<details><summary>[角色状态]</summary>',
+            '```',
+            '- status text',
+            '```',
+            '</details>',
+        ].join('\n'));
+        assert.doesNotMatch(html, /xb-markdown-html-placeholder/);
+        assert.doesNotMatch(html, /@@XBHTMLBLOCK/);
+        assert.match(html, /&lt;note&gt;/);
+        assert.match(html, /Keep this as ordinary prose/);
+        assert.match(html, /&lt;marker&gt;inline marker&lt;\/marker&gt;/);
+        assert.match(html, /<details>/);
+        assert.match(html, /<summary>\[角色状态\]<\/summary>/);
+    } finally {
+        globalThis.showdown = previousShowdown;
+        globalThis.DOMPurify = previousDOMPurify;
+    }
+});
+
 test('Shared markdown renderer folds fenced HTML into a lightweight placeholder', () => {
     const previousShowdown = globalThis.showdown;
     const previousDOMPurify = globalThis.DOMPurify;

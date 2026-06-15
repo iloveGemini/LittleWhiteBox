@@ -663,6 +663,16 @@
     box-shadow: 0 0 0 3px var(--xb-stamp-soft);
 }
 
+.message-edit-sizer {
+    position: fixed;
+    top: -9999px;
+    left: -9999px;
+    overflow: hidden;
+    visibility: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .message-edit-actions {
     display: flex;
     flex-wrap: wrap;

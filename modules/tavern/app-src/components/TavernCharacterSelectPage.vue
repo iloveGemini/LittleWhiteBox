@@ -62,6 +62,12 @@ const greetingOptions = computed(() => {
         ...(selected.alternateGreetings || []),
     ].filter(Boolean);
 });
+const selectedGreetingText = computed(() => {
+    if (!greetingOptions.value.length) {return '';}
+    const index = Math.min(Math.max(0, Number(props.selectedGreetingIndex) || 0), greetingOptions.value.length - 1);
+    return greetingOptions.value[index] || '';
+});
+const hasMultipleGreetings = computed(() => greetingOptions.value.length > 1);
 
 const selectedCharacterPreviewLoading = computed(() => (
     !!props.selectedCharacter
@@ -83,8 +89,12 @@ function handleSearchInput(event: Event) {
     emit('update:searchText', (event.target as HTMLInputElement).value);
 }
 
-function characterAdvancedDisclosureId() {
-    return `character-advanced:${props.selectedCharacter?.id || 'none'}`;
+function characterDataDisclosureId(key: string) {
+    return `character-data:${props.selectedCharacter?.id || 'none'}:${key}`;
+}
+
+function greetingLabel(index: number) {
+    return index === 0 ? '主开场白' : `备用 ${index}`;
 }
 
 watch(
@@ -267,20 +277,42 @@ defineExpose({ scrollSelectedIntoView });
                 <dd>
                   <div
                     v-if="greetingOptions.length"
-                    class="greeting-choice-list"
+                    class="greeting-current-card"
                   >
-                    <button
-                      v-for="(greeting, index) in greetingOptions"
-                      :key="`${selectedCharacter.id}-greeting-${index}`"
-                      type="button"
-                      class="greeting-choice"
-                      :class="{ selected: index === selectedGreetingIndex }"
-                      :disabled="!!pendingCharacterSessionId"
-                      @click="$emit('select-greeting', index)"
+                    <div class="greeting-current-head">
+                      <strong>{{ greetingLabel(selectedGreetingIndex) }}</strong>
+                      <span v-if="greetingOptions.length > 1">{{ greetingOptions.length }} 个可选</span>
+                    </div>
+                    <div class="data-block greeting-current-text">
+                      {{ selectedGreetingText }}
+                    </div>
+                    <details
+                      :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('greetings'))"
+                      class="data-section greeting-picker"
+                      :class="{ 'is-empty': !hasMultipleGreetings }"
+                      @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('greetings'), $event)"
                     >
-                      <span class="greeting-choice-name">{{ index === 0 ? '主开场白' : `备用 ${index}` }}</span>
-                      <span class="greeting-choice-text">{{ greeting }}</span>
-                    </button>
+                      <summary class="data-section-title">
+                        切换开场白
+                      </summary>
+                      <div
+                        v-if="hasMultipleGreetings && advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('greetings'))"
+                        class="greeting-choice-list"
+                      >
+                        <button
+                          v-for="(greeting, index) in greetingOptions"
+                          :key="`${selectedCharacter.id}-greeting-${index}`"
+                          type="button"
+                          class="greeting-choice"
+                          :class="{ selected: index === selectedGreetingIndex }"
+                          :disabled="!!pendingCharacterSessionId"
+                          @click="$emit('select-greeting', index)"
+                        >
+                          <span class="greeting-choice-name">{{ greetingLabel(index) }}</span>
+                          <span class="greeting-choice-text">{{ shortText(greeting, 120) }}</span>
+                        </button>
+                      </div>
+                    </details>
                   </div>
                   <div
                     v-else-if="selectedCharacterPreviewLoading"
@@ -296,52 +328,93 @@ defineExpose({ scrollSelectedIntoView });
                   </div>
                 </dd>
               </div>
+            </dl>
+            <div class="character-data-list">
               <details
-                class="data-section"
-                :open="advancedDefinitionDisclosure.isOpen(characterAdvancedDisclosureId())"
-                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterAdvancedDisclosureId(), $event)"
+                class="data-section character-data-section"
+                :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('description'))"
+                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('description'), $event)"
               >
                 <summary class="data-section-title">
-                  高级定义
+                  角色描述 <span>Description</span>
                 </summary>
-                <template
-                  v-if="advancedDefinitionDisclosure.isOpen(characterAdvancedDisclosureId())"
-                >
-                  <div class="data-row">
-                    <dt>性格摘要 <span>Personality summary</span></dt>
-                    <dd>
-                      <div class="data-block">
-                        {{ selectedCharacter.personality || '未填写' }}
-                      </div>
-                    </dd>
-                  </div>
-                  <div class="data-row">
-                    <dt>情景 <span>Scenario</span></dt>
-                    <dd>
-                      <div class="data-block">
-                        {{ selectedCharacter.scenario || '未填写' }}
-                      </div>
-                    </dd>
-                  </div>
-                  <div class="data-row">
-                    <dt>角色备注 <span>Character's Note</span></dt>
-                    <dd>
-                      <div class="data-block">
-                        {{ selectedCharacter.characterDepthPrompt || '未填写' }}
-                      </div>
-                    </dd>
-                  </div>
-                  <div class="data-row">
-                    <dt>制作者备注 <span>Creator's Notes</span></dt>
-                    <dd>
-                      <div class="data-block">
-                        {{ selectedCharacter.creatorNotes || '未填写' }}
-                      </div>
-                    </dd>
+                <template v-if="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('description'))">
+                  <div class="data-block">
+                    {{ selectedCharacter.description || '未填写' }}
                   </div>
                 </template>
               </details>
-            </dl>
+              <details
+                class="data-section character-data-section"
+                :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('personality'))"
+                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('personality'), $event)"
+              >
+                <summary class="data-section-title">
+                  性格摘要 <span>Personality</span>
+                </summary>
+                <template v-if="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('personality'))">
+                  <div class="data-block">
+                    {{ selectedCharacter.personality || '未填写' }}
+                  </div>
+                </template>
+              </details>
+              <details
+                class="data-section character-data-section"
+                :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('scenario'))"
+                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('scenario'), $event)"
+              >
+                <summary class="data-section-title">
+                  情景 <span>Scenario</span>
+                </summary>
+                <template v-if="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('scenario'))">
+                  <div class="data-block">
+                    {{ selectedCharacter.scenario || '未填写' }}
+                  </div>
+                </template>
+              </details>
+              <details
+                class="data-section character-data-section"
+                :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('depth'))"
+                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('depth'), $event)"
+              >
+                <summary class="data-section-title">
+                  角色备注 <span>Character's Note</span>
+                </summary>
+                <template v-if="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('depth'))">
+                  <div class="data-block">
+                    {{ selectedCharacter.characterDepthPrompt || '未填写' }}
+                  </div>
+                </template>
+              </details>
+              <details
+                class="data-section character-data-section"
+                :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('creator'))"
+                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('creator'), $event)"
+              >
+                <summary class="data-section-title">
+                  制作者备注 <span>Creator's Notes</span>
+                </summary>
+                <template v-if="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('creator'))">
+                  <div class="data-block">
+                    {{ selectedCharacter.creatorNotes || '未填写' }}
+                  </div>
+                </template>
+              </details>
+              <details
+                class="data-section character-data-section"
+                :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('examples'))"
+                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('examples'), $event)"
+              >
+                <summary class="data-section-title">
+                  示例对话 <span>Example dialogue</span>
+                </summary>
+                <template v-if="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('examples'))">
+                  <div class="data-block">
+                    {{ selectedCharacter.mesExample || '未填写' }}
+                  </div>
+                </template>
+              </details>
+            </div>
           </div>
         </main>
 

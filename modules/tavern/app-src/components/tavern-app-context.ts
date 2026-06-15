@@ -198,7 +198,6 @@ export interface TavernChatContext {
     drawMessageStatusText: TavernCommand<[message: TavernMessageRecord], string>;
     drawMessageTitle: TavernCommand<[message: TavernMessageRecord], string>;
     drawProgressText: Ref<string>;
-    editingMessageDraft: Ref<string>;
     filteredChatSidebarSessionCount: TavernReadable<number>;
     formatMessageTime: TavernCommand<[value: unknown], string>;
     handleChatScroll: TavernCommand;
@@ -208,12 +207,9 @@ export interface TavernChatContext {
     handleChatWheel: TavernCommand<[event: WheelEvent]>;
     handleComposeInput: TavernCommand<[event: Event]>;
     handleComposeKeydown: TavernCommand<[event: KeyboardEvent]>;
-    handleEditInput: TavernCommand<[event: Event]>;
-    handleEditKeydown: TavernCommand<[event: KeyboardEvent, message: TavernMessageRecord]>;
     hiddenChatSidebarSessionCount: TavernReadable<number>;
     isDrawingMessage: TavernCommand<[message: TavernMessageRecord], boolean>;
     isEditingMessage: TavernCommand<[message: TavernMessageRecord], boolean>;
-    isEditingMessageDirty: TavernCommand<[message: TavernMessageRecord], boolean>;
     isCancellingRun: Ref<boolean>;
     isRunning: Ref<boolean>;
     latestErrorMessage: TavernReadable<string>;
@@ -221,14 +217,14 @@ export interface TavernChatContext {
     messageKey: TavernCommand<[message: TavernMessageRecord], string>;
     normalizeTavernSessionState: TavernCommand<[value?: unknown], { turn?: number }>;
     removeSession: TavernCommand<[sessionId: string, event?: Event], Promise<void>>;
-    renderChatMarkdown: TavernCommand<[text?: string], string>;
+    renderChatMarkdown: TavernCommand<[text?: string, options?: { roleplay?: boolean; userName?: string; characterName?: string }], string>;
     rerunFromMessage: TavernCommand<[message: TavernMessageRecord], Promise<void>>;
     revealOlderChatMessages: TavernCommand<[force?: boolean], boolean>;
     roleLabel: TavernCommand<[role?: string], string>;
     runtimeActionCheckEvents: Ref<TavernActionCheckRuntimeEvent[]>;
     runtimeText: Ref<string>;
     runtimeThoughts: Ref<Array<{ label?: string; text?: string }>>;
-    saveEditMessage: TavernCommand<[message: TavernMessageRecord, options?: { rerun?: boolean }], Promise<void>>;
+    saveEditMessage: TavernCommand<[message: TavernMessageRecord, options?: { rerun?: boolean; content?: string }], Promise<void>>;
     scrollChatToBottom: TavernCommand<[force?: boolean, options?: { collapseWindow?: boolean; revealHelpers?: boolean }]>;
     scrollChatToTop: TavernCommand;
     selectedSessionId: Ref<string>;
@@ -256,6 +252,7 @@ export interface TavernManagerContext {
     copyManagerMessage: TavernCommand<[message: TavernManagerMessageRecord], Promise<void>>;
     currentManagerWorkRun: TavernReadable<TavernManagerRunRecord | null>;
     deleteManagerMessageTurn: TavernCommand<[message: TavernManagerMessageRecord], Promise<void>>;
+    editingMessageDraft: Ref<string>;
     formatRunActivityLine: TavernCommand<[run: TavernManagerRunRecord], string>;
     formatRunIssueLine: TavernCommand<[run: TavernManagerRunRecord], string>;
     formatRunInputLine: TavernCommand<[run: TavernManagerRunRecord], string>;
@@ -263,6 +260,7 @@ export interface TavernManagerContext {
     formatRunMemoryLine: TavernCommand<[run: TavernManagerRunRecord], string>;
     formatRunModelLine: TavernCommand<[run: TavernManagerRunRecord], string>;
     handleManagerComposeKeydown: TavernCommand<[event: KeyboardEvent]>;
+    handleEditInput: TavernCommand<[event: Event]>;
     handleManagerEditKeydown: TavernCommand<[event: KeyboardEvent, message: TavernManagerMessageRecord]>;
     handleManagerScroll: TavernCommand;
     handleManagerSubmit: TavernCommand<[], Promise<void>>;
@@ -335,7 +333,7 @@ export interface TavernMemoryContext {
     memoryFileSearchText: Ref<string>;
     memoryFileStatusLabel: TavernCommand<[status?: string], string>;
     previewMemoryDraft: TavernCommand;
-    renderChatMarkdown: TavernCommand<[text?: string], string>;
+    renderChatMarkdown: TavernCommand<[text?: string, options?: { roleplay?: boolean; userName?: string; characterName?: string }], string>;
     saveSelectedMemoryFile: TavernCommand<[], Promise<void>>;
     selectedMemoryFileEntry: TavernReadable<TavernMemoryIndexFileEntry | null>;
     selectedMemoryFile: TavernReadable<TavernMemoryFileRecord | null>;

@@ -139,12 +139,17 @@ function collectRuntimeSources(context = {}) {
       sourceIndex: Number.isFinite(Number(record.sourceIndex)) ? Number(record.sourceIndex) : index
     };
   }) : [];
+  const legacyMetaSources = !metaSources.length && Array.isArray(sessionMeta.worldbookNames) ? sessionMeta.worldbookNames.map((name, index) => ({
+    name: normalizeText(name),
+    sourceType: "global",
+    sourceIndex: index
+  })) : [];
   const bookSources = Array.isArray(context.worldBooks) ? context.worldBooks.map((book, index) => ({
     name: normalizeText(book.name),
     sourceType: normalizeText(book.worldSourceType),
     sourceIndex: Number.isFinite(Number(book.worldSourceIndex)) ? Number(book.worldSourceIndex) : index
   })) : [];
-  return dedupeSources([...metaSources, ...bookSources]);
+  return dedupeSources([...metaSources, ...legacyMetaSources, ...bookSources]);
 }
 function buildHistoryScanLines(context = {}, currentUserMessage = "", includeNames = false) {
   const userName = normalizeText(context.user?.name) || "User";

@@ -89,6 +89,16 @@ textarea:disabled {
     background: rgba(10, 12, 18, 0.24);
 }
 
+.xb-markdown-html-block-auto {
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.xb-markdown-html-block-auto .xb-markdown-html-preview {
+    display: block;
+}
+
 .xb-markdown-html-title {
     display: grid;
     gap: 2px;

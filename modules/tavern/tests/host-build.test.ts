@@ -150,6 +150,8 @@ test('tavern chat creation waits for hydrated character context before adding gr
 
 test('tavern worldbook sync uses native source overview with current context', () => {
     const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
+    const contextSource = readRepoFile('modules/tavern/host/sillytavern-context.ts');
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     assert.match(
         settingsControllerSource,
         /requestHost\('xb-tavern:list-worldbook-sources', \{\s*payload: \{\s*context: options\.effectiveContext\.value,/,
@@ -160,6 +162,10 @@ test('tavern worldbook sync uses native source overview with current context', (
     assert.match(settingsControllerSource, /async function openSelectedWorldbookEditor/);
     assert.match(settingsControllerSource, /requestHost\('xb-tavern:open-worldbook-editor'/);
     assert.match(settingsControllerSource, /postToHost\('xb-tavern:close'\)/);
+    assert.match(contextSource, /const worldbookSources = collectWorldbookSources\(ctx, options\);/);
+    assert.match(contextSource, /worldbookSources,/);
+    assert.match(contextSource, /worldbookSourcesSynced: true/);
+    assert.match(appSource, /syncSessionCharacterContext\(\{ sessionId: targetSessionId, force: true \}\)/);
 });
 
 test('tavern worldbook host bridge exposes native runtime result instead of edit endpoints', () => {
@@ -171,6 +177,8 @@ test('tavern worldbook host bridge exposes native runtime result instead of edit
     assert.match(hostSource, /Number\(payload\.limit\)/);
     assert.match(hostSource, /export async function getTavernWorldbookRuntime/);
     assert.match(hostSource, /export function openTavernWorldbookEditor/);
+    assert.match(hostSource, /sessionMeta\.worldbookSources/);
+    assert.match(hostSource, /sessionMeta\.worldbookNames/);
     assert.match(hostSource, /await checkWorldInfo\(chatLines, maxContext, false, globalScanData\)/);
     assert.match(hostSource, /worldInfoBefore:/);
     assert.match(hostSource, /worldInfoAfter:/);

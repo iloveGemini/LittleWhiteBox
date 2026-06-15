@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue';
 import TavernScrollControls from '../TavernScrollControls.vue';
+import TavernMessageEditPanel from './TavernMessageEditPanel.vue';
 import { useTavernChatContext, useTavernShellContext } from '../tavern-app-context';
 import { useTavernEphemeralDisclosureScope } from '../useTavernEphemeralDisclosureScope';
 import {
@@ -45,7 +46,6 @@ const {
     drawMessageStatusClass,
     drawMessageStatusText,
     drawMessageTitle,
-    editingMessageDraft,
     formatMessageTime,
     handleChatScroll,
     handleChatSubmit,
@@ -54,11 +54,8 @@ const {
     handleChatWheel,
     handleComposeInput,
     handleComposeKeydown,
-    handleEditInput,
-    handleEditKeydown,
     isDrawingMessage,
     isEditingMessage,
-    isEditingMessageDirty,
     isCancellingRun,
     isRunning,
     latestErrorMessage,
@@ -97,14 +94,34 @@ function openContractModal() {
     emit('open-contract');
 }
 
+function roleplayMarkdownOptions() {
+    return {
+        roleplay: true,
+        userName: roleLabel('user'),
+        characterName: roleLabel('assistant'),
+    };
+}
+
+function roleplayMarkdownSignature(text = '', extra = '') {
+    const options = roleplayMarkdownOptions();
+    return markdownSignature([
+        text,
+        extra,
+        options.userName,
+        options.characterName,
+    ].join('\u0000'));
+}
+
+function renderRoleplayMarkdown(text = '') {
+    return renderChatMarkdown(text, roleplayMarkdownOptions());
+}
+
 function buildAssistantRenderState(text: string, events: ReturnType<typeof getActionCheckEvents> = []) {
     const payload = injectActionCheckRenderMarkers(text, events);
     const actionCheckGroups = payload.groups.length ? JSON.stringify(payload.groups) : '';
     return {
         text: payload.text,
-        signature: actionCheckGroups
-            ? markdownSignature(`${payload.text}\u0000${actionCheckGroups}`)
-            : markdownSignature(payload.text),
+        signature: roleplayMarkdownSignature(payload.text, actionCheckGroups),
         actionCheckGroups,
     };
 }
@@ -114,7 +131,7 @@ function assistantMessageRenderState(message: TavernMessageRecord) {
     if (message.role !== 'assistant') {
         return {
             text,
-            signature: markdownSignature(text),
+            signature: roleplayMarkdownSignature(text),
             actionCheckGroups: '',
         };
     }
@@ -259,42 +276,13 @@ watch(
               </span>
               <small>{{ formatMessageTime(message.createdAt) }}</small>
             </div>
-            <div
+            <TavernMessageEditPanel
               v-if="isEditingMessage(message)"
-              class="message-edit-panel"
-            >
-              <textarea
-                v-model="editingMessageDraft"
-                class="message-edit-box"
-                rows="6"
-                :data-message-editor="messageKey(message)"
-                @input="handleEditInput"
-                @keydown="handleEditKeydown($event, message)"
-              />
-              <div class="message-edit-actions">
-                <button
-                  type="button"
-                  :disabled="!isEditingMessageDirty(message)"
-                  @click="saveEditMessage(message)"
-                >
-                  {{ message.role === 'user' ? '保存' : '保存修改' }}
-                </button>
-                <button
-                  v-if="message.role === 'user'"
-                  type="button"
-                  :disabled="!isEditingMessageDirty(message)"
-                  @click="saveEditMessage(message, { rerun: true })"
-                >
-                  保存并从这里重来
-                </button>
-                <button
-                  type="button"
-                  @click="cancelEditMessage"
-                >
-                  取消
-                </button>
-              </div>
-            </div>
+              :message="message"
+              :message-key="messageKey(message)"
+              @cancel="cancelEditMessage"
+              @save="saveEditMessage(message, $event)"
+            />
             <details
               v-if="!isEditingMessage(message) && thoughtBlocks(message).length"
               class="tavern-thought-details"
@@ -326,7 +314,7 @@ watch(
                   class="xb-tavern-markdown"
                   :data-markdown-signature="render.signature"
                   :data-action-check-groups="render.actionCheckGroups || null"
-                  v-html="renderChatMarkdown(render.text)"
+                  v-html="renderRoleplayMarkdown(render.text)"
                 />
               </template>
             </template>
@@ -451,7 +439,7 @@ watch(
             class="xb-tavern-markdown"
             :data-action-check-groups="liveAssistantRenderState.actionCheckGroups || undefined"
             :data-markdown-signature="liveAssistantRenderState.signature"
-            v-html="renderChatMarkdown(liveAssistantRenderState.text)"
+            v-html="renderRoleplayMarkdown(liveAssistantRenderState.text)"
           />
         </div>
         <div

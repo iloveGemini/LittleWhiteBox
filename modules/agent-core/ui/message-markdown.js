@@ -4,6 +4,7 @@ let htmlBlockSerial = 0;
 const htmlBlockStore = new Map();
 
 const HTML_BLOCK_LANGUAGES = new Set(['html', 'htm', 'xhtml', 'xml', 'svg', 'vue', 'svelte']);
+const SAFE_MARKDOWN_HTML_TAGS = new Set(['details', 'summary']);
 export const HTML_PREVIEW_SANDBOX = 'allow-scripts';
 
 function escapeHtml(text) {
@@ -49,6 +50,11 @@ function looksLikeHtmlCode(code = '') {
     return tagMatches.length >= 3 && /<\/[a-z][\w:-]*>/i.test(text);
 }
 
+function looksLikeStandaloneHtmlDocument(code = '') {
+    const text = String(code || '').trim();
+    return /^<!doctype\s+html/i.test(text) || /^<html[\s>]/i.test(text);
+}
+
 function storeHtmlBlock(code = '', language = 'html') {
     const id = createHtmlBlockId();
     htmlBlockStore.set(id, {
@@ -58,24 +64,29 @@ function storeHtmlBlock(code = '', language = 'html') {
     return `@@XBHTMLBLOCK:${id}@@`;
 }
 
-function escapeRawHtmlTags(text = '') {
-    return String(text || '')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+function escapeRawHtmlTags(text = '', options = {}) {
+    const allowSafeHtmlTags = options.allowSafeHtmlTags === true;
+    return String(text || '').replace(/<\/?([a-z][\w:-]*)(?:\s[^<>]*)?>/gi, (match, tagName) => {
+        const normalized = String(tagName || '').toLowerCase();
+        if (allowSafeHtmlTags && SAFE_MARKDOWN_HTML_TAGS.has(normalized)) {
+            return match;
+        }
+        return match.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    });
 }
 
-function preprocessNonFenceMarkdown(text = '') {
+function preprocessNonFenceMarkdown(text = '', options = {}) {
     const segment = String(text || '');
     const trimmed = segment.trim();
-    if (trimmed.length >= 220 && looksLikeHtmlCode(trimmed)) {
+    if (looksLikeStandaloneHtmlDocument(trimmed)) {
         const leading = segment.match(/^\s*/)?.[0] || '';
         const trailing = segment.match(/\s*$/)?.[0] || '';
         return `${leading}${storeHtmlBlock(trimmed, 'html')}${trailing}`;
     }
-    return escapeRawHtmlTags(segment);
+    return escapeRawHtmlTags(segment, options);
 }
 
-function preprocessMarkdownInput(raw = '') {
+function preprocessMarkdownInput(raw = '', options = {}) {
     const text = String(raw || '');
     const fenceRegex = /(^|\n)(`{3,}|~{3,})[ \t]*([^\n]*)\n([\s\S]*?)\n\2[ \t]*(?=\n|$)/g;
     let result = '';
@@ -90,7 +101,7 @@ function preprocessMarkdownInput(raw = '') {
         const code = String(match[4] || '');
         const shouldFoldAsHtml = isHtmlBlockLanguage(rawLanguage) || (!rawLanguage && looksLikeHtmlCode(code));
 
-        result += preprocessNonFenceMarkdown(text.slice(lastIndex, blockStart));
+        result += preprocessNonFenceMarkdown(text.slice(lastIndex, blockStart), options);
         if (shouldFoldAsHtml) {
             result += storeHtmlBlock(code, rawLanguage || 'html');
         } else {
@@ -99,7 +110,7 @@ function preprocessMarkdownInput(raw = '') {
         lastIndex = fenceEnd;
     }
 
-    result += preprocessNonFenceMarkdown(text.slice(lastIndex));
+    result += preprocessNonFenceMarkdown(text.slice(lastIndex), options);
     return result;
 }
 
@@ -112,10 +123,12 @@ function injectHtmlBlockPlaceholders(html = '') {
 export function renderMarkdownToHtml(text) {
     const raw = String(text || '').trim();
     if (!raw) return '';
-    const markdownText = preprocessMarkdownInput(raw);
+    const { showdown, DOMPurify } = getMarkdownLibraries();
+    const markdownText = preprocessMarkdownInput(raw, {
+        allowSafeHtmlTags: !!DOMPurify?.sanitize,
+    });
 
     try {
-        const { showdown, DOMPurify } = getMarkdownLibraries();
         if (showdown?.Converter && DOMPurify?.sanitize) {
             if (!markdownConverter || markdownConverterSource !== showdown) {
                 markdownConverterSource = showdown;
@@ -296,8 +309,18 @@ function buildHtmlPreview(doc, code = '') {
     return iframe;
 }
 
-function createHtmlBlockNode(doc, entry = {}) {
+function createHtmlBlockNode(doc, entry = {}, options = {}) {
     const code = String(entry.code || '');
+    if (options.htmlBlockMode === 'preview') {
+        const block = doc.createElement('div');
+        block.className = 'xb-markdown-html-block xb-markdown-html-block-auto';
+        const body = doc.createElement('div');
+        body.className = 'xb-markdown-html-body';
+        body.append(buildHtmlPreview(doc, code));
+        block.append(body);
+        return block;
+    }
+
     const block = doc.createElement('div');
     block.className = 'xb-markdown-html-block';
 
@@ -357,7 +380,7 @@ function createHtmlBlockNode(doc, entry = {}) {
     return block;
 }
 
-export function enhanceHtmlBlocks(rootNode) {
+export function enhanceHtmlBlocks(rootNode, options = {}) {
     if (!rootNode?.querySelectorAll) return;
 
     const doc = rootNode.ownerDocument || globalThis.document;
@@ -372,7 +395,7 @@ export function enhanceHtmlBlocks(rootNode) {
             return;
         }
 
-        const node = createHtmlBlockNode(doc, entry);
+        const node = createHtmlBlockNode(doc, entry, options);
         const parent = placeholder.parentElement;
         if (parent?.tagName === 'P' && parent.textContent.trim() === '') {
             parent.replaceWith(node);
@@ -384,7 +407,7 @@ export function enhanceHtmlBlocks(rootNode) {
 
 export function enhanceMarkdownContent(rootNode, options = {}) {
     if (!rootNode) return rootNode;
-    enhanceHtmlBlocks(rootNode);
+    enhanceHtmlBlocks(rootNode, options);
     enhanceMarkdownCodeBlocks(rootNode, options);
     enhancePathLinks(rootNode, options);
     return rootNode;

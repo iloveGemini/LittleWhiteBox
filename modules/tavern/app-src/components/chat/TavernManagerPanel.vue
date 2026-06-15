@@ -18,10 +18,8 @@ const {
 const {
     chatFocus,
     cancelEditMessage,
-    editingMessageDraft,
     formatMessageTime,
     handleComposeInput,
-    handleEditInput,
     markdownSignature,
     renderChatMarkdown,
     roleLabel,
@@ -37,12 +35,14 @@ const {
     copyManagerMessage,
     currentManagerWorkRun,
     deleteManagerMessageTurn,
+    editingMessageDraft,
     formatRunActivityLine,
     formatRunIssueLine,
     formatRunInputLine,
     formatRunMapLine,
     formatRunMemoryLine,
     formatRunModelLine,
+    handleEditInput,
     handleManagerComposeKeydown,
     handleManagerEditKeydown,
     handleManagerScroll,
@@ -661,5 +661,4 @@ watch(
     </form>
   </section>
 </template>
-
 

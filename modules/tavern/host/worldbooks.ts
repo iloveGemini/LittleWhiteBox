@@ -192,6 +192,13 @@ function collectRuntimeSources(context: XbTavernContext = {}): XbTavernNativeWor
             } as XbTavernNativeWorldInfoSource;
         })
         : [];
+    const legacyMetaSources = !metaSources.length && Array.isArray(sessionMeta.worldbookNames)
+        ? sessionMeta.worldbookNames.map((name, index) => ({
+            name: normalizeText(name),
+            sourceType: 'global',
+            sourceIndex: index,
+        } as XbTavernNativeWorldInfoSource))
+        : [];
     const bookSources = Array.isArray(context.worldBooks)
         ? context.worldBooks.map((book, index) => ({
             name: normalizeText(book.name),
@@ -199,7 +206,7 @@ function collectRuntimeSources(context: XbTavernContext = {}): XbTavernNativeWor
             sourceIndex: Number.isFinite(Number(book.worldSourceIndex)) ? Number(book.worldSourceIndex) : index,
         }))
         : [];
-    return dedupeSources([...metaSources, ...bookSources]);
+    return dedupeSources([...metaSources, ...legacyMetaSources, ...bookSources]);
 }
 
 function buildHistoryScanLines(context: XbTavernContext = {}, currentUserMessage = '', includeNames = false): string[] {

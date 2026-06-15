@@ -527,21 +527,23 @@ export async function buildTavernContext(options: TavernHostOptions = {}): Promi
     const useCurrentHistory = options.includeHistory !== false && isCurrentCharacterSelection(ctx, options);
     const includeWorldbooks = options.includeWorldbooks !== false;
     const embeddedBook = includeWorldbooks ? normalizeEmbeddedCharacterBook(ctx, options) : null;
-    const worldbookSources = includeWorldbooks ? collectWorldbookSources(ctx, options) : [];
+    const worldbookSources = collectWorldbookSources(ctx, options);
     const worldbookNames = worldbookSources.map((source) => source.name);
-    const fetchedWorldBooks = await Promise.all(worldbookSources.map(async (source) => {
-        try {
-            return await fetchWorldbook(source);
-        } catch (error) {
-            return {
-                name: source.name,
-                worldSourceType: source.sourceType,
-                worldSourceIndex: source.sourceIndex,
-                entries: [],
-                error: error instanceof Error ? error.message : String(error || 'worldbook_failed'),
-            };
-        }
-    }));
+    const fetchedWorldBooks = includeWorldbooks
+        ? await Promise.all(worldbookSources.map(async (source) => {
+            try {
+                return await fetchWorldbook(source);
+            } catch (error) {
+                return {
+                    name: source.name,
+                    worldSourceType: source.sourceType,
+                    worldSourceIndex: source.sourceIndex,
+                    entries: [],
+                    error: error instanceof Error ? error.message : String(error || 'worldbook_failed'),
+                };
+            }
+        }))
+        : [];
     const worldBooks = dedupeWorldBooks([
         ...(embeddedBook ? [embeddedBook] : []),
         ...fetchedWorldBooks,
@@ -555,6 +557,9 @@ export async function buildTavernContext(options: TavernHostOptions = {}): Promi
         worldEntries: worldBooks.flatMap((book) => Array.isArray(book.entries) ? book.entries : []),
         sessionMeta: {
             worldbookNames,
+            worldbookSources,
+            worldbookSourcesSynced: true,
+            worldbooksIncluded: includeWorldbooks,
             chatLength: useCurrentHistory && Array.isArray(ctx.chat) ? ctx.chat.length : 0,
             historySource: useCurrentHistory ? 'sillytavern-current-chat' : 'empty-different-character',
             source: 'sillytavern-current',

@@ -15,6 +15,55 @@ export interface TavernMarkdownToolsOptions {
     imageRequestTimeoutMs: number;
 }
 
+export interface TavernRoleplayMarkdownOptions {
+    roleplay?: boolean;
+    userName?: string;
+    characterName?: string;
+}
+
+const ROLEPLAY_FORMAT_TAGS = new Set(['details', 'summary']);
+
+function normalizeDisplayName(value = '', fallback = '') {
+    return String(value || '').trim() || fallback;
+}
+
+function replaceRoleplayMacros(text = '', options: TavernRoleplayMarkdownOptions = {}) {
+    const userName = normalizeDisplayName(options.userName, 'User');
+    const characterName = normalizeDisplayName(options.characterName, '角色');
+    return String(text || '')
+        .replace(/<\s*user\s*>/gi, userName)
+        .replace(/<\s*(?:char|bot)\s*>/gi, characterName)
+        .replace(/\{\{\s*user\s*\}\}/gi, userName)
+        .replace(/\{\{\s*(?:char|bot)\s*\}\}/gi, characterName);
+}
+
+function stripRoleplayXmlTags(text = '') {
+    return String(text || '').replace(/<\/?([a-z][\w:-]*)(?:\s[^<>]*)?>/gi, (match, tagName) => {
+        const normalized = String(tagName || '').toLowerCase();
+        return ROLEPLAY_FORMAT_TAGS.has(normalized) ? match : '';
+    });
+}
+
+export function preprocessTavernRoleplayMarkdown(text = '', options: TavernRoleplayMarkdownOptions = {}) {
+    const withMacros = replaceRoleplayMacros(text, options);
+    const fenceRegex = /(^|\n)(`{3,}|~{3,})[ \t]*([^\n]*)\n([\s\S]*?)\n\2[ \t]*(?=\n|$)/g;
+    let result = '';
+    let lastIndex = 0;
+    let match: RegExpExecArray | null = null;
+
+    while ((match = fenceRegex.exec(withMacros)) !== null) {
+        const leadingBreak = match[1] || '';
+        const blockStart = match.index + leadingBreak.length;
+        const fenceEnd = fenceRegex.lastIndex;
+        result += stripRoleplayXmlTags(withMacros.slice(lastIndex, blockStart));
+        result += withMacros.slice(blockStart, fenceEnd);
+        lastIndex = fenceEnd;
+    }
+
+    result += stripRoleplayXmlTags(withMacros.slice(lastIndex));
+    return result;
+}
+
 export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
     const markdownHtmlCache = new Map<string, string>();
 
@@ -27,10 +76,12 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
         return `${raw.length}:${hash.toString(36)}`;
     }
 
-    function renderChatMarkdown(text = '') {
+    function renderChatMarkdown(text = '', renderOptions: TavernRoleplayMarkdownOptions = {}) {
         // renderMarkdownToHtml sanitizes through DOMPurify when SillyTavern exposes it,
         // matching the ebook/assistant Markdown pipeline before Vue inserts the HTML.
-        const raw = String(text || '');
+        const raw = renderOptions.roleplay
+            ? preprocessTavernRoleplayMarkdown(text, renderOptions)
+            : String(text || '');
         const canCache = !/(^|\n)(`{3,}|~{3,})[ \t]*(html|htm|xhtml|xml|svg|vue|svelte)?\b/i.test(raw)
             && !/^<!doctype\s+html/i.test(raw.trim())
             && !/^<html[\s>]/i.test(raw.trim());
@@ -39,7 +90,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
             return markdownHtmlCache.get(cacheKey) || '';
         }
         const html = renderMarkdownToHtml(raw);
-        if (canCache) {
+        if (canCache && !html.includes('xb-markdown-html-placeholder')) {
             markdownHtmlCache.set(cacheKey, html);
             if (markdownHtmlCache.size > 160) {
                 const firstKey = markdownHtmlCache.keys().next().value;
@@ -376,6 +427,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
             enhanceMarkdownContent(node, {
                 codeBlockClassName: 'xb-tavern-codeblock',
                 codeCopyClassName: 'xb-tavern-code-copy',
+                htmlBlockMode: 'preview',
             });
             enhanceTavernImageMarkers(node);
             enhanceRoleplayDialogue(node);
