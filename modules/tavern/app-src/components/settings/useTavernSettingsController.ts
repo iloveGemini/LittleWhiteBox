@@ -1,7 +1,7 @@
 import { computed, nextTick, ref, watch, type ComputedRef, type Ref } from 'vue';
 import { createAgentSettingsPanel } from '../../../../agent-core/ui/settings-panel.js';
 import { buildAgentSettingsPanelMarkup } from '../../../../agent-core/ui/settings-markup.js';
-import { normalizeAgentConfig } from '../../../../agent-core/config.js';
+import { normalizeAgentConfig, normalizeTavernUserSettings } from '../../../../agent-core/config.js';
 import {
     createDefaultTavernAssistantPreset,
     DEFAULT_TAVERN_ASSISTANT_PRESET_ID,
@@ -37,7 +37,20 @@ import type {
     TavernWorldbookPreviewRow,
 } from '../tavern-app-context';
 
-export type TavernSettingsWorkspaceKey = 'api' | 'chatPreset' | 'worldbooks' | 'regex' | 'assistantPreset';
+export type TavernSettingsWorkspaceKey = 'api' | 'chatPreset' | 'worldbooks' | 'regex' | 'assistantPreset' | 'user';
+
+export interface TavernUserOption {
+    id: string;
+    name: string;
+    avatarUrl: string;
+    description?: string;
+    active: boolean;
+}
+
+export interface TavernDisplaySettings {
+    hiddenOutsideCount: number;
+    loadBatchSize: number;
+}
 
 interface TavernSettingsControllerOptions {
     activeView: Ref<string>;
@@ -246,10 +259,49 @@ function normalizeRegexDraft(input: unknown = {}): TavernRegexScriptDraft {
     };
 }
 
+function normalizeTavernUserOptionPayload(value: unknown): TavernUserOption | null {
+    const record = promptRecord(value);
+    const id = String(record.id || '').trim();
+    if (!id) {return null;}
+    return {
+        id,
+        name: String(record.name || id).trim() || id,
+        avatarUrl: String(record.avatarUrl || '').trim(),
+        description: String(record.description || '').trim(),
+        active: record.active === true,
+    };
+}
+
+function normalizeTavernUsersPayload(value: unknown): { users: TavernUserOption[]; currentUserId: string | null } {
+    const record = promptRecord(value);
+    const currentUserId = String(record.currentUserId || '').trim() || null;
+    const users = Array.isArray(record.users)
+        ? record.users
+            .map((item) => normalizeTavernUserOptionPayload(item))
+            .filter((item): item is TavernUserOption => Boolean(item))
+        : [];
+    if (currentUserId && !users.some((item) => item.id === currentUserId)) {
+        users.unshift({
+            id: currentUserId,
+            name: currentUserId,
+            avatarUrl: '',
+            description: '',
+            active: true,
+        });
+    }
+    return {
+        users: users.map((item) => ({
+            ...item,
+            active: currentUserId ? item.id === currentUserId : item.active,
+        })),
+        currentUserId,
+    };
+}
+
 export function readInitialSettingsWorkspace(): TavernSettingsWorkspaceKey {
     const hash = String(window.location.hash || '').replace(/^#\/?/, '');
     const key = hash.split('/')[1];
-    if (key === 'api' || key === 'chatPreset' || key === 'worldbooks' || key === 'regex' || key === 'assistantPreset') {return key;}
+    if (key === 'api' || key === 'chatPreset' || key === 'worldbooks' || key === 'regex' || key === 'assistantPreset' || key === 'user') {return key;}
     return 'api';
 }
 
@@ -302,6 +354,15 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
     const regexDraft = ref<TavernRegexScriptDraft>({});
     const activeRegexScriptJson = ref(snapshotNativeDraft(regexDraft.value));
     const regexStatus = ref('');
+    const tavernUsers = ref<TavernUserOption[]>([]);
+    const currentTavernUserId = ref<string | null>(null);
+    const userSettingsStatus = ref('');
+    const userSettingsSaving = ref(false);
+    const userSettingsLoading = ref(false);
+    const switchingTavernUserId = ref('');
+    const displaySettings = ref(normalizeTavernUserSettings((options.agentConfig.value?.tavern as Record<string, unknown> | undefined)?.userSettings));
+    const committedDisplaySettings = ref(clonePromptJson(displaySettings.value) as TavernDisplaySettings);
+    let userSettingsSaveSerial = 0;
     let worldbookEntryLoadRequestSerial = 0;
     let worldbookEntryLoadRequestKey = '';
     let globalWorldbookRequestSerial = 0;
@@ -504,7 +565,13 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
             label: 'API 配置',
             mobileLabel: 'API',
         },
+        {
+            key: 'user',
+            label: '用户设置',
+            mobileLabel: '用户',
+        },
     ]);
+    const currentTavernUser = computed(() => tavernUsers.value.find((item) => item.id === currentTavernUserId.value) || null);
     const assistantPresetItems = computed<TavernAssistantPresetItemRow[]>(() => {
         return assistantPresetSections.map((section) => ({
             id: section.key,
@@ -1104,6 +1171,121 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
             regexStatus.value = error instanceof Error ? error.message : String(error || '删除失败');
         }
     }
+    function readDisplaySettingsFromConfig(configSource: Record<string, unknown> = options.agentConfig.value || {}): TavernDisplaySettings {
+        return normalizeTavernUserSettings((configSource.tavern as Record<string, unknown> | undefined)?.userSettings) as TavernDisplaySettings;
+    }
+    function syncDisplaySettingsFromConfig(options: { updateCommitted?: boolean } = {}) {
+        const normalized = readDisplaySettingsFromConfig();
+        displaySettings.value = normalized;
+        if (options.updateCommitted !== false) {
+            committedDisplaySettings.value = clonePromptJson(normalized) as TavernDisplaySettings;
+        }
+    }
+    function applyDisplaySettingsLocally(next: TavernDisplaySettings) {
+        displaySettings.value = next;
+        const config = promptRecord(options.agentConfig.value);
+        const tavern = promptRecord(config.tavern);
+        options.agentConfig.value = normalizeAgentConfig({
+            ...config,
+            tavern: {
+                ...tavern,
+                userSettings: next,
+            },
+        });
+    }
+    async function saveDisplaySettingsToHost(next: TavernDisplaySettings) {
+        const requestSerial = ++userSettingsSaveSerial;
+        userSettingsSaving.value = true;
+        userSettingsStatus.value = '正在保存显示设置';
+        applyDisplaySettingsLocally(next);
+        try {
+            await options.requestHost('xb-tavern:save-user-settings', {
+                payload: next,
+            });
+            if (requestSerial !== userSettingsSaveSerial) {return;}
+            committedDisplaySettings.value = clonePromptJson(readDisplaySettingsFromConfig(options.agentConfig.value || {})) as TavernDisplaySettings;
+            userSettingsStatus.value = '显示设置已保存';
+        } catch (error) {
+            if (requestSerial !== userSettingsSaveSerial) {return;}
+            applyDisplaySettingsLocally(clonePromptJson(committedDisplaySettings.value) as TavernDisplaySettings);
+            userSettingsStatus.value = error instanceof Error ? error.message : String(error || '保存失败');
+        } finally {
+            if (requestSerial === userSettingsSaveSerial) {
+                userSettingsSaving.value = false;
+            }
+        }
+    }
+    function updateDisplaySettingsPatch(patch: Partial<TavernDisplaySettings>) {
+        const next = normalizeTavernUserSettings({
+            ...displaySettings.value,
+            ...patch,
+        }) as TavernDisplaySettings;
+        void saveDisplaySettingsToHost(next);
+    }
+    function stepHiddenOutsideCount(direction: -1 | 1) {
+        const current = Number(displaySettings.value.hiddenOutsideCount) || 5;
+        const next = Math.min(20, Math.max(1, current + direction));
+        if (next === current) {return;}
+        updateDisplaySettingsPatch({ hiddenOutsideCount: next });
+    }
+    function stepLoadBatchSize(direction: -1 | 1) {
+        const current = Number(displaySettings.value.loadBatchSize) || 20;
+        const next = Math.min(50, Math.max(5, current + (direction * 5)));
+        if (next === current) {return;}
+        updateDisplaySettingsPatch({ loadBatchSize: next });
+    }
+    function resetDisplaySettings() {
+        const next = normalizeTavernUserSettings({ hiddenOutsideCount: 5, loadBatchSize: 20 }) as TavernDisplaySettings;
+        if (
+            next.hiddenOutsideCount === displaySettings.value.hiddenOutsideCount
+            && next.loadBatchSize === displaySettings.value.loadBatchSize
+        ) {
+            return;
+        }
+        void saveDisplaySettingsToHost(next);
+    }
+    function applyTavernUsersPayload(payload: unknown) {
+        const normalized = normalizeTavernUsersPayload(payload);
+        tavernUsers.value = normalized.users;
+        currentTavernUserId.value = normalized.currentUserId;
+    }
+    async function loadTavernUsers() {
+        userSettingsLoading.value = true;
+        if (!switchingTavernUserId.value) {
+            userSettingsStatus.value = '正在读取 USER 列表';
+        }
+        try {
+            const result = await options.requestHost('xb-tavern:list-users');
+            applyTavernUsersPayload(result.result || result);
+            if (!switchingTavernUserId.value) {
+                userSettingsStatus.value = '';
+            }
+        } catch (error) {
+            userSettingsStatus.value = error instanceof Error ? error.message : String(error || 'USER 列表读取失败');
+        } finally {
+            userSettingsLoading.value = false;
+        }
+    }
+    async function switchTavernUser(userId: string) {
+        const targetId = String(userId || '').trim();
+        if (!targetId || targetId === currentTavernUserId.value || switchingTavernUserId.value) {return;}
+        switchingTavernUserId.value = targetId;
+        userSettingsStatus.value = '正在切换 USER';
+        try {
+            const result = await options.requestHost('xb-tavern:switch-user', {
+                payload: { userId: targetId },
+            });
+            applyTavernUsersPayload(result.result || result);
+            userSettingsStatus.value = currentTavernUser.value
+                ? `已切换到 ${currentTavernUser.value.name}`
+                : 'USER 已切换';
+            options.postToHost('xb-tavern:refresh-context', {});
+        } catch (error) {
+            userSettingsStatus.value = error instanceof Error ? error.message : String(error || '切换失败');
+        } finally {
+            switchingTavernUserId.value = '';
+        }
+    }
     async function discardPresetChanges() {
         if (!presetDirty.value) {return;}
         preset.value = normalizeTavernChatPromptPresetBundle(activeChatPreset.value);
@@ -1486,7 +1668,8 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
             || normalized === 'chatPreset'
             || normalized === 'worldbooks'
             || normalized === 'regex'
-            || normalized === 'assistantPreset') {
+            || normalized === 'assistantPreset'
+            || normalized === 'user') {
             openSettingsWorkspace(normalized);
         }
     }
@@ -1515,6 +1698,9 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
     watch(regexSearchText, () => {
         regexGroupVisibleLimits.value = {};
     });
+    watch(() => options.agentConfig.value, () => {
+        syncDisplaySettingsFromConfig({ updateCommitted: !userSettingsSaving.value });
+    }, { immediate: true });
     watch(assistantPresetItems, (items) => {
         if (!items.length) {
             selectedAssistantPresetItemId.value = '';
@@ -1552,6 +1738,13 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         ) {
             void syncWorldbooksFromHost({ keepSelection: true });
             void syncGlobalWorldbooksFromHost();
+        }
+        if (
+            view === 'settings'
+            && workspace === 'user'
+            && (previousView !== view || previousWorkspace !== workspace)
+        ) {
+            void loadTavernUsers();
         }
     });
     watch(selectedWorldbookName, (name) => {
@@ -1623,6 +1816,10 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         promptSearchText,
         promptVisibleLimit,
         refreshRegexFromHost,
+        currentTavernUser,
+        currentTavernUserId,
+        displaySettings,
+        loadTavernUsers,
         REGEX_GROUP_BATCH_SIZE,
         regexDirty,
         regexDraft,
@@ -1654,17 +1851,26 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         settingsNavItems,
         shortText: options.shortText,
         showMoreWorldbookPreviewEntries,
+        stepHiddenOutsideCount,
+        stepLoadBatchSize,
         startWorldbookEntryEdit,
+        switchingTavernUserId,
         syncGlobalWorldbooksFromHost,
         syncWorldbooksFromHost,
+        switchTavernUser,
+        tavernUsers,
         togglePromptRow,
         toggleGlobalWorldbook,
         toggleRegexPlacement,
         updateAssistantPresetPatch,
+        updateDisplaySettingsPatch,
         updatePromptByIdentifier,
         updateRegexPatch,
         updateSelectedAssistantPresetItem,
         updateWorldbookEntryDraftPatch,
+        userSettingsLoading,
+        userSettingsSaving,
+        userSettingsStatus,
         visibleAssistantPresetRecords,
         visibleChatPresetOptions,
         visiblePromptEditorRows,
@@ -1683,6 +1889,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         worldbookSearchText,
         worldbookStatus,
         worldbookVisibleLimit,
+        resetDisplaySettings,
     };
 
     return {
@@ -1696,6 +1903,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         handleApiConfigSaved,
         openSettingsWorkspace,
         openWorldbookWorkspace,
+        loadTavernUsers,
         refreshPresets,
         refreshRegexFromHost,
         renderApiSettingsPanel,

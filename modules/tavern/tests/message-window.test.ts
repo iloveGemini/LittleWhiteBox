@@ -7,6 +7,8 @@ import {
     AGENT_MESSAGE_WINDOW_DEFAULT,
     expandMessageWindow,
     getMessageWindow,
+    normalizeHiddenOutsideCount,
+    normalizeMessageLoadBatchSize,
     resetMessageWindow,
 } from '../app-src/message-window';
 
@@ -30,6 +32,23 @@ test('tavern message window matches ebook defaults and expands older messages in
     assert.equal(afterExpand.visibleCount, 12);
 });
 
+test('tavern message window normalizes custom hidden counts and load batch sizes', () => {
+    assert.equal(normalizeHiddenOutsideCount(0), 1);
+    assert.equal(normalizeHiddenOutsideCount(27), 20);
+    assert.equal(normalizeMessageLoadBatchSize(6), 5);
+    assert.equal(normalizeMessageLoadBatchSize(18), 20);
+
+    const state = { uiMessageWindowLimit: 1 };
+    const windowState = getMessageWindow(state, 12, { defaultLimit: 8 });
+    assert.equal(windowState.visibleCount, 8);
+
+    const expanded = expandMessageWindow(state, 40, { defaultLimit: 8, chunk: 15 });
+    assert.equal(expanded, true);
+
+    const afterExpand = getMessageWindow(state, 40, { defaultLimit: 8 });
+    assert.equal(afterExpand.visibleCount, 23);
+});
+
 test('tavern scroll handlers collapse expanded message windows when returning to bottom', () => {
     const appSource = readFileSync(resolve(root, 'modules/tavern/app-src/App.vue'), 'utf8');
     const scrollPaneSource = readFileSync(resolve(root, 'modules/tavern/app-src/components/chat/useTavernScrollPane.ts'), 'utf8');
@@ -39,4 +58,5 @@ test('tavern scroll handlers collapse expanded message windows when returning to
     assert.doesNotMatch(appSource, /function handleManagerScroll\(\)/);
     assert.match(scrollPaneSource, /function handleScroll\(\)[\s\S]*collapseMessageWindowIfBottom\(\);/);
     assert.match(scrollPaneSource, /function scrollToBottom\([\s\S]*scrollOptions\.collapseWindow \|\| autoScroll\.value[\s\S]*collapseMessageWindowIfBottom\(true\);/);
+    assert.match(scrollPaneSource, /watch\(\(\) => normalizeHiddenOutsideCount/);
 });

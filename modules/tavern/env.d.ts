@@ -33,6 +33,11 @@ declare module '*.js' {
     export function getRequestHeaders(): Record<string, string>;
     export function getThumbnailUrl(type: string, file: string, t?: boolean): string;
     export function getContext(): Record<string, unknown>;
+    export function getUserAvatars(doRender?: boolean, openPageAt?: string): Promise<string[]>;
+    export function setUserAvatar(
+        imgfile: string,
+        options?: { toastPersonaNameChange?: boolean; navigateToCurrent?: boolean },
+    ): Promise<void>;
     export function saveSettingsDebounced(): void;
     export const event_types: Record<string, string>;
     export const eventSource: {
@@ -57,6 +62,7 @@ declare module '*.js' {
     export const instruct_presets: Array<Record<string, unknown>>;
     export const system_prompts: Array<Record<string, unknown>>;
     export const power_user: Record<string, unknown>;
+    export const user_avatar: string;
     export const chat_metadata: Record<string, unknown>;
     export const characters: Array<Record<string, unknown>>;
     export const this_chid: string | number | undefined;
@@ -115,6 +121,16 @@ declare module '*.js' {
     export const AGENT_SETTINGS_CONFIG_VERSION: number;
     export function normalizeAgentSettings(settings: Record<string, unknown>): Record<string, unknown>;
     export function normalizeAgentConfig(settings: Record<string, unknown>): Record<string, unknown>;
+    export function normalizeTavernUserSettings(settings?: unknown): {
+        hiddenOutsideCount: number;
+        loadBatchSize: number;
+    };
+    export function normalizeTavernSettings(settings?: unknown): {
+        userSettings: {
+            hiddenOutsideCount: number;
+            loadBatchSize: number;
+        };
+    };
     export function normalizeJsApiPermission(value: unknown): string;
     export function normalizePresetName(value: unknown): string;
     export function createFirstPartyIframeOverlay(options: {

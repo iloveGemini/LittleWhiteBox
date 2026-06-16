@@ -236,6 +236,32 @@ function resolveGlobalTavilySettings(input = {}, legacyPresetName, currentPreset
     };
 }
 
+function clampInteger(value, fallback, min, max) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {return fallback;}
+    return Math.min(max, Math.max(min, Math.floor(number)));
+}
+
+function normalizeLoadBatchSize(value, fallback = 20) {
+    const clamped = clampInteger(value, fallback, 5, 50);
+    return Math.min(50, Math.max(5, Math.round(clamped / 5) * 5));
+}
+
+export function normalizeTavernUserSettings(value = {}) {
+    const settings = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return {
+        hiddenOutsideCount: clampInteger(settings.hiddenOutsideCount, 5, 1, 20),
+        loadBatchSize: normalizeLoadBatchSize(settings.loadBatchSize, 20),
+    };
+}
+
+export function normalizeTavernSettings(value = {}) {
+    const tavern = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return {
+        userSettings: normalizeTavernUserSettings(tavern.userSettings),
+    };
+}
+
 export function normalizeAgentSettings(saved = {}, options = {}) {
     const {
         defaultWorkspaceFileName = '',
@@ -259,6 +285,7 @@ export function normalizeAgentSettings(saved = {}, options = {}) {
         presets,
         tavilyApiKey: tavilySettings.tavilyApiKey,
         tavilyBaseUrl: tavilySettings.tavilyBaseUrl,
+        tavern: normalizeTavernSettings(saved.tavern),
         updatedAt: Number(saved.updatedAt) || 0,
         configVersion: Number(saved.configVersion) || 0,
     };
@@ -288,6 +315,7 @@ export function normalizeAgentConfig(config = {}) {
         permissionMode: normalizePermissionMode(currentPreset.permissionMode),
         tavilyApiKey: tavilySettings.tavilyApiKey,
         tavilyBaseUrl: tavilySettings.tavilyBaseUrl,
+        tavern: normalizeTavernSettings(config.tavern),
     };
 }
 

@@ -5,7 +5,8 @@ import {
   AGENT_SETTINGS_CONFIG_VERSION,
   normalizeAgentSettings,
   normalizeJsApiPermission,
-  normalizePresetName
+  normalizePresetName,
+  normalizeTavernSettings
 } from "../../agent-core/config.js";
 import { getTavernChatPresetBundle, listTavernChatPresetBundles } from "./chat-presets.js";
 const SERVER_FILE_KEY = "settings";
@@ -31,6 +32,7 @@ async function saveTavernAgentConfig(patch = {}, options = {}) {
     jsApiPermission: normalizeJsApiPermission(patch.jsApiPermission ?? normalizedCurrent.jsApiPermission),
     tavilyApiKey: patch.tavilyApiKey ?? normalizedCurrent.tavilyApiKey,
     tavilyBaseUrl: patch.tavilyBaseUrl ?? normalizedCurrent.tavilyBaseUrl,
+    tavern: normalizeTavernSettings(patch.tavern ?? normalizedCurrent.tavern),
     currentPresetName: normalizePresetName(String(patch.currentPresetName || normalizedCurrent.currentPresetName || "")),
     delegatePresetName: normalizePresetName(String(
       patch.delegatePresetName || normalizedCurrent.delegatePresetName || patch.currentPresetName || normalizedCurrent.currentPresetName || ""

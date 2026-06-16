@@ -18,7 +18,7 @@ import {
 } from "./host/regex.js";
 import { applyTavernSubstituteParams } from "./host/substitute-params.js";
 import { runTavernSlashCommand } from "./host/slash-commands.js";
-import { buildTavernContext } from "./host/sillytavern-context.js";
+import { buildTavernContext, listTavernUsers, switchTavernUser } from "./host/sillytavern-context.js";
 import {
   activateTavernCharacterWorldbook,
   bindTavernCharacterWorldbook,
@@ -441,6 +441,37 @@ async function handleSlashCommandRequest(type, payload = {}) {
     replyHostResult(requestId, hostErrorPayload(error, "slash_command_failed"));
   }
 }
+async function handleUserRequest(type, payload = {}) {
+  const requestId = String(payload.requestId || "");
+  try {
+    let result;
+    if (type === "xb-tavern:list-users") {
+      result = await listTavernUsers();
+    } else if (type === "xb-tavern:switch-user") {
+      result = await switchTavernUser(payload.payload || {});
+    } else if (type === "xb-tavern:save-user-settings") {
+      const patch = payload.payload && typeof payload.payload === "object" ? payload.payload : {};
+      const saveResult = await saveTavernAgentConfig({
+        tavern: {
+          userSettings: patch
+        }
+      }, { silent: false });
+      if (!saveResult.ok) {
+        throw new Error(saveResult.error || "user_settings_save_failed");
+      }
+      result = {
+        userSettings: saveResult.config?.tavern?.userSettings || {}
+      };
+      await sendConfigToFrame();
+    }
+    replyHostResult(requestId, {
+      ok: true,
+      result
+    });
+  } catch (error) {
+    replyHostResult(requestId, hostErrorPayload(error, "user_request_failed"));
+  }
+}
 async function createOverlay() {
   const overlay = await createFirstPartyIframeOverlay({
     overlayId: OVERLAY_ID,
@@ -567,6 +598,11 @@ function handleFrameMessage(event) {
       break;
     case "xb-tavern:run-slash-command":
       void handleSlashCommandRequest(data.type, data.payload || {});
+      break;
+    case "xb-tavern:list-users":
+    case "xb-tavern:switch-user":
+    case "xb-tavern:save-user-settings":
+      void handleUserRequest(data.type, data.payload || {});
       break;
     default:
       break;

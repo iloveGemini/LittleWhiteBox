@@ -1,0 +1,332 @@
+/* Tavern settings: user workspace */
+
+.user-settings-workspace {
+    overflow: hidden;
+}
+
+.user-settings-stack {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+.user-settings-section {
+    padding: clamp(22px, 3vw, 34px);
+    border-bottom: 1px solid var(--xb-line);
+}
+
+.user-settings-section:last-child {
+    border-bottom: 0;
+}
+
+.user-settings-section-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.user-settings-section-head > div {
+    min-width: 0;
+}
+
+.user-settings-kicker {
+    display: inline-block;
+    margin-bottom: 8px;
+    color: var(--xb-text-muted);
+    font-family: var(--xb-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.user-settings-section-head h3 {
+    margin: 0;
+    color: var(--xb-text-main);
+    font-family: var(--xb-font-serif);
+    font-size: 26px;
+    font-weight: 540;
+    line-height: 1.08;
+}
+
+.user-settings-section-head p {
+    margin: 10px 0 0;
+    color: var(--xb-text-muted);
+    font-size: 14px;
+    line-height: 1.65;
+}
+
+.user-settings-inline-button,
+.user-settings-stepper-button {
+    border: 1px solid var(--xb-line);
+    background: var(--xb-settings-control-bg);
+    color: var(--xb-text-main);
+}
+
+.user-settings-inline-button {
+    min-height: 36px;
+    border-radius: 999px;
+    font-size: 13px;
+    padding: 0 14px;
+}
+
+.user-settings-inline-button:hover:not(:disabled),
+.user-settings-inline-button:focus-visible,
+.user-settings-stepper-button:hover:not(:disabled),
+.user-settings-stepper-button:focus-visible {
+    outline: none;
+    border-color: rgba(var(--xb-accent-rgb), 0.34);
+    background: rgba(var(--xb-accent-rgb), 0.08);
+}
+
+.user-settings-inline-button:disabled,
+.user-settings-stepper-button:disabled,
+.user-settings-user-card:disabled {
+    opacity: 0.5;
+}
+
+.user-settings-user-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(228px, 1fr));
+    gap: 12px;
+}
+
+.user-settings-user-card {
+    min-height: 104px;
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr);
+    align-items: center;
+    gap: 14px;
+    border: 1px solid var(--xb-line);
+    border-radius: 8px;
+    background: var(--xb-settings-subtle-bg);
+    color: var(--xb-text-main);
+    text-align: left;
+    padding: 14px;
+}
+
+.user-settings-user-card:hover:not(:disabled),
+.user-settings-user-card:focus-visible {
+    outline: none;
+    border-color: var(--xb-line-strong);
+    background: var(--xb-settings-soft-bg);
+}
+
+.user-settings-user-card.active {
+    border-color: rgba(var(--xb-accent-rgb), 0.3);
+    background: rgba(var(--xb-accent-rgb), 0.08);
+}
+
+.user-settings-user-card.switching {
+    opacity: 0.72;
+}
+
+.user-settings-user-avatar {
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid var(--xb-line);
+    border-radius: 999px;
+    background: var(--xb-settings-control-bg);
+    color: var(--xb-text-muted);
+    font-family: var(--xb-font-serif);
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.user-settings-user-avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.user-settings-user-copy {
+    min-width: 0;
+}
+
+.user-settings-user-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.user-settings-user-line strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--xb-text-main);
+    font-family: var(--xb-font-serif);
+    font-size: 18px;
+    font-weight: 540;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-settings-user-badge {
+    flex: 0 0 auto;
+    border: 1px solid rgba(var(--xb-accent-rgb), 0.32);
+    border-radius: 999px;
+    background: rgba(var(--xb-accent-rgb), 0.1);
+    color: var(--xb-cyan);
+    font-size: 11px;
+    padding: 2px 8px;
+}
+
+.user-settings-user-copy p {
+    margin: 8px 0 0;
+    color: var(--xb-text-muted);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.user-settings-display-list {
+    display: grid;
+    gap: 12px;
+}
+
+.user-settings-display-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    border: 1px solid var(--xb-line);
+    border-radius: 8px;
+    background: var(--xb-settings-subtle-bg);
+    padding: 16px 18px;
+}
+
+.user-settings-display-copy strong {
+    display: block;
+    color: var(--xb-text-main);
+    font-size: 16px;
+    font-weight: 560;
+}
+
+.user-settings-display-copy p {
+    margin: 8px 0 0;
+    color: var(--xb-text-muted);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.user-settings-stepper {
+    display: inline-grid;
+    grid-template-columns: auto auto auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.user-settings-stepper-button {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    padding: 0;
+}
+
+.user-settings-stepper-button svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    vector-effect: non-scaling-stroke;
+}
+
+.user-settings-stepper-value {
+    min-width: 76px;
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+}
+
+.user-settings-stepper-value strong {
+    color: var(--xb-text-main);
+    font-family: var(--xb-font-serif);
+    font-size: 24px;
+    font-weight: 560;
+    line-height: 1;
+}
+
+.user-settings-stepper-value span {
+    color: var(--xb-text-muted);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.user-settings-note-list {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding-left: 18px;
+    color: var(--xb-text-body);
+}
+
+.user-settings-note-list li {
+    line-height: 1.6;
+}
+
+@media (max-width: 860px) {
+    .user-settings-section-head,
+    .user-settings-display-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .user-settings-section-head {
+        gap: 12px;
+    }
+
+    .user-settings-inline-button {
+        justify-self: start;
+    }
+
+    .user-settings-stepper {
+        justify-self: start;
+    }
+}
+
+@media (max-width: 560px) {
+    .user-settings-section {
+        padding: 14px;
+    }
+
+    .user-settings-section-head h3 {
+        font-size: 22px;
+    }
+
+    .user-settings-user-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .user-settings-user-card {
+        min-height: 92px;
+        grid-template-columns: 50px minmax(0, 1fr);
+        gap: 12px;
+        padding: 12px;
+    }
+
+    .user-settings-user-avatar {
+        width: 50px;
+        height: 50px;
+        font-size: 21px;
+    }
+
+    .user-settings-display-row {
+        padding: 14px;
+    }
+
+    .user-settings-stepper-value {
+        min-width: 64px;
+    }
+
+    .user-settings-stepper-value strong {
+        font-size: 22px;
+    }
+}

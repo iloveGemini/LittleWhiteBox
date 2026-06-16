@@ -168,6 +168,10 @@
     color: var(--xb-stamp);
 }
 
+.home-menu-mobile-footer {
+    display: none;
+}
+
 @media (max-width: 980px) {
     .home-command-center {
         padding: 28px 18px;
@@ -206,6 +210,10 @@
     .home-menu-item span {
         font-size: 10px;
         letter-spacing: 0.08em;
+    }
+
+    .home-menu-mobile-footer {
+        display: none;
     }
 }
 

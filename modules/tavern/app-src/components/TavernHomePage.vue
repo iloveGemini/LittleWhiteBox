@@ -13,7 +13,7 @@ defineEmits<{
     (event: 'exit'): void;
     (event: 'enter'): void;
     (event: 'open-characters'): void;
-    (event: 'open-settings', workspace: 'api' | 'chatPreset' | 'assistantPreset' | 'worldbooks' | 'regex'): void;
+    (event: 'open-settings', workspace: 'api' | 'chatPreset' | 'assistantPreset' | 'worldbooks' | 'regex' | 'user'): void;
     (event: 'open-about'): void;
 }>();
 </script>
@@ -177,12 +177,48 @@ defineEmits<{
         </button>
         <button
           type="button"
-          class="home-menu-item highlight"
+          class="home-menu-item desktop-only"
+          @click="$emit('open-settings', 'user')"
+        >
+          <svg
+            class="home-menu-icon"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-width="1.6"
+              d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0"
+            />
+          </svg>
+          <strong>用户设置</strong>
+          <span>User Settings</span>
+        </button>
+        <button
+          type="button"
+          class="home-menu-item highlight desktop-only"
           @click="$emit('open-about')"
         >
           <strong>关于界面</strong>
           <span>About</span>
         </button>
+        <div class="home-menu-mobile-footer">
+          <button
+            type="button"
+            class="home-menu-item mobile-footer-item"
+            @click="$emit('open-settings', 'user')"
+          >
+            <strong>用户设置</strong>
+          </button>
+          <button
+            type="button"
+            class="home-menu-item mobile-footer-item mobile-footer-about"
+            @click="$emit('open-about')"
+          >
+            <strong>关于界面</strong>
+          </button>
+        </div>
       </div>
     </div>
   </section>

@@ -6,6 +6,7 @@ import TavernChatPresetSettingsPanel from './TavernChatPresetSettingsPanel.vue';
 import TavernWorldbooksSettingsPanel from './TavernWorldbooksSettingsPanel.vue';
 import TavernRegexSettingsPanel from './TavernRegexSettingsPanel.vue';
 import TavernAssistantPresetSettingsPanel from './TavernAssistantPresetSettingsPanel.vue';
+import TavernUserSettingsPanel from './TavernUserSettingsPanel.vue';
 import { useTavernSettingsContext, useTavernShellContext } from '../tavern-app-context';
 
 const settings = useTavernSettingsContext();
@@ -49,6 +50,8 @@ const {
       <TavernRegexSettingsPanel />
 
       <TavernAssistantPresetSettingsPanel />
+
+      <TavernUserSettingsPanel />
     </section>
   </section>
 </template>

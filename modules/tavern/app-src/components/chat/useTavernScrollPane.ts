@@ -1,12 +1,17 @@
-import { nextTick, ref, type Ref } from 'vue';
+import { nextTick, ref, unref, watch, type Ref } from 'vue';
 import {
+    AGENT_MESSAGE_WINDOW_CHUNK,
     AGENT_MESSAGE_WINDOW_DEFAULT,
     expandMessageWindow,
+    normalizeHiddenOutsideCount,
+    normalizeMessageLoadBatchSize,
     resetMessageWindow,
 } from '../../message-window';
 
 export interface TavernScrollPaneOptions {
     totalItems: () => number;
+    defaultLimit?: number | Ref<number>;
+    loadBatchSize?: number | Ref<number>;
 }
 
 export interface TavernScrollToBottomOptions {
@@ -20,7 +25,7 @@ export function useTavernScrollPane(options: TavernScrollPaneOptions) {
     const showScrollTop = ref(false);
     const showScrollBottom = ref(false);
     const scrollControlsActive = ref(false);
-    const messageWindowLimit = ref(AGENT_MESSAGE_WINDOW_DEFAULT);
+    const messageWindowLimit = ref(normalizeHiddenOutsideCount(unref(options.defaultLimit), AGENT_MESSAGE_WINDOW_DEFAULT));
     let scrollHideTimer: number | null = null;
     let scrollTicking = false;
     let touchStartY: number | null = null;
@@ -28,7 +33,7 @@ export function useTavernScrollPane(options: TavernScrollPaneOptions) {
 
     function resetWindowState() {
         const state = { uiMessageWindowLimit: messageWindowLimit.value };
-        resetMessageWindow(state);
+        resetMessageWindow(state, { defaultLimit: normalizeHiddenOutsideCount(unref(options.defaultLimit), AGENT_MESSAGE_WINDOW_DEFAULT) });
         messageWindowLimit.value = Number(state.uiMessageWindowLimit || AGENT_MESSAGE_WINDOW_DEFAULT);
     }
 
@@ -37,7 +42,10 @@ export function useTavernScrollPane(options: TavernScrollPaneOptions) {
         if (!force && autoScroll.value !== false) {return false;}
         if (!node || (!force && node.scrollTop > 64)) {return false;}
         const state = { uiMessageWindowLimit: messageWindowLimit.value };
-        if (!expandMessageWindow(state, options.totalItems())) {return false;}
+        if (!expandMessageWindow(state, options.totalItems(), {
+            defaultLimit: normalizeHiddenOutsideCount(unref(options.defaultLimit), AGENT_MESSAGE_WINDOW_DEFAULT),
+            chunk: normalizeMessageLoadBatchSize(unref(options.loadBatchSize), AGENT_MESSAGE_WINDOW_CHUNK),
+        })) {return false;}
         messageWindowLimit.value = Number(state.uiMessageWindowLimit || messageWindowLimit.value);
         autoScroll.value = false;
         return true;
@@ -75,11 +83,16 @@ export function useTavernScrollPane(options: TavernScrollPaneOptions) {
     }
 
     function collapseMessageWindowIfBottom(force = false) {
-        if (messageWindowLimit.value <= AGENT_MESSAGE_WINDOW_DEFAULT) {return false;}
+        const defaultLimit = normalizeHiddenOutsideCount(unref(options.defaultLimit), AGENT_MESSAGE_WINDOW_DEFAULT);
+        if (messageWindowLimit.value <= defaultLimit) {return false;}
         if (!force && !isNearBottom(8)) {return false;}
         resetWindowState();
         return true;
     }
+
+    watch(() => normalizeHiddenOutsideCount(unref(options.defaultLimit), AGENT_MESSAGE_WINDOW_DEFAULT), () => {
+        resetWindowState();
+    });
 
     function scrollToBottom(force = false, scrollOptions: TavernScrollToBottomOptions = {}) {
         if (!force && !autoScroll.value) {return;}

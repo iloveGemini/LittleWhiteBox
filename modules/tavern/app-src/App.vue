@@ -2,7 +2,10 @@
 import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue';
 import {
     getMessageWindow,
+    normalizeHiddenOutsideCount,
+    normalizeMessageLoadBatchSize,
 } from './message-window';
+import { normalizeTavernUserSettings } from '../../agent-core/config.js';
 import { useTavernMarkdownTools } from './components/chat/useTavernMarkdownTools';
 import { useTavernScrollPane } from './components/chat/useTavernScrollPane';
 import { setHostChatCompletionsRequestHeadersProvider } from '../../../shared/host-llm/chat-completions/client.js';
@@ -176,6 +179,9 @@ const RUNTIME_DISPLAY_REGEX_THROTTLE_MS = 200;
 const context = ref<XbTavernContext>({});
 const diagnostics = ref<TavernDiagnostics>({});
 const agentConfig = ref<Record<string, unknown>>({});
+const tavernUserSettings = computed(() => normalizeTavernUserSettings((agentConfig.value?.tavern as Record<string, unknown> | undefined)?.userSettings));
+const hiddenOutsideCount = computed(() => normalizeHiddenOutsideCount(tavernUserSettings.value.hiddenOutsideCount));
+const loadBatchSize = computed(() => normalizeMessageLoadBatchSize(tavernUserSettings.value.loadBatchSize));
 const hostRequestHeaders = ref<Record<string, unknown>>({});
 const hostMainFontSizePx = ref('15px');
 const hostProseLineHeightPx = ref('23px');
@@ -363,8 +369,16 @@ const chatSidePanel = ref<ChatSidePanel>('memory');
 const chatComposeTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const managerComposeTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const characterArchivePageRef = ref<InstanceType<typeof TavernCharacterSelectPage> | null>(null);
-const chatScrollPane = useTavernScrollPane({ totalItems: () => chatMessages.value.length });
-const managerScrollPane = useTavernScrollPane({ totalItems: () => managerChatDisplayItems.value.length });
+const chatScrollPane = useTavernScrollPane({
+    totalItems: () => chatMessages.value.length,
+    defaultLimit: hiddenOutsideCount,
+    loadBatchSize,
+});
+const managerScrollPane = useTavernScrollPane({
+    totalItems: () => managerChatDisplayItems.value.length,
+    defaultLimit: hiddenOutsideCount,
+    loadBatchSize,
+});
 const chatScrollRef = chatScrollPane.scrollRef;
 const managerScrollRef = managerScrollPane.scrollRef;
 const chatAutoScroll = chatScrollPane.autoScroll;
@@ -434,6 +448,7 @@ const {
     activeChatPreset,
     applyHostChatPreset,
     handleApiConfigSaved,
+    loadTavernUsers,
     openSettingsWorkspace,
     openWorldbookWorkspace,
     refreshPresets,
@@ -630,7 +645,7 @@ const lastRequestRawJson = computed(() => String(lastRequestSnapshot.value?.rawR
 const chatMessages = computed(() => sessionMessages.value);
 const chatMessageWindow = computed(() => getMessageWindow({
     uiMessageWindowLimit: chatMessageWindowLimit.value,
-}, chatMessages.value.length));
+}, chatMessages.value.length, { defaultLimit: hiddenOutsideCount.value }));
 const visibleChatMessages = computed(() => chatMessages.value.slice(chatMessageWindow.value.startIndex));
 const latestErrorMessage = computed(() => composeErrorMessage.value);
 const latestSavedChatError = computed(() => {
@@ -905,7 +920,7 @@ const liveManagerProtocolMessages = computed(() => {
 const liveManagerChatDisplayItems = computed(() => buildManagerChatDisplayItems(liveManagerProtocolMessages.value));
 const managerMessageWindow = computed(() => getMessageWindow({
     uiMessageWindowLimit: managerMessageWindowLimit.value,
-}, managerChatDisplayItems.value.length));
+}, managerChatDisplayItems.value.length, { defaultLimit: hiddenOutsideCount.value }));
 const visibleManagerChatItems = computed(() => managerChatDisplayItems.value.slice(managerMessageWindow.value.startIndex));
 const visibleManagerChatMessages = computed(() => visibleManagerChatItems.value
     .filter((item): item is ManagerMessageDisplayItem => item.kind === 'message')
@@ -4046,6 +4061,9 @@ onMounted(async () => {
     }
     if (activeView.value === 'settings' && activeSettingsWorkspace.value === 'regex') {
         void refreshRegexFromHost();
+    }
+    if (activeView.value === 'settings' && activeSettingsWorkspace.value === 'user') {
+        void loadTavernUsers();
     }
     postToHost('xb-tavern:frame-ready');
     if (selectedSessionId.value) {

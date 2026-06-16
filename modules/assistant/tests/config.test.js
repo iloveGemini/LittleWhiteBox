@@ -195,3 +195,31 @@ test('assistant config lifts legacy preset Tavily setting into the global field'
     assert.equal(resolveActiveProviderConfig(config, { role: 'delegate' }).tavilyApiKey, 'legacy-preset-tavily-key');
     assert.equal(resolveActiveProviderConfig(config).tavilyBaseUrl, 'https://legacy.search.example');
 });
+
+test('assistant config normalizes tavern user settings', () => {
+    const settings = normalizeAgentSettings({
+        tavern: {
+            userSettings: {
+                hiddenOutsideCount: 0,
+                loadBatchSize: 18,
+            },
+        },
+    });
+    const config = normalizeAgentConfig({
+        tavern: {
+            userSettings: {
+                hiddenOutsideCount: 27,
+                loadBatchSize: 53,
+            },
+        },
+    });
+
+    assert.deepEqual(settings.tavern.userSettings, {
+        hiddenOutsideCount: 1,
+        loadBatchSize: 20,
+    });
+    assert.deepEqual(config.tavern.userSettings, {
+        hiddenOutsideCount: 20,
+        loadBatchSize: 50,
+    });
+});

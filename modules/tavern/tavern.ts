@@ -17,7 +17,7 @@ import {
 } from './host/regex.js';
 import { applyTavernSubstituteParams } from './host/substitute-params.js';
 import { runTavernSlashCommand } from './host/slash-commands.js';
-import { buildTavernContext } from './host/sillytavern-context.js';
+import { buildTavernContext, listTavernUsers, switchTavernUser } from './host/sillytavern-context.js';
 import {
     activateTavernCharacterWorldbook,
     bindTavernCharacterWorldbook,
@@ -479,6 +479,40 @@ async function handleSlashCommandRequest(type: string, payload: Record<string, u
     }
 }
 
+async function handleUserRequest(type: string, payload: Record<string, unknown> = {}): Promise<void> {
+    const requestId = String(payload.requestId || '');
+    try {
+        let result: unknown;
+        if (type === 'xb-tavern:list-users') {
+            result = await listTavernUsers();
+        } else if (type === 'xb-tavern:switch-user') {
+            result = await switchTavernUser(payload.payload as Record<string, unknown> || {});
+        } else if (type === 'xb-tavern:save-user-settings') {
+            const patch = payload.payload && typeof payload.payload === 'object'
+                ? payload.payload as Record<string, unknown>
+                : {};
+            const saveResult = await saveTavernAgentConfig({
+                tavern: {
+                    userSettings: patch,
+                },
+            }, { silent: false });
+            if (!saveResult.ok) {
+                throw new Error(saveResult.error || 'user_settings_save_failed');
+            }
+            result = {
+                userSettings: ((saveResult.config as Record<string, unknown>)?.tavern as Record<string, unknown> | undefined)?.userSettings || {},
+            };
+            await sendConfigToFrame();
+        }
+        replyHostResult(requestId, {
+            ok: true,
+            result: result as Record<string, unknown>,
+        });
+    } catch (error) {
+        replyHostResult(requestId, hostErrorPayload(error, 'user_request_failed'));
+    }
+}
+
 async function createOverlay(): Promise<HTMLElement> {
     const overlay = await createFirstPartyIframeOverlay({
         overlayId: OVERLAY_ID,
@@ -604,6 +638,11 @@ function handleFrameMessage(event: MessageEvent): void {
             break;
         case 'xb-tavern:run-slash-command':
             void handleSlashCommandRequest(data.type, data.payload || {});
+            break;
+        case 'xb-tavern:list-users':
+        case 'xb-tavern:switch-user':
+        case 'xb-tavern:save-user-settings':
+            void handleUserRequest(data.type, data.payload || {});
             break;
         default:
             break;
