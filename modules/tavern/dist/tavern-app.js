@@ -41592,7 +41592,7 @@ var XQ = { class: "panel-head preset-page-head" }, QQ = { class: "panel-pills" }
           disabled: S(E).marker,
           onInput: se[8] || (se[8] = (de) => S(x)(S(E).identifier, { content: de.target.value }))
         }, null, 40, NZ)]),
-        S(E).marker ? (B(), q("p", $Z, " 这是酒馆顺序占位，不编辑正文。 ")) : we("", !0)
+        S(E).marker ? (B(), q("p", $Z, " 这是酒馆顺序占位条目，不允许编辑。 ")) : we("", !0)
       ])) : (B(), q("div", DZ, " 当前预设没有可编辑条目。 "))])) : we("", !0)])
     ], 2)), [[Zo, S(n) === "chatPreset"]]);
   }

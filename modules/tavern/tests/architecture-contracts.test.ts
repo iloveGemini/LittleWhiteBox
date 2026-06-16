@@ -126,11 +126,15 @@ test('tavern desktop worldbook editor keeps dense readable rows', () => {
     assert.doesNotMatch(worldbookSource, />注入出口<[\s\S]*>扫描深度<[\s\S]*>区分大小写/);
     assert.match(worldbookSource, />跟随全局<[\s\S]*>启用概率<[\s\S]*>忽略预算<[\s\S]*>生成触发</);
     assert.match(worldbookCss, /\.worldbook-entry-core-grid \{[\s\S]*grid-template-columns:[\s\S]*minmax\(180px, 220px\)[\s\S]*repeat\(4, minmax\(72px, 0\.38fr\)\);/);
+    assert.match(worldbookCss, /\.worldbook-entry-core-grid > label,[\s\S]*\.worldbook-entry-title-row > label:not\(\.worldbook-entry-active-toggle\),[\s\S]*\.worldbook-entry-key-grid > label,[\s\S]*\.worldbook-entry-key-grid \.worldbook-entry-logic-field,[\s\S]*\.worldbook-entry-advanced-grid > label \{[\s\S]*grid-template-rows: 14px var\(--worldbook-entry-control-height\);[\s\S]*min-height: calc\(14px \+ 6px \+ var\(--worldbook-entry-control-height\)\);[\s\S]*align-self: stretch;/);
+    assert.match(worldbookCss, /\.worldbook-entry-core-grid > label > span,[\s\S]*\.worldbook-entry-title-row > label:not\(\.worldbook-entry-active-toggle\) > span,[\s\S]*\.worldbook-entry-key-grid > label > span,[\s\S]*\.worldbook-entry-key-grid \.worldbook-entry-logic-field > span,[\s\S]*\.worldbook-entry-advanced-grid > label > span \{[\s\S]*height: 14px;[\s\S]*line-height: 14px;[\s\S]*white-space: nowrap;/);
     assert.match(worldbookCss, /\.worldbook-entry-key-grid \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(132px, 170px\) minmax\(0, 1fr\);/);
     assert.match(worldbookCss, /\.worldbook-entry-filter-controls \{[\s\S]*display: contents;/);
     assert.match(worldbookCss, /\.worldbook-entry-logic-field \{[\s\S]*align-self: end;[\s\S]*width: 100%;/);
     assert.match(worldbookCss, /\.worldbook-entry-editor \{[\s\S]*--worldbook-entry-control-height: 38px;/);
     assert.match(worldbookCss, /\.worldbook-entry-editor input\[type="text"\],[\s\S]*\.worldbook-entry-editor input\[type="number"\],[\s\S]*\.worldbook-entry-editor select \{[\s\S]*height: var\(--worldbook-entry-control-height\);[\s\S]*min-height: var\(--worldbook-entry-control-height\);/);
+    assert.match(worldbookCss, /\.worldbook-entry-editor input\[type="text"\],[\s\S]*\.worldbook-entry-editor input\[type="number"\],[\s\S]*\.worldbook-entry-editor select \{[\s\S]*appearance: none;[\s\S]*height: var\(--worldbook-entry-control-height\);/);
+    assert.match(worldbookCss, /\.worldbook-entry-editor select \{[\s\S]*padding-right: 24px;[\s\S]*background-image:[\s\S]*linear-gradient\(45deg, transparent 50%, var\(--xb-text-muted\) 50%\)/);
     assert.match(worldbookSource, /class="worldbook-entry-editor-lines worldbook-entry-keywords-field"[\s\S]*<input[\s\S]*type="text"[\s\S]*listFromCommaText\(\(\$event\.target as HTMLInputElement\)\.value\)/);
     assert.match(worldbookSource, /class="worldbook-entry-editor-lines worldbook-entry-triggers-field"[\s\S]*<input[\s\S]*type="text"[\s\S]*listFromCommaText\(\(\$event\.target as HTMLInputElement\)\.value\)/);
     assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-editor \{[\s\S]*--worldbook-entry-control-height: 34px;/);
@@ -303,6 +307,10 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.match(chatLayoutCss, /\.chat-quick-settings-overlay \{[\s\S]*position: absolute;[\s\S]*backdrop-filter: blur\(16px\);/);
     assert.match(chatLayoutCss, /\.chat-quick-settings-dialog \{[\s\S]*max-height: min\(88vh, 900px\);/);
     assert.match(chatLayoutCss, /\.chat-quick-settings-dialog \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\);/);
+    assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 34px 0 38px;/);
+    assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 22px 0 28px;/);
+    assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 18px 0 22px;/);
+    assert.doesNotMatch(chatLayoutCss, /--xb-chat-scroll-padding:\s*\d+px\s+(?:8|10|12)px/);
     assert.match(stylesSource, /@import '\.\/styles\/settings\.css';\s*@import '\.\/styles\/chat\/quick-settings\.css';/);
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout \{[\s\S]*display: block;[\s\S]*grid-template-columns: none;[\s\S]*overflow: visible;/);
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout \.xb-main \{[\s\S]*background: transparent;[\s\S]*padding: 0;/);

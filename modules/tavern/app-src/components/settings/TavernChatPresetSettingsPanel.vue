@@ -333,7 +333,7 @@ watch(activeSettingsWorkspace, (workspace) => {
             v-if="selectedPromptRow.marker"
             class="muted compact"
           >
-            这是酒馆顺序占位，不编辑正文。
+            这是酒馆顺序占位条目，不允许编辑。
           </p>
         </div>
         <div
