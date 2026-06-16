@@ -839,6 +839,7 @@
 
     .worldbook-entry-core-grid {
         grid-template-columns: minmax(0, 1fr) minmax(72px, 0.55fr);
+        align-items: stretch;
         gap: 8px;
     }
 
@@ -856,6 +857,28 @@
     .worldbook-entry-editor-lines {
         gap: 4px;
         font-size: 11px;
+    }
+
+    .worldbook-entry-core-grid > label,
+    .worldbook-entry-key-grid > label,
+    .worldbook-entry-key-grid .worldbook-entry-logic-field,
+    .worldbook-entry-advanced-grid > label {
+        grid-template-rows: 14px var(--worldbook-entry-control-height);
+        min-height: calc(14px + 4px + var(--worldbook-entry-control-height));
+        align-self: stretch;
+        align-content: start;
+    }
+
+    .worldbook-entry-core-grid > label > span,
+    .worldbook-entry-key-grid > label > span,
+    .worldbook-entry-key-grid .worldbook-entry-logic-field > span,
+    .worldbook-entry-advanced-grid > label > span {
+        min-width: 0;
+        height: 14px;
+        line-height: 14px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .worldbook-entry-editor input[type="text"],
