@@ -1,0 +1,185 @@
+/* Chat-local settings modal overrides. Imported after settings.css on purpose. */
+
+.settings-layout.chat-quick-settings-layout {
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    display: block;
+    grid-template-columns: none;
+    grid-template-rows: none;
+    overflow: visible;
+    background: transparent;
+}
+
+.settings-layout.chat-quick-settings-layout .xb-main {
+    width: 100%;
+    min-height: 0;
+    display: block;
+    overflow: visible;
+    background: transparent;
+    padding: 0;
+}
+
+.settings-layout.chat-quick-settings-layout .step-panel {
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+}
+
+.settings-layout.chat-quick-settings-layout .step-panel > .panel-head,
+.settings-layout.chat-quick-settings-layout .step-panel > .preset-page-head {
+    min-height: 0;
+    align-items: center;
+    border-bottom: 1px solid var(--xb-line);
+    background: transparent;
+    padding: 0 18px;
+}
+
+.settings-layout.chat-quick-settings-layout .step-panel > .panel-head h2,
+.settings-layout.chat-quick-settings-layout .step-panel > .preset-page-head h2 {
+    display: none;
+}
+
+.settings-layout.chat-quick-settings-layout .step-panel > .panel-head .panel-pills,
+.settings-layout.chat-quick-settings-layout .step-panel > .preset-page-head .panel-pills {
+    min-height: 40px;
+    align-items: center;
+}
+
+.settings-layout.chat-quick-settings-layout .preset-command-bar {
+    min-height: 52px;
+    padding: 8px 18px;
+}
+
+.settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .preset-workspace {
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .preset-studio {
+    min-height: clamp(420px, 64vh, 700px);
+    grid-template-columns: minmax(280px, 34%) minmax(0, 1fr);
+    border-top: 1px solid var(--xb-line);
+}
+
+.settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-sequence-panel {
+    min-height: 0;
+    overflow: hidden;
+    border-right: 1px solid var(--xb-line);
+    background: var(--xb-settings-subtle-bg);
+}
+
+.settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-manager-list {
+    padding: 8px;
+}
+
+.settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-edit-button {
+    display: grid;
+}
+
+.settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .preset-preview-panel {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: transparent;
+}
+
+.settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .preset-preview-head {
+    min-height: 46px;
+    border-bottom: 1px solid var(--xb-line);
+    padding: 0 14px;
+}
+
+.settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-editor-close {
+    display: inline-grid;
+}
+
+.settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-detail-form {
+    min-height: 0;
+    padding: 16px;
+}
+
+.settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .native-workspace {
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-overview-grid {
+    min-height: clamp(420px, 64vh, 700px);
+    overflow: visible;
+}
+
+.settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-overview-detail {
+    overflow: visible;
+}
+
+.settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-preview-surface {
+    min-height: 0;
+    padding: 16px 18px 20px;
+}
+
+@media (max-width: 760px) {
+    .settings-layout.chat-quick-settings-layout {
+        height: auto;
+        overflow: visible;
+    }
+
+    .settings-layout.chat-quick-settings-layout .xb-main,
+    .settings-layout.chat-quick-settings-layout .step-panel {
+        overflow: visible;
+    }
+
+    .settings-layout.chat-quick-settings-layout .step-panel > .panel-head,
+    .settings-layout.chat-quick-settings-layout .step-panel > .preset-page-head {
+        padding: 0 12px;
+    }
+
+    .settings-layout.chat-quick-settings-layout .step-panel > .panel-head .panel-pills,
+    .settings-layout.chat-quick-settings-layout .step-panel > .preset-page-head .panel-pills {
+        display: flex;
+        justify-content: flex-start;
+    }
+
+    .settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .preset-studio,
+    .settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-overview-grid {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: visible;
+    }
+
+    .settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-sequence-panel {
+        max-height: none;
+        overflow: visible;
+        border-right: 0;
+    }
+
+    .settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-manager-list {
+        overflow: visible;
+        padding: 0 12px 8px;
+    }
+
+    .settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-manager-row {
+        width: 100%;
+        flex: none;
+    }
+
+    .settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-row-actions {
+        display: flex;
+    }
+
+    .settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .preset-preview-panel.prompt-editor-panel {
+        z-index: 120;
+    }
+
+    .settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-overview-detail,
+    .settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-preview-surface {
+        overflow: visible;
+    }
+}

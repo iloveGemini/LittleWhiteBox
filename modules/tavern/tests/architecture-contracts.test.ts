@@ -284,7 +284,9 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     const cornerSource = readRepoFile('modules/tavern/app-src/components/TavernCornerActions.vue');
     const chatPageSource = readRepoFile('modules/tavern/app-src/components/chat/TavernChatPage.vue');
     const chatLayoutCss = readRepoFile('modules/tavern/app-src/styles/chat/layout.css');
+    const chatQuickSettingsCss = readRepoFile('modules/tavern/app-src/styles/chat/quick-settings.css');
     const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
+    const stylesSource = readRepoFile('modules/tavern/app-src/styles.css');
 
     assert.match(cornerSource, /includeApi\?: boolean/);
     assert.match(cornerSource, /includeChatPreset\?: boolean/);
@@ -301,7 +303,12 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.match(chatLayoutCss, /\.chat-quick-settings-overlay \{[\s\S]*position: absolute;[\s\S]*backdrop-filter: blur\(16px\);/);
     assert.match(chatLayoutCss, /\.chat-quick-settings-dialog \{[\s\S]*max-height: min\(88vh, 900px\);/);
     assert.match(chatLayoutCss, /\.chat-quick-settings-dialog \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\);/);
-    assert.match(chatLayoutCss, /\.chat-quick-settings-layout \.xb-main \{[\s\S]*background: transparent;[\s\S]*padding: 0;/);
+    assert.match(stylesSource, /@import '\.\/styles\/settings\.css';\s*@import '\.\/styles\/chat\/quick-settings\.css';/);
+    assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout \{[\s\S]*display: block;[\s\S]*grid-template-columns: none;[\s\S]*overflow: visible;/);
+    assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout \.xb-main \{[\s\S]*background: transparent;[\s\S]*padding: 0;/);
+    assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-chatPreset-workspace \.prompt-edit-button \{[\s\S]*display: grid;/);
+    assert.doesNotMatch(settingsControllerSource, /activeView\.value !== 'settings' \|\| options\.activeSettingsWorkspace\.value !== 'worldbooks'/);
+    assert.match(settingsControllerSource, /watch\(selectedWorldbookName, \(name\) => \{[\s\S]*activeSettingsWorkspace\.value !== 'worldbooks'[\s\S]*loadSelectedWorldbookPreview\(name\)/);
 });
 
 test('tavern UI context is grouped by page responsibility instead of one flat bag', () => {

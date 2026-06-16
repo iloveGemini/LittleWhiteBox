@@ -1793,7 +1793,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         }
     });
     watch(selectedWorldbookName, (name) => {
-        if (options.activeView.value !== 'settings' || options.activeSettingsWorkspace.value !== 'worldbooks') {return;}
+        if (options.activeSettingsWorkspace.value !== 'worldbooks') {return;}
         cancelWorldbookEntryEdit();
         worldbookPreviewVisibleLimit.value = WORLDBOOK_PREVIEW_BATCH_SIZE;
         void loadSelectedWorldbookPreview(name);

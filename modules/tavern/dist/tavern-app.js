@@ -47020,7 +47020,7 @@ function Rae(e) {
   }), gt([e.activeView, e.activeSettingsWorkspace], ([F, X], [Se, ke]) => {
     F === "settings" && X === "chatPreset" && (Se !== F || ke !== X) && zr(), F === "settings" && X === "worldbooks" && (Se !== F || ke !== X) && (da({ keepSelection: !0 }), zl()), F === "settings" && X === "base" && (Se !== F || ke !== X) && Ad();
   }), gt(m, (F) => {
-    e.activeView.value !== "settings" || e.activeSettingsWorkspace.value !== "worldbooks" || (Jl(), U.value = Ff, an(F));
+    e.activeSettingsWorkspace.value === "worldbooks" && (Jl(), U.value = Ff, an(F));
   }), {
     activeAssistantPreset: _,
     activeChatPreset: a,
