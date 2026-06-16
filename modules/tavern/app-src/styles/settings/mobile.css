@@ -597,9 +597,26 @@
     }
 
     .settings-layout.is-worldbooks-workspace .worldbook-entry-preview summary {
+        grid-template-columns: minmax(0, 1fr) auto auto 12px;
         min-height: 42px;
-        gap: 8px;
+        gap: 6px;
         padding: 5px 0;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-entry-preview[open] {
+        margin: 6px 0;
+        padding: 0 8px 8px;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-entry-preview[open] summary {
+        min-height: 44px;
+        padding: 6px 0;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-entry-body {
+        max-height: none;
+        overflow: visible;
+        overscroll-behavior: auto;
     }
 
     .settings-layout.is-worldbooks-workspace .worldbook-entry-title strong {
@@ -607,7 +624,22 @@
     }
 
     .settings-layout.is-worldbooks-workspace .worldbook-entry-state {
-        font-size: 11px;
+        grid-column: 2;
+        grid-row: 1;
+        font-size: 12px;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-entry-position {
+        grid-column: 3;
+        grid-row: 1;
+        min-width: 38px;
+        font-size: 10px;
+        justify-self: end;
+        white-space: nowrap;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-entry-preview summary::before {
+        grid-column: 4;
     }
 
     .settings-layout.is-worldbooks-workspace .worldbook-preview-more {

@@ -69,7 +69,7 @@ test('tavern worldbook bridge edits named entries through native save boundary',
     assert.match(hostSource, /function syncWorldbookOriginalDataEntry/);
     assert.match(hostSource, /syncWorldbookOriginalDataEntry\(asRecord\(data\), uid, slot\.entry\);[\s\S]*await saveWorldInfo\(name, data, true\)/);
     assert.match(hostSource, /if \('secondary_keys' in entry && \('secondary_keys' in draft \|\| 'secondaryKeys' in draft\)\)/);
-    assert.match(hostSource, /entry\.secondary_keys = normalizeStringList\(draft\.keysecondary \?\? draft\.secondary_keys \?\? draft\.secondaryKeys\)/);
+    assert.match(hostSource, /const keysecondary = normalizeStringList\(draft\.keysecondary\);[\s\S]*entry\.secondary_keys = keysecondary\.length \? keysecondary : normalizeStringList\(draft\.secondary_keys \?\? draft\.secondaryKeys\)/);
     assert.match(hostSource, /await saveWorldInfo\(name, data, true\)/);
     assert.match(hostSource, /export async function getTavernWorldbookRuntime/);
     assert.match(hostSource, /await checkWorldInfo\(chatLines, maxContext, false, globalScanData\)/);
@@ -77,6 +77,49 @@ test('tavern worldbook bridge edits named entries through native save boundary',
     assert.doesNotMatch(hostSource, /createWorldInfoEntry/);
     assert.match(hostSource, /export async function setTavernGlobalWorldbooks/);
     assert.match(hostSource, /updateWorldInfoSettings\(settings, selected\)/);
+});
+
+test('tavern mobile worldbook entry rows stay compact', () => {
+    const worldbookSource = readRepoFile('modules/tavern/app-src/components/settings/TavernWorldbooksSettingsPanel.vue');
+    const worldbookCss = readRepoFile('modules/tavern/app-src/styles/settings/worldbooks.css');
+    const mobileCss = readRepoFile('modules/tavern/app-src/styles/settings/mobile.css');
+
+    assert.match(worldbookSource, /function worldbookEntryStateLabel[\s\S]*return '×';[\s\S]*return '🔵';[\s\S]*return '🔗';[\s\S]*return '🟢';/);
+    assert.doesNotMatch(worldbookSource, /return '🔵 常驻'|return '🔗 向量'|return '🟢 普通'/);
+    assert.match(worldbookSource, /class="worldbook-entry-editor-actions"[\s\S]*class="worldbook-entry-active-toggle"[\s\S]*保存/);
+    assert.doesNotMatch(worldbookCss, /\.worldbook-entry-position\s*\{[^}]*grid-row:\s*2;/);
+    assert.doesNotMatch(mobileCss, /\.worldbook-entry-position\s*\{[^}]*grid-row:\s*2;/);
+    assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-preview summary \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto auto 12px;/);
+    assert.match(mobileCss, /\.settings-layout\.is-worldbooks-workspace \.worldbook-entry-preview summary \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto auto 12px;/);
+    assert.match(mobileCss, /\.settings-layout\.is-worldbooks-workspace \.worldbook-entry-preview\[open\] \{[\s\S]*margin: 6px 0;[\s\S]*padding: 0 8px 8px;/);
+    assert.match(mobileCss, /\.settings-layout\.is-worldbooks-workspace \.worldbook-entry-body \{[\s\S]*max-height: none;[\s\S]*overflow: visible;/);
+});
+
+test('tavern desktop worldbook editor keeps dense readable rows', () => {
+    const worldbookSource = readRepoFile('modules/tavern/app-src/components/settings/TavernWorldbooksSettingsPanel.vue');
+    const worldbookCss = readRepoFile('modules/tavern/app-src/styles/settings/worldbooks.css');
+
+    assert.match(worldbookSource, /class="worldbook-entry-core-grid"[\s\S]*>条目名<[\s\S]*>状态<[\s\S]*>注入位置<[\s\S]*>触发概率</);
+    assert.match(worldbookSource, />关键词<[\s\S]*class="worldbook-entry-filter-controls"[\s\S]*>过滤逻辑<[\s\S]*<option value="off">[\s\S]*关闭[\s\S]*>可选过滤</);
+    assert.match(worldbookSource, /function worldbookFilterLogicValue[\s\S]*return draft\.selective \? String\(Number\(draft\.selectiveLogic\) \|\| 0\) : 'off';/);
+    assert.match(worldbookSource, /function updateWorldbookFilterLogic[\s\S]*value === 'off'[\s\S]*selective: false[\s\S]*selective: true/);
+    assert.doesNotMatch(worldbookSource, /worldbook-entry-inline-check|worldbook-entry-filter-toggle|>启用过滤</);
+    assert.doesNotMatch(worldbookSource, />Selective</);
+    assert.doesNotMatch(worldbookSource, />Outlet Name<|>Scan Depth<|>Case-Sensitive<|>Whole Words<|>Group Scoring<|>Automation ID<|>Inclusion Group<|>Group Weight<|>Sticky<|>Cooldown<|>Delay<|>Use Probability<|>Ignore Budget<|>Exclude Recursion<|>Prevent Recursion<|>Prioritize Group<|>Delay Until Recursion<|>Recursion Level<|>Generation Triggers</);
+    assert.match(worldbookSource, />注入出口<[\s\S]*>扫描深度<[\s\S]*>区分大小写<[\s\S]*>全词匹配<[\s\S]*>分组评分/);
+    assert.match(worldbookSource, />跟随全局<[\s\S]*>启用概率<[\s\S]*>忽略预算<[\s\S]*>生成触发</);
+    assert.match(worldbookCss, /\.worldbook-entry-core-grid \{[\s\S]*grid-template-columns:[\s\S]*minmax\(180px, 240px\)[\s\S]*repeat\(3, minmax\(78px, 0\.42fr\)\);/);
+    assert.match(worldbookCss, /\.worldbook-entry-key-grid \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(132px, 170px\) minmax\(0, 1fr\);/);
+    assert.match(worldbookCss, /\.worldbook-entry-filter-controls \{[\s\S]*align-self: end;/);
+    assert.match(worldbookCss, /\.worldbook-entry-editor \{[\s\S]*--worldbook-entry-control-height: 38px;/);
+    assert.match(worldbookCss, /\.worldbook-entry-editor input\[type="text"\],[\s\S]*\.worldbook-entry-editor input\[type="number"\],[\s\S]*\.worldbook-entry-editor select \{[\s\S]*height: var\(--worldbook-entry-control-height\);[\s\S]*min-height: var\(--worldbook-entry-control-height\);/);
+    assert.match(worldbookSource, /class="worldbook-entry-editor-lines worldbook-entry-keywords-field"[\s\S]*<input[\s\S]*type="text"[\s\S]*listFromCommaText\(\(\$event\.target as HTMLInputElement\)\.value\)/);
+    assert.match(worldbookSource, /class="worldbook-entry-editor-lines worldbook-entry-triggers-field"[\s\S]*<input[\s\S]*type="text"[\s\S]*listFromCommaText\(\(\$event\.target as HTMLInputElement\)\.value\)/);
+    assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-editor \{[\s\S]*--worldbook-entry-control-height: 34px;/);
+    assert.match(worldbookCss, /\.worldbook-entry-preview\[open\] \{[\s\S]*border-left: 3px solid var\(--xb-cyan\);[\s\S]*background:[\s\S]*box-shadow:/);
+    assert.match(worldbookCss, /\.worldbook-entry-preview\[open\] summary \{[\s\S]*border-bottom: 1px solid var\(--xb-line\);/);
+    assert.match(worldbookCss, /\.worldbook-entry-body \{[\s\S]*background: rgba\(0, 0, 0, 0\.08\);/);
+    assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-body \{[\s\S]*max-height: none;[\s\S]*overflow: visible;/);
 });
 
 test('tavern character and global worldbook actions stay on native ST boundaries', () => {
@@ -383,6 +426,7 @@ test('tavern worldbook preview keeps summary lean and expanded content ephemeral
     const worldbookSource = readRepoFile('modules/tavern/app-src/components/settings/TavernWorldbooksSettingsPanel.vue');
     const worldbookCss = readRepoFile('modules/tavern/app-src/styles/settings/worldbooks.css');
     const worldbookHost = readRepoFile('modules/tavern/host/worldbooks.ts');
+    const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
     const mobileCss = readRepoFile('modules/tavern/app-src/styles/settings/mobile.css');
 
     assert.match(helperSource, /export function useTavernEphemeralDisclosureScope/);
@@ -390,6 +434,21 @@ test('tavern worldbook preview keeps summary lean and expanded content ephemeral
     assert.match(worldbookSource, /aria-label="选择世界书"/);
     assert.doesNotMatch(worldbookSource, /筛选世界书|worldbookSearchText|worldbook-search-field/);
     assert.match(worldbookSource, />条目名</);
+    assert.match(worldbookSource, />状态</);
+    assert.match(worldbookSource, />注入位置</);
+    assert.match(worldbookSource, />触发概率</);
+    assert.match(worldbookSource, />可选过滤</);
+    assert.match(worldbookSource, /worldbookEntryStateValue/);
+    assert.match(worldbookSource, /worldbookPositionValue/);
+    assert.match(worldbookSource, /depth: nextPosition === 4 \? worldbookEntryDraft\.value\?\.depth \?\? 4 : null/);
+    assert.match(worldbookSource, /function listFromCommaText/);
+    assert.match(worldbookSource, /key: listFromCommaText/);
+    assert.match(worldbookSource, /keysecondary: listFromCommaText/);
+    assert.match(worldbookSource, /triggers', listFromCommaText/);
+    assert.doesNotMatch(worldbookSource, /key: listFromLines/);
+    assert.doesNotMatch(worldbookSource, /keysecondary: listFromLines/);
+    assert.doesNotMatch(worldbookSource, /triggers', listFromLines/);
+    assert.doesNotMatch(worldbookSource, />次级关键词</);
     assert.doesNotMatch(worldbookSource, /worldbookEntryDraft\.(?:name|title)|updateWorldbookEntryDraftPatch\(\{ (?:name|title):|>名称<\/span>|>标题<\/span>/);
     assert.doesNotMatch(worldbookSource, />检索世界书</);
     const worldbookSummaries = [...worldbookSource.matchAll(/<summary>[\s\S]*?<\/summary>/g)].map((match) => match[0]);
@@ -398,9 +457,17 @@ test('tavern worldbook preview keeps summary lean and expanded content ephemeral
         assert.doesNotMatch(summary, /entry\.(?:keys|secondaryKeys)/);
     }
     assert.match(worldbookSource, /v-if="worldbookDisclosure\.isOpen[\s\S]*class="worldbook-entry-body"/);
+    assert.match(worldbookSource, /worldbookDisclosure\.isOpen\(worldbookAdvancedDisclosureId/);
     assert.match(worldbookCss, /\.worldbook-entry-body \{[\s\S]*max-height: 560px;[\s\S]*overflow: auto;/);
     assert.match(worldbookCss, /\.worldbook-entry-content \{[\s\S]*white-space: pre-wrap;/);
     assert.doesNotMatch(worldbookHost, /truncatePreview/);
+    assert.match(worldbookHost, /\['extensions\.position', normalizeWorldbookPosition\(entry\.position\)\]/);
+    assert.match(worldbookHost, /function normalizeWorldbookDepth\(position: unknown, depth: unknown\): number \| null/);
+    assert.match(worldbookHost, /return normalizeWorldbookPosition\(position\) === 4 \? normalizeNullableNumber\(depth\) \?\? 4 : null;/);
+    assert.match(worldbookHost, /\['extensions\.depth', normalizeWorldbookDepth\(entry\.position, entry\.depth\)\]/);
+    assert.match(settingsControllerSource, /depth: Number\(record\.position\) === 4 \? normalizeNullableNumber\(record\.depth\) \?\? 4 : null/);
+    assert.match(worldbookHost, /\['extensions\.vectorized', entry\.vectorized === true\]/);
+    assert.match(worldbookHost, /\['selectiveLogic', Math\.floor\(normalizeFiniteNumber\(entry\.selectiveLogic, 0\)\)\]/);
     assert.match(mobileCss, /\.settings-layout\.is-worldbooks-workspace \.worldbook-entry-preview summary \{[\s\S]*min-height: 42px;/);
 });
 

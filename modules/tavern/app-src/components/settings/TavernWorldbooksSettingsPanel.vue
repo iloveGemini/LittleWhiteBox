@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { useTavernSettingsContext } from '../tavern-app-context';
+import { useTavernSettingsContext, type TavernWorldbookEntryDraft } from '../tavern-app-context';
 import { useTavernEphemeralDisclosureScope } from '../useTavernEphemeralDisclosureScope';
 
 const settings = useTavernSettingsContext();
@@ -13,8 +13,6 @@ const {
     globalWorldbookStatus,
     hiddenWorldbookPreviewEntryCount,
     isEditingWorldbookEntry,
-    linesFromList,
-    listFromLines,
     saveWorldbookEntryDraft,
     selectedWorldbook,
     selectedWorldbookName,
@@ -36,6 +34,35 @@ const {
 const worldbookDisclosure = useTavernEphemeralDisclosureScope();
 const globalWorldbookPickerOpen = ref(false);
 
+const worldbookPositionOptions = [
+    { value: '0:', label: '↑Char', title: '角色定义前' },
+    { value: '1:', label: '↓Char', title: '角色定义后' },
+    { value: '5:', label: '↑EM', title: '示例消息前' },
+    { value: '6:', label: '↓EM', title: '示例消息后' },
+    { value: '2:', label: '↑AN', title: '作者注释前' },
+    { value: '3:', label: '↓AN', title: '作者注释后' },
+    { value: '4:0', label: '@D ⚙️', title: '按深度注入：系统' },
+    { value: '4:1', label: '@D 👤', title: '按深度注入：用户' },
+    { value: '4:2', label: '@D 🤖', title: '按深度注入：助手' },
+    { value: '7:', label: 'Outlet', title: 'Outlet' },
+];
+
+const worldbookLogicOptions = [
+    { value: 0, label: '满足任一' },
+    { value: 3, label: '全部满足' },
+    { value: 1, label: '不全满足' },
+    { value: 2, label: '全部不满足' },
+];
+
+const worldbookMatchSourceOptions: Array<{ key: keyof TavernWorldbookEntryDraft; label: string }> = [
+    { key: 'matchPersonaDescription', label: '用户设定' },
+    { key: 'matchCharacterDescription', label: '角色描述' },
+    { key: 'matchCharacterPersonality', label: '角色人格' },
+    { key: 'matchCharacterDepthPrompt', label: '角色深度提示' },
+    { key: 'matchScenario', label: '场景' },
+    { key: 'matchCreatorNotes', label: '作者备注' },
+];
+
 const globalWorldbookSummary = computed(() => {
     const count = globalWorldbookSelected.value.length;
     if (!count) {return '未启用';}
@@ -56,6 +83,162 @@ function worldbookEntryDisclosureId(entry: { uid?: string | number; name: string
             ? String(entry.order).trim()
             : entry.name;
     return `worldbook:${selectedWorldbookName.value}:${entryId}`;
+}
+
+function worldbookAdvancedDisclosureId(draft: TavernWorldbookEntryDraft) {
+    return `worldbook-advanced:${selectedWorldbookName.value}:${draft.uid}`;
+}
+
+function patchWorldbookEntryField<K extends keyof TavernWorldbookEntryDraft>(key: K, value: TavernWorldbookEntryDraft[K]) {
+    updateWorldbookEntryDraftPatch({ [key]: value } as Partial<TavernWorldbookEntryDraft>);
+}
+
+function commaTextFromList(value: unknown) {
+    return Array.isArray(value) ? value.map((item) => String(item || '').trim()).filter(Boolean).join(', ') : '';
+}
+
+function listFromCommaText(value = '') {
+    return String(value || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
+function numberInputValue(value: number | null | undefined) {
+    return value === null || value === undefined ? '' : String(value);
+}
+
+function nullableNumberFromEvent(event: Event) {
+    const value = (event.target as HTMLInputElement).value;
+    if (value === '') {return null;}
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function triStateValue(value: boolean | null | undefined) {
+    if (value === true) {return 'true';}
+    if (value === false) {return 'false';}
+    return 'null';
+}
+
+function triStateFromEvent(event: Event): boolean | null {
+    const value = (event.target as HTMLSelectElement).value;
+    if (value === 'true') {return true;}
+    if (value === 'false') {return false;}
+    return null;
+}
+
+function worldbookEntryStateValue(draft: TavernWorldbookEntryDraft) {
+    if (draft.constant) {return 'constant';}
+    if (draft.vectorized) {return 'vectorized';}
+    return 'normal';
+}
+
+function updateWorldbookEntryState(event: Event) {
+    const value = (event.target as HTMLSelectElement).value;
+    updateWorldbookEntryDraftPatch({
+        constant: value === 'constant',
+        vectorized: value === 'vectorized',
+    });
+}
+
+function worldbookFilterLogicValue(draft: TavernWorldbookEntryDraft) {
+    return draft.selective ? String(Number(draft.selectiveLogic) || 0) : 'off';
+}
+
+function updateWorldbookFilterLogic(event: Event) {
+    const value = (event.target as HTMLSelectElement).value;
+    if (value === 'off') {
+        updateWorldbookEntryDraftPatch({ selective: false });
+        return;
+    }
+    const selectiveLogic = Number(value);
+    updateWorldbookEntryDraftPatch({
+        selective: true,
+        selectiveLogic: Number.isFinite(selectiveLogic) ? selectiveLogic : 0,
+    });
+}
+
+function worldbookEntryStateLabel(entry: { enabled?: boolean; constant?: boolean; vectorized?: boolean }) {
+    if (entry.enabled === false) {return '×';}
+    if (entry.constant) {return '🔵';}
+    if (entry.vectorized) {return '🔗';}
+    return '🟢';
+}
+
+function worldbookEntryStateTitle(entry: { enabled?: boolean; constant?: boolean; vectorized?: boolean }) {
+    if (entry.enabled === false) {return '关闭';}
+    if (entry.constant) {return '常驻';}
+    if (entry.vectorized) {return '向量化';}
+    return '普通';
+}
+
+function worldbookPositionValue(draft: TavernWorldbookEntryDraft) {
+    return `${Number(draft.position) || 0}:${Number(draft.position) === 4 ? Number(draft.role) || 0 : ''}`;
+}
+
+function updateWorldbookPosition(event: Event) {
+    const [positionText, roleText = ''] = (event.target as HTMLSelectElement).value.split(':');
+    const position = Number(positionText);
+    const role = Number(roleText);
+    const nextPosition = Number.isFinite(position) ? position : 0;
+    updateWorldbookEntryDraftPatch({
+        position: nextPosition,
+        role: Number.isFinite(role) ? role : 0,
+        depth: nextPosition === 4 ? worldbookEntryDraft.value?.depth ?? 4 : null,
+    });
+}
+
+function worldbookPositionLabel(entry: { position?: number; role?: number; depth?: number | null }) {
+    const position = Number(entry.position ?? 0);
+    const option = worldbookPositionOptions.find((item) => item.value === `${position}:${position === 4 ? Number(entry.role || 0) : ''}`);
+    if (position === 4) {
+        return `${option?.label || '@D'} ${numberInputValue(entry.depth) || 4}`;
+    }
+    return option?.label || '↑Char';
+}
+
+function worldbookDepthEnabled(draft: TavernWorldbookEntryDraft) {
+    return Number(draft.position) === 4;
+}
+
+function updateWorldbookProbability(event: Event) {
+    const probability = nullableNumberFromEvent(event);
+    updateWorldbookEntryDraftPatch({
+        probability,
+        useProbability: probability !== null,
+    });
+}
+
+function updateWorldbookUseProbability(event: Event) {
+    const checked = (event.target as HTMLInputElement).checked;
+    updateWorldbookEntryDraftPatch({
+        useProbability: checked,
+        probability: checked ? worldbookEntryDraft.value?.probability ?? 100 : null,
+    });
+}
+
+function delayUntilRecursionChecked(value: boolean | number) {
+    return value !== false && value !== 0;
+}
+
+function delayUntilRecursionLevel(value: boolean | number) {
+    return typeof value === 'number' ? String(value) : '';
+}
+
+function updateDelayUntilRecursionEnabled(event: Event) {
+    const checked = (event.target as HTMLInputElement).checked;
+    updateWorldbookEntryDraftPatch({ delayUntilRecursion: checked ? true : false });
+}
+
+function updateDelayUntilRecursionLevel(event: Event) {
+    const value = (event.target as HTMLInputElement).value;
+    if (!value) {
+        updateWorldbookEntryDraftPatch({ delayUntilRecursion: true });
+        return;
+    }
+    const numberValue = Number(value);
+    updateWorldbookEntryDraftPatch({ delayUntilRecursion: Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : false });
 }
 
 watch(
@@ -209,7 +392,12 @@ watch(
                     <span class="worldbook-entry-title">
                       <strong>{{ entry.name }}</strong>
                     </span>
-                    <span class="worldbook-entry-state">{{ entry.constant ? '常驻' : entry.enabled ? '启用' : '关闭' }}</span>
+                    <span
+                      class="worldbook-entry-state"
+                      :title="worldbookEntryStateTitle(entry)"
+                      :aria-label="worldbookEntryStateTitle(entry)"
+                    >{{ worldbookEntryStateLabel(entry) }}</span>
+                    <span class="worldbook-entry-position">{{ worldbookPositionLabel(entry) }}</span>
                   </summary>
                   <div
                     v-if="worldbookDisclosure.isOpen(worldbookEntryDisclosureId(entry))"
@@ -223,17 +411,34 @@ watch(
                         <div class="worldbook-entry-editor-head">
                           <span v-if="worldbookEntryStatus">{{ worldbookEntryStatus }}</span>
                           <span v-else>编辑条目</span>
-                          <button
-                            type="button"
-                            class="worldbook-row-open"
-                            :disabled="worldbookEntrySaving"
-                            @click="cancelWorldbookEntryEdit"
-                          >
-                            取消
-                          </button>
+                          <div class="worldbook-entry-editor-actions">
+                            <label class="worldbook-entry-active-toggle">
+                              <input
+                                type="checkbox"
+                                :checked="!worldbookEntryDraft.disable"
+                                @change="updateWorldbookEntryDraftPatch({ disable: !($event.target as HTMLInputElement).checked, enabled: ($event.target as HTMLInputElement).checked })"
+                              >
+                              <span>启用</span>
+                            </label>
+                            <button
+                              type="button"
+                              class="worldbook-row-open"
+                              :disabled="worldbookEntrySaving"
+                              @click="cancelWorldbookEntryEdit"
+                            >
+                              取消
+                            </button>
+                            <button
+                              type="submit"
+                              class="primary-action"
+                              :disabled="!worldbookEntryDirty || worldbookEntrySaving"
+                            >
+                              保存
+                            </button>
+                          </div>
                         </div>
-                        <div class="worldbook-entry-editor-grid">
-                          <label>
+                        <div class="worldbook-entry-core-grid">
+                          <label class="worldbook-entry-title-field">
                             <span>条目名</span>
                             <input
                               :value="worldbookEntryDraft.comment"
@@ -242,32 +447,113 @@ watch(
                             >
                           </label>
                           <label>
+                            <span>状态</span>
+                            <select
+                              :value="worldbookEntryStateValue(worldbookEntryDraft)"
+                              @change="updateWorldbookEntryState"
+                            >
+                              <option value="constant">
+                                🔵 常驻
+                              </option>
+                              <option value="normal">
+                                🟢 普通
+                              </option>
+                              <option value="vectorized">
+                                🔗 向量化
+                              </option>
+                            </select>
+                          </label>
+                          <label>
+                            <span>注入位置</span>
+                            <select
+                              :value="worldbookPositionValue(worldbookEntryDraft)"
+                              @change="updateWorldbookPosition"
+                            >
+                              <option
+                                v-for="item in worldbookPositionOptions"
+                                :key="item.value"
+                                :value="item.value"
+                                :title="item.title"
+                              >
+                                {{ item.label }}
+                              </option>
+                            </select>
+                          </label>
+                          <label>
+                            <span>深度</span>
+                            <input
+                              :value="numberInputValue(worldbookEntryDraft.depth)"
+                              type="number"
+                              min="0"
+                              max="9999"
+                              step="1"
+                              :disabled="!worldbookDepthEnabled(worldbookEntryDraft)"
+                              @input="patchWorldbookEntryField('depth', nullableNumberFromEvent($event))"
+                            >
+                          </label>
+                          <label>
                             <span>排序</span>
                             <input
                               :value="worldbookEntryDraft.order"
                               type="number"
+                              min="0"
+                              max="9999"
                               step="1"
-                              @input="updateWorldbookEntryDraftPatch({ order: Number(($event.target as HTMLInputElement).value) })"
+                              @input="patchWorldbookEntryField('order', Number(($event.target as HTMLInputElement).value))"
+                            >
+                          </label>
+                          <label>
+                            <span>触发概率</span>
+                            <input
+                              :value="numberInputValue(worldbookEntryDraft.probability)"
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="1"
+                              :disabled="!worldbookEntryDraft.useProbability"
+                              @input="updateWorldbookProbability"
                             >
                           </label>
                         </div>
-                        <label class="worldbook-entry-editor-lines">
-                          <span>关键词</span>
-                          <textarea
-                            :value="linesFromList(worldbookEntryDraft.key)"
-                            rows="3"
-                            @input="updateWorldbookEntryDraftPatch({ key: listFromLines(($event.target as HTMLTextAreaElement).value) })"
-                          />
-                        </label>
-                        <label class="worldbook-entry-editor-lines">
-                          <span>次级关键词</span>
-                          <textarea
-                            :value="linesFromList(worldbookEntryDraft.keysecondary.length ? worldbookEntryDraft.keysecondary : worldbookEntryDraft.secondary_keys)"
-                            rows="3"
-                            @input="updateWorldbookEntryDraftPatch({ keysecondary: listFromLines(($event.target as HTMLTextAreaElement).value) })"
-                          />
-                        </label>
-                        <label class="worldbook-entry-editor-lines">
+                        <div class="worldbook-entry-key-grid">
+                          <label class="worldbook-entry-editor-lines worldbook-entry-keywords-field">
+                            <span>关键词</span>
+                            <input
+                              :value="commaTextFromList(worldbookEntryDraft.key)"
+                              type="text"
+                              @input="updateWorldbookEntryDraftPatch({ key: listFromCommaText(($event.target as HTMLInputElement).value) })"
+                            >
+                          </label>
+                          <div class="worldbook-entry-filter-controls">
+                            <label class="worldbook-entry-logic-field">
+                              <span>过滤逻辑</span>
+                              <select
+                                :value="worldbookFilterLogicValue(worldbookEntryDraft)"
+                                @change="updateWorldbookFilterLogic"
+                              >
+                                <option value="off">
+                                  关闭
+                                </option>
+                                <option
+                                  v-for="item in worldbookLogicOptions"
+                                  :key="item.value"
+                                  :value="item.value"
+                                >
+                                  {{ item.label }}
+                                </option>
+                              </select>
+                            </label>
+                          </div>
+                          <label class="worldbook-entry-editor-lines worldbook-entry-keywords-field">
+                            <span>可选过滤</span>
+                            <input
+                              :value="commaTextFromList(worldbookEntryDraft.keysecondary.length ? worldbookEntryDraft.keysecondary : worldbookEntryDraft.secondary_keys)"
+                              type="text"
+                              @input="updateWorldbookEntryDraftPatch({ keysecondary: listFromCommaText(($event.target as HTMLInputElement).value) })"
+                            >
+                          </label>
+                        </div>
+                        <label class="worldbook-entry-editor-lines worldbook-entry-content-field">
                           <span>内容</span>
                           <textarea
                             :value="worldbookEntryDraft.content"
@@ -275,30 +561,207 @@ watch(
                             @input="updateWorldbookEntryDraftPatch({ content: ($event.target as HTMLTextAreaElement).value })"
                           />
                         </label>
-                        <div class="worldbook-entry-editor-toggles">
-                          <label>
-                            <input
-                              type="checkbox"
-                              :checked="!worldbookEntryDraft.disable"
-                              @change="updateWorldbookEntryDraftPatch({ disable: !($event.target as HTMLInputElement).checked, enabled: ($event.target as HTMLInputElement).checked })"
-                            >
-                            <span>启用</span>
-                          </label>
-                          <label>
-                            <input
-                              type="checkbox"
-                              :checked="worldbookEntryDraft.constant"
-                              @change="updateWorldbookEntryDraftPatch({ constant: ($event.target as HTMLInputElement).checked })"
-                            >
-                            <span>常驻</span>
-                          </label>
+                        <div
+                          class="worldbook-entry-advanced"
+                          :class="{ open: worldbookDisclosure.isOpen(worldbookAdvancedDisclosureId(worldbookEntryDraft)) }"
+                        >
                           <button
-                            type="submit"
-                            class="primary-action"
-                            :disabled="!worldbookEntryDirty || worldbookEntrySaving"
+                            type="button"
+                            class="worldbook-entry-advanced-toggle"
+                            :aria-expanded="worldbookDisclosure.isOpen(worldbookAdvancedDisclosureId(worldbookEntryDraft))"
+                            @click="worldbookDisclosure.setOpen(worldbookAdvancedDisclosureId(worldbookEntryDraft), !worldbookDisclosure.isOpen(worldbookAdvancedDisclosureId(worldbookEntryDraft)))"
                           >
-                            保存
+                            高级设置
                           </button>
+                          <template v-if="worldbookDisclosure.isOpen(worldbookAdvancedDisclosureId(worldbookEntryDraft))">
+                            <div class="worldbook-entry-advanced-grid">
+                              <label>
+                                <span>注入出口</span>
+                                <input
+                                  :value="worldbookEntryDraft.outletName"
+                                  type="text"
+                                  @input="patchWorldbookEntryField('outletName', ($event.target as HTMLInputElement).value)"
+                                >
+                              </label>
+                              <label>
+                                <span>扫描深度</span>
+                                <input
+                                  :value="numberInputValue(worldbookEntryDraft.scanDepth)"
+                                  type="number"
+                                  min="0"
+                                  max="1000"
+                                  @input="patchWorldbookEntryField('scanDepth', nullableNumberFromEvent($event))"
+                                >
+                              </label>
+                              <label>
+                                <span>区分大小写</span>
+                                <select
+                                  :value="triStateValue(worldbookEntryDraft.caseSensitive)"
+                                  @change="patchWorldbookEntryField('caseSensitive', triStateFromEvent($event))"
+                                >
+                                  <option value="null">跟随全局</option>
+                                  <option value="true">是</option>
+                                  <option value="false">否</option>
+                                </select>
+                              </label>
+                              <label>
+                                <span>全词匹配</span>
+                                <select
+                                  :value="triStateValue(worldbookEntryDraft.matchWholeWords)"
+                                  @change="patchWorldbookEntryField('matchWholeWords', triStateFromEvent($event))"
+                                >
+                                  <option value="null">跟随全局</option>
+                                  <option value="true">是</option>
+                                  <option value="false">否</option>
+                                </select>
+                              </label>
+                              <label>
+                                <span>分组评分</span>
+                                <select
+                                  :value="triStateValue(worldbookEntryDraft.useGroupScoring)"
+                                  @change="patchWorldbookEntryField('useGroupScoring', triStateFromEvent($event))"
+                                >
+                                  <option value="null">跟随全局</option>
+                                  <option value="true">是</option>
+                                  <option value="false">否</option>
+                                </select>
+                              </label>
+                              <label>
+                                <span>自动化 ID</span>
+                                <input
+                                  :value="worldbookEntryDraft.automationId"
+                                  type="text"
+                                  @input="patchWorldbookEntryField('automationId', ($event.target as HTMLInputElement).value)"
+                                >
+                              </label>
+                              <label>
+                                <span>包含组</span>
+                                <input
+                                  :value="worldbookEntryDraft.group"
+                                  type="text"
+                                  @input="patchWorldbookEntryField('group', ($event.target as HTMLInputElement).value)"
+                                >
+                              </label>
+                              <label>
+                                <span>分组权重</span>
+                                <input
+                                  :value="numberInputValue(worldbookEntryDraft.groupWeight)"
+                                  type="number"
+                                  min="1"
+                                  @input="patchWorldbookEntryField('groupWeight', nullableNumberFromEvent($event))"
+                                >
+                              </label>
+                              <label>
+                                <span>黏着轮数</span>
+                                <input
+                                  :value="numberInputValue(worldbookEntryDraft.sticky)"
+                                  type="number"
+                                  min="0"
+                                  @input="patchWorldbookEntryField('sticky', nullableNumberFromEvent($event))"
+                                >
+                              </label>
+                              <label>
+                                <span>冷却轮数</span>
+                                <input
+                                  :value="numberInputValue(worldbookEntryDraft.cooldown)"
+                                  type="number"
+                                  min="0"
+                                  @input="patchWorldbookEntryField('cooldown', nullableNumberFromEvent($event))"
+                                >
+                              </label>
+                              <label>
+                                <span>延迟轮数</span>
+                                <input
+                                  :value="numberInputValue(worldbookEntryDraft.delay)"
+                                  type="number"
+                                  min="0"
+                                  @input="patchWorldbookEntryField('delay', nullableNumberFromEvent($event))"
+                                >
+                              </label>
+                            </div>
+                            <div class="worldbook-entry-advanced-checks">
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  :checked="worldbookEntryDraft.useProbability"
+                                  @change="updateWorldbookUseProbability"
+                                >
+                                <span>启用概率</span>
+                              </label>
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  :checked="worldbookEntryDraft.ignoreBudget"
+                                  @change="patchWorldbookEntryField('ignoreBudget', ($event.target as HTMLInputElement).checked)"
+                                >
+                                <span>忽略预算</span>
+                              </label>
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  :checked="worldbookEntryDraft.excludeRecursion"
+                                  @change="patchWorldbookEntryField('excludeRecursion', ($event.target as HTMLInputElement).checked)"
+                                >
+                                <span>排除递归</span>
+                              </label>
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  :checked="worldbookEntryDraft.preventRecursion"
+                                  @change="patchWorldbookEntryField('preventRecursion', ($event.target as HTMLInputElement).checked)"
+                                >
+                                <span>阻止递归</span>
+                              </label>
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  :checked="worldbookEntryDraft.groupOverride"
+                                  @change="patchWorldbookEntryField('groupOverride', ($event.target as HTMLInputElement).checked)"
+                                >
+                                <span>分组优先</span>
+                              </label>
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  :checked="delayUntilRecursionChecked(worldbookEntryDraft.delayUntilRecursion)"
+                                  @change="updateDelayUntilRecursionEnabled"
+                                >
+                                <span>递归后延迟</span>
+                              </label>
+                              <label>
+                                <span>递归层级</span>
+                                <input
+                                  :value="delayUntilRecursionLevel(worldbookEntryDraft.delayUntilRecursion)"
+                                  type="number"
+                                  min="1"
+                                  :disabled="!delayUntilRecursionChecked(worldbookEntryDraft.delayUntilRecursion)"
+                                  @input="updateDelayUntilRecursionLevel"
+                                >
+                              </label>
+                            </div>
+                            <label class="worldbook-entry-editor-lines worldbook-entry-triggers-field">
+                              <span>生成触发</span>
+                              <input
+                                :value="commaTextFromList(worldbookEntryDraft.triggers)"
+                                type="text"
+                                @input="patchWorldbookEntryField('triggers', listFromCommaText(($event.target as HTMLInputElement).value))"
+                              >
+                            </label>
+                            <div class="worldbook-entry-match-source-list">
+                              <span>额外匹配源</span>
+                              <label
+                                v-for="item in worldbookMatchSourceOptions"
+                                :key="item.key"
+                              >
+                                <input
+                                  type="checkbox"
+                                  :checked="Boolean(worldbookEntryDraft[item.key])"
+                                  @change="patchWorldbookEntryField(item.key, ($event.target as HTMLInputElement).checked as never)"
+                                >
+                                <span>{{ item.label }}</span>
+                              </label>
+                            </div>
+                          </template>
                         </div>
                       </form>
                     </template>

@@ -54,7 +54,12 @@ interface TavernWorldbookPreviewEntry {
     contentPreview: string;
     enabled: boolean;
     constant: boolean;
+    vectorized: boolean;
     order: number;
+    position: number;
+    role: number;
+    depth: number | null;
+    probability: number | null;
 }
 
 interface TavernWorldbookPreviewResult {
@@ -85,7 +90,38 @@ interface TavernWorldbookEntryDraft {
     disable: boolean;
     enabled: boolean;
     constant: boolean;
+    vectorized: boolean;
     order: number;
+    position: number;
+    role: number;
+    depth: number | null;
+    probability: number | null;
+    useProbability: boolean;
+    selective: boolean;
+    selectiveLogic: number;
+    scanDepth: number | null;
+    caseSensitive: boolean | null;
+    matchWholeWords: boolean | null;
+    useGroupScoring: boolean | null;
+    outletName: string;
+    automationId: string;
+    ignoreBudget: boolean;
+    excludeRecursion: boolean;
+    preventRecursion: boolean;
+    delayUntilRecursion: boolean | number;
+    group: string;
+    groupOverride: boolean;
+    groupWeight: number | null;
+    sticky: number | null;
+    cooldown: number | null;
+    delay: number | null;
+    triggers: string[];
+    matchPersonaDescription: boolean;
+    matchCharacterDescription: boolean;
+    matchCharacterPersonality: boolean;
+    matchCharacterDepthPrompt: boolean;
+    matchScenario: boolean;
+    matchCreatorNotes: boolean;
     entryHash: string;
     revision: string;
 }
@@ -191,6 +227,46 @@ function normalizeStringList(value: unknown): string[] {
     return text ? [text] : [];
 }
 
+function normalizeFiniteNumber(value: unknown, fallback: number): number {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : fallback;
+}
+
+function normalizeNullableNumber(value: unknown): number | null {
+    if (value === '' || value === null || value === undefined) {return null;}
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function normalizeTriStateBoolean(value: unknown): boolean | null {
+    if (value === true || value === 'true') {return true;}
+    if (value === false || value === 'false') {return false;}
+    return null;
+}
+
+function normalizeDelayUntilRecursion(value: unknown): boolean | number {
+    if (value === true || value === 'true') {return true;}
+    if (value === false || value === 'false' || value === '' || value === null || value === undefined) {return false;}
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : false;
+}
+
+function entryExtensionValue(entry: Record<string, unknown>, extensionKey: string, entryKey: string): unknown {
+    const extensions = asRecord(entry.extensions);
+    return Object.prototype.hasOwnProperty.call(extensions, extensionKey) ? extensions[extensionKey] : entry[entryKey];
+}
+
+function normalizeWorldbookPosition(value: unknown): number {
+    if (normalizeText(value) === 'after_char') {return 1;}
+    if (normalizeText(value) === 'before_char') {return 0;}
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function normalizeWorldbookDepth(position: unknown, depth: unknown): number | null {
+    return normalizeWorldbookPosition(position) === 4 ? normalizeNullableNumber(depth) ?? 4 : null;
+}
+
 function cloneJson<T>(value: T): T {
     try {
         return JSON.parse(JSON.stringify(value)) as T;
@@ -261,19 +337,55 @@ function findWorldbookEntrySlot(data: unknown, uid: string): TavernWorldbookEntr
 function buildWorldbookEntryDraft(name: string, slot: TavernWorldbookEntrySlot): TavernWorldbookEntryDraft {
     const entry = slot.entry;
     const entryHash = buildWorldbookEntryHash(entry);
-    const keysecondary = normalizeStringList(entry.keysecondary);
+    const keysecondary = normalizeStringList(entry.keysecondary).length
+        ? normalizeStringList(entry.keysecondary)
+        : normalizeStringList(entry.secondary_keys);
+    const position = normalizeWorldbookPosition(entryExtensionValue(entry, 'position', 'position'));
+    const vectorized = entryExtensionValue(entry, 'vectorized', 'vectorized') === true;
+    const probability = normalizeNullableNumber(entryExtensionValue(entry, 'probability', 'probability'));
     return {
         worldbookName: name,
         uid: normalizeIdText(entry.uid ?? entry.id ?? slot.index),
         comment: asEditableText(entry.comment),
         key: normalizeStringList(entry.key),
         keysecondary,
-        secondary_keys: normalizeStringList(entry.secondary_keys),
+        secondary_keys: keysecondary,
         content: asEditableText(entry.content),
         disable: entry.disable === true,
         enabled: entry.disable !== true,
         constant: entry.constant === true,
+        vectorized,
         order: Number.isFinite(Number(entry.order)) ? Number(entry.order) : 100,
+        position,
+        role: Math.floor(normalizeFiniteNumber(entryExtensionValue(entry, 'role', 'role'), 0)),
+        depth: normalizeWorldbookDepth(position, entryExtensionValue(entry, 'depth', 'depth')),
+        probability: probability ?? 100,
+        useProbability: entryExtensionValue(entry, 'useProbability', 'useProbability') !== false && probability !== null,
+        selective: entry.selective === true,
+        selectiveLogic: Math.floor(normalizeFiniteNumber(entry.selectiveLogic, 0)),
+        scanDepth: normalizeNullableNumber(entryExtensionValue(entry, 'scan_depth', 'scanDepth')),
+        caseSensitive: normalizeTriStateBoolean(entryExtensionValue(entry, 'case_sensitive', 'caseSensitive')),
+        matchWholeWords: normalizeTriStateBoolean(entryExtensionValue(entry, 'match_whole_words', 'matchWholeWords')),
+        useGroupScoring: normalizeTriStateBoolean(entryExtensionValue(entry, 'use_group_scoring', 'useGroupScoring')),
+        outletName: asEditableText(entryExtensionValue(entry, 'outlet_name', 'outletName')),
+        automationId: asEditableText(entryExtensionValue(entry, 'automation_id', 'automationId')),
+        ignoreBudget: entryExtensionValue(entry, 'ignore_budget', 'ignoreBudget') === true,
+        excludeRecursion: entryExtensionValue(entry, 'exclude_recursion', 'excludeRecursion') === true,
+        preventRecursion: entryExtensionValue(entry, 'prevent_recursion', 'preventRecursion') === true,
+        delayUntilRecursion: normalizeDelayUntilRecursion(entryExtensionValue(entry, 'delay_until_recursion', 'delayUntilRecursion')),
+        group: asEditableText(entryExtensionValue(entry, 'group', 'group')),
+        groupOverride: entryExtensionValue(entry, 'group_override', 'groupOverride') === true,
+        groupWeight: normalizeNullableNumber(entryExtensionValue(entry, 'group_weight', 'groupWeight')),
+        sticky: normalizeNullableNumber(entryExtensionValue(entry, 'sticky', 'sticky')),
+        cooldown: normalizeNullableNumber(entryExtensionValue(entry, 'cooldown', 'cooldown')),
+        delay: normalizeNullableNumber(entryExtensionValue(entry, 'delay', 'delay')),
+        triggers: normalizeStringList(entryExtensionValue(entry, 'triggers', 'triggers')),
+        matchPersonaDescription: entryExtensionValue(entry, 'match_persona_description', 'matchPersonaDescription') === true,
+        matchCharacterDescription: entryExtensionValue(entry, 'match_character_description', 'matchCharacterDescription') === true,
+        matchCharacterPersonality: entryExtensionValue(entry, 'match_character_personality', 'matchCharacterPersonality') === true,
+        matchCharacterDepthPrompt: entryExtensionValue(entry, 'match_character_depth_prompt', 'matchCharacterDepthPrompt') === true,
+        matchScenario: entryExtensionValue(entry, 'match_scenario', 'matchScenario') === true,
+        matchCreatorNotes: entryExtensionValue(entry, 'match_creator_notes', 'matchCreatorNotes') === true,
         entryHash,
         revision: entryHash,
     };
@@ -285,19 +397,62 @@ function patchWorldbookEntry(entry: Record<string, unknown>, draft: Record<strin
         entry.key = normalizeStringList(draft.key ?? draft.keys);
     }
     if ('keysecondary' in draft || 'secondaryKeys' in draft) {
-        entry.keysecondary = normalizeStringList(draft.keysecondary ?? draft.secondaryKeys);
+        const keysecondary = normalizeStringList(draft.keysecondary);
+        entry.keysecondary = keysecondary.length ? keysecondary : normalizeStringList(draft.secondary_keys ?? draft.secondaryKeys);
     }
     if ('secondary_keys' in entry && ('secondary_keys' in draft || 'secondaryKeys' in draft)) {
-        entry.secondary_keys = normalizeStringList(draft.keysecondary ?? draft.secondary_keys ?? draft.secondaryKeys);
+        const keysecondary = normalizeStringList(draft.keysecondary);
+        entry.secondary_keys = keysecondary.length ? keysecondary : normalizeStringList(draft.secondary_keys ?? draft.secondaryKeys);
     }
     if ('content' in draft) {entry.content = asEditableText(draft.content);}
     if ('disable' in draft) {entry.disable = draft.disable === true;}
     if ('enabled' in draft && !('disable' in draft)) {entry.disable = draft.enabled === false;}
     if ('constant' in draft) {entry.constant = draft.constant === true;}
+    if ('vectorized' in draft) {entry.vectorized = draft.vectorized === true;}
+    if (entry.constant === true) {entry.vectorized = false;}
+    if (entry.vectorized === true) {entry.constant = false;}
     if ('order' in draft) {
         const order = Number(draft.order);
         if (Number.isFinite(order)) {entry.order = order;}
     }
+    if ('position' in draft) {entry.position = normalizeWorldbookPosition(draft.position);}
+    if ('role' in draft) {entry.role = Math.floor(normalizeFiniteNumber(draft.role, 0));}
+    if ('depth' in draft) {entry.depth = normalizeNullableNumber(draft.depth);}
+    entry.depth = normalizeWorldbookDepth(entry.position, entry.depth);
+    if ('probability' in draft) {entry.probability = normalizeNullableNumber(draft.probability);}
+    if ('useProbability' in draft) {
+        entry.useProbability = draft.useProbability === true;
+        if (entry.useProbability === false) {
+            entry.probability = null;
+        } else if (normalizeNullableNumber(entry.probability) === null) {
+            entry.probability = 100;
+        }
+    }
+    if ('selective' in draft) {entry.selective = draft.selective === true;}
+    if ('selectiveLogic' in draft) {entry.selectiveLogic = Math.floor(normalizeFiniteNumber(draft.selectiveLogic, 0));}
+    if ('scanDepth' in draft) {entry.scanDepth = normalizeNullableNumber(draft.scanDepth);}
+    if ('caseSensitive' in draft) {entry.caseSensitive = normalizeTriStateBoolean(draft.caseSensitive);}
+    if ('matchWholeWords' in draft) {entry.matchWholeWords = normalizeTriStateBoolean(draft.matchWholeWords);}
+    if ('useGroupScoring' in draft) {entry.useGroupScoring = normalizeTriStateBoolean(draft.useGroupScoring);}
+    if ('outletName' in draft) {entry.outletName = asEditableText(draft.outletName);}
+    if ('automationId' in draft) {entry.automationId = asEditableText(draft.automationId);}
+    if ('ignoreBudget' in draft) {entry.ignoreBudget = draft.ignoreBudget === true;}
+    if ('excludeRecursion' in draft) {entry.excludeRecursion = draft.excludeRecursion === true;}
+    if ('preventRecursion' in draft) {entry.preventRecursion = draft.preventRecursion === true;}
+    if ('delayUntilRecursion' in draft) {entry.delayUntilRecursion = normalizeDelayUntilRecursion(draft.delayUntilRecursion);}
+    if ('group' in draft) {entry.group = asEditableText(draft.group);}
+    if ('groupOverride' in draft) {entry.groupOverride = draft.groupOverride === true;}
+    if ('groupWeight' in draft) {entry.groupWeight = normalizeNullableNumber(draft.groupWeight);}
+    if ('sticky' in draft) {entry.sticky = normalizeNullableNumber(draft.sticky);}
+    if ('cooldown' in draft) {entry.cooldown = normalizeNullableNumber(draft.cooldown);}
+    if ('delay' in draft) {entry.delay = normalizeNullableNumber(draft.delay);}
+    if ('triggers' in draft) {entry.triggers = normalizeStringList(draft.triggers);}
+    if ('matchPersonaDescription' in draft) {entry.matchPersonaDescription = draft.matchPersonaDescription === true;}
+    if ('matchCharacterDescription' in draft) {entry.matchCharacterDescription = draft.matchCharacterDescription === true;}
+    if ('matchCharacterPersonality' in draft) {entry.matchCharacterPersonality = draft.matchCharacterPersonality === true;}
+    if ('matchCharacterDepthPrompt' in draft) {entry.matchCharacterDepthPrompt = draft.matchCharacterDepthPrompt === true;}
+    if ('matchScenario' in draft) {entry.matchScenario = draft.matchScenario === true;}
+    if ('matchCreatorNotes' in draft) {entry.matchCreatorNotes = draft.matchCreatorNotes === true;}
 }
 
 function syncWorldbookOriginalDataEntry(
@@ -320,6 +475,38 @@ function syncWorldbookOriginalDataEntry(
         ['insertion_order', Number.isFinite(Number(entry.order)) ? Number(entry.order) : 100],
         ['constant', entry.constant === true],
         ['enabled', entry.disable !== true],
+        ['selective', entry.selective === true],
+        ['selectiveLogic', Math.floor(normalizeFiniteNumber(entry.selectiveLogic, 0))],
+        ['position', normalizeWorldbookPosition(entry.position) === 0 ? 'before_char' : 'after_char'],
+        ['extensions.position', normalizeWorldbookPosition(entry.position)],
+        ['extensions.role', Math.floor(normalizeFiniteNumber(entry.role, 0))],
+        ['extensions.depth', normalizeWorldbookDepth(entry.position, entry.depth)],
+        ['extensions.probability', entry.useProbability === false ? null : normalizeNullableNumber(entry.probability) ?? 100],
+        ['extensions.useProbability', entry.useProbability !== false],
+        ['extensions.vectorized', entry.vectorized === true],
+        ['extensions.scan_depth', normalizeNullableNumber(entry.scanDepth)],
+        ['extensions.case_sensitive', normalizeTriStateBoolean(entry.caseSensitive)],
+        ['extensions.match_whole_words', normalizeTriStateBoolean(entry.matchWholeWords)],
+        ['extensions.use_group_scoring', normalizeTriStateBoolean(entry.useGroupScoring)],
+        ['extensions.outlet_name', asEditableText(entry.outletName)],
+        ['extensions.automation_id', asEditableText(entry.automationId)],
+        ['extensions.ignore_budget', entry.ignoreBudget === true],
+        ['extensions.exclude_recursion', entry.excludeRecursion === true],
+        ['extensions.prevent_recursion', entry.preventRecursion === true],
+        ['extensions.delay_until_recursion', normalizeDelayUntilRecursion(entry.delayUntilRecursion)],
+        ['extensions.group', asEditableText(entry.group)],
+        ['extensions.group_override', entry.groupOverride === true],
+        ['extensions.group_weight', normalizeNullableNumber(entry.groupWeight)],
+        ['extensions.sticky', normalizeNullableNumber(entry.sticky)],
+        ['extensions.cooldown', normalizeNullableNumber(entry.cooldown)],
+        ['extensions.delay', normalizeNullableNumber(entry.delay)],
+        ['extensions.triggers', normalizeStringList(entry.triggers)],
+        ['extensions.match_persona_description', entry.matchPersonaDescription === true],
+        ['extensions.match_character_description', entry.matchCharacterDescription === true],
+        ['extensions.match_character_personality', entry.matchCharacterPersonality === true],
+        ['extensions.match_character_depth_prompt', entry.matchCharacterDepthPrompt === true],
+        ['extensions.match_scenario', entry.matchScenario === true],
+        ['extensions.match_creator_notes', entry.matchCreatorNotes === true],
     ];
     mappings.forEach(([path, value]) => setValueByPath(originalEntry, path, value));
 }
@@ -517,8 +704,8 @@ function buildActivatedPromptEntries(
             selective: entry.selective === true,
             selectiveLogic: Number.isFinite(Number(entry.selectiveLogic)) ? Number(entry.selectiveLogic) : 0,
             scanDepth: Number.isFinite(Number(entry.scanDepth)) ? Number(entry.scanDepth) : null,
-            caseSensitive: entry.caseSensitive === true,
-            matchWholeWords: entry.matchWholeWords === true,
+            caseSensitive: normalizeTriStateBoolean(entry.caseSensitive) ?? undefined,
+            matchWholeWords: normalizeTriStateBoolean(entry.matchWholeWords) ?? undefined,
             ignoreBudget: entry.ignoreBudget === true,
             excludeRecursion: entry.excludeRecursion === true,
             preventRecursion: entry.preventRecursion === true,
@@ -914,7 +1101,12 @@ export async function getTavernWorldbookPreview(input: unknown = {}): Promise<Ta
                 contentPreview: content,
                 enabled: entry.disable !== true,
                 constant: entry.constant === true,
+                vectorized: entryExtensionValue(entry, 'vectorized', 'vectorized') === true,
                 order: Number.isFinite(Number(entry.order)) ? Number(entry.order) : 100,
+                position: normalizeWorldbookPosition(entryExtensionValue(entry, 'position', 'position')),
+                role: Math.floor(normalizeFiniteNumber(entryExtensionValue(entry, 'role', 'role'), 0)),
+                depth: normalizeNullableNumber(entryExtensionValue(entry, 'depth', 'depth')),
+                probability: normalizeNullableNumber(entryExtensionValue(entry, 'probability', 'probability')),
             };
         })
         .sort((a, b) => Number(b.order) - Number(a.order))

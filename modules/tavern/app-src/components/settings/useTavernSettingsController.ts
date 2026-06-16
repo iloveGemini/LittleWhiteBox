@@ -89,7 +89,12 @@ interface WorldbookPreviewEntryRow {
     contentPreview: string;
     enabled: boolean;
     constant: boolean;
+    vectorized: boolean;
     order: number;
+    position: number;
+    role: number;
+    depth: number | null;
+    probability: number | null;
 }
 
 interface WorldbookEntryDraftRow {
@@ -103,7 +108,38 @@ interface WorldbookEntryDraftRow {
     disable: boolean;
     enabled: boolean;
     constant: boolean;
+    vectorized: boolean;
     order: number;
+    position: number;
+    role: number;
+    depth: number | null;
+    probability: number | null;
+    useProbability: boolean;
+    selective: boolean;
+    selectiveLogic: number;
+    scanDepth: number | null;
+    caseSensitive: boolean | null;
+    matchWholeWords: boolean | null;
+    useGroupScoring: boolean | null;
+    outletName: string;
+    automationId: string;
+    ignoreBudget: boolean;
+    excludeRecursion: boolean;
+    preventRecursion: boolean;
+    delayUntilRecursion: boolean | number;
+    group: string;
+    groupOverride: boolean;
+    groupWeight: number | null;
+    sticky: number | null;
+    cooldown: number | null;
+    delay: number | null;
+    triggers: string[];
+    matchPersonaDescription: boolean;
+    matchCharacterDescription: boolean;
+    matchCharacterPersonality: boolean;
+    matchCharacterDepthPrompt: boolean;
+    matchScenario: boolean;
+    matchCreatorNotes: boolean;
     entryHash: string;
     revision: string;
 }
@@ -161,6 +197,29 @@ function snapshotNativeDraft(value: unknown) {
     return JSON.stringify(value || {});
 }
 
+function normalizeStringList(value: unknown): string[] {
+    return Array.isArray(value) ? value.map((item) => String(item || '').trim()).filter(Boolean) : [];
+}
+
+function normalizeNullableNumber(value: unknown): number | null {
+    if (value === '' || value === null || value === undefined) {return null;}
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function normalizeTriStateBoolean(value: unknown): boolean | null {
+    if (value === true || value === 'true') {return true;}
+    if (value === false || value === 'false') {return false;}
+    return null;
+}
+
+function normalizeDelayUntilRecursion(value: unknown): boolean | number {
+    if (value === true || value === 'true') {return true;}
+    if (value === false || value === 'false' || value === '' || value === null || value === undefined) {return false;}
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) && numberValue > 0 ? Math.floor(numberValue) : false;
+}
+
 function normalizeWorldbookPreview(value: unknown): TavernWorldbookPreviewRow {
     const record = promptRecord(value);
     const entries = Array.isArray(record.entries)
@@ -174,7 +233,12 @@ function normalizeWorldbookPreview(value: unknown): TavernWorldbookPreviewRow {
                 contentPreview: String(entryRecord.contentPreview || ''),
                 enabled: entryRecord.enabled !== false,
                 constant: entryRecord.constant === true,
+                vectorized: entryRecord.vectorized === true,
                 order: Number.isFinite(Number(entryRecord.order)) ? Number(entryRecord.order) : 100,
+                position: Number.isFinite(Number(entryRecord.position)) ? Number(entryRecord.position) : 0,
+                role: Number.isFinite(Number(entryRecord.role)) ? Number(entryRecord.role) : 0,
+                depth: normalizeNullableNumber(entryRecord.depth),
+                probability: normalizeNullableNumber(entryRecord.probability),
             } as WorldbookPreviewEntryRow;
         })
         : [];
@@ -192,25 +256,56 @@ function normalizeWorldbookPreview(value: unknown): TavernWorldbookPreviewRow {
 
 function normalizeWorldbookEntryDraft(value: unknown): TavernWorldbookEntryDraft {
     const record = promptRecord(value);
-    const keysecondary = Array.isArray(record.keysecondary)
-        ? record.keysecondary.map((item) => String(item || '').trim()).filter(Boolean)
-        : [];
-    const secondaryKeys = Array.isArray(record.secondary_keys)
-        ? record.secondary_keys.map((item) => String(item || '').trim()).filter(Boolean)
-        : keysecondary;
+    const nativeSecondaryKeys = normalizeStringList(record.keysecondary);
+    const originalSecondaryKeys = normalizeStringList(record.secondary_keys);
+    const keysecondary = nativeSecondaryKeys.length ? nativeSecondaryKeys : originalSecondaryKeys;
+    const secondaryKeys = keysecondary;
     const disable = record.disable === true || record.enabled === false;
+    const constant = record.constant === true;
+    const vectorized = !constant && record.vectorized === true;
     return {
         worldbookName: String(record.worldbookName || record.name || '').trim(),
         uid: record.uid === null || record.uid === undefined ? '' : String(record.uid).trim(),
         comment: String(record.comment ?? ''),
-        key: Array.isArray(record.key) ? record.key.map((item) => String(item || '').trim()).filter(Boolean) : [],
+        key: normalizeStringList(record.key),
         keysecondary,
         secondary_keys: secondaryKeys,
         content: String(record.content ?? ''),
         disable,
         enabled: !disable,
-        constant: record.constant === true,
+        constant,
+        vectorized,
         order: Number.isFinite(Number(record.order)) ? Number(record.order) : 100,
+        position: Number.isFinite(Number(record.position)) ? Number(record.position) : 0,
+        role: Number.isFinite(Number(record.role)) ? Number(record.role) : 0,
+        depth: Number(record.position) === 4 ? normalizeNullableNumber(record.depth) ?? 4 : null,
+        probability: normalizeNullableNumber(record.probability) ?? 100,
+        useProbability: record.useProbability !== false,
+        selective: record.selective === true,
+        selectiveLogic: Number.isFinite(Number(record.selectiveLogic)) ? Number(record.selectiveLogic) : 0,
+        scanDepth: normalizeNullableNumber(record.scanDepth),
+        caseSensitive: normalizeTriStateBoolean(record.caseSensitive),
+        matchWholeWords: normalizeTriStateBoolean(record.matchWholeWords),
+        useGroupScoring: normalizeTriStateBoolean(record.useGroupScoring),
+        outletName: String(record.outletName ?? ''),
+        automationId: String(record.automationId ?? ''),
+        ignoreBudget: record.ignoreBudget === true,
+        excludeRecursion: record.excludeRecursion === true,
+        preventRecursion: record.preventRecursion === true,
+        delayUntilRecursion: normalizeDelayUntilRecursion(record.delayUntilRecursion),
+        group: String(record.group ?? ''),
+        groupOverride: record.groupOverride === true,
+        groupWeight: normalizeNullableNumber(record.groupWeight),
+        sticky: normalizeNullableNumber(record.sticky),
+        cooldown: normalizeNullableNumber(record.cooldown),
+        delay: normalizeNullableNumber(record.delay),
+        triggers: normalizeStringList(record.triggers),
+        matchPersonaDescription: record.matchPersonaDescription === true,
+        matchCharacterDescription: record.matchCharacterDescription === true,
+        matchCharacterPersonality: record.matchCharacterPersonality === true,
+        matchCharacterDepthPrompt: record.matchCharacterDepthPrompt === true,
+        matchScenario: record.matchScenario === true,
+        matchCreatorNotes: record.matchCreatorNotes === true,
         entryHash: String(record.entryHash || ''),
         revision: String(record.revision || record.entryHash || ''),
     } as WorldbookEntryDraftRow;

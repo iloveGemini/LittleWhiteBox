@@ -74,7 +74,12 @@ export interface TavernWorldbookPreviewEntryRow {
     contentPreview: string;
     enabled: boolean;
     constant: boolean;
+    vectorized?: boolean;
     order: number;
+    position?: number;
+    role?: number;
+    depth?: number | null;
+    probability?: number | null;
 }
 
 export interface TavernWorldbookPreviewRow {
@@ -99,7 +104,38 @@ export interface TavernWorldbookEntryDraft {
     disable: boolean;
     enabled: boolean;
     constant: boolean;
+    vectorized: boolean;
     order: number;
+    position: number;
+    role: number;
+    depth: number | null;
+    probability: number | null;
+    useProbability: boolean;
+    selective: boolean;
+    selectiveLogic: number;
+    scanDepth: number | null;
+    caseSensitive: boolean | null;
+    matchWholeWords: boolean | null;
+    useGroupScoring: boolean | null;
+    outletName: string;
+    automationId: string;
+    ignoreBudget: boolean;
+    excludeRecursion: boolean;
+    preventRecursion: boolean;
+    delayUntilRecursion: boolean | number;
+    group: string;
+    groupOverride: boolean;
+    groupWeight: number | null;
+    sticky: number | null;
+    cooldown: number | null;
+    delay: number | null;
+    triggers: string[];
+    matchPersonaDescription: boolean;
+    matchCharacterDescription: boolean;
+    matchCharacterPersonality: boolean;
+    matchCharacterDepthPrompt: boolean;
+    matchScenario: boolean;
+    matchCreatorNotes: boolean;
     entryHash: string;
     revision: string;
 }
