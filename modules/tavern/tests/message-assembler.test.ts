@@ -988,6 +988,38 @@ test('xb tavern world scan checks character data only when entry opts in', () =>
     assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid), ['character-scan']);
 });
 
+test('xb tavern world scan reads SillyTavern character depth prompt sources', () => {
+    const nested = buildXbTavernMessages({
+        character: {
+            data: {
+                extensions: {
+                    depth_prompt: {
+                        prompt: 'depth-beacon',
+                    },
+                },
+            },
+        },
+        worldEntries: [
+            { uid: 'nested-depth', content: 'Nested depth lore.', key: ['depth-beacon'], matchCharacterDepthPrompt: true },
+        ],
+    }, {}, {
+        currentUserMessage: 'No keyword here.',
+    });
+    const flat = buildXbTavernMessages({
+        character: {
+            characterDepthPrompt: 'flat-depth-beacon',
+        },
+        worldEntries: [
+            { uid: 'flat-depth', content: 'Flat depth lore.', key: ['flat-depth-beacon'], matchCharacterDepthPrompt: true },
+        ],
+    }, {}, {
+        currentUserMessage: 'No keyword here.',
+    });
+
+    assert.deepEqual(nested.activatedWorldEntries.map((entry) => entry.uid), ['nested-depth']);
+    assert.deepEqual(flat.activatedWorldEntries.map((entry) => entry.uid), ['flat-depth']);
+});
+
 test('xb tavern world activation honors generation type triggers', () => {
     const result = buildXbTavernMessages({
         worldEntries: [

@@ -72,7 +72,10 @@ test('tavern worldbook bridge edits named entries through native save boundary',
     assert.match(hostSource, /const keysecondary = normalizeStringList\(draft\.keysecondary\);[\s\S]*entry\.secondary_keys = keysecondary\.length \? keysecondary : normalizeStringList\(draft\.secondary_keys \?\? draft\.secondaryKeys\)/);
     assert.match(hostSource, /await saveWorldInfo\(name, data, true\)/);
     assert.match(hostSource, /export async function getTavernWorldbookRuntime/);
-    assert.match(hostSource, /await checkWorldInfo\(chatLines, maxContext, false, globalScanData\)/);
+    assert.match(hostSource, /let tavernWorldbookRuntimeQueue: Promise<void> = Promise\.resolve\(\);/);
+    assert.match(hostSource, /function runTavernWorldbookRuntimeExclusive/);
+    assert.match(hostSource, /return runTavernWorldbookRuntimeExclusive\(async \(\) => \{[\s\S]*await checkWorldInfo\(chatLines, maxContext, false, globalScanData\)[\s\S]*restoreRuntimeState\(snapshot\);/);
+    assert.match(hostSource, /characterDepthPrompt: normalizeText\([\s\S]*characterRecord\.characterDepthPrompt[\s\S]*depthPrompt\.prompt[\s\S]*legacyDepthPrompt\.prompt/);
     assert.doesNotMatch(hostSource, /openWorldInfoEditor/);
     assert.doesNotMatch(hostSource, /createWorldInfoEntry/);
     assert.match(hostSource, /export async function setTavernGlobalWorldbooks/);

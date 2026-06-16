@@ -541,14 +541,19 @@ function buildHistoryScanLines(context = {}, currentUserMessage = "", includeNam
 function buildGlobalScanData(input = {}) {
   const context = input.context || {};
   const character = context.character || {};
+  const characterRecord = asRecord(character);
   const user = context.user || {};
   const data = asRecord(character.data);
   const extensions = asRecord(data.extensions);
+  const depthPrompt = asRecord(extensions.depth_prompt);
+  const legacyDepthPrompt = asRecord(data.depth_prompt);
   return {
     personaDescription: normalizeText(user.persona || user.description),
     characterDescription: normalizeText(character.description || data.description),
     characterPersonality: normalizeText(character.personality || data.personality),
-    characterDepthPrompt: normalizeText(asRecord(extensions.depth_prompt).prompt),
+    characterDepthPrompt: normalizeText(
+      characterRecord.characterDepthPrompt || characterRecord.character_depth_prompt || depthPrompt.prompt || data.character_depth_prompt || legacyDepthPrompt.prompt || data.depth_prompt
+    ),
     scenario: normalizeText(character.scenario || data.scenario),
     creatorNotes: normalizeText(character.creatorNotes || character.creator_notes || data.creator_notes),
     trigger: normalizeText(input.trigger || context.worldSettings?.trigger) || "normal"
@@ -681,6 +686,21 @@ function restoreRuntimeState(snapshot) {
   }
   if (eventSource) {
     eventSource.emit = snapshot.emit;
+  }
+}
+let tavernWorldbookRuntimeQueue = Promise.resolve();
+async function runTavernWorldbookRuntimeExclusive(task) {
+  const previous = tavernWorldbookRuntimeQueue;
+  let release = () => {
+  };
+  tavernWorldbookRuntimeQueue = new Promise((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    return await task();
+  } finally {
+    release();
   }
 }
 function getCharacterRecordById(characterId) {
@@ -1082,43 +1102,45 @@ async function getTavernWorldbookRuntime(input = {}) {
   const globalScanData = buildGlobalScanData(payload);
   const maxContext = Math.max(1, Number(payload.maxContext) || Number(asRecord(getContext?.() || {}).maxContext) || 4096);
   const sources = collectRuntimeSources(context);
-  const snapshot = captureRuntimeState();
-  applyRuntimeState({
-    context,
-    sources,
-    timedState: normalizeTimedState(payload.timedState)
+  return runTavernWorldbookRuntimeExclusive(async () => {
+    const snapshot = captureRuntimeState();
+    applyRuntimeState({
+      context,
+      sources,
+      timedState: normalizeTimedState(payload.timedState)
+    });
+    try {
+      const activated = await checkWorldInfo(chatLines, maxContext, false, globalScanData);
+      const activatedPromptEntries = buildActivatedPromptEntries(
+        valuesToRecordList(activated.allActivatedEntries),
+        sources
+      );
+      return {
+        trigger: normalizeText(globalScanData.trigger),
+        sourceNames: sources,
+        activatedEntries: activatedPromptEntries,
+        worldInfoBefore: normalizeText(activated.worldInfoBefore),
+        worldInfoAfter: normalizeText(activated.worldInfoAfter),
+        worldInfoExamples: Array.isArray(activated.EMEntries) ? activated.EMEntries.map((entry) => ({
+          position: normalizeText(asRecord(entry).position),
+          content: normalizeText(asRecord(entry).content)
+        })).filter((entry) => entry.content) : [],
+        worldInfoDepth: Array.isArray(activated.WIDepthEntries) ? activated.WIDepthEntries.map((entry) => ({
+          depth: Number(asRecord(entry).depth),
+          role: Number(asRecord(entry).role),
+          entries: normalizeStringList(asRecord(entry).entries)
+        })).filter((entry) => Array.isArray(entry.entries) && entry.entries.length) : [],
+        anBefore: normalizeStringList(activated.ANBeforeEntries),
+        anAfter: normalizeStringList(activated.ANAfterEntries),
+        outlets: Object.fromEntries(
+          Object.entries(asRecord(activated.outletEntries)).map(([key, value]) => [key, normalizeStringList(value)]).filter(([, value]) => value.length)
+        ),
+        timedState: normalizeTimedState(chat_metadata?.timedWorldInfo)
+      };
+    } finally {
+      restoreRuntimeState(snapshot);
+    }
   });
-  try {
-    const activated = await checkWorldInfo(chatLines, maxContext, false, globalScanData);
-    const activatedPromptEntries = buildActivatedPromptEntries(
-      valuesToRecordList(activated.allActivatedEntries),
-      sources
-    );
-    return {
-      trigger: normalizeText(globalScanData.trigger),
-      sourceNames: sources,
-      activatedEntries: activatedPromptEntries,
-      worldInfoBefore: normalizeText(activated.worldInfoBefore),
-      worldInfoAfter: normalizeText(activated.worldInfoAfter),
-      worldInfoExamples: Array.isArray(activated.EMEntries) ? activated.EMEntries.map((entry) => ({
-        position: normalizeText(asRecord(entry).position),
-        content: normalizeText(asRecord(entry).content)
-      })).filter((entry) => entry.content) : [],
-      worldInfoDepth: Array.isArray(activated.WIDepthEntries) ? activated.WIDepthEntries.map((entry) => ({
-        depth: Number(asRecord(entry).depth),
-        role: Number(asRecord(entry).role),
-        entries: normalizeStringList(asRecord(entry).entries)
-      })).filter((entry) => Array.isArray(entry.entries) && entry.entries.length) : [],
-      anBefore: normalizeStringList(activated.ANBeforeEntries),
-      anAfter: normalizeStringList(activated.ANAfterEntries),
-      outlets: Object.fromEntries(
-        Object.entries(asRecord(activated.outletEntries)).map(([key, value]) => [key, normalizeStringList(value)]).filter(([, value]) => value.length)
-      ),
-      timedState: normalizeTimedState(chat_metadata?.timedWorldInfo)
-    };
-  } finally {
-    restoreRuntimeState(snapshot);
-  }
 }
 export {
   activateTavernCharacterWorldbook,

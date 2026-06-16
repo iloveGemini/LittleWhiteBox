@@ -59,6 +59,8 @@ export interface XbTavernCharacter {
     description?: string;
     personality?: string;
     scenario?: string;
+    characterDepthPrompt?: string;
+    character_depth_prompt?: string;
     firstMessage?: string;
     first_mes?: string;
     alternateGreetings?: string[];
@@ -544,13 +546,12 @@ function normalizeText(value: unknown = ''): string {
 }
 
 function pickNestedString(source: unknown, keys: string[]): string {
-    if (!source || typeof source !== 'object') {return '';}
-    const record = source as Record<string, unknown>;
+    let record = source;
     for (const key of keys) {
-        const text = normalizeText(record[key]);
-        if (text) {return text;}
+        if (!record || typeof record !== 'object') {return '';}
+        record = (record as Record<string, unknown>)[key];
     }
-    return '';
+    return normalizeText(record);
 }
 
 export function normalizeRole(role: unknown, fallback: XbTavernRole = 'system'): XbTavernRole {
@@ -1822,7 +1823,13 @@ function buildGlobalScanData(context: XbTavernContext = {}): XbTavernWorldSettin
         personaDescription: normalizeText(user.persona || user.description),
         characterDescription: normalizeText(character.description || pickNestedString(data, ['description'])),
         characterPersonality: normalizeText(character.personality || pickNestedString(data, ['personality'])),
-        characterDepthPrompt: normalizeText(pickNestedString(data, ['character_depth_prompt']) || pickNestedString(data, ['depth_prompt'])),
+        characterDepthPrompt: normalizeText(
+            pickNestedString(character, ['characterDepthPrompt'])
+            || pickNestedString(character, ['character_depth_prompt'])
+            || pickNestedString(data, ['extensions', 'depth_prompt', 'prompt'])
+            || pickNestedString(data, ['character_depth_prompt'])
+            || pickNestedString(data, ['depth_prompt']),
+        ),
         scenario: normalizeText(character.scenario || pickNestedString(data, ['scenario'])),
         creatorNotes: normalizeText(character.creatorNotes || character.creator_notes || pickNestedString(data, ['creator_notes'])),
     };
