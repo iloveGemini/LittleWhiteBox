@@ -2,11 +2,14 @@
 defineProps<{
   dark: boolean;
   includeHome?: boolean;
+  includeApi?: boolean;
   includeExit?: boolean;
   compact?: boolean;
+  homeLast?: boolean;
 }>();
 
 const emit = defineEmits<{
+  api: [];
   home: [];
   toggleTheme: [];
   exit: [];
@@ -19,28 +22,52 @@ const emit = defineEmits<{
     :class="{ 'page-corner-actions': includeHome || compact }"
   >
     <button
-      v-if="includeHome"
+      v-if="includeApi"
       type="button"
-      class="home-icon-button page-home-button"
-      title="首页"
-      aria-label="首页"
-      @click="emit('home')"
+      class="home-icon-button page-api-button"
+      title="API 配置"
+      aria-label="API 配置"
+      @click="emit('api')"
     >
       <svg
-        class="xb-home-icon"
+        class="xb-api-icon"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        stroke-width="1.8"
         stroke-linecap="round"
         stroke-linejoin="round"
         aria-hidden="true"
       >
-        <path d="M3 11.5 12 4l9 7.5" />
-        <path d="M5.5 10.5V20h13v-9.5" />
-        <path d="M9.5 20v-5.5h5V20" />
+        <path
+          stroke-width="1.6"
+          d="M9 7V3M15 7V3M7 11h10M8 7h8v5a4 4 0 0 1-8 0V7ZM12 16v5"
+        />
       </svg>
     </button>
+    <template v-if="includeHome && !homeLast">
+      <button
+        type="button"
+        class="home-icon-button page-home-button"
+        title="首页"
+        aria-label="首页"
+        @click="emit('home')"
+      >
+        <svg
+          class="xb-home-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 11.5 12 4l9 7.5" />
+          <path d="M5.5 10.5V20h13v-9.5" />
+          <path d="M9.5 20v-5.5h5V20" />
+        </svg>
+      </button>
+    </template>
     <button
       type="button"
       class="home-icon-button home-theme-button"
@@ -79,6 +106,30 @@ const emit = defineEmits<{
         aria-hidden="true"
       >☾</span>
     </button>
+    <template v-if="includeHome && homeLast">
+      <button
+        type="button"
+        class="home-icon-button page-home-button"
+        title="首页"
+        aria-label="首页"
+        @click="emit('home')"
+      >
+        <svg
+          class="xb-home-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 11.5 12 4l9 7.5" />
+          <path d="M5.5 10.5V20h13v-9.5" />
+          <path d="M9.5 20v-5.5h5V20" />
+        </svg>
+      </button>
+    </template>
     <button
       v-if="includeExit"
       type="button"

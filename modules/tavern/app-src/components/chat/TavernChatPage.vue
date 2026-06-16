@@ -6,6 +6,7 @@ import TavernContractModal from './TavernContractModal.vue';
 import {
     useTavernChatContext,
     useTavernManagerContext,
+    useTavernSettingsContext,
     useTavernShellContext,
     useTavernWorkspaceContext,
 } from '../tavern-app-context';
@@ -22,6 +23,7 @@ import {
 const shell = useTavernShellContext();
 const chat = useTavernChatContext();
 const manager = useTavernManagerContext();
+const settings = useTavernSettingsContext();
 const workspace = useTavernWorkspaceContext();
 const {
     activeView,
@@ -47,10 +49,14 @@ const {
     selectedSessionId,
     sessionContract,
 } = workspace;
+const {
+    apiSettingsRootRef,
+} = settings;
 
 let pendingChatScrollSnapshot: ElementScrollSnapshot | null = null;
 let pendingManagerScrollSnapshot: ElementScrollSnapshot | null = null;
 const contractModalOpen = ref(false);
+const apiConfigOpen = ref(false);
 const contractSaving = ref(false);
 const contractError = ref('');
 const contractDraft = ref<TavernSessionContract>(normalizeTavernSessionContract(sessionContract.value));
@@ -105,6 +111,19 @@ function closeContractModal() {
     contractModalOpen.value = false;
 }
 
+function openApiConfigModal() {
+    closeMobileChatPanel();
+    apiConfigOpen.value = true;
+}
+
+function closeApiConfigModal() {
+    apiConfigOpen.value = false;
+}
+
+function setChatApiSettingsRootRef(element: Element | null) {
+    apiSettingsRootRef.value = element instanceof HTMLElement ? element : null;
+}
+
 function toggleContractDraft(key: TavernContractPermissionKey) {
     contractDraft.value = {
         ...contractDraft.value,
@@ -142,6 +161,12 @@ watch(() => selectedSessionId.value, () => {
     contractError.value = '';
     contractModalOpen.value = false;
     contractDraft.value = normalizeTavernSessionContract(sessionContract.value);
+});
+
+watch(() => activeView.value, (view) => {
+    if (view !== 'chat') {
+        apiConfigOpen.value = false;
+    }
 });
 
 onBeforeUpdate(() => {
@@ -195,8 +220,11 @@ onUpdated(() => {
     ]"
   >
     <TavernCornerActions
+      include-api
       include-home
+      home-last
       :dark="homeThemeDark"
+      @api="openApiConfigModal"
       @home="activeView = 'home'"
       @toggle-theme="homeThemeDark = !homeThemeDark"
     />
@@ -231,23 +259,23 @@ onUpdated(() => {
           <button
             type="button"
             class="chat-mobile-icon-button chat-mobile-utility-button"
-            title="首页"
-            aria-label="首页"
-            @click="activeView = 'home'; closeMobileChatPanel()"
+            title="API 配置"
+            aria-label="API 配置"
+            @click="openApiConfigModal"
           >
             <svg
               class="chat-mobile-svg"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              stroke-width="1.8"
               stroke-linecap="round"
               stroke-linejoin="round"
               aria-hidden="true"
             >
-              <path d="M3 11.5 12 4l9 7.5" />
-              <path d="M5.5 10.5V20h13v-9.5" />
-              <path d="M9.5 20v-5.5h5V20" />
+              <path
+                stroke-width="1.6"
+                d="M9 7V3M15 7V3M7 11h10M8 7h8v5a4 4 0 0 1-8 0V7ZM12 16v5"
+              />
             </svg>
           </button>
           <button
@@ -294,6 +322,28 @@ onUpdated(() => {
               aria-hidden="true"
             >
               <path d="M20.2 14.5A7.3 7.3 0 0 1 9.5 3.8 8.7 8.7 0 1 0 20.2 14.5Z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="chat-mobile-icon-button chat-mobile-utility-button"
+            title="首页"
+            aria-label="首页"
+            @click="activeView = 'home'; closeMobileChatPanel()"
+          >
+            <svg
+              class="chat-mobile-svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 11.5 12 4l9 7.5" />
+              <path d="M5.5 10.5V20h13v-9.5" />
+              <path d="M9.5 20v-5.5h5V20" />
             </svg>
           </button>
         </div>
@@ -378,5 +428,39 @@ onUpdated(() => {
       @toggle="toggleContractDraft"
       @save="sealContract"
     />
+    <div
+      v-if="apiConfigOpen"
+      class="chat-api-config-overlay"
+      role="presentation"
+      @click.self="closeApiConfigModal"
+    >
+      <section
+        class="chat-api-config-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="chat-api-config-title"
+      >
+        <header class="chat-api-config-head">
+          <h2 id="chat-api-config-title">
+            API 配置
+          </h2>
+          <button
+            type="button"
+            class="chat-api-config-close"
+            title="关闭"
+            aria-label="关闭"
+            @click="closeApiConfigModal"
+          >
+            ×
+          </button>
+        </header>
+        <div class="chat-api-config-body">
+          <div
+            :ref="setChatApiSettingsRootRef"
+            class="tavern-api-settings chat-api-settings-root"
+          />
+        </div>
+      </section>
+    </div>
   </section>
 </template>

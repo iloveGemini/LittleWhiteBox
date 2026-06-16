@@ -1759,8 +1759,9 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         () => options.activeView.value,
         () => apiConfigSave.value.status,
         () => options.agentConfig.value,
+        () => apiSettingsRootRef.value,
     ], () => {
-        if (options.activeView.value === 'settings' && options.activeSettingsWorkspace.value === 'api') {
+        if (apiSettingsRootRef.value) {
             void nextTick(renderApiSettingsPanel);
         }
         if (options.activeView.value === 'settings' && options.activeSettingsWorkspace.value === 'regex' && !regexGroups.value.length) {

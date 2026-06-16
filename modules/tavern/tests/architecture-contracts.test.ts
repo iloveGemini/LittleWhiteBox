@@ -256,6 +256,7 @@ test('tavern mobile character archive keeps the card list as the scroll containe
 test('tavern split UI keeps App-owned DOM refs explicitly wired', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
+    const chatPageSource = readRepoFile('modules/tavern/app-src/components/chat/TavernChatPage.vue');
     const conversationPanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
     const managerPanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernManagerPanel.vue');
     const apiPanelSource = readRepoFile('modules/tavern/app-src/components/settings/TavernApiSettingsPanel.vue');
@@ -270,11 +271,33 @@ test('tavern split UI keeps App-owned DOM refs explicitly wired', () => {
     assert.match(settingsControllerSource, /\bapiSettingsRootRef,/);
     assert.match(apiPanelSource, /function setApiSettingsRootRef/);
     assert.match(apiPanelSource, /:ref="setApiSettingsRootRef"/);
+    assert.match(chatPageSource, /function setChatApiSettingsRootRef/);
+    assert.match(chatPageSource, /:ref="setChatApiSettingsRootRef"/);
     assert.match(conversationPanelSource, /function setChatScrollRef/);
     assert.match(conversationPanelSource, /function setChatComposeTextareaRef/);
     assert.match(managerPanelSource, /function setManagerScrollRef/);
     assert.match(managerPanelSource, /function setManagerComposeTextareaRef/);
-    assert.doesNotMatch(`${conversationPanelSource}\n${managerPanelSource}\n${apiPanelSource}`, /ref="(?:apiSettingsRootRef|chatScrollRef|chatComposeTextareaRef|managerScrollRef|managerComposeTextareaRef)"/);
+    assert.doesNotMatch(`${chatPageSource}\n${conversationPanelSource}\n${managerPanelSource}\n${apiPanelSource}`, /ref="(?:apiSettingsRootRef|chatScrollRef|chatComposeTextareaRef|managerScrollRef|managerComposeTextareaRef)"/);
+});
+
+test('tavern chat exposes local API config without leaving the session', () => {
+    const cornerSource = readRepoFile('modules/tavern/app-src/components/TavernCornerActions.vue');
+    const chatPageSource = readRepoFile('modules/tavern/app-src/components/chat/TavernChatPage.vue');
+    const chatLayoutCss = readRepoFile('modules/tavern/app-src/styles/chat/layout.css');
+    const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
+
+    assert.match(cornerSource, /includeApi\?: boolean/);
+    assert.match(cornerSource, /homeLast\?: boolean/);
+    assert.match(cornerSource, /v-if="includeApi"[\s\S]*class="home-icon-button page-api-button"[\s\S]*d="M9 7V3M15 7V3M7 11h10M8 7h8v5a4 4 0 0 1-8 0V7ZM12 16v5"[\s\S]*class="home-icon-button home-theme-button"[\s\S]*v-if="includeHome && homeLast"[\s\S]*class="home-icon-button page-home-button"/);
+    assert.match(chatPageSource, /<TavernCornerActions[\s\S]*include-api[\s\S]*include-home[\s\S]*home-last[\s\S]*@api="openApiConfigModal"/);
+    assert.match(chatPageSource, /class="chat-mobile-action-group"[\s\S]*title="API 配置"[\s\S]*title="首页"/);
+    assert.match(chatPageSource, /const apiConfigOpen = ref\(false\)/);
+    assert.match(chatPageSource, /class="chat-api-config-overlay"[\s\S]*@click\.self="closeApiConfigModal"[\s\S]*class="tavern-api-settings chat-api-settings-root"/);
+    assert.match(chatPageSource, /function setChatApiSettingsRootRef[\s\S]*apiSettingsRootRef\.value = element instanceof HTMLElement \? element : null;/);
+    assert.match(settingsControllerSource, /\(\) => apiSettingsRootRef\.value,[\s\S]*if \(apiSettingsRootRef\.value\) \{[\s\S]*nextTick\(renderApiSettingsPanel\)/);
+    assert.match(chatLayoutCss, /\.chat-api-config-overlay \{[\s\S]*position: absolute;[\s\S]*backdrop-filter: blur\(16px\);/);
+    assert.match(chatLayoutCss, /\.chat-api-config-dialog \{[\s\S]*max-height: min\(88vh, 900px\);/);
+    assert.match(chatLayoutCss, /\.chat-api-config-dialog \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\);/);
 });
 
 test('tavern UI context is grouped by page responsibility instead of one flat bag', () => {

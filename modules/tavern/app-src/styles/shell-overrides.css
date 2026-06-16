@@ -60,14 +60,16 @@
     color: var(--xb-stamp);
 }
 
-.page-corner-actions .page-home-button {
+.page-corner-actions .page-home-button,
+.page-corner-actions .page-api-button {
     width: 30px;
     min-width: 30px;
     color: var(--xb-ink-soft);
     padding: 0;
 }
 
-.page-corner-actions .xb-home-icon {
+.page-corner-actions .xb-home-icon,
+.page-corner-actions .xb-api-icon {
     width: 18px;
     height: 18px;
 }
@@ -97,7 +99,8 @@
         background: rgba(255, 255, 255, 0.045);
     }
 
-    .page-corner-actions .page-home-button {
+    .page-corner-actions .page-home-button,
+    .page-corner-actions .page-api-button {
         width: 34px;
         min-width: 34px;
         padding: 0;
