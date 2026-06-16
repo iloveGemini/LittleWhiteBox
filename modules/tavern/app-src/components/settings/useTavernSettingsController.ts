@@ -96,8 +96,6 @@ interface WorldbookEntryDraftRow {
     worldbookName: string;
     uid: string;
     comment: string;
-    name: string;
-    title: string;
     key: string[];
     keysecondary: string[];
     secondary_keys: string[];
@@ -113,7 +111,6 @@ interface WorldbookEntryDraftRow {
 const CHAT_PRESET_SOURCE_BATCH_SIZE = 48;
 const ASSISTANT_PRESET_BATCH_SIZE = 48;
 const PROMPT_EDITOR_BATCH_SIZE = 80;
-const WORLDBOOK_BATCH_SIZE = 80;
 const WORLDBOOK_PREVIEW_BATCH_SIZE = 24;
 const REGEX_GROUP_BATCH_SIZE = 60;
 
@@ -206,8 +203,6 @@ function normalizeWorldbookEntryDraft(value: unknown): TavernWorldbookEntryDraft
         worldbookName: String(record.worldbookName || record.name || '').trim(),
         uid: record.uid === null || record.uid === undefined ? '' : String(record.uid).trim(),
         comment: String(record.comment ?? ''),
-        name: String(record.name ?? ''),
-        title: String(record.title ?? ''),
         key: Array.isArray(record.key) ? record.key.map((item) => String(item || '').trim()).filter(Boolean) : [],
         keysecondary,
         secondary_keys: secondaryKeys,
@@ -337,8 +332,6 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
     const assistantPresetVisibleLimit = ref(ASSISTANT_PRESET_BATCH_SIZE);
     const promptSearchText = ref('');
     const promptVisibleLimit = ref(PROMPT_EDITOR_BATCH_SIZE);
-    const worldbookSearchText = ref('');
-    const worldbookVisibleLimit = ref(WORLDBOOK_BATCH_SIZE);
     const worldbookPreviewVisibleLimit = ref(WORLDBOOK_PREVIEW_BATCH_SIZE);
     const regexSearchText = ref('');
     const regexGroupVisibleLimits = ref<Record<string, number>>({});
@@ -428,22 +421,6 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
             };
         }).filter((item) => item.name);
     });
-    const filteredWorldbookOptions = computed<TavernWorldbookOptionRow[]>(() => {
-        const query = normalizedSearchText(worldbookSearchText.value);
-        if (!query) {return worldbookOptions.value;}
-        return worldbookOptions.value.filter((item) => includesSearch(item.name, query));
-    });
-    const visibleWorldbookOptions = computed(() => {
-        const visible = filteredWorldbookOptions.value.slice(0, worldbookVisibleLimit.value);
-        const selectedName = String(selectedWorldbookName.value || '').trim();
-        if (!selectedName || visible.some((item) => item.name === selectedName)) {return visible;}
-        const selected = worldbookOptions.value.find((item) => item.name === selectedName);
-        return selected ? [selected, ...visible] : visible;
-    });
-    const hiddenWorldbookCount = computed(() => Math.max(
-        0,
-        filteredWorldbookOptions.value.length - Math.min(filteredWorldbookOptions.value.length, worldbookVisibleLimit.value),
-    ));
     const selectedWorldbook = computed<TavernWorldbookOptionRow | null>(() => (
         worldbookOptions.value.find((item) => item.name === selectedWorldbookName.value) || null
     ));
@@ -680,13 +657,13 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         .filter((row) => (row.content || row.marker) && row.enabled !== false));
     const presetTotalChars = computed(() => presetRows.value.reduce((sum, row) => sum + row.chars, 0));
 
-    function worldbookEntryEditKey(entry: Pick<TavernWorldbookPreviewEntryRow, 'uid' | 'name' | 'order'> | TavernWorldbookEntryDraft | null): string {
+    function worldbookEntryEditKey(entry: { uid?: string; name?: string; order?: number } | TavernWorldbookEntryDraft | null): string {
         if (!entry) {return '';}
         const entryId = entry.uid !== undefined && entry.uid !== null && String(entry.uid).trim()
             ? String(entry.uid).trim()
             : entry.order !== undefined && entry.order !== null && String(entry.order).trim()
                 ? String(entry.order).trim()
-                : String(entry.name || '').trim();
+                : ('name' in entry ? String(entry.name || '').trim() : '');
         return `${String(selectedWorldbookName.value || '').trim()}:${entryId}`;
     }
     function isEditingWorldbookEntry(entry: TavernWorldbookPreviewEntryRow): boolean {
@@ -1667,9 +1644,6 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
     watch(promptSearchText, () => {
         promptVisibleLimit.value = PROMPT_EDITOR_BATCH_SIZE;
     });
-    watch(worldbookSearchText, () => {
-        worldbookVisibleLimit.value = WORLDBOOK_BATCH_SIZE;
-    });
     watch(regexSearchText, () => {
         regexGroupVisibleLimits.value = {};
     });
@@ -1770,7 +1744,6 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         hiddenAssistantPresetCount,
         hiddenChatPresetOptionCount,
         hiddenPromptCount,
-        hiddenWorldbookCount,
         hiddenWorldbookPreviewEntryCount,
         homeThemeDark: options.homeThemeDark,
         importAssistantPreset,
@@ -1848,8 +1821,6 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         visibleAssistantPresetRecords,
         visibleChatPresetOptions,
         visiblePromptEditorRows,
-        visibleWorldbookOptions,
-        WORLDBOOK_BATCH_SIZE,
         WORLDBOOK_PREVIEW_BATCH_SIZE,
         worldbookEntryDirty,
         worldbookEntryDraft,
@@ -1860,9 +1831,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         worldbookPreview,
         worldbookPreviewStatus,
         worldbookPreviewVisibleLimit,
-        worldbookSearchText,
         worldbookStatus,
-        worldbookVisibleLimit,
     };
 
     return {

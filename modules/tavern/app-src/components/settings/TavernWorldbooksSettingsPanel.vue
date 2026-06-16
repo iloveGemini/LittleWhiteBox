@@ -30,22 +30,8 @@ const {
     worldbookOptions,
     worldbookPreview,
     worldbookPreviewStatus,
-    worldbookSearchText,
     worldbookStatus,
 } = settings;
-
-const worldbookSelectOptions = computed(() => {
-    const query = String(worldbookSearchText.value || '').trim().toLocaleLowerCase();
-    const selectedName = String(selectedWorldbookName.value || '').trim();
-    const selected = worldbookOptions.value.find((item) => item.name === selectedName);
-    const filtered = query
-        ? worldbookOptions.value.filter((item) => item.name.toLocaleLowerCase().includes(query))
-        : worldbookOptions.value;
-    if (selected && !filtered.some((item) => item.name === selected.name)) {
-        return [selected, ...filtered];
-    }
-    return filtered;
-});
 
 const worldbookDisclosure = useTavernEphemeralDisclosureScope();
 const globalWorldbookPickerOpen = ref(false);
@@ -152,31 +138,24 @@ watch(
       <div class="preset-command-bar worldbook-command-bar">
         <label class="preset-source-select worldbook-source-select">
           <select
+            aria-label="选择世界书"
             :value="selectedWorldbookName"
             @change="selectedWorldbookName = ($event.target as HTMLSelectElement).value"
           >
             <option
-              v-if="!worldbookSelectOptions.length"
+              v-if="!worldbookOptions.length"
               value=""
             >
               没有世界书
             </option>
             <option
-              v-for="item in worldbookSelectOptions"
+              v-for="item in worldbookOptions"
               :key="item.name"
               :value="item.name"
             >
               {{ item.name }}
             </option>
           </select>
-        </label>
-        <label class="archive-search native-search worldbook-search-field">
-          <input
-            v-model="worldbookSearchText"
-            type="search"
-            aria-label="筛选世界书"
-            placeholder="筛选世界书"
-          >
         </label>
       </div>
       <div class="native-settings-studio worldbook-overview-grid">
@@ -255,27 +234,11 @@ watch(
                         </div>
                         <div class="worldbook-entry-editor-grid">
                           <label>
-                            <span>备注</span>
+                            <span>条目名</span>
                             <input
                               :value="worldbookEntryDraft.comment"
                               type="text"
                               @input="updateWorldbookEntryDraftPatch({ comment: ($event.target as HTMLInputElement).value })"
-                            >
-                          </label>
-                          <label>
-                            <span>名称</span>
-                            <input
-                              :value="worldbookEntryDraft.name"
-                              type="text"
-                              @input="updateWorldbookEntryDraftPatch({ name: ($event.target as HTMLInputElement).value })"
-                            >
-                          </label>
-                          <label>
-                            <span>标题</span>
-                            <input
-                              :value="worldbookEntryDraft.title"
-                              type="text"
-                              @input="updateWorldbookEntryDraftPatch({ title: ($event.target as HTMLInputElement).value })"
                             >
                           </label>
                           <label>

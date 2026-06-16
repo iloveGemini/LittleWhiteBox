@@ -455,8 +455,7 @@
     }
 
     .settings-layout.is-worldbooks-workspace .worldbook-source-select,
-    .settings-layout.is-regex-workspace .regex-group-select,
-    .settings-layout.is-worldbooks-workspace .worldbook-search-field {
+    .settings-layout.is-regex-workspace .regex-group-select {
         display: grid;
         gap: 0;
         margin: 0;
@@ -468,13 +467,11 @@
 
     .settings-layout.is-worldbooks-workspace .worldbook-source-select > span,
     .settings-layout.is-regex-workspace .regex-group-select > span,
-    .settings-layout.is-worldbooks-workspace .worldbook-search-field > span,
     .settings-layout.is-regex-workspace .regex-search-field > span {
         display: none;
     }
 
     .settings-layout.is-worldbooks-workspace .worldbook-source-select select,
-    .settings-layout.is-worldbooks-workspace .worldbook-search-field input,
     .settings-layout.is-regex-workspace .regex-group-select select,
     .settings-layout.is-regex-workspace .regex-search-field input,
     .settings-layout.is-regex-workspace .settings-icon-tool {

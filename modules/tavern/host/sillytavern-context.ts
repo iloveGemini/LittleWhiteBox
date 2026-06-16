@@ -189,7 +189,7 @@ function makeWorldbookEntryKey(entry: Record<string, unknown> = {}, fallbackInde
     if (uid) {return `uid:${uid}`;}
     const bodyKey = [
         'body',
-        normalizeText(entry.comment || entry.title || entry.name),
+        normalizeText(entry.comment),
         normalizeText(entry.content),
         JSON.stringify(entry.key || ''),
         JSON.stringify(entry.keysecondary || entry.secondary_keys || ''),

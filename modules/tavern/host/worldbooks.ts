@@ -78,8 +78,6 @@ interface TavernWorldbookEntryDraft {
     worldbookName: string;
     uid: string;
     comment: string;
-    name: string;
-    title: string;
     key: string[];
     keysecondary: string[];
     secondary_keys: string[];
@@ -268,8 +266,6 @@ function buildWorldbookEntryDraft(name: string, slot: TavernWorldbookEntrySlot):
         worldbookName: name,
         uid: normalizeIdText(entry.uid ?? entry.id ?? slot.index),
         comment: asEditableText(entry.comment),
-        name: asEditableText(entry.name),
-        title: asEditableText(entry.title),
         key: normalizeStringList(entry.key),
         keysecondary,
         secondary_keys: normalizeStringList(entry.secondary_keys),
@@ -285,8 +281,6 @@ function buildWorldbookEntryDraft(name: string, slot: TavernWorldbookEntrySlot):
 
 function patchWorldbookEntry(entry: Record<string, unknown>, draft: Record<string, unknown>): void {
     if ('comment' in draft) {entry.comment = asEditableText(draft.comment);}
-    if ('name' in draft) {entry.name = asEditableText(draft.name);}
-    if ('title' in draft) {entry.title = asEditableText(draft.title);}
     if ('key' in draft || 'keys' in draft) {
         entry.key = normalizeStringList(draft.key ?? draft.keys);
     }
@@ -332,8 +326,6 @@ function syncWorldbookOriginalDataEntry(
 
 function previewEntryName(entry: Record<string, unknown>, index: number): string {
     return normalizeText(entry.comment)
-        || normalizeText(entry.name)
-        || normalizeText(entry.title)
         || `条目 ${index + 1}`;
 }
 

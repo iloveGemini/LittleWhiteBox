@@ -65,6 +65,7 @@ test('tavern worldbook bridge edits named entries through native save boundary',
     assert.match(hostSource, /uid: normalizeIdText\(entry\.uid \?\? entry\.id \?\? slot\.index\)/);
     assert.match(hostSource, /buildWorldbookEntryHash/);
     assert.match(hostSource, /patchWorldbookEntry/);
+    assert.doesNotMatch(hostSource, /if \('name' in draft\)|if \('title' in draft\)|name: asEditableText\(entry\.name\)|title: asEditableText\(entry\.title\)/);
     assert.match(hostSource, /function syncWorldbookOriginalDataEntry/);
     assert.match(hostSource, /syncWorldbookOriginalDataEntry\(asRecord\(data\), uid, slot\.entry\);[\s\S]*await saveWorldInfo\(name, data, true\)/);
     assert.match(hostSource, /if \('secondary_keys' in entry && \('secondary_keys' in draft \|\| 'secondaryKeys' in draft\)\)/);
@@ -386,7 +387,10 @@ test('tavern worldbook preview keeps summary lean and expanded content ephemeral
 
     assert.match(helperSource, /export function useTavernEphemeralDisclosureScope/);
     assert.match(worldbookSource, /useTavernEphemeralDisclosureScope/);
-    assert.match(worldbookSource, /aria-label="筛选世界书"/);
+    assert.match(worldbookSource, /aria-label="选择世界书"/);
+    assert.doesNotMatch(worldbookSource, /筛选世界书|worldbookSearchText|worldbook-search-field/);
+    assert.match(worldbookSource, />条目名</);
+    assert.doesNotMatch(worldbookSource, /worldbookEntryDraft\.(?:name|title)|updateWorldbookEntryDraftPatch\(\{ (?:name|title):|>名称<\/span>|>标题<\/span>/);
     assert.doesNotMatch(worldbookSource, />检索世界书</);
     const worldbookSummaries = [...worldbookSource.matchAll(/<summary>[\s\S]*?<\/summary>/g)].map((match) => match[0]);
     assert.ok(worldbookSummaries.length > 0);

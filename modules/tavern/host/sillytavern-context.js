@@ -149,7 +149,7 @@ function makeWorldbookEntryKey(entry = {}, fallbackIndex = 0) {
   }
   const bodyKey = [
     "body",
-    normalizeText(entry.comment || entry.title || entry.name),
+    normalizeText(entry.comment),
     normalizeText(entry.content),
     JSON.stringify(entry.key || ""),
     JSON.stringify(entry.keysecondary || entry.secondary_keys || "")

@@ -92,8 +92,6 @@ export interface TavernWorldbookEntryDraft {
     worldbookName: string;
     uid: string;
     comment: string;
-    name: string;
-    title: string;
     key: string[];
     keysecondary: string[];
     secondary_keys: string[];
@@ -422,7 +420,6 @@ export interface TavernSettingsContext {
     hiddenAssistantPresetCount: TavernReadable<number>;
     hiddenChatPresetOptionCount: TavernReadable<number>;
     hiddenPromptCount: TavernReadable<number>;
-    hiddenWorldbookCount: TavernReadable<number>;
     hiddenWorldbookPreviewEntryCount: TavernReadable<number>;
     homeThemeDark: Ref<boolean>;
     importAssistantPreset: TavernCommand<[payload: unknown], Promise<boolean>>;
@@ -498,8 +495,6 @@ export interface TavernSettingsContext {
     visibleAssistantPresetRecords: TavernReadable<TavernAssistantPresetRecord[]>;
     visibleChatPresetOptions: TavernReadable<TavernChatPresetOptionRow[]>;
     visiblePromptEditorRows: TavernReadable<TavernPromptEditorRow[]>;
-    visibleWorldbookOptions: TavernReadable<TavernWorldbookOptionRow[]>;
-    WORLDBOOK_BATCH_SIZE: number;
     WORLDBOOK_PREVIEW_BATCH_SIZE: number;
     worldbookEntryDirty: TavernReadable<boolean>;
     worldbookEntryDraft: Ref<TavernWorldbookEntryDraft | null>;
@@ -510,9 +505,7 @@ export interface TavernSettingsContext {
     worldbookPreview: Ref<TavernWorldbookPreviewRow | null>;
     worldbookPreviewStatus: Ref<string>;
     worldbookPreviewVisibleLimit: Ref<number>;
-    worldbookSearchText: Ref<string>;
     worldbookStatus: Ref<string>;
-    worldbookVisibleLimit: Ref<number>;
 }
 
 export interface TavernAppUiContext {

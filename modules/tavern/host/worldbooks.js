@@ -124,8 +124,6 @@ function buildWorldbookEntryDraft(name, slot) {
     worldbookName: name,
     uid: normalizeIdText(entry.uid ?? entry.id ?? slot.index),
     comment: asEditableText(entry.comment),
-    name: asEditableText(entry.name),
-    title: asEditableText(entry.title),
     key: normalizeStringList(entry.key),
     keysecondary,
     secondary_keys: normalizeStringList(entry.secondary_keys),
@@ -141,12 +139,6 @@ function buildWorldbookEntryDraft(name, slot) {
 function patchWorldbookEntry(entry, draft) {
   if ("comment" in draft) {
     entry.comment = asEditableText(draft.comment);
-  }
-  if ("name" in draft) {
-    entry.name = asEditableText(draft.name);
-  }
-  if ("title" in draft) {
-    entry.title = asEditableText(draft.title);
   }
   if ("key" in draft || "keys" in draft) {
     entry.key = normalizeStringList(draft.key ?? draft.keys);
@@ -198,7 +190,7 @@ function syncWorldbookOriginalDataEntry(data, uid, entry) {
   mappings.forEach(([path, value]) => setValueByPath(originalEntry, path, value));
 }
 function previewEntryName(entry, index) {
-  return normalizeText(entry.comment) || normalizeText(entry.name) || normalizeText(entry.title) || `\u6761\u76EE ${index + 1}`;
+  return normalizeText(entry.comment) || `\u6761\u76EE ${index + 1}`;
 }
 function readHistoryMessages(context = {}) {
   return Array.isArray(context.history) ? context.history : [];

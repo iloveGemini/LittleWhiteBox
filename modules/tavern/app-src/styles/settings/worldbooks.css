@@ -55,7 +55,7 @@
 }
 
 .settings-layout .worldbook-command-bar {
-    grid-template-columns: minmax(220px, 0.44fr) minmax(0, 1fr);
+    grid-template-columns: minmax(220px, 1fr);
     align-items: center;
     border-bottom: 0;
 }
@@ -208,8 +208,7 @@
     padding: 10px clamp(26px, 4vw, 54px);
 }
 
-.settings-layout .worldbook-source-select,
-.settings-layout .worldbook-command-bar .archive-search {
+.settings-layout .worldbook-source-select {
     display: block;
     align-self: center;
     height: 40px;
@@ -219,8 +218,7 @@
     margin: 0;
 }
 
-.settings-layout .worldbook-source-select select,
-.settings-layout .worldbook-command-bar .archive-search input {
+.settings-layout .worldbook-source-select select {
     box-sizing: border-box;
     width: 100%;
     height: 40px;
@@ -233,10 +231,6 @@
     font-size: 14px;
     line-height: 1;
     padding: 0 12px;
-}
-
-.settings-layout .worldbook-command-bar .archive-search input::placeholder {
-    color: var(--xb-text-dim);
 }
 
 .settings-layout .worldbook-overview-grid .native-list-row {
