@@ -516,6 +516,16 @@ watch(
                               @input="updateWorldbookProbability"
                             >
                           </label>
+                          <label class="worldbook-entry-scan-depth-field">
+                            <span>扫描深度</span>
+                            <input
+                              :value="numberInputValue(worldbookEntryDraft.scanDepth)"
+                              type="number"
+                              min="0"
+                              max="1000"
+                              @input="patchWorldbookEntryField('scanDepth', nullableNumberFromEvent($event))"
+                            >
+                          </label>
                         </div>
                         <div class="worldbook-entry-key-grid">
                           <label class="worldbook-entry-editor-lines worldbook-entry-keywords-field">
@@ -583,16 +593,6 @@ watch(
                                   :value="worldbookEntryDraft.outletName"
                                   type="text"
                                   @input="patchWorldbookEntryField('outletName', ($event.target as HTMLInputElement).value)"
-                                >
-                              </label>
-                              <label>
-                                <span>扫描深度</span>
-                                <input
-                                  :value="numberInputValue(worldbookEntryDraft.scanDepth)"
-                                  type="number"
-                                  min="0"
-                                  max="1000"
-                                  @input="patchWorldbookEntryField('scanDepth', nullableNumberFromEvent($event))"
                                 >
                               </label>
                               <label>

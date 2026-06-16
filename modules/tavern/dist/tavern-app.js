@@ -68,7 +68,7 @@ function Fe(e) {
     for (const n in e) e[n] && (t += n + " ");
   return t.trim();
 }
-var hk = "itemscope,allowfullscreen,formnovalidate,ismap,nomodule,novalidate,readonly", wL = /* @__PURE__ */ Tp(hk), Hae = /* @__PURE__ */ Tp(hk + ",async,autofocus,autoplay,controls,default,defer,disabled,hidden,inert,loop,open,required,reversed,scoped,seamless,checked,muted,multiple,selected");
+var hk = "itemscope,allowfullscreen,formnovalidate,ismap,nomodule,novalidate,readonly", wL = /* @__PURE__ */ Tp(hk), Gae = /* @__PURE__ */ Tp(hk + ",async,autofocus,autoplay,controls,default,defer,disabled,hidden,inert,loop,open,required,reversed,scoped,seamless,checked,muted,multiple,selected");
 function pk(e) {
   return !!e || e === "";
 }
@@ -1186,7 +1186,7 @@ function n0(e) {
   const t = Th.get(e);
   t && (t.flags |= 8, Th.delete(e));
 }
-var Gae = xp().requestIdleCallback || ((e) => setTimeout(e, 1)), Wae = xp().cancelIdleCallback || ((e) => clearTimeout(e)), ac = (e) => !!e.type.__asyncLoader, qk = (e) => e.type.__isKeepAlive;
+var Wae = xp().requestIdleCallback || ((e) => setTimeout(e, 1)), Vae = xp().cancelIdleCallback || ((e) => clearTimeout(e)), ac = (e) => !!e.type.__asyncLoader, qk = (e) => e.type.__isKeepAlive;
 function aO(e, t) {
   Hk(e, "a", t);
 }
@@ -13275,7 +13275,7 @@ var Jq = class extends Lc {
       managerStateSnapshots: "[managerRunId+docType+docId], managerRunId, sessionId, docType, docId, updatedAt"
     });
   }
-}, sn = new Jq(), xt = sn.sessions, ir = sn.messages, Ir = sn.managerMessages, oo = sn.meta, Vae = sn.presets, Jn = sn.managerRuns, Nn = sn.memoryFiles, xr = sn.memoryIndexes, ta = sn.assistantPresets, es = sn.managerMemorySnapshots, Mr = sn.stateDocuments, Ko = sn.statePatches, Wr = sn.managerStateSnapshots;
+}, sn = new Jq(), xt = sn.sessions, ir = sn.messages, Ir = sn.managerMessages, oo = sn.meta, Kae = sn.presets, Jn = sn.managerRuns, Nn = sn.memoryFiles, xr = sn.memoryIndexes, ta = sn.assistantPresets, es = sn.managerMemorySnapshots, Mr = sn.stateDocuments, Ko = sn.statePatches, Wr = sn.managerStateSnapshots;
 function Ct() {
   return Date.now();
 }
@@ -43870,19 +43870,19 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
 }, ise = ["open", "onToggle"], ase = { class: "worldbook-entry-title" }, lse = ["title", "aria-label"], use = { class: "worldbook-entry-position" }, cse = {
   key: 0,
   class: "worldbook-entry-body"
-}, dse = { class: "worldbook-entry-editor-head" }, fse = { key: 0 }, hse = { key: 1 }, pse = { class: "worldbook-entry-editor-actions" }, mse = ["disabled"], gse = ["disabled"], vse = { class: "worldbook-entry-core-grid" }, yse = { class: "worldbook-entry-title-row" }, _se = { class: "worldbook-entry-title-field" }, bse = ["value"], wse = { class: "worldbook-entry-active-toggle" }, Sse = ["checked"], Tse = { class: "worldbook-entry-state-field" }, Ese = ["value"], Cse = { class: "worldbook-entry-position-field" }, Ase = ["value"], kse = ["value", "title"], Ise = { class: "worldbook-entry-depth-field" }, xse = ["value", "disabled"], Mse = { class: "worldbook-entry-order-field" }, Pse = ["value"], Rse = { class: "worldbook-entry-probability-field" }, Nse = ["value", "disabled"], $se = { class: "worldbook-entry-key-grid" }, Dse = { class: "worldbook-entry-editor-lines worldbook-entry-keywords-field" }, Lse = ["value"], Ose = { class: "worldbook-entry-filter-controls" }, Fse = { class: "worldbook-entry-logic-field" }, Bse = ["value"], Use = ["value"], qse = { class: "worldbook-entry-editor-lines worldbook-entry-keywords-field" }, Hse = ["value"], Gse = { class: "worldbook-entry-editor-lines worldbook-entry-content-field" }, Wse = ["value"], Vse = ["aria-expanded"], Kse = { class: "worldbook-entry-advanced-grid" }, zse = ["value"], Jse = ["value"], Yse = ["value"], Xse = ["value"], Qse = ["value"], Zse = ["value"], jse = ["value"], eoe = ["value"], toe = ["value"], noe = ["value"], roe = ["value"], soe = { class: "worldbook-entry-advanced-checks" }, ooe = ["checked"], ioe = ["checked"], aoe = ["checked"], loe = ["checked"], uoe = ["checked"], coe = ["checked"], doe = ["value", "disabled"], foe = { class: "worldbook-entry-editor-lines worldbook-entry-triggers-field" }, hoe = ["value"], poe = { class: "worldbook-entry-match-source-list" }, moe = ["checked", "onChange"], goe = { class: "worldbook-entry-actions" }, voe = ["onClick"], yoe = { key: 0 }, _oe = {
+}, dse = { class: "worldbook-entry-editor-head" }, fse = { key: 0 }, hse = { key: 1 }, pse = { class: "worldbook-entry-editor-actions" }, mse = ["disabled"], gse = ["disabled"], vse = { class: "worldbook-entry-core-grid" }, yse = { class: "worldbook-entry-title-row" }, _se = { class: "worldbook-entry-title-field" }, bse = ["value"], wse = { class: "worldbook-entry-active-toggle" }, Sse = ["checked"], Tse = { class: "worldbook-entry-state-field" }, Ese = ["value"], Cse = { class: "worldbook-entry-position-field" }, Ase = ["value"], kse = ["value", "title"], Ise = { class: "worldbook-entry-depth-field" }, xse = ["value", "disabled"], Mse = { class: "worldbook-entry-order-field" }, Pse = ["value"], Rse = { class: "worldbook-entry-probability-field" }, Nse = ["value", "disabled"], $se = { class: "worldbook-entry-scan-depth-field" }, Dse = ["value"], Lse = { class: "worldbook-entry-key-grid" }, Ose = { class: "worldbook-entry-editor-lines worldbook-entry-keywords-field" }, Fse = ["value"], Bse = { class: "worldbook-entry-filter-controls" }, Use = { class: "worldbook-entry-logic-field" }, qse = ["value"], Hse = ["value"], Gse = { class: "worldbook-entry-editor-lines worldbook-entry-keywords-field" }, Wse = ["value"], Vse = { class: "worldbook-entry-editor-lines worldbook-entry-content-field" }, Kse = ["value"], zse = ["aria-expanded"], Jse = { class: "worldbook-entry-advanced-grid" }, Yse = ["value"], Xse = ["value"], Qse = ["value"], Zse = ["value"], jse = ["value"], eoe = ["value"], toe = ["value"], noe = ["value"], roe = ["value"], soe = ["value"], ooe = { class: "worldbook-entry-advanced-checks" }, ioe = ["checked"], aoe = ["checked"], loe = ["checked"], uoe = ["checked"], coe = ["checked"], doe = ["checked"], foe = ["value", "disabled"], hoe = { class: "worldbook-entry-editor-lines worldbook-entry-triggers-field" }, poe = ["value"], moe = { class: "worldbook-entry-match-source-list" }, goe = ["checked", "onChange"], voe = { class: "worldbook-entry-actions" }, yoe = ["onClick"], _oe = { key: 0 }, boe = {
   key: 0,
   class: "worldbook-entry-keys"
-}, boe = {
-  key: 1,
-  class: "worldbook-entry-content"
 }, woe = {
   key: 1,
-  class: "empty-note"
+  class: "worldbook-entry-content"
 }, Soe = {
   key: 1,
   class: "empty-note"
-}, Toe = /* @__PURE__ */ jt({
+}, Toe = {
+  key: 1,
+  class: "empty-note"
+}, Eoe = /* @__PURE__ */ jt({
   __name: "TavernWorldbooksSettingsPanel",
   setup(e) {
     const { activeSettingsWorkspace: t, cancelWorldbookEntryEdit: n, globalWorldbookOptions: r, globalWorldbookSelected: s, globalWorldbookSaving: o, globalWorldbookStatus: i, hiddenWorldbookPreviewEntryCount: a, isEditingWorldbookEntry: l, saveWorldbookEntryDraft: u, selectedWorldbook: d, selectedWorldbookName: h, showMoreWorldbookPreviewEntries: p, startWorldbookEntryEdit: _, toggleGlobalWorldbook: w, updateWorldbookEntryDraftPatch: T, WORLDBOOK_PREVIEW_BATCH_SIZE: C, worldbookEntryDirty: M, worldbookEntryDraft: k, worldbookEntrySaving: R, worldbookEntryStatus: L, worldbookOptions: m, worldbookPreview: b, worldbookPreviewStatus: y, worldbookStatus: E } = la(), I = gm(), x = /* @__PURE__ */ ae(!1), P = [
@@ -44220,51 +44220,51 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
               step: "1",
               disabled: !S(k).useProbability,
               onInput: de
-            }, null, 40, Nse)])
+            }, null, 40, Nse)]),
+            g("label", $se, [G[44] || (G[44] = g("span", null, "扫描深度", -1)), g("input", {
+              value: fe(S(k).scanDepth),
+              type: "number",
+              min: "0",
+              max: "1000",
+              onInput: G[7] || (G[7] = (ce) => X("scanDepth", me(ce)))
+            }, null, 40, Dse)])
           ]),
-          g("div", $se, [
-            g("label", Dse, [G[44] || (G[44] = g("span", null, "关键词", -1)), g("input", {
+          g("div", Lse, [
+            g("label", Ose, [G[45] || (G[45] = g("span", null, "关键词", -1)), g("input", {
               value: oe(S(k).key),
               type: "text",
-              onInput: G[7] || (G[7] = (ce) => S(T)({ key: ne(ce.target.value) }))
-            }, null, 40, Lse)]),
-            g("div", Ose, [g("label", Fse, [G[46] || (G[46] = g("span", null, "过滤逻辑", -1)), g("select", {
+              onInput: G[8] || (G[8] = (ce) => S(T)({ key: ne(ce.target.value) }))
+            }, null, 40, Fse)]),
+            g("div", Bse, [g("label", Use, [G[47] || (G[47] = g("span", null, "过滤逻辑", -1)), g("select", {
               value: ke(S(k)),
               onChange: Re
-            }, [G[45] || (G[45] = g("option", { value: "off" }, " 关闭 ", -1)), (U(), q(Ue, null, lt(D, (ce) => g("option", {
+            }, [G[46] || (G[46] = g("option", { value: "off" }, " 关闭 ", -1)), (U(), q(Ue, null, lt(D, (ce) => g("option", {
               key: ce.value,
               value: ce.value
-            }, Q(ce.label), 9, Use)), 64))], 40, Bse)])]),
-            g("label", qse, [G[47] || (G[47] = g("span", null, "可选过滤", -1)), g("input", {
+            }, Q(ce.label), 9, Hse)), 64))], 40, qse)])]),
+            g("label", Gse, [G[48] || (G[48] = g("span", null, "可选过滤", -1)), g("input", {
               value: oe(S(k).keysecondary.length ? S(k).keysecondary : S(k).secondary_keys),
               type: "text",
-              onInput: G[8] || (G[8] = (ce) => S(T)({ keysecondary: ne(ce.target.value) }))
-            }, null, 40, Hse)])
+              onInput: G[9] || (G[9] = (ce) => S(T)({ keysecondary: ne(ce.target.value) }))
+            }, null, 40, Wse)])
           ]),
-          g("label", Gse, [G[48] || (G[48] = g("span", null, "内容", -1)), g("textarea", {
+          g("label", Vse, [G[49] || (G[49] = g("span", null, "内容", -1)), g("textarea", {
             value: S(k).content,
             rows: "9",
-            onInput: G[9] || (G[9] = (ce) => S(T)({ content: ce.target.value }))
-          }, null, 40, Wse)]),
+            onInput: G[10] || (G[10] = (ce) => S(T)({ content: ce.target.value }))
+          }, null, 40, Kse)]),
           g("div", { class: Fe(["worldbook-entry-advanced", { open: S(I).isOpen(O(S(k))) }]) }, [g("button", {
             type: "button",
             class: "worldbook-entry-advanced-toggle",
             "aria-expanded": S(I).isOpen(O(S(k))),
-            onClick: G[10] || (G[10] = (ce) => S(I).setOpen(O(S(k)), !S(I).isOpen(O(S(k)))))
-          }, " 高级设置 ", 8, Vse), S(I).isOpen(O(S(k))) ? (U(), q(Ue, { key: 0 }, [
-            g("div", Kse, [
-              g("label", null, [G[49] || (G[49] = g("span", null, "注入出口", -1)), g("input", {
+            onClick: G[11] || (G[11] = (ce) => S(I).setOpen(O(S(k)), !S(I).isOpen(O(S(k)))))
+          }, " 高级设置 ", 8, zse), S(I).isOpen(O(S(k))) ? (U(), q(Ue, { key: 0 }, [
+            g("div", Jse, [
+              g("label", null, [G[50] || (G[50] = g("span", null, "注入出口", -1)), g("input", {
                 value: S(k).outletName,
                 type: "text",
-                onInput: G[11] || (G[11] = (ce) => X("outletName", ce.target.value))
-              }, null, 40, zse)]),
-              g("label", null, [G[50] || (G[50] = g("span", null, "扫描深度", -1)), g("input", {
-                value: fe(S(k).scanDepth),
-                type: "number",
-                min: "0",
-                max: "1000",
-                onInput: G[12] || (G[12] = (ce) => X("scanDepth", me(ce)))
-              }, null, 40, Jse)]),
+                onInput: G[12] || (G[12] = (ce) => X("outletName", ce.target.value))
+              }, null, 40, Yse)]),
               g("label", null, [G[52] || (G[52] = g("span", null, "区分大小写", -1)), g("select", {
                 value: B(S(k).caseSensitive),
                 onChange: G[13] || (G[13] = (ce) => X("caseSensitive", N(ce)))
@@ -44272,7 +44272,7 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
                 g("option", { value: "null" }, "跟随全局", -1),
                 g("option", { value: "true" }, "是", -1),
                 g("option", { value: "false" }, "否", -1)
-              ])], 40, Yse)]),
+              ])], 40, Xse)]),
               g("label", null, [G[54] || (G[54] = g("span", null, "全词匹配", -1)), g("select", {
                 value: B(S(k).matchWholeWords),
                 onChange: G[14] || (G[14] = (ce) => X("matchWholeWords", N(ce)))
@@ -44280,7 +44280,7 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
                 g("option", { value: "null" }, "跟随全局", -1),
                 g("option", { value: "true" }, "是", -1),
                 g("option", { value: "false" }, "否", -1)
-              ])], 40, Xse)]),
+              ])], 40, Qse)]),
               g("label", null, [G[56] || (G[56] = g("span", null, "分组评分", -1)), g("select", {
                 value: B(S(k).useGroupScoring),
                 onChange: G[15] || (G[15] = (ce) => X("useGroupScoring", N(ce)))
@@ -44288,128 +44288,128 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
                 g("option", { value: "null" }, "跟随全局", -1),
                 g("option", { value: "true" }, "是", -1),
                 g("option", { value: "false" }, "否", -1)
-              ])], 40, Qse)]),
+              ])], 40, Zse)]),
               g("label", null, [G[57] || (G[57] = g("span", null, "自动化 ID", -1)), g("input", {
                 value: S(k).automationId,
                 type: "text",
                 onInput: G[16] || (G[16] = (ce) => X("automationId", ce.target.value))
-              }, null, 40, Zse)]),
+              }, null, 40, jse)]),
               g("label", null, [G[58] || (G[58] = g("span", null, "包含组", -1)), g("input", {
                 value: S(k).group,
                 type: "text",
                 onInput: G[17] || (G[17] = (ce) => X("group", ce.target.value))
-              }, null, 40, jse)]),
+              }, null, 40, eoe)]),
               g("label", null, [G[59] || (G[59] = g("span", null, "分组权重", -1)), g("input", {
                 value: fe(S(k).groupWeight),
                 type: "number",
                 min: "1",
                 onInput: G[18] || (G[18] = (ce) => X("groupWeight", me(ce)))
-              }, null, 40, eoe)]),
+              }, null, 40, toe)]),
               g("label", null, [G[60] || (G[60] = g("span", null, "黏着轮数", -1)), g("input", {
                 value: fe(S(k).sticky),
                 type: "number",
                 min: "0",
                 onInput: G[19] || (G[19] = (ce) => X("sticky", me(ce)))
-              }, null, 40, toe)]),
+              }, null, 40, noe)]),
               g("label", null, [G[61] || (G[61] = g("span", null, "冷却轮数", -1)), g("input", {
                 value: fe(S(k).cooldown),
                 type: "number",
                 min: "0",
                 onInput: G[20] || (G[20] = (ce) => X("cooldown", me(ce)))
-              }, null, 40, noe)]),
+              }, null, 40, roe)]),
               g("label", null, [G[62] || (G[62] = g("span", null, "延迟轮数", -1)), g("input", {
                 value: fe(S(k).delay),
                 type: "number",
                 min: "0",
                 onInput: G[21] || (G[21] = (ce) => X("delay", me(ce)))
-              }, null, 40, roe)])
+              }, null, 40, soe)])
             ]),
-            g("div", soe, [
+            g("div", ooe, [
               g("label", null, [g("input", {
                 type: "checkbox",
                 checked: S(k).useProbability,
                 onChange: Ce
-              }, null, 40, ooe), G[63] || (G[63] = g("span", null, "启用概率", -1))]),
+              }, null, 40, ioe), G[63] || (G[63] = g("span", null, "启用概率", -1))]),
               g("label", null, [g("input", {
                 type: "checkbox",
                 checked: S(k).ignoreBudget,
                 onChange: G[22] || (G[22] = (ce) => X("ignoreBudget", ce.target.checked))
-              }, null, 40, ioe), G[64] || (G[64] = g("span", null, "忽略预算", -1))]),
+              }, null, 40, aoe), G[64] || (G[64] = g("span", null, "忽略预算", -1))]),
               g("label", null, [g("input", {
                 type: "checkbox",
                 checked: S(k).excludeRecursion,
                 onChange: G[23] || (G[23] = (ce) => X("excludeRecursion", ce.target.checked))
-              }, null, 40, aoe), G[65] || (G[65] = g("span", null, "排除递归", -1))]),
+              }, null, 40, loe), G[65] || (G[65] = g("span", null, "排除递归", -1))]),
               g("label", null, [g("input", {
                 type: "checkbox",
                 checked: S(k).preventRecursion,
                 onChange: G[24] || (G[24] = (ce) => X("preventRecursion", ce.target.checked))
-              }, null, 40, loe), G[66] || (G[66] = g("span", null, "阻止递归", -1))]),
+              }, null, 40, uoe), G[66] || (G[66] = g("span", null, "阻止递归", -1))]),
               g("label", null, [g("input", {
                 type: "checkbox",
                 checked: S(k).groupOverride,
                 onChange: G[25] || (G[25] = (ce) => X("groupOverride", ce.target.checked))
-              }, null, 40, uoe), G[67] || (G[67] = g("span", null, "分组优先", -1))]),
+              }, null, 40, coe), G[67] || (G[67] = g("span", null, "分组优先", -1))]),
               g("label", null, [g("input", {
                 type: "checkbox",
                 checked: we(S(k).delayUntilRecursion),
                 onChange: $e
-              }, null, 40, coe), G[68] || (G[68] = g("span", null, "递归后延迟", -1))]),
+              }, null, 40, doe), G[68] || (G[68] = g("span", null, "递归后延迟", -1))]),
               g("label", null, [G[69] || (G[69] = g("span", null, "递归层级", -1)), g("input", {
                 value: Ee(S(k).delayUntilRecursion),
                 type: "number",
                 min: "1",
                 disabled: !we(S(k).delayUntilRecursion),
                 onInput: Pe
-              }, null, 40, doe)])
+              }, null, 40, foe)])
             ]),
-            g("label", foe, [G[70] || (G[70] = g("span", null, "生成触发", -1)), g("input", {
+            g("label", hoe, [G[70] || (G[70] = g("span", null, "生成触发", -1)), g("input", {
               value: oe(S(k).triggers),
               type: "text",
               onInput: G[26] || (G[26] = (ce) => X("triggers", ne(ce.target.value)))
-            }, null, 40, hoe)]),
-            g("div", poe, [G[71] || (G[71] = g("span", null, "额外匹配源", -1)), (U(), q(Ue, null, lt(V, (ce) => g("label", { key: ce.key }, [g("input", {
+            }, null, 40, poe)]),
+            g("div", moe, [G[71] || (G[71] = g("span", null, "额外匹配源", -1)), (U(), q(Ue, null, lt(V, (ce) => g("label", { key: ce.key }, [g("input", {
               type: "checkbox",
               checked: !!S(k)[ce.key],
               onChange: (Le) => X(ce.key, Le.target.checked)
-            }, null, 40, moe), g("span", null, Q(ce.label), 1)])), 64))])
+            }, null, 40, goe), g("span", null, Q(ce.label), 1)])), 64))])
           ], 64)) : be("", !0)], 2)
         ], 32)) : (U(), q(Ue, { key: 1 }, [
-          g("div", goe, [g("button", {
+          g("div", voe, [g("button", {
             type: "button",
             class: "worldbook-row-open",
             onClick: (ce) => S(_)(Se)
-          }, " 编辑 ", 8, voe), S(L) && S(l)(Se) ? (U(), q("span", yoe, Q(S(L)), 1)) : be("", !0)]),
-          Se.keys.length || Se.secondaryKeys.length ? (U(), q("p", _oe, Q([...Se.keys, ...Se.secondaryKeys].join(" / ")), 1)) : be("", !0),
-          Se.contentPreview ? (U(), q("p", boe, Q(Se.contentPreview), 1)) : be("", !0)
+          }, " 编辑 ", 8, yoe), S(L) && S(l)(Se) ? (U(), q("span", _oe, Q(S(L)), 1)) : be("", !0)]),
+          Se.keys.length || Se.secondaryKeys.length ? (U(), q("p", boe, Q([...Se.keys, ...Se.secondaryKeys].join(" / ")), 1)) : be("", !0),
+          Se.contentPreview ? (U(), q("p", woe, Q(Se.contentPreview), 1)) : be("", !0)
         ], 64))])) : be("", !0)], 42, ise))), 128)), S(a) ? (U(), q("button", {
           key: 0,
           type: "button",
           class: "native-add-row worldbook-preview-more",
           onClick: G[28] || (G[28] = (...Se) => S(p) && S(p)(...Se))
-        }, " 再显示 " + Q(Math.min(S(a), S(C))) + " 条 ", 1)) : be("", !0)])) : (U(), q("div", woe, " 这本世界书暂无条目。 "))], 64)) : be("", !0)])) : (U(), q("div", Soe, " 选择一本世界书后查看预览。 "))])])
+        }, " 再显示 " + Q(Math.min(S(a), S(C))) + " 条 ", 1)) : be("", !0)])) : (U(), q("div", Soe, " 这本世界书暂无条目。 "))], 64)) : be("", !0)])) : (U(), q("div", Toe, " 选择一本世界书后查看预览。 "))])])
       ])
     ], 512)), [[Zo, S(t) === "worldbooks"]]);
   }
-}), Eoe = Toe, Coe = { class: "panel-head preset-page-head" }, Aoe = { class: "panel-pills" }, koe = {
+}), Coe = Eoe, Aoe = { class: "panel-head preset-page-head" }, koe = { class: "panel-pills" }, Ioe = {
   key: 0,
   class: "pill warning"
-}, Ioe = { class: "pill" }, xoe = { class: "preset-command-bar regex-command-bar" }, Moe = { class: "preset-source-select regex-group-select" }, Poe = ["value"], Roe = { class: "archive-search native-search regex-search-field" }, Noe = { class: "settings-toolstrip" }, $oe = ["aria-expanded"], Doe = {
+}, xoe = { class: "pill" }, Moe = { class: "preset-command-bar regex-command-bar" }, Poe = { class: "preset-source-select regex-group-select" }, Roe = ["value"], Noe = { class: "archive-search native-search regex-search-field" }, $oe = { class: "settings-toolstrip" }, Doe = ["aria-expanded"], Loe = {
   key: 0,
   class: "regex-create-popover"
-}, Loe = ["onClick"], Ooe = {
+}, Ooe = ["onClick"], Foe = {
   key: 0,
   class: "preset-status-line"
-}, Foe = { class: "native-settings-studio regex-studio" }, Boe = { class: "native-list-panel regex-group-panel regex-library-panel" }, Uoe = { class: "assistant-preset-nav-head" }, qoe = ["onClick", "onKeydown"], Hoe = { class: "regex-row-state" }, Goe = { class: "regex-row-copy" }, Woe = { class: "regex-row-actions" }, Voe = ["onClick"], Koe = ["onClick"], zoe = ["onClick"], Joe = {
+}, Boe = { class: "native-settings-studio regex-studio" }, Uoe = { class: "native-list-panel regex-group-panel regex-library-panel" }, qoe = { class: "assistant-preset-nav-head" }, Hoe = ["onClick", "onKeydown"], Goe = { class: "regex-row-state" }, Woe = { class: "regex-row-copy" }, Voe = { class: "regex-row-actions" }, Koe = ["onClick"], zoe = ["onClick"], Joe = ["onClick"], Yoe = {
   key: 0,
   class: "inline-empty-note"
-}, Yoe = {
+}, Xoe = {
   key: 0,
   class: "native-detail-panel regex-detail-panel"
-}, Xoe = { class: "preset-preview-head" }, Qoe = { class: "regex-editor-actions" }, Zoe = ["disabled"], joe = { class: "regex-editor-grid" }, eie = { class: "regex-editor-section regex-pattern-section" }, tie = { class: "native-form-grid regex-editor-meta" }, nie = ["value"], rie = ["value"], sie = { class: "preset-text-field regex-main-field" }, oie = ["value"], iie = { class: "preset-text-field regex-support-field" }, aie = ["value"], lie = { class: "regex-editor-section regex-placement-section" }, uie = { class: "native-check-row placement-row regex-editor-switches" }, cie = ["checked", "onChange"], die = { class: "regex-editor-section regex-ephemeral-section" }, fie = { class: "native-check-row regex-editor-switches" }, hie = { class: "inline-check" }, pie = ["checked"], mie = { class: "inline-check" }, gie = ["checked"], vie = { class: "regex-editor-section regex-options-section" }, yie = { class: "native-check-row regex-editor-switches" }, _ie = { class: "inline-check" }, bie = ["checked"], wie = { class: "inline-check" }, Sie = ["checked"], Tie = { class: "native-form-grid regex-advanced-grid" }, Eie = ["value"], Cie = ["value"], Aie = ["value"], kie = {
+}, Qoe = { class: "preset-preview-head" }, Zoe = { class: "regex-editor-actions" }, joe = ["disabled"], eie = { class: "regex-editor-grid" }, tie = { class: "regex-editor-section regex-pattern-section" }, nie = { class: "native-form-grid regex-editor-meta" }, rie = ["value"], sie = ["value"], oie = { class: "preset-text-field regex-main-field" }, iie = ["value"], aie = { class: "preset-text-field regex-support-field" }, lie = ["value"], uie = { class: "regex-editor-section regex-placement-section" }, cie = { class: "native-check-row placement-row regex-editor-switches" }, die = ["checked", "onChange"], fie = { class: "regex-editor-section regex-ephemeral-section" }, hie = { class: "native-check-row regex-editor-switches" }, pie = { class: "inline-check" }, mie = ["checked"], gie = { class: "inline-check" }, vie = ["checked"], yie = { class: "regex-editor-section regex-options-section" }, _ie = { class: "native-check-row regex-editor-switches" }, bie = { class: "inline-check" }, wie = ["checked"], Sie = { class: "inline-check" }, Tie = ["checked"], Eie = { class: "native-form-grid regex-advanced-grid" }, Cie = ["value"], Aie = ["value"], kie = ["value"], Iie = {
   key: 1,
   class: "empty-note"
-}, Iie = /* @__PURE__ */ jt({
+}, xie = /* @__PURE__ */ jt({
   __name: "TavernRegexSettingsPanel",
   setup(e) {
     const { activeSettingsWorkspace: t, applyActiveRegexScript: n, createRegexScript: r, deleteRegexScript: s, expandRegexGroup: o, linesFromList: i, listFromLines: a, REGEX_GROUP_BATCH_SIZE: l, regexDirty: u, regexDraft: d, regexDraftTypeLabel: h, regexGroups: p, regexGroupsForDisplay: _, regexPlacementLabel: w, regexScriptRows: T, regexSearchText: C, regexStatus: M, saveCurrentRegexScript: k, selectedRegexKey: R, selectedRegexRow: L, selectRegexScript: m, toggleRegexPlacement: b, updateRegexPatch: y } = la(), E = /* @__PURE__ */ ae(!1), I = ON("(max-width: 560px)"), x = /* @__PURE__ */ ae(""), P = /* @__PURE__ */ ae(!1), D = le(() => {
@@ -44443,19 +44443,19 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
     return vt(t, (B) => {
       B !== "regex" && (E.value = !1, P.value = !1);
     }), (B, N) => Rn((U(), q("div", { class: Fe(["panel step-panel native-workspace", { "is-mobile-editor-open": E.value }]) }, [
-      g("div", Coe, [N[13] || (N[13] = g("div", null, [g("h2", null, "正则")], -1)), g("div", Aoe, [S(u) ? (U(), q("span", koe, "未保存")) : be("", !0), g("span", Ioe, Q(S(T).length) + " 条", 1)])]),
-      g("div", xoe, [
-        g("label", Moe, [Rn(g("select", { "onUpdate:modelValue": N[0] || (N[0] = (H) => x.value = H) }, [N[14] || (N[14] = g("option", { value: "" }, " 全部正则 ", -1)), (U(!0), q(Ue, null, lt(S(_), (H) => (U(), q("option", {
+      g("div", Aoe, [N[13] || (N[13] = g("div", null, [g("h2", null, "正则")], -1)), g("div", koe, [S(u) ? (U(), q("span", Ioe, "未保存")) : be("", !0), g("span", xoe, Q(S(T).length) + " 条", 1)])]),
+      g("div", Moe, [
+        g("label", Poe, [Rn(g("select", { "onUpdate:modelValue": N[0] || (N[0] = (H) => x.value = H) }, [N[14] || (N[14] = g("option", { value: "" }, " 全部正则 ", -1)), (U(!0), q(Ue, null, lt(S(_), (H) => (U(), q("option", {
           key: H.key,
           value: H.key
-        }, Q(H.label), 9, Poe))), 128))], 512), [[SF, x.value]])]),
-        g("label", Roe, [Rn(g("input", {
+        }, Q(H.label), 9, Roe))), 128))], 512), [[SF, x.value]])]),
+        g("label", Noe, [Rn(g("input", {
           "onUpdate:modelValue": N[1] || (N[1] = (H) => /* @__PURE__ */ Zt(C) ? C.value = H : null),
           type: "search",
           "aria-label": "筛选正则",
           placeholder: "名称、匹配式或替换文本"
         }, null, 512), [[jo, S(C)]])]),
-        g("div", Noe, [g("div", { class: Fe(["regex-create-menu", { open: P.value }]) }, [g("button", {
+        g("div", $oe, [g("div", { class: Fe(["regex-create-menu", { open: P.value }]) }, [g("button", {
           type: "button",
           class: "settings-icon-tool regex-create-trigger",
           title: "新增正则",
@@ -44465,18 +44465,18 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
         }, [...N[15] || (N[15] = [g("svg", {
           viewBox: "0 0 24 24",
           "aria-hidden": "true"
-        }, [g("path", { d: "M12 5v14" }), g("path", { d: "M5 12h14" })], -1)])], 8, $oe), P.value ? (U(), q("div", Doe, [(U(!0), q(Ue, null, lt(V.value, (H) => (U(), q("button", {
+        }, [g("path", { d: "M12 5v14" }), g("path", { d: "M5 12h14" })], -1)])], 8, Doe), P.value ? (U(), q("div", Loe, [(U(!0), q(Ue, null, lt(V.value, (H) => (U(), q("button", {
           key: H.key,
           type: "button",
           onClick: (ue) => Z(H)
-        }, [g("strong", null, Q(H.label), 1), g("span", null, Q(fe(H)), 1)], 8, Loe))), 128))])) : be("", !0)], 2)])
+        }, [g("strong", null, Q(H.label), 1), g("span", null, Q(fe(H)), 1)], 8, Ooe))), 128))])) : be("", !0)], 2)])
       ]),
-      S(M) ? (U(), q("div", Ooe, [g("span", null, Q(S(M)), 1)])) : be("", !0),
-      g("div", Foe, [g("aside", Boe, [(U(!0), q(Ue, null, lt(D.value, (H) => (U(), q("div", {
+      S(M) ? (U(), q("div", Foe, [g("span", null, Q(S(M)), 1)])) : be("", !0),
+      g("div", Boe, [g("aside", Uoe, [(U(!0), q(Ue, null, lt(D.value, (H) => (U(), q("div", {
         key: H.key,
         class: "regex-group-block"
       }, [
-        g("div", Uoe, [g("strong", null, Q(H.label), 1), g("span", null, Q(H.allowed === !1 ? "未允许" : `${H.visibleRows.length} / ${H.filteredCount} / ${H.totalCount} 条`), 1)]),
+        g("div", qoe, [g("strong", null, Q(H.label), 1), g("span", null, Q(H.allowed === !1 ? "未允许" : `${H.visibleRows.length} / ${H.filteredCount} / ${H.totalCount} 条`), 1)]),
         (U(!0), q(Ue, null, lt(H.visibleRows, (ue) => (U(), q("div", {
           key: ue.key,
           class: Fe(["native-list-row regex-list-row", {
@@ -44488,9 +44488,9 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
           onClick: (ke) => K(ue),
           onKeydown: (ke) => me(ke, ue)
         }, [
-          g("span", Hoe, Q(ue.script.disabled ? "停" : "用"), 1),
-          g("span", Goe, [g("strong", null, Q(ue.script.scriptName || "未命名正则"), 1), g("small", null, Q(ue.script.findRegex || "空匹配式"), 1)]),
-          g("span", Woe, [g("button", {
+          g("span", Goe, Q(ue.script.disabled ? "停" : "用"), 1),
+          g("span", Woe, [g("strong", null, Q(ue.script.scriptName || "未命名正则"), 1), g("small", null, Q(ue.script.findRegex || "空匹配式"), 1)]),
+          g("span", Voe, [g("button", {
             type: "button",
             class: "regex-row-icon regex-row-edit-icon",
             title: "编辑",
@@ -44499,24 +44499,24 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
           }, [...N[16] || (N[16] = [g("svg", {
             viewBox: "0 0 24 24",
             "aria-hidden": "true"
-          }, [g("path", { d: "M12 20h9" }), g("path", { d: "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" })], -1)])], 8, Voe), g("button", {
+          }, [g("path", { d: "M12 20h9" }), g("path", { d: "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" })], -1)])], 8, Koe), g("button", {
             type: "button",
             class: "regex-row-icon regex-row-delete-icon",
             title: "删除",
             "aria-label": "删除",
             onClick: Pn((ke) => S(s)(ue), ["stop"])
-          }, [...N[17] || (N[17] = [Cl('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>', 1)])], 8, Koe)])
-        ], 42, qoe))), 128)),
+          }, [...N[17] || (N[17] = [Cl('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>', 1)])], 8, zoe)])
+        ], 42, Hoe))), 128)),
         H.hiddenCount ? (U(), q("button", {
           key: 0,
           type: "button",
           class: "native-add-row",
           onClick: (ue) => S(o)(H.key)
-        }, " 再显示 " + Q(Math.min(H.hiddenCount, S(l))) + " 条 ", 9, zoe)) : be("", !0)
-      ]))), 128)), S(C) && !D.value.length ? (U(), q("div", Joe, " 没有匹配的正则。 ")) : be("", !0)]), J.value ? (U(), q("section", Yoe, [S(R) || S(d).scriptName ? (U(), q(Ue, { key: 0 }, [g("div", Xoe, [
+        }, " 再显示 " + Q(Math.min(H.hiddenCount, S(l))) + " 条 ", 9, Joe)) : be("", !0)
+      ]))), 128)), S(C) && !D.value.length ? (U(), q("div", Yoe, " 没有匹配的正则。 ")) : be("", !0)]), J.value ? (U(), q("section", Xoe, [S(R) || S(d).scriptName ? (U(), q(Ue, { key: 0 }, [g("div", Qoe, [
         g("strong", null, Q(S(d).scriptName || "新正则"), 1),
         g("span", null, Q(S(h)()), 1),
-        g("div", Qoe, [g("button", {
+        g("div", Zoe, [g("button", {
           type: "button",
           class: "regex-editor-secondary",
           onClick: X
@@ -44525,32 +44525,32 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
           class: "regex-editor-primary",
           disabled: !S(d).scriptName || !S(u),
           onClick: oe
-        }, " 保存 ", 8, Zoe)])
-      ]), g("div", joe, [
-        g("section", eie, [
+        }, " 保存 ", 8, joe)])
+      ]), g("div", eie, [
+        g("section", tie, [
           N[22] || (N[22] = g("div", { class: "regex-section-title" }, " 查找与替换 ", -1)),
-          g("div", tie, [g("label", null, [N[18] || (N[18] = g("span", null, "名称", -1)), g("input", {
+          g("div", nie, [g("label", null, [N[18] || (N[18] = g("span", null, "名称", -1)), g("input", {
             value: S(d).scriptName || "",
             onInput: N[2] || (N[2] = (H) => S(y)({ scriptName: H.target.value }))
-          }, null, 40, nie)]), g("label", null, [N[19] || (N[19] = g("span", null, "匹配", -1)), g("input", {
+          }, null, 40, rie)]), g("label", null, [N[19] || (N[19] = g("span", null, "匹配", -1)), g("input", {
             value: S(d).findRegex || "",
             spellcheck: "false",
             onInput: N[3] || (N[3] = (H) => S(y)({ findRegex: H.target.value }))
-          }, null, 40, rie)])]),
-          g("label", sie, [N[20] || (N[20] = g("span", null, "替换为", -1)), g("textarea", {
+          }, null, 40, sie)])]),
+          g("label", oie, [N[20] || (N[20] = g("span", null, "替换为", -1)), g("textarea", {
             value: S(d).replaceString || "",
             rows: "5",
             spellcheck: "false",
             onInput: N[4] || (N[4] = (H) => S(y)({ replaceString: H.target.value }))
-          }, null, 40, oie)]),
-          g("label", iie, [N[21] || (N[21] = g("span", null, "裁剪字符串", -1)), g("textarea", {
+          }, null, 40, iie)]),
+          g("label", aie, [N[21] || (N[21] = g("span", null, "裁剪字符串", -1)), g("textarea", {
             value: S(i)(S(d).trimStrings),
             rows: "3",
             spellcheck: "false",
             onInput: N[5] || (N[5] = (H) => S(y)({ trimStrings: S(a)(H.target.value) }))
-          }, null, 40, aie)])
+          }, null, 40, lie)])
         ]),
-        g("section", lie, [N[23] || (N[23] = g("div", { class: "regex-section-title" }, " 作用范围 ", -1)), g("div", uie, [(U(), q(Ue, null, lt([
+        g("section", uie, [N[23] || (N[23] = g("div", { class: "regex-section-title" }, " 作用范围 ", -1)), g("div", cie, [(U(), q(Ue, null, lt([
           1,
           2,
           3,
@@ -44563,28 +44563,28 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
           type: "checkbox",
           checked: (S(d).placement || []).includes(H),
           onChange: (ue) => S(b)(H, ue.target.checked)
-        }, null, 40, cie), g("span", null, Q(S(w)(H)), 1)])), 64))])]),
-        g("section", die, [N[26] || (N[26] = g("div", { class: "regex-section-title" }, " 表层替换 ", -1)), g("div", fie, [g("label", hie, [g("input", {
+        }, null, 40, die), g("span", null, Q(S(w)(H)), 1)])), 64))])]),
+        g("section", fie, [N[26] || (N[26] = g("div", { class: "regex-section-title" }, " 表层替换 ", -1)), g("div", hie, [g("label", pie, [g("input", {
           type: "checkbox",
           checked: S(d).markdownOnly === !0,
           onChange: N[6] || (N[6] = (H) => S(y)({ markdownOnly: H.target.checked }))
-        }, null, 40, pie), N[24] || (N[24] = g("span", null, "只改显示", -1))]), g("label", mie, [g("input", {
+        }, null, 40, mie), N[24] || (N[24] = g("span", null, "只改显示", -1))]), g("label", gie, [g("input", {
           type: "checkbox",
           checked: S(d).promptOnly === !0,
           onChange: N[7] || (N[7] = (H) => S(y)({ promptOnly: H.target.checked }))
-        }, null, 40, gie), N[25] || (N[25] = g("span", null, "只改提示词", -1))])])]),
-        g("section", vie, [
+        }, null, 40, vie), N[25] || (N[25] = g("span", null, "只改提示词", -1))])])]),
+        g("section", yie, [
           N[33] || (N[33] = g("div", { class: "regex-section-title" }, " 其他选项 ", -1)),
-          g("div", yie, [g("label", _ie, [g("input", {
+          g("div", _ie, [g("label", bie, [g("input", {
             type: "checkbox",
             checked: S(d).disabled === !0,
             onChange: N[8] || (N[8] = (H) => S(y)({ disabled: H.target.checked }))
-          }, null, 40, bie), N[27] || (N[27] = g("span", null, "停用", -1))]), g("label", wie, [g("input", {
+          }, null, 40, wie), N[27] || (N[27] = g("span", null, "停用", -1))]), g("label", Sie, [g("input", {
             type: "checkbox",
             checked: S(d).runOnEdit === !0,
             onChange: N[9] || (N[9] = (H) => S(y)({ runOnEdit: H.target.checked }))
-          }, null, 40, Sie), N[28] || (N[28] = g("span", null, "编辑时执行", -1))])]),
-          g("div", Tie, [
+          }, null, 40, Tie), N[28] || (N[28] = g("span", null, "编辑时执行", -1))])]),
+          g("div", Eie, [
             g("label", null, [N[30] || (N[30] = g("span", null, "查找宏", -1)), g("select", {
               value: S(d).substituteRegex ?? 0,
               onChange: N[10] || (N[10] = (H) => S(y)({ substituteRegex: Number(H.target.value) }))
@@ -44592,40 +44592,40 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
               g("option", { value: 0 }, "不替换", -1),
               g("option", { value: 1 }, "原样替换", -1),
               g("option", { value: 2 }, "转义替换", -1)
-            ])], 40, Eie)]),
+            ])], 40, Cie)]),
             g("label", null, [N[31] || (N[31] = g("span", null, "最小深度", -1)), g("input", {
               type: "number",
               value: S(d).minDepth ?? "",
               onInput: N[11] || (N[11] = (H) => S(y)({ minDepth: H.target.value === "" ? null : Number(H.target.value) }))
-            }, null, 40, Cie)]),
+            }, null, 40, Aie)]),
             g("label", null, [N[32] || (N[32] = g("span", null, "最大深度", -1)), g("input", {
               type: "number",
               value: S(d).maxDepth ?? "",
               onInput: N[12] || (N[12] = (H) => S(y)({ maxDepth: H.target.value === "" ? null : Number(H.target.value) }))
-            }, null, 40, Aie)])
+            }, null, 40, kie)])
           ])
         ])
-      ])], 64)) : (U(), q("div", kie, " 选择一条正则，或在左侧新建。 "))])) : be("", !0)])
+      ])], 64)) : (U(), q("div", Iie, " 选择一条正则，或在左侧新建。 "))])) : be("", !0)])
     ], 2)), [[Zo, S(t) === "regex"]]);
   }
-}), xie = Iie, Mie = { class: "panel step-panel preset-workspace" }, Pie = { class: "panel-head preset-page-head" }, Rie = { class: "panel-pills" }, Nie = {
+}), Mie = xie, Pie = { class: "panel step-panel preset-workspace" }, Rie = { class: "panel-head preset-page-head" }, Nie = { class: "panel-pills" }, $ie = {
   key: 0,
   class: "pill warning"
-}, $ie = { class: "preset-command-bar assistant-preset-command-bar" }, Die = { class: "assistant-preset-picker" }, Lie = ["value"], Oie = {
+}, Die = { class: "preset-command-bar assistant-preset-command-bar" }, Lie = { class: "assistant-preset-picker" }, Oie = ["value"], Fie = {
   key: 0,
   value: ""
-}, Fie = ["value"], Bie = { class: "assistant-preset-toolstrip" }, Uie = ["disabled"], qie = ["disabled"], Hie = ["disabled"], Gie = {
+}, Bie = ["value"], Uie = { class: "assistant-preset-toolstrip" }, qie = ["disabled"], Hie = ["disabled"], Gie = ["disabled"], Wie = {
   key: 0,
   class: "preset-status-line"
-}, Wie = { class: "assistant-preset-studio" }, Vie = { class: "assistant-preset-item-list archive-item-list" }, Kie = ["onClick"], zie = { class: "assistant-preset-detail-panel archive-editor-panel" }, Jie = { class: "assistant-preset-line-head" }, Yie = {
+}, Vie = { class: "assistant-preset-studio" }, Kie = { class: "assistant-preset-item-list archive-item-list" }, zie = ["onClick"], Jie = { class: "assistant-preset-detail-panel archive-editor-panel" }, Yie = { class: "assistant-preset-line-head" }, Xie = {
   key: 0,
   class: "assistant-preset-detail-fields"
-}, Xie = ["value"], Qie = {
+}, Qie = ["value"], Zie = {
   key: 1,
   type: "button",
   class: "assistant-preset-empty-add",
   disabled: ""
-}, Zie = /* @__PURE__ */ jt({
+}, jie = /* @__PURE__ */ jt({
   __name: "TavernAssistantPresetSettingsPanel",
   setup(e) {
     const { activeAssistantPresetId: t, activeSettingsWorkspace: n, assistantPreset: r, assistantPresetDirty: s, assistantPresetItems: o, assistantPresets: i, assistantPresetStatus: a, createAssistantPreset: l, deleteCurrentAssistantPreset: u, importAssistantPreset: d, saveCurrentAssistantPreset: h, selectAssistantPreset: p, selectAssistantPresetItem: _, selectedAssistantPresetItem: w, shortText: T, updateAssistantPresetPatch: C, updateSelectedAssistantPresetItem: M } = la(), k = le(() => String(t.value || r.value.id || "").trim()), R = le(() => i.value.find((I) => I.id === k.value) || null), L = /* @__PURE__ */ ae(null);
@@ -44660,15 +44660,15 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
       }, P = new Blob([JSON.stringify(x, null, 2)], { type: "application/json;charset=utf-8" }), D = URL.createObjectURL(P), V = document.createElement("a");
       V.href = D, V.download = `${I.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim() || "assistant-preset"}.json`, document.body.appendChild(V), V.click(), V.remove(), URL.revokeObjectURL(D);
     }
-    return (I, x) => Rn((U(), q("div", Mie, [
-      g("div", Pie, [x[5] || (x[5] = g("div", null, [g("h2", null, "助手预设")], -1)), g("div", Rie, [S(s) ? (U(), q("span", Nie, "未保存")) : be("", !0)])]),
-      g("div", $ie, [g("label", Die, [g("select", {
+    return (I, x) => Rn((U(), q("div", Pie, [
+      g("div", Rie, [x[5] || (x[5] = g("div", null, [g("h2", null, "助手预设")], -1)), g("div", Nie, [S(s) ? (U(), q("span", $ie, "未保存")) : be("", !0)])]),
+      g("div", Die, [g("label", Lie, [g("select", {
         value: k.value,
         onChange: x[0] || (x[0] = (P) => S(p)(P.target.value))
-      }, [S(i).length ? be("", !0) : (U(), q("option", Oie, " 没有可用助手预设 ")), (U(!0), q(Ue, null, lt(S(i), (P) => (U(), q("option", {
+      }, [S(i).length ? be("", !0) : (U(), q("option", Fie, " 没有可用助手预设 ")), (U(!0), q(Ue, null, lt(S(i), (P) => (U(), q("option", {
         key: P.id,
         value: P.id
-      }, Q(P.name) + Q(P.isBuiltIn ? " · 内置" : ""), 9, Fie))), 128))], 40, Lie)]), g("div", Bie, [
+      }, Q(P.name) + Q(P.isBuiltIn ? " · 内置" : ""), 9, Bie))), 128))], 40, Oie)]), g("div", Uie, [
         g("button", {
           type: "button",
           class: "assistant-preset-tool icon-button",
@@ -44693,7 +44693,7 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
           g("path", { d: "M5 21h14a1 1 0 0 0 1-1V7.5L16.5 4H5a1 1 0 0 0-1 1v15a1 1 0 0 0 1 1Z" }),
           g("path", { d: "M8 21v-7h8v7" }),
           g("path", { d: "M8 4v5h7" })
-        ], -1)])], 8, Uie),
+        ], -1)])], 8, qie),
         g("button", {
           type: "button",
           class: "assistant-preset-tool icon-button",
@@ -44701,7 +44701,7 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
           "aria-label": "删除",
           disabled: !R.value || R.value.id === S("littlewhitebox-assistant-default"),
           onClick: x[2] || (x[2] = (...P) => S(u) && S(u)(...P))
-        }, [...x[8] || (x[8] = [Cl('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>', 1)])], 8, qie),
+        }, [...x[8] || (x[8] = [Cl('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path></svg>', 1)])], 8, Hie),
         g("button", {
           type: "button",
           class: "assistant-preset-tool icon-button",
@@ -44740,7 +44740,7 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
           g("path", { d: "M12 20V9" }),
           g("path", { d: "m17 13-5-5-5 5" }),
           g("path", { d: "M4 20h16" })
-        ], -1)])], 8, Hie),
+        ], -1)])], 8, Gie),
         g("input", {
           ref_key: "importInputRef",
           ref: L,
@@ -44750,21 +44750,21 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
           onChange: y
         }, null, 544)
       ])]),
-      S(a) ? (U(), q("div", Gie, [g("span", null, Q(S(a)), 1)])) : be("", !0),
-      g("div", Wie, [g("aside", Vie, [x[12] || (x[12] = g("div", { class: "assistant-preset-nav-head" }, [g("strong", null, "记忆档案")], -1)), (U(!0), q(Ue, null, lt(S(o), (P) => (U(), q("button", {
+      S(a) ? (U(), q("div", Wie, [g("span", null, Q(S(a)), 1)])) : be("", !0),
+      g("div", Vie, [g("aside", Kie, [x[12] || (x[12] = g("div", { class: "assistant-preset-nav-head" }, [g("strong", null, "记忆档案")], -1)), (U(!0), q(Ue, null, lt(S(o), (P) => (U(), q("button", {
         key: P.id,
         type: "button",
         class: Fe(["assistant-preset-nav-row", { selected: S(w)?.id === P.id }]),
         onClick: (D) => S(_)(P.id)
-      }, [g("strong", null, Q(P.label), 1), g("small", null, Q(S(T)(P.content || "未填写职责。", 54)), 1)], 10, Kie))), 128))]), g("section", zie, [g("div", Jie, [g("div", null, [g("strong", null, Q(S(w)?.label || "记忆档案"), 1)])]), S(w) ? (U(), q("div", Yie, [g("label", null, [x[13] || (x[13] = g("span", null, "职责说明", -1)), g("textarea", {
+      }, [g("strong", null, Q(P.label), 1), g("small", null, Q(S(T)(P.content || "未填写职责。", 54)), 1)], 10, zie))), 128))]), g("section", Jie, [g("div", Yie, [g("div", null, [g("strong", null, Q(S(w)?.label || "记忆档案"), 1)])]), S(w) ? (U(), q("div", Xie, [g("label", null, [x[13] || (x[13] = g("span", null, "职责说明", -1)), g("textarea", {
         value: S(w).content,
         rows: "12",
         placeholder: "写这个记忆档案应该维护什么、保留什么、避免什么。",
         onInput: x[4] || (x[4] = (P) => S(M)(P.target.value))
-      }, null, 40, Xie)])])) : (U(), q("button", Qie, " 没有可编辑条目 "))])])
+      }, null, 40, Qie)])])) : (U(), q("button", Zie, " 没有可编辑条目 "))])])
     ], 512)), [[Zo, S(n) === "assistantPreset"]]);
   }
-}), jie = Zie, eae = { class: "xb-main" }, tae = /* @__PURE__ */ jt({
+}), eae = jie, tae = { class: "xb-main" }, nae = /* @__PURE__ */ jt({
   __name: "TavernSettingsPage",
   setup(e) {
     const t = la(), n = _d(), { activeSettingsWorkspace: r, selectSettingsWorkspace: s, settingsNavItems: o } = t, { activeView: i, homeThemeDark: a } = n;
@@ -44787,17 +44787,17 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
         "items",
         "onSelect"
       ]),
-      g("section", eae, [
+      g("section", tae, [
         Ft(Ane),
         Ft(Nre),
-        Ft(Eoe),
-        Ft(xie),
-        Ft(jie),
+        Ft(Coe),
+        Ft(Mie),
+        Ft(eae),
         Ft(Vne)
       ])
     ], 2)) : be("", !0);
   }
-}), nae = tae, rae = { chat: { exclude: [
+}), rae = nae, sae = { chat: { exclude: [
   "embedding",
   "embed",
   "rerank",
@@ -44812,7 +44812,7 @@ var Kne = { class: "panel-head preset-page-head" }, zne = { class: "panel-pills"
   "sdxl",
   "flux",
   "moderation"
-] } }, sae = Object.freeze([
+] } }, oae = Object.freeze([
   "claude-opus-4-7",
   "claude-opus-4-6",
   "claude-opus-4-5",
@@ -44838,7 +44838,7 @@ function ys(e, t, n = "") {
   });
 }
 function Kc(e = []) {
-  const t = [...new Set(e.filter(Boolean).map((s) => String(s).trim()).filter(Boolean))], n = rae.chat, r = t.filter((s) => {
+  const t = [...new Set(e.filter(Boolean).map((s) => String(s).trim()).filter(Boolean))], n = sae.chat, r = t.filter((s) => {
     const o = s.toLowerCase();
     return !n.exclude.some((i) => o.includes(i));
   });
@@ -44850,7 +44850,7 @@ function Of(e = "") {
 function El(e) {
   return String(e || "").trim().replace(/\/+$/, "");
 }
-function oae(e = "") {
+function iae(e = "") {
   return e === "sillytavern-openai-compatible" || e === "sillytavern-claude" || e === "sillytavern-google";
 }
 function Na(e = "") {
@@ -44859,13 +44859,13 @@ function Na(e = "") {
 function O_(e = "") {
   return e === "anthropic" || e === "sillytavern-claude";
 }
-function iae(e = "") {
+function aae(e = "") {
   return e === "sillytavern-claude" ? ob : e === "sillytavern-google" ? ib : Al;
 }
 function zc(e = []) {
   return [...new Set(e.filter(Boolean).map((t) => String(t).trim()).filter(Boolean))];
 }
-function aae(e) {
+function lae(e) {
   const t = El(e);
   if (!t) return [];
   if (t.endsWith("/v1")) {
@@ -44891,7 +44891,7 @@ function FN(e) {
   }
   return zc([`${t}/v1/models`, `${t}/models`]);
 }
-function lae(e, t) {
+function uae(e, t) {
   const n = El(e);
   if (!n) return [];
   const r = n.endsWith("/v1beta") ? n.slice(0, -7) : n;
@@ -44904,7 +44904,7 @@ function lae(e, t) {
     `${r}/models`
   ]);
 }
-function uae(e, t) {
+function cae(e, t) {
   const n = [
     e?.error?.message,
     e?.message,
@@ -44914,7 +44914,7 @@ function uae(e, t) {
   ].find((r) => typeof r == "string" && r.trim());
   return n ? n.trim() : String(t || "").trim().slice(0, 160);
 }
-async function cae(e, t = {}) {
+async function dae(e, t = {}) {
   const n = await fetch(e, t), r = await n.text();
   let s = null, o = null;
   try {
@@ -44929,22 +44929,22 @@ async function cae(e, t = {}) {
     data: s,
     rawText: r,
     parseError: o,
-    errorSnippet: uae(s, r)
+    errorSnippet: cae(s, r)
   };
 }
-function dae(e) {
+function fae(e) {
   return Kc((e?.data || []).map((t) => String(t?.id || "").trim()).filter(Boolean));
 }
 function BN(e) {
   return Kc((e?.data || []).map((t) => String(t?.id || "").trim()).filter(Boolean));
 }
-function fae(e) {
+function hae(e) {
   return Kc((e?.models || e?.data || []).map((t) => String(t?.id || t?.name || "")).map((t) => t.split("/").pop() || "").filter(Boolean));
 }
 async function yh({ urls: e, requestOptionsList: t, extractModels: n, providerLabel: r }) {
   let s = null;
   for (const o of e) for (const i of t) {
-    const a = await cae(o, i);
+    const a = await dae(o, i);
     if (!a.ok) {
       s = a;
       continue;
@@ -44969,7 +44969,7 @@ async function yh({ urls: e, requestOptionsList: t, extractModels: n, providerLa
   }
   throw new Error(`${r} 拉取模型失败：未获取到模型列表。`);
 }
-async function hae(e) {
+async function pae(e) {
   const t = String(e.apiKey || "").trim(), n = El(e.baseUrl || ""), r = El(n || bI.claude);
   if (t && r) try {
     return await yh({
@@ -44985,16 +44985,16 @@ async function hae(e) {
   } catch (s) {
     if (n) throw s;
   }
-  return [...sae];
+  return [...oae];
 }
 async function YA(e) {
   const t = e.provider, n = El(e.baseUrl || ""), r = String(e.apiKey || "").trim();
-  if (t === "sillytavern-claude") return Kc(await hae(e));
-  if (oae(t)) return Kc(await D2(e, iae(t)));
+  if (t === "sillytavern-claude") return Kc(await pae(e));
+  if (iae(t)) return Kc(await D2(e, aae(t)));
   if (!r) throw new Error("请先填写 API Key。");
   if (!n) throw new Error("请先填写 Base URL。");
   return t === "google" ? await yh({
-    urls: lae(n, r),
+    urls: uae(n, r),
     requestOptionsList: [
       { headers: {
         Accept: "application/json",
@@ -45006,7 +45006,7 @@ async function YA(e) {
       } },
       { headers: { Accept: "application/json" } }
     ],
-    extractModels: fae,
+    extractModels: hae,
     providerLabel: "Google AI"
   }) : O_(t) ? await yh({
     urls: FN(n),
@@ -45018,20 +45018,20 @@ async function YA(e) {
     extractModels: BN,
     providerLabel: "Anthropic"
   }) : await yh({
-    urls: aae(n),
+    urls: lae(n),
     requestOptionsList: [{ headers: {
       Authorization: `Bearer ${r}`,
       Accept: "application/json"
     } }],
-    extractModels: dae,
+    extractModels: fae,
     providerLabel: t === "openai-responses" ? "OpenAI Responses" : "OpenAI-Compatible"
   });
 }
-function pae(e) {
+function mae(e) {
   return e instanceof Error ? e.message : String(e || "unknown_error");
 }
-function mae(e = {}) {
-  const { state: t, render: n, showToast: r, createRequestId: s = (B = "req") => `${B}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, saveConfig: o, describeError: i = pae, getRuntimeSummaryText: a } = e;
+function gae(e = {}) {
+  const { state: t, render: n, showToast: r, createRequestId: s = (B = "req") => `${B}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, saveConfig: o, describeError: i = mae, getRuntimeSummaryText: a } = e;
   function l() {
     t.configFormSyncPending = !0;
   }
@@ -45554,7 +45554,7 @@ function mae(e = {}) {
 function _h(e = "") {
   return String(e || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
-function gae(e = {}) {
+function vae(e = {}) {
   const t = String(e?.status || "idle");
   return t === "saving" ? {
     className: "xb-assistant-save-button is-saving",
@@ -45574,8 +45574,8 @@ function gae(e = {}) {
     html: "保存配置"
   };
 }
-function vae(e = {}) {
-  const { configSave: t = {}, runtimeText: n = "", inlineToastText: r = "", showInlineToast: s = !0, showAssistantPermissions: o = !0, showDelegateSettings: i = !0, activePage: a = "main", delegatePresetHint: l = "DelegateRun 分身会使用这里的独立 API 配置；可以和主助手使用不同 Provider、Base URL、模型和 Tool 调用格式。", isBusy: u = !1, canDeletePreset: d = !0 } = e, h = gae(t), p = u || String(t?.status || "") === "saving" ? "disabled" : "", _ = u || !d ? "disabled" : "", w = a === "delegate" ? "delegate" : "main", T = w === "main", C = w === "delegate", M = o ? `
+function yae(e = {}) {
+  const { configSave: t = {}, runtimeText: n = "", inlineToastText: r = "", showInlineToast: s = !0, showAssistantPermissions: o = !0, showDelegateSettings: i = !0, activePage: a = "main", delegatePresetHint: l = "DelegateRun 分身会使用这里的独立 API 配置；可以和主助手使用不同 Provider、Base URL、模型和 Tool 调用格式。", isBusy: u = !1, canDeletePreset: d = !0 } = e, h = vae(t), p = u || String(t?.status || "") === "saving" ? "disabled" : "", _ = u || !d ? "disabled" : "", w = a === "delegate" ? "delegate" : "main", T = w === "main", C = w === "delegate", M = o ? `
             <label>
                 <span>斜杠命令权限</span>
                 <select id="xb-assistant-permission-mode"></select>
@@ -45760,7 +45760,7 @@ function vae(e = {}) {
         </section>
     `;
 }
-var Sv = 48, Tv = 48, Ev = 80, Ff = 24, Cv = 60, yae = [
+var Sv = 48, Tv = 48, Ev = 80, Ff = 24, Cv = 60, _ae = [
   {
     key: "storyArcPrompt",
     label: "剧情脉络",
@@ -45776,7 +45776,7 @@ var Sv = 48, Tv = 48, Ev = 80, Ff = 24, Cv = 60, yae = [
     label: "楼层小记",
     summary: "按楼层轻量记录"
   }
-], _ae = {
+], bae = {
   top: "最前面",
   beforeCharacter: "角色卡前",
   afterCharacter: "角色卡后",
@@ -45797,7 +45797,7 @@ function $a(e) {
 function No(e = "") {
   return String(e || "").trim().toLocaleLowerCase();
 }
-function bae(e, t) {
+function wae(e, t) {
   return t ? No(e).includes(t) : !0;
 }
 function Av(e, t = 1600) {
@@ -45818,13 +45818,13 @@ function Js(e) {
 function kv(e) {
   return e === !0 || e === "true" ? !0 : e === !1 || e === "false" ? !1 : null;
 }
-function wae(e) {
+function Sae(e) {
   if (e === !0 || e === "true") return !0;
   if (e === !1 || e === "false" || e === "" || e === null || e === void 0) return !1;
   const t = Number(e);
   return Number.isFinite(t) && t > 0 ? Math.floor(t) : !1;
 }
-function Sae(e) {
+function Tae(e) {
   const t = _n(e), n = Array.isArray(t.entries) ? t.entries.map((r) => {
     const s = _n(r);
     return {
@@ -45885,7 +45885,7 @@ function XA(e) {
     ignoreBudget: t.ignoreBudget === !0,
     excludeRecursion: t.excludeRecursion === !0,
     preventRecursion: t.preventRecursion === !0,
-    delayUntilRecursion: wae(t.delayUntilRecursion),
+    delayUntilRecursion: Sae(t.delayUntilRecursion),
     group: String(t.group ?? ""),
     groupOverride: t.groupOverride === !0,
     groupWeight: Js(t.groupWeight),
@@ -45929,7 +45929,7 @@ function Iv(e = {}) {
     maxDepth: t.maxDepth === null || t.maxDepth === "" || t.maxDepth === void 0 ? null : Number(t.maxDepth)
   };
 }
-function Tae(e) {
+function Eae(e) {
   const t = _n(e), n = String(t.id || "").trim();
   return n ? {
     id: n,
@@ -45939,8 +45939,8 @@ function Tae(e) {
     active: t.active === !0
   } : null;
 }
-function Eae(e) {
-  const t = _n(e), n = String(t.currentUserId || "").trim() || null, r = Array.isArray(t.users) ? t.users.map((s) => Tae(s)).filter((s) => !!s) : [];
+function Cae(e) {
+  const t = _n(e), n = String(t.currentUserId || "").trim() || null, r = Array.isArray(t.users) ? t.users.map((s) => Eae(s)).filter((s) => !!s) : [];
   return n && !r.some((s) => s.id === n) && r.unshift({
     id: n,
     name: n,
@@ -45955,11 +45955,11 @@ function Eae(e) {
     currentUserId: n
   };
 }
-function Cae() {
+function Aae() {
   const e = String(window.location.hash || "").replace(/^#\/?/, "").split("/")[1];
   return e === "api" || e === "chatPreset" || e === "worldbooks" || e === "regex" || e === "assistantPreset" || e === "base" ? e : "api";
 }
-function Aae(e) {
+function kae(e) {
   const t = gx(), n = Oc(), r = /* @__PURE__ */ ae(null), s = /* @__PURE__ */ ae({
     status: "idle",
     requestId: "",
@@ -45991,7 +45991,7 @@ function Aae(e) {
     }));
   }), Mt = le(() => {
     const F = No(O.value);
-    return F ? Nt.value.filter((Y) => bae(Y.label || Y.name, F)) : Nt.value;
+    return F ? Nt.value.filter((Y) => wae(Y.label || Y.name, F)) : Nt.value;
   }), Vt = le(() => {
     const F = Mt.value.slice(0, X.value), Y = String(k.value || i.value.promptManager?.name || i.value.name || "").trim();
     if (!Y || F.some((Ae) => Ae.name === Y)) return F;
@@ -46093,7 +46093,7 @@ function Aae(e) {
       label: "基础设定",
       mobileLabel: "基础"
     }
-  ]), Je = le(() => Xe.value.find((F) => F.id === it.value) || null), kt = le(() => yae.map((F) => ({
+  ]), Je = le(() => Xe.value.find((F) => F.id === it.value) || null), kt = le(() => _ae.map((F) => ({
     id: F.key,
     key: F.key,
     label: F.label,
@@ -46157,7 +46157,7 @@ function Aae(e) {
     ...F,
     previewId: F.id || `chat-preset-section-${Y}`,
     previewLabel: F.label || F.source || `提示词 ${Y + 1}`,
-    previewPlacement: F.source === "promptManager" ? F.marker ? "酒馆标记" : "酒馆顺序" : _ae[F.placement || "beforeHistory"] || F.placement || "历史前",
+    previewPlacement: F.source === "promptManager" ? F.marker ? "酒馆标记" : "酒馆顺序" : bae[F.placement || "beforeHistory"] || F.placement || "历史前",
     sectionIndex: Y,
     chars: String(F.content || "").length
   })).filter((F) => (F.content || F.marker) && F.enabled !== !1)), _m = le(() => wd.value.reduce((F, Y) => F + Y.chars, 0));
@@ -46338,7 +46338,7 @@ function Aae(e) {
         limit: B.value
       } });
       if (String(m.value || "").trim() !== _e) return;
-      P.value = Sae(Ae.result || Ae), D.value = "";
+      P.value = Tae(Ae.result || Ae), D.value = "";
     } catch (Ae) {
       if (String(m.value || "").trim() !== _e) return;
       P.value = null, D.value = Ae instanceof Error ? Ae.message : String(Ae || "预览读取失败");
@@ -46521,7 +46521,7 @@ function Aae(e) {
     _e !== Y && fs({ loadBatchSize: _e });
   }
   function Bn(F) {
-    const Y = Eae(F);
+    const Y = Cae(F);
     Xe.value = Y.users, it.value = Y.currentUserId;
   }
   async function Ad() {
@@ -46757,7 +46757,7 @@ function Aae(e) {
   }
   function Eo() {
     const F = r.value;
-    F && (Le || (Le = mae({
+    F && (Le || (Le = gae({
       state: ce,
       render: Eo,
       describeError: e.describeError,
@@ -46766,7 +46766,7 @@ function Aae(e) {
       },
       saveConfig: Rd,
       getRuntimeSummaryText: () => At.value
-    })), ce.configSave = s.value, F.innerHTML = vae({
+    })), ce.configSave = s.value, F.innerHTML = yae({
       configSave: s.value,
       runtimeText: At.value,
       inlineToastText: o.value,
@@ -46986,10 +46986,10 @@ function Aae(e) {
     syncWorldbooksFromHost: da
   };
 }
-var kae = { class: "xb-os-stage" }, Iae = { class: "character-worldbook-picker" }, xae = {
+var Iae = { class: "xb-os-stage" }, xae = { class: "character-worldbook-picker" }, Mae = {
   key: 0,
   class: "worldbook-picker-status"
-}, Mae = { class: "worldbook-picker-list" }, Pae = ["disabled", "onClick"], Rae = "xb-tavern-app", Nae = "xb-tavern-host", ZA = 5e3, jA = 15e3, Uf = 48, ek = 6, $ae = 12, Dae = 12, Lae = 36, tk = 48, xv = 24, nk = 480, Oae = 200, rk = 1e9, sk = "LittleWhiteBox_Tavern_theme", Fae = 1e3 * 60 * 20, Bae = "配图已生成", Uae = /* @__PURE__ */ jt({
+}, Pae = { class: "worldbook-picker-list" }, Rae = ["disabled", "onClick"], Nae = "xb-tavern-app", $ae = "xb-tavern-host", ZA = 5e3, jA = 15e3, Uf = 48, ek = 6, Dae = 12, Lae = 12, Oae = 36, tk = 48, xv = 24, nk = 480, Fae = 200, rk = 1e9, sk = "LittleWhiteBox_Tavern_theme", Bae = 1e3 * 60 * 20, Uae = "配图已生成", qae = /* @__PURE__ */ jt({
   __name: "App",
   setup(e) {
     const t = /* @__PURE__ */ ae({}), n = /* @__PURE__ */ ae({}), r = /* @__PURE__ */ ae({}), s = /* @__PURE__ */ ae(Va({})), o = le(() => Do(s.value.hiddenOutsideCount)), i = le(() => tb(s.value.loadBatchSize)), a = /* @__PURE__ */ ae({}), l = /* @__PURE__ */ ae("15px"), u = /* @__PURE__ */ ae("23px"), d = /* @__PURE__ */ ae([]), h = /* @__PURE__ */ ae(""), p = /* @__PURE__ */ ae(""), _ = /* @__PURE__ */ ae(0), w = /* @__PURE__ */ ae(""), T = /* @__PURE__ */ ae(""), C = /* @__PURE__ */ ae(null), M = /* @__PURE__ */ ae(!1), k = /* @__PURE__ */ ae(""), R = /* @__PURE__ */ ae(!1), L = /* @__PURE__ */ ae([]), m = /* @__PURE__ */ ae(0), b = /* @__PURE__ */ ae(""), y = /* @__PURE__ */ ae("等待读取角色与会话"), E = /* @__PURE__ */ ae(""), I = /* @__PURE__ */ ae("raw"), x = /* @__PURE__ */ ae(""), P = /* @__PURE__ */ ae([]), D = /* @__PURE__ */ ae(""), V = /* @__PURE__ */ ae(""), J = /* @__PURE__ */ ae(""), K = /* @__PURE__ */ ae(""), Z = /* @__PURE__ */ ae(!1), O = /* @__PURE__ */ ae(!1), X = /* @__PURE__ */ ae({
@@ -47029,7 +47029,7 @@ var kae = { class: "xb-os-stage" }, Iae = { class: "character-worldbook-picker" 
     function Ie(v) {
       return Array.isArray(v) ? v.map((A) => String(A || "").trim()).filter(Boolean) : [];
     }
-    const Te = le(() => B.value.find((v) => v.id === N.value) || null), ye = le(() => rr(Te.value?.state || {})), Ze = le(() => Ur(ye.value.contract)), De = le(() => !!(Te.value && String(Te.value.characterId || "").trim())), ie = /* @__PURE__ */ ae(gn()), Je = /* @__PURE__ */ ae(Cae()), kt = /* @__PURE__ */ ae(Nr()), dt = /* @__PURE__ */ ae("chat"), li = /* @__PURE__ */ ae("balanced"), Ul = /* @__PURE__ */ ae("memory"), ql = /* @__PURE__ */ ae(null), Hl = /* @__PURE__ */ ae(null), ui = /* @__PURE__ */ ae(null), qt = B0({
+    const Te = le(() => B.value.find((v) => v.id === N.value) || null), ye = le(() => rr(Te.value?.state || {})), Ze = le(() => Ur(ye.value.contract)), De = le(() => !!(Te.value && String(Te.value.characterId || "").trim())), ie = /* @__PURE__ */ ae(gn()), Je = /* @__PURE__ */ ae(Aae()), kt = /* @__PURE__ */ ae(Nr()), dt = /* @__PURE__ */ ae("chat"), li = /* @__PURE__ */ ae("balanced"), Ul = /* @__PURE__ */ ae("memory"), ql = /* @__PURE__ */ ae(null), Hl = /* @__PURE__ */ ae(null), ui = /* @__PURE__ */ ae(null), qt = B0({
       totalItems: () => Ae.value.length,
       defaultLimit: o,
       loadBatchSize: i
@@ -47052,7 +47052,7 @@ var kae = { class: "xb-os-stage" }, Iae = { class: "character-worldbook-picker" 
     const pa = le(() => ({
       ...t.value,
       history: N.value ? vd(H.value) : t.value.history
-    })), { activeAssistantPreset: ma, activeChatPreset: Bn, applyHostChatPreset: Ad, handleApiConfigSaved: Sm, loadTavernUsers: Tm, openSettingsWorkspace: Em, openWorldbookWorkspace: Ql, refreshPresets: Cm, refreshRegexFromHost: kd, renderApiSettingsPanel: ga, selectSettingsWorkspace: nS, settingsContext: Am, syncApiSettingsConfigFromAgentConfig: Id, syncChatPresetFromHost: km, syncWorldbooksFromHost: Im } = Aae({
+    })), { activeAssistantPreset: ma, activeChatPreset: Bn, applyHostChatPreset: Ad, handleApiConfigSaved: Sm, loadTavernUsers: Tm, openSettingsWorkspace: Em, openWorldbookWorkspace: Ql, refreshPresets: Cm, refreshRegexFromHost: kd, renderApiSettingsPanel: ga, selectSettingsWorkspace: nS, settingsContext: Am, syncApiSettingsConfigFromAgentConfig: Id, syncChatPresetFromHost: km, syncWorldbooksFromHost: Im } = kae({
       activeView: ie,
       activeSettingsWorkspace: Je,
       agentConfig: r,
@@ -47186,7 +47186,7 @@ var kae = { class: "xb-os-stage" }, Iae = { class: "character-worldbook-picker" 
       return v?.error ? `${v.sessionId}:${v.order}:${v.content || ""}` : "";
     }), { archivedManagerRuns: Fm, currentManagerWorkRun: UN, formatRunActivityLine: qN, formatRunIssueLine: HN, formatRunInputLine: GN, formatRunMapLine: WN, formatRunMemoryLine: VN, formatRunModelLine: KN, hiddenManagerRunCount: zN, isManagerRunLive: JN, managerBusy: rS, managerRunTone: YN, managerStatusClock: XN, managerStatusLabel: QN, managerToolStatusLabel: ZN, managerToolTone: jN, managerToolTraceItems: e$, toolTraceSummary: t$ } = Qte({
       managerRuns: ke,
-      visibleRunLimit: Dae
+      visibleRunLimit: Lae
     }), sS = le(() => {
       const v = String(Te.value?.characterId || pa.value.character?.id || "").trim();
       return v ? B.value.filter((A) => String(A.characterId || "").trim() === v) : B.value;
@@ -47261,7 +47261,7 @@ var kae = { class: "xb-os-stage" }, Iae = { class: "character-worldbook-picker" 
       return Cd.set(v, $), $;
     }
     function uS(v = "") {
-      const A = v === "turns" ? Lae : xv, $ = Number(Mt.value[v]);
+      const A = v === "turns" ? Oae : xv, $ = Number(Mt.value[v]);
       return Number.isFinite($) && $ > 0 ? Math.floor($) : A;
     }
     function l$(v = "") {
@@ -47394,7 +47394,7 @@ var kae = { class: "xb-os-stage" }, Iae = { class: "character-worldbook-picker" 
     function hs(v, A = {}) {
       const $ = S$(A);
       window.parent?.postMessage({
-        source: Rae,
+        source: Nae,
         type: v,
         payload: $
       }, window.location.origin);
@@ -47727,7 +47727,7 @@ ${Ne}`), Ye.length > 0 && !Ye.startsWith(`
       const z = window.setTimeout(() => {
         const te = So.get(v);
         te && (So.delete(v), M$(v, te.input));
-      }, Oae);
+      }, Fae);
       So.set(v, {
         timer: z,
         key: A.key,
@@ -48004,7 +48004,7 @@ ${ve}`), console.error("[小白酒馆] host request failed", {
     function CS(v) {
       if (v.origin !== window.location.origin) return;
       const A = v.data || {};
-      if (A.source === Nae) {
+      if (A.source === $ae) {
         if (A.type === "xb-tavern:host-result") {
           L$(A.payload || {});
           return;
@@ -48587,7 +48587,7 @@ ${ve}`), console.error("[小白酒馆] host request failed", {
           role: v.role,
           characterName: Te.value?.characterName || Ls.value.name || ""
         } }, {
-          timeoutMs: Fae,
+          timeoutMs: Bae,
           signal: $.signal
         });
         if ($.signal.aborted) {
@@ -48601,7 +48601,7 @@ ${ve}`), console.error("[小白酒馆] host request failed", {
           return;
         }
         const xe = await yy(v.sessionId, v.order, { content: ve.content });
-        xe && N.value === v.sessionId && (H.value = await Fr(v.sessionId)), _i(v, `${Bae}${ve.appended ? `，${ve.appended} 张追加到末尾` : ""}`, "success", 2600), cr(xe || v, "draw", !!xe), Yt(fi);
+        xe && N.value === v.sessionId && (H.value = await Fr(v.sessionId)), _i(v, `${Uae}${ve.appended ? `，${ve.appended} 张追加到末尾` : ""}`, "success", 2600), cr(xe || v, "draw", !!xe), Yt(fi);
       } catch (z) {
         const te = _a(z);
         /abort|已取消|request_aborted/i.test(te) ? _i(v, "配图已取消", "error", 1800) : _i(v, `配图失败：${te}`, "error", 4200), cr(v, "draw", !1);
@@ -49256,7 +49256,7 @@ ${ve}`), console.error("[小白酒馆] host request failed", {
         canEditMessage: og,
         canRerunMessage: DS,
         canSendMessage: b$,
-        CHAT_SIDEBAR_BATCH_SIZE: $ae,
+        CHAT_SIDEBAR_BATCH_SIZE: Dae,
         chatAutoScroll: Wl,
         chatFocus: dt,
         chatLayout: li,
@@ -49455,7 +49455,7 @@ ${ve}`), console.error("[小白酒馆] host request failed", {
       }]),
       style: Tr(da.value)
     }, [
-      g("section", kae, [
+      g("section", Iae, [
         ie.value === "home" ? (U(), Ys(oQ, {
           key: 0,
           dark: kt.value,
@@ -49531,7 +49531,7 @@ ${ve}`), console.error("[小白酒馆] host request failed", {
           "hidden-count"
         ])) : be("", !0),
         ie.value === "chat" ? (U(), Ys(Yte, { key: 3 })) : be("", !0),
-        ie.value === "settings" ? (U(), Ys(nae, { key: 4 })) : be("", !0)
+        ie.value === "settings" ? (U(), Ys(rae, { key: 4 })) : be("", !0)
       ]),
       ca.value ? (U(), Ys(pne, {
         key: 0,
@@ -49559,22 +49559,22 @@ ${ve}`), console.error("[小白酒馆] host request failed", {
         key: 1,
         class: "character-worldbook-picker-overlay",
         onClick: Pn(IS, ["self"])
-      }, [g("section", Iae, [
+      }, [g("section", xae, [
         g("header", null, [A[11] || (A[11] = g("strong", null, "选择角色世界书", -1)), g("button", {
           type: "button",
           class: "worldbook-picker-close",
           "aria-label": "关闭",
           onClick: IS
         }, " × ")]),
-        k.value ? (U(), q("div", xae, Q(k.value), 1)) : be("", !0),
-        g("div", Mae, [(U(!0), q(Ue, null, lt(L.value, ($) => (U(), q("button", {
+        k.value ? (U(), q("div", Mae, Q(k.value), 1)) : be("", !0),
+        g("div", Pae, [(U(!0), q(Ue, null, lt(L.value, ($) => (U(), q("button", {
           key: $,
           type: "button",
           disabled: M.value,
           onClick: (z) => H$($)
-        }, Q($), 9, Pae))), 128))])
+        }, Q($), 9, Rae))), 128))])
       ])])) : be("", !0)
     ], 6));
   }
-}), qae = Uae;
-IF(qae).mount("#app");
+}), Hae = qae;
+IF(Hae).mount("#app");

@@ -99,9 +99,11 @@ test('tavern mobile worldbook entry rows stay compact', () => {
     assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-preview summary \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto auto 12px;/);
     assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-editor-head \{[\s\S]*display: contents;/);
     assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-editor-actions \{[\s\S]*position: sticky;[\s\S]*bottom: calc\(8px \+ env\(safe-area-inset-bottom, 0px\)\);[\s\S]*order: 100;[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\);/);
-    assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-core-grid \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(72px, 0\.75fr\) minmax\(60px, 0\.55fr\);[\s\S]*align-items: stretch;/);
+    assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-active-toggle \{[\s\S]*grid-template-rows: 14px var\(--worldbook-entry-control-height\);[\s\S]*padding-top: 0;/);
+    assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-core-grid \{[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[\s\S]*align-items: stretch;/);
     assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-title-row \{[\s\S]*order: 1;[\s\S]*grid-column: 1 \/ -1;/);
     assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-position-field \{[\s\S]*order: 2;[\s\S]*\.worldbook-entry-state-field \{[\s\S]*order: 3;[\s\S]*\.worldbook-entry-depth-field \{[\s\S]*order: 4;/);
+    assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-order-field \{[\s\S]*order: 5;[\s\S]*grid-column: 1;[\s\S]*\.worldbook-entry-probability-field \{[\s\S]*order: 6;[\s\S]*grid-column: 2;[\s\S]*\.worldbook-entry-scan-depth-field \{[\s\S]*order: 7;[\s\S]*grid-column: 3;/);
     assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-core-grid > label,[\s\S]*\.worldbook-entry-title-row > label:not\(\.worldbook-entry-active-toggle\),[\s\S]*\.worldbook-entry-key-grid > label,[\s\S]*\.worldbook-entry-key-grid \.worldbook-entry-logic-field,[\s\S]*\.worldbook-entry-advanced-grid > label \{[\s\S]*grid-template-rows: 14px var\(--worldbook-entry-control-height\);[\s\S]*align-self: stretch;/);
     assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-core-grid > label > span,[\s\S]*\.worldbook-entry-title-row > label:not\(\.worldbook-entry-active-toggle\) > span,[\s\S]*\.worldbook-entry-key-grid > label > span,[\s\S]*\.worldbook-entry-key-grid \.worldbook-entry-logic-field > span,[\s\S]*\.worldbook-entry-advanced-grid > label > span \{[\s\S]*height: 14px;[\s\S]*white-space: nowrap;/);
     assert.match(mobileCss, /\.settings-layout\.is-worldbooks-workspace \.worldbook-entry-preview summary \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto auto 12px;/);
@@ -113,16 +115,17 @@ test('tavern desktop worldbook editor keeps dense readable rows', () => {
     const worldbookSource = readRepoFile('modules/tavern/app-src/components/settings/TavernWorldbooksSettingsPanel.vue');
     const worldbookCss = readRepoFile('modules/tavern/app-src/styles/settings/worldbooks.css');
 
-    assert.match(worldbookSource, /class="worldbook-entry-core-grid"[\s\S]*>条目名<[\s\S]*>状态<[\s\S]*>注入位置<[\s\S]*>触发概率</);
+    assert.match(worldbookSource, /class="worldbook-entry-core-grid"[\s\S]*>条目名<[\s\S]*>状态<[\s\S]*>注入位置<[\s\S]*>触发概率<[\s\S]*>扫描深度<[\s\S]*<\/div>\s*<div class="worldbook-entry-key-grid">/);
     assert.match(worldbookSource, />关键词<[\s\S]*class="worldbook-entry-filter-controls"[\s\S]*>过滤逻辑<[\s\S]*<option value="off">[\s\S]*关闭[\s\S]*>可选过滤</);
     assert.match(worldbookSource, /function worldbookFilterLogicValue[\s\S]*return draft\.selective \? String\(Number\(draft\.selectiveLogic\) \|\| 0\) : 'off';/);
     assert.match(worldbookSource, /function updateWorldbookFilterLogic[\s\S]*value === 'off'[\s\S]*selective: false[\s\S]*selective: true/);
     assert.doesNotMatch(worldbookSource, /worldbook-entry-inline-check|worldbook-entry-filter-toggle|>启用过滤</);
     assert.doesNotMatch(worldbookSource, />Selective</);
     assert.doesNotMatch(worldbookSource, />Outlet Name<|>Scan Depth<|>Case-Sensitive<|>Whole Words<|>Group Scoring<|>Automation ID<|>Inclusion Group<|>Group Weight<|>Sticky<|>Cooldown<|>Delay<|>Use Probability<|>Ignore Budget<|>Exclude Recursion<|>Prevent Recursion<|>Prioritize Group<|>Delay Until Recursion<|>Recursion Level<|>Generation Triggers</);
-    assert.match(worldbookSource, />注入出口<[\s\S]*>扫描深度<[\s\S]*>区分大小写<[\s\S]*>全词匹配<[\s\S]*>分组评分/);
+    assert.match(worldbookSource, />注入出口<[\s\S]*>区分大小写<[\s\S]*>全词匹配<[\s\S]*>分组评分/);
+    assert.doesNotMatch(worldbookSource, />注入出口<[\s\S]*>扫描深度<[\s\S]*>区分大小写/);
     assert.match(worldbookSource, />跟随全局<[\s\S]*>启用概率<[\s\S]*>忽略预算<[\s\S]*>生成触发</);
-    assert.match(worldbookCss, /\.worldbook-entry-core-grid \{[\s\S]*grid-template-columns:[\s\S]*minmax\(180px, 240px\)[\s\S]*repeat\(3, minmax\(78px, 0\.42fr\)\);/);
+    assert.match(worldbookCss, /\.worldbook-entry-core-grid \{[\s\S]*grid-template-columns:[\s\S]*minmax\(180px, 220px\)[\s\S]*repeat\(4, minmax\(72px, 0\.38fr\)\);/);
     assert.match(worldbookCss, /\.worldbook-entry-key-grid \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(132px, 170px\) minmax\(0, 1fr\);/);
     assert.match(worldbookCss, /\.worldbook-entry-filter-controls \{[\s\S]*display: contents;/);
     assert.match(worldbookCss, /\.worldbook-entry-logic-field \{[\s\S]*align-self: end;[\s\S]*width: 100%;/);

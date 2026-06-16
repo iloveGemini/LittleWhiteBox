@@ -500,10 +500,10 @@
 .worldbook-entry-core-grid {
     display: grid;
     grid-template-columns:
-        minmax(180px, 240px)
-        minmax(108px, 0.6fr)
-        minmax(128px, 0.72fr)
-        repeat(3, minmax(78px, 0.42fr));
+        minmax(180px, 220px)
+        minmax(96px, 0.5fr)
+        minmax(116px, 0.62fr)
+        repeat(4, minmax(72px, 0.38fr));
     align-items: end;
     gap: 10px;
 }
@@ -848,12 +848,35 @@
     }
 
     .worldbook-entry-active-toggle {
-        min-height: 34px;
-        padding-top: 14px;
+        display: grid;
+        grid-template-rows: 14px var(--worldbook-entry-control-height);
+        align-items: start;
+        gap: 4px;
+        min-height: calc(14px + 4px + var(--worldbook-entry-control-height));
+        padding-top: 0;
+    }
+
+    .worldbook-entry-active-toggle > span {
+        grid-row: 1;
+        min-width: 0;
+        height: 14px;
+        color: var(--xb-text-muted);
+        font-size: 11px;
+        line-height: 14px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .worldbook-entry-active-toggle > input {
+        grid-row: 2;
+        align-self: center;
+        width: 18px;
+        height: 18px;
     }
 
     .worldbook-entry-core-grid {
-        grid-template-columns: minmax(0, 1fr) minmax(72px, 0.75fr) minmax(60px, 0.55fr);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         align-items: stretch;
         gap: 8px;
     }
@@ -891,7 +914,12 @@
 
     .worldbook-entry-probability-field {
         order: 6;
-        grid-column: 2 / -1;
+        grid-column: 2;
+    }
+
+    .worldbook-entry-scan-depth-field {
+        order: 7;
+        grid-column: 3;
     }
 
     .worldbook-entry-key-grid,
