@@ -72,9 +72,11 @@ test('tavern worldbook bridge edits named entries through native save boundary',
     assert.match(hostSource, /const keysecondary = normalizeStringList\(draft\.keysecondary\);[\s\S]*entry\.secondary_keys = keysecondary\.length \? keysecondary : normalizeStringList\(draft\.secondary_keys \?\? draft\.secondaryKeys\)/);
     assert.match(hostSource, /await saveWorldInfo\(name, data, true\)/);
     assert.match(hostSource, /export async function getTavernWorldbookRuntime/);
-    assert.match(hostSource, /let tavernWorldbookRuntimeQueue: Promise<void> = Promise\.resolve\(\);/);
-    assert.match(hostSource, /function runTavernWorldbookRuntimeExclusive/);
-    assert.match(hostSource, /return runTavernWorldbookRuntimeExclusive\(async \(\) => \{[\s\S]*await checkWorldInfo\(chatLines, maxContext, false, globalScanData\)[\s\S]*restoreRuntimeState\(snapshot\);/);
+    assert.match(hostSource, /let tavernWorldbookStateQueue: Promise<void> = Promise\.resolve\(\);/);
+    assert.match(hostSource, /function runTavernWorldbookStateExclusive/);
+    assert.match(hostSource, /return runTavernWorldbookStateExclusive\(async \(\) => \{[\s\S]*await checkWorldInfo\(chatLines, maxContext, false, globalScanData\)[\s\S]*restoreRuntimeState\(snapshot\);/);
+    assert.match(hostSource, /export async function saveTavernWorldbookEntry[\s\S]*return runTavernWorldbookStateExclusive\(async \(\) => \{/);
+    assert.match(hostSource, /export async function getTavernGlobalWorldbooks[\s\S]*return runTavernWorldbookStateExclusive\(\(\) => readGlobalWorldbooksState\(\)\);/);
     assert.match(hostSource, /characterDepthPrompt: normalizeText\([\s\S]*characterRecord\.characterDepthPrompt[\s\S]*depthPrompt\.prompt[\s\S]*legacyDepthPrompt\.prompt/);
     assert.doesNotMatch(hostSource, /openWorldInfoEditor/);
     assert.doesNotMatch(hostSource, /createWorldInfoEntry/);
@@ -163,7 +165,8 @@ test('tavern character and global worldbook actions stay on native ST boundaries
     assert.match(hostSource, /const convertedBook = convertCharacterBook\(book\);[\s\S]*await saveWorldInfo\(name, convertedBook, true\);[\s\S]*await updateWorldInfoList\(\);[\s\S]*const boundState = await bindCharacterWorldbookThroughEditor\(state\.characterId, name\);/);
     assert.match(hostSource, /if \(!name\) \{[\s\S]*throw new Error\('缺少要绑定的世界书名称。'\);[\s\S]*if \(!state\.worldbookOptions\.includes\(name\)\)/);
     assert.match(hostSource, /await prepareCharacterEditorForWorldbookBinding\(characterId\);[\s\S]*await charUpdatePrimaryWorld\(name\);/);
-    assert.match(hostSource, /return bindCharacterWorldbookThroughEditor\(characterId, name\);/);
+    assert.match(hostSource, /export async function bindTavernCharacterWorldbook[\s\S]*return runTavernWorldbookStateExclusive\(async \(\) => \{[\s\S]*return bindCharacterWorldbookThroughEditor\(characterId, name\);/);
+    assert.match(hostSource, /export async function activateTavernCharacterWorldbook[\s\S]*return runTavernWorldbookStateExclusive\(async \(\) => \{[\s\S]*const boundState = await bindCharacterWorldbookThroughEditor/);
     assert.match(hostSource, /updateWorldInfoSettings\(settings, selected\);[\s\S]*await updateWorldInfoList\(\);/);
     assert.match(tavernSource, /case 'xb-tavern:get-character-worldbook-state':/);
     assert.match(tavernSource, /case 'xb-tavern:activate-character-worldbook':/);

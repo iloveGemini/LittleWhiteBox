@@ -252,8 +252,8 @@ test('tavern worldbook host bridge exposes named entry edit endpoints and native
     assert.match(hostSource, /sessionMeta\.worldbookNames/);
     assert.match(hostSource, /function isNativeRuntimeSource/);
     assert.match(hostSource, /sourceType\) !== 'embedded'/);
-    assert.match(hostSource, /runTavernWorldbookRuntimeExclusive\(async \(\) => \{[\s\S]*await checkWorldInfo\(chatLines, maxContext, false, globalScanData\)/);
-    assert.match(hostSource, /tavernWorldbookRuntimeQueue = new Promise<void>/);
+    assert.match(hostSource, /runTavernWorldbookStateExclusive\(async \(\) => \{[\s\S]*await checkWorldInfo\(chatLines, maxContext, false, globalScanData\)/);
+    assert.match(hostSource, /tavernWorldbookStateQueue = new Promise<void>/);
     assert.match(hostSource, /worldInfoBefore:/);
     assert.match(hostSource, /worldInfoAfter:/);
     assert.match(hostSource, /worldInfoExamples:/);

@@ -688,12 +688,12 @@ function restoreRuntimeState(snapshot) {
     eventSource.emit = snapshot.emit;
   }
 }
-let tavernWorldbookRuntimeQueue = Promise.resolve();
-async function runTavernWorldbookRuntimeExclusive(task) {
-  const previous = tavernWorldbookRuntimeQueue;
+let tavernWorldbookStateQueue = Promise.resolve();
+async function runTavernWorldbookStateExclusive(task) {
+  const previous = tavernWorldbookStateQueue;
   let release = () => {
   };
-  tavernWorldbookRuntimeQueue = new Promise((resolve) => {
+  tavernWorldbookStateQueue = new Promise((resolve) => {
     release = resolve;
   });
   await previous;
@@ -924,175 +924,191 @@ async function ensureWorldbookNames() {
   return Array.isArray(world_names) ? [...world_names] : [];
 }
 async function listTavernWorldbookSources(input = {}) {
-  const payload = asRecord(input);
-  const context = asRecord(payload.context);
-  const requestedContext = Object.keys(context).length ? context : void 0;
-  const names = await ensureWorldbookNames();
-  const sourceContext = requestedContext || {};
-  const globalNameSet = new Set(collectGlobalWorldbookNames(sourceContext));
-  return {
-    books: names.map((name) => ({
-      name,
-      globalActive: globalNameSet.has(name)
-    }))
-  };
+  return runTavernWorldbookStateExclusive(async () => {
+    const payload = asRecord(input);
+    const context = asRecord(payload.context);
+    const requestedContext = Object.keys(context).length ? context : void 0;
+    const names = await ensureWorldbookNames();
+    const sourceContext = requestedContext || {};
+    const globalNameSet = new Set(collectGlobalWorldbookNames(sourceContext));
+    return {
+      books: names.map((name) => ({
+        name,
+        globalActive: globalNameSet.has(name)
+      }))
+    };
+  });
 }
 async function getTavernWorldbookPreview(input = {}) {
-  const payload = asRecord(input);
-  const name = normalizeText(payload.name);
-  if (!name) {
-    throw new Error("\u7F3A\u5C11\u4E16\u754C\u4E66\u540D\u79F0\u3002");
-  }
-  const names = await ensureWorldbookNames();
-  if (!names.includes(name)) {
-    throw new Error(`\u627E\u4E0D\u5230\u4E16\u754C\u4E66\uFF1A${name}`);
-  }
-  const data = await loadWorldInfo(name);
-  const entries = readWorldbookEntries(data);
-  const limit = Math.max(1, Math.floor(Number(payload.limit) || 24));
-  const previewEntries = entries.map((entry, index) => {
-    const keys = normalizeStringList(entry.key);
-    const secondaryKeys = normalizeStringList(entry.keysecondary || entry.secondary_keys);
-    const content = normalizeText(entry.content);
+  return runTavernWorldbookStateExclusive(async () => {
+    const payload = asRecord(input);
+    const name = normalizeText(payload.name);
+    if (!name) {
+      throw new Error("\u7F3A\u5C11\u4E16\u754C\u4E66\u540D\u79F0\u3002");
+    }
+    const names = await ensureWorldbookNames();
+    if (!names.includes(name)) {
+      throw new Error(`\u627E\u4E0D\u5230\u4E16\u754C\u4E66\uFF1A${name}`);
+    }
+    const data = await loadWorldInfo(name);
+    const entries = readWorldbookEntries(data);
+    const limit = Math.max(1, Math.floor(Number(payload.limit) || 24));
+    const previewEntries = entries.map((entry, index) => {
+      const keys = normalizeStringList(entry.key);
+      const secondaryKeys = normalizeStringList(entry.keysecondary || entry.secondary_keys);
+      const content = normalizeText(entry.content);
+      return {
+        uid: normalizeIdText(entry.uid ?? entry.id ?? index),
+        name: previewEntryName(entry, index),
+        keys,
+        secondaryKeys,
+        contentPreview: content,
+        enabled: entry.disable !== true,
+        constant: entry.constant === true,
+        vectorized: entryExtensionValue(entry, "vectorized", "vectorized") === true,
+        order: Number.isFinite(Number(entry.order)) ? Number(entry.order) : 100,
+        position: normalizeWorldbookPosition(entryExtensionValue(entry, "position", "position")),
+        role: Math.floor(normalizeFiniteNumber(entryExtensionValue(entry, "role", "role"), 0)),
+        depth: normalizeNullableNumber(entryExtensionValue(entry, "depth", "depth")),
+        probability: normalizeNullableNumber(entryExtensionValue(entry, "probability", "probability"))
+      };
+    }).sort((a, b) => Number(b.order) - Number(a.order)).slice(0, limit);
     return {
-      uid: normalizeIdText(entry.uid ?? entry.id ?? index),
-      name: previewEntryName(entry, index),
-      keys,
-      secondaryKeys,
-      contentPreview: content,
-      enabled: entry.disable !== true,
-      constant: entry.constant === true,
-      vectorized: entryExtensionValue(entry, "vectorized", "vectorized") === true,
-      order: Number.isFinite(Number(entry.order)) ? Number(entry.order) : 100,
-      position: normalizeWorldbookPosition(entryExtensionValue(entry, "position", "position")),
-      role: Math.floor(normalizeFiniteNumber(entryExtensionValue(entry, "role", "role"), 0)),
-      depth: normalizeNullableNumber(entryExtensionValue(entry, "depth", "depth")),
-      probability: normalizeNullableNumber(entryExtensionValue(entry, "probability", "probability"))
+      name,
+      entryCount: entries.length,
+      enabledCount: entries.filter((entry) => entry.disable !== true).length,
+      constantCount: entries.filter((entry) => entry.constant === true).length,
+      disabledCount: entries.filter((entry) => entry.disable === true).length,
+      keywordCount: entries.reduce((sum, entry) => sum + normalizeStringList(entry.key).length + normalizeStringList(entry.keysecondary || entry.secondary_keys).length, 0),
+      totalChars: entries.reduce((sum, entry) => sum + normalizeText(entry.content).length, 0),
+      entries: previewEntries
     };
-  }).sort((a, b) => Number(b.order) - Number(a.order)).slice(0, limit);
-  return {
-    name,
-    entryCount: entries.length,
-    enabledCount: entries.filter((entry) => entry.disable !== true).length,
-    constantCount: entries.filter((entry) => entry.constant === true).length,
-    disabledCount: entries.filter((entry) => entry.disable === true).length,
-    keywordCount: entries.reduce((sum, entry) => sum + normalizeStringList(entry.key).length + normalizeStringList(entry.keysecondary || entry.secondary_keys).length, 0),
-    totalChars: entries.reduce((sum, entry) => sum + normalizeText(entry.content).length, 0),
-    entries: previewEntries
-  };
+  });
 }
 async function getTavernWorldbookEntry(input = {}) {
-  const payload = asRecord(input);
-  const name = normalizeText(payload.name || payload.worldbookName);
-  const uid = normalizeIdText(payload.uid);
-  if (!name) {
-    throw new Error("\u7F3A\u5C11\u4E16\u754C\u4E66\u540D\u79F0\u3002");
-  }
-  if (!uid) {
-    throw new Error("\u7F3A\u5C11\u4E16\u754C\u4E66\u6761\u76EE UID\u3002");
-  }
-  const names = await ensureWorldbookNames();
-  if (!names.includes(name)) {
-    throw new Error(`\u627E\u4E0D\u5230\u4E16\u754C\u4E66\uFF1A${name}`);
-  }
-  const data = await loadWorldInfo(name);
-  const slot = findWorldbookEntrySlot(data, uid);
-  if (!slot) {
-    throw new Error(`\u627E\u4E0D\u5230\u4E16\u754C\u4E66\u6761\u76EE\uFF1A${uid}`);
-  }
-  return buildWorldbookEntryDraft(name, slot);
+  return runTavernWorldbookStateExclusive(async () => {
+    const payload = asRecord(input);
+    const name = normalizeText(payload.name || payload.worldbookName);
+    const uid = normalizeIdText(payload.uid);
+    if (!name) {
+      throw new Error("\u7F3A\u5C11\u4E16\u754C\u4E66\u540D\u79F0\u3002");
+    }
+    if (!uid) {
+      throw new Error("\u7F3A\u5C11\u4E16\u754C\u4E66\u6761\u76EE UID\u3002");
+    }
+    const names = await ensureWorldbookNames();
+    if (!names.includes(name)) {
+      throw new Error(`\u627E\u4E0D\u5230\u4E16\u754C\u4E66\uFF1A${name}`);
+    }
+    const data = await loadWorldInfo(name);
+    const slot = findWorldbookEntrySlot(data, uid);
+    if (!slot) {
+      throw new Error(`\u627E\u4E0D\u5230\u4E16\u754C\u4E66\u6761\u76EE\uFF1A${uid}`);
+    }
+    return buildWorldbookEntryDraft(name, slot);
+  });
 }
 async function saveTavernWorldbookEntry(input = {}) {
-  const payload = asRecord(input);
-  const name = normalizeText(payload.name || payload.worldbookName);
-  const uid = normalizeIdText(payload.uid);
-  const entryHash = normalizeText(payload.entryHash || payload.revision);
-  const draft = asRecord(payload.draft || payload.entry || payload);
-  if (!name) {
-    throw new Error("\u7F3A\u5C11\u4E16\u754C\u4E66\u540D\u79F0\u3002");
-  }
-  if (!uid) {
-    throw new Error("\u7F3A\u5C11\u4E16\u754C\u4E66\u6761\u76EE UID\u3002");
-  }
-  if (!entryHash) {
-    throw new Error("\u7F3A\u5C11\u4E16\u754C\u4E66\u6761\u76EE\u7248\u672C\uFF0C\u8BF7\u91CD\u65B0\u8BFB\u53D6\u540E\u518D\u4FDD\u5B58\u3002");
-  }
-  const names = await ensureWorldbookNames();
-  if (!names.includes(name)) {
-    throw new Error(`\u627E\u4E0D\u5230\u4E16\u754C\u4E66\uFF1A${name}`);
-  }
-  const data = await loadWorldInfo(name);
-  const slot = findWorldbookEntrySlot(data, uid);
-  if (!slot) {
-    throw new Error(`\u627E\u4E0D\u5230\u4E16\u754C\u4E66\u6761\u76EE\uFF1A${uid}`);
-  }
-  const currentHash = buildWorldbookEntryHash(slot.entry);
-  if (currentHash !== entryHash) {
-    throw new Error("\u8FD9\u4E2A\u4E16\u754C\u4E66\u6761\u76EE\u5DF2\u7ECF\u5728\u9152\u9986\u91CC\u88AB\u4FEE\u6539\uFF0C\u8BF7\u91CD\u65B0\u8BFB\u53D6\u540E\u518D\u4FDD\u5B58\u3002");
-  }
-  patchWorldbookEntry(slot.entry, draft);
-  syncWorldbookOriginalDataEntry(asRecord(data), uid, slot.entry);
-  await saveWorldInfo(name, data, true);
-  await updateWorldInfoList();
-  return buildWorldbookEntryDraft(name, slot);
+  return runTavernWorldbookStateExclusive(async () => {
+    const payload = asRecord(input);
+    const name = normalizeText(payload.name || payload.worldbookName);
+    const uid = normalizeIdText(payload.uid);
+    const entryHash = normalizeText(payload.entryHash || payload.revision);
+    const draft = asRecord(payload.draft || payload.entry || payload);
+    if (!name) {
+      throw new Error("\u7F3A\u5C11\u4E16\u754C\u4E66\u540D\u79F0\u3002");
+    }
+    if (!uid) {
+      throw new Error("\u7F3A\u5C11\u4E16\u754C\u4E66\u6761\u76EE UID\u3002");
+    }
+    if (!entryHash) {
+      throw new Error("\u7F3A\u5C11\u4E16\u754C\u4E66\u6761\u76EE\u7248\u672C\uFF0C\u8BF7\u91CD\u65B0\u8BFB\u53D6\u540E\u518D\u4FDD\u5B58\u3002");
+    }
+    const names = await ensureWorldbookNames();
+    if (!names.includes(name)) {
+      throw new Error(`\u627E\u4E0D\u5230\u4E16\u754C\u4E66\uFF1A${name}`);
+    }
+    const data = await loadWorldInfo(name);
+    const slot = findWorldbookEntrySlot(data, uid);
+    if (!slot) {
+      throw new Error(`\u627E\u4E0D\u5230\u4E16\u754C\u4E66\u6761\u76EE\uFF1A${uid}`);
+    }
+    const currentHash = buildWorldbookEntryHash(slot.entry);
+    if (currentHash !== entryHash) {
+      throw new Error("\u8FD9\u4E2A\u4E16\u754C\u4E66\u6761\u76EE\u5DF2\u7ECF\u5728\u9152\u9986\u91CC\u88AB\u4FEE\u6539\uFF0C\u8BF7\u91CD\u65B0\u8BFB\u53D6\u540E\u518D\u4FDD\u5B58\u3002");
+    }
+    patchWorldbookEntry(slot.entry, draft);
+    syncWorldbookOriginalDataEntry(asRecord(data), uid, slot.entry);
+    await saveWorldInfo(name, data, true);
+    await updateWorldInfoList();
+    return buildWorldbookEntryDraft(name, slot);
+  });
 }
 async function getTavernCharacterWorldbookState(input = {}) {
-  const payload = asRecord(input);
-  return readCharacterWorldbookState(normalizeIdText(payload.characterId));
+  return runTavernWorldbookStateExclusive(async () => {
+    const payload = asRecord(input);
+    return readCharacterWorldbookState(normalizeIdText(payload.characterId));
+  });
 }
 async function activateTavernCharacterWorldbook(input = {}) {
-  const payload = asRecord(input);
-  const state = await readCharacterWorldbookState(normalizeIdText(payload.characterId));
-  if (state.boundWorldbookName && state.boundExists) {
-    return { action: "selected", name: state.boundWorldbookName, state };
-  }
-  const character = await hydrateCharacterRecordById(state.characterId);
-  const book = readCharacterBook(character);
-  if (hasCharacterBookEntries(book)) {
-    const name = characterBookName(character, book);
-    if (state.worldbookOptions.includes(name) && payload.confirmed !== true) {
-      return { action: "needs_import_confirmation", name, state };
+  return runTavernWorldbookStateExclusive(async () => {
+    const payload = asRecord(input);
+    const state = await readCharacterWorldbookState(normalizeIdText(payload.characterId));
+    if (state.boundWorldbookName && state.boundExists) {
+      return { action: "selected", name: state.boundWorldbookName, state };
     }
-    const convertedBook = convertCharacterBook(book);
-    await saveWorldInfo(name, convertedBook, true);
-    await updateWorldInfoList();
-    const boundState = await bindCharacterWorldbookThroughEditor(state.characterId, name);
+    const character = await hydrateCharacterRecordById(state.characterId);
+    const book = readCharacterBook(character);
+    if (hasCharacterBookEntries(book)) {
+      const name = characterBookName(character, book);
+      if (state.worldbookOptions.includes(name) && payload.confirmed !== true) {
+        return { action: "needs_import_confirmation", name, state };
+      }
+      const convertedBook = convertCharacterBook(book);
+      await saveWorldInfo(name, convertedBook, true);
+      await updateWorldInfoList();
+      const boundState = await bindCharacterWorldbookThroughEditor(state.characterId, name);
+      return {
+        action: "imported",
+        name,
+        state: boundState
+      };
+    }
     return {
-      action: "imported",
-      name,
-      state: boundState
+      action: "needs_selection",
+      worldbookOptions: state.worldbookOptions,
+      state
     };
-  }
-  return {
-    action: "needs_selection",
-    worldbookOptions: state.worldbookOptions,
-    state
-  };
+  });
 }
 async function bindTavernCharacterWorldbook(input = {}) {
-  const payload = asRecord(input);
-  const characterId = normalizeIdText(payload.characterId);
-  const state = await readCharacterWorldbookState(characterId);
-  const name = normalizeText(payload.name);
-  if (!name) {
-    throw new Error("\u7F3A\u5C11\u8981\u7ED1\u5B9A\u7684\u4E16\u754C\u4E66\u540D\u79F0\u3002");
-  }
-  if (!state.worldbookOptions.includes(name)) {
-    throw new Error(`\u627E\u4E0D\u5230\u4E16\u754C\u4E66\uFF1A${name}`);
-  }
-  return bindCharacterWorldbookThroughEditor(characterId, name);
+  return runTavernWorldbookStateExclusive(async () => {
+    const payload = asRecord(input);
+    const characterId = normalizeIdText(payload.characterId);
+    const state = await readCharacterWorldbookState(characterId);
+    const name = normalizeText(payload.name);
+    if (!name) {
+      throw new Error("\u7F3A\u5C11\u8981\u7ED1\u5B9A\u7684\u4E16\u754C\u4E66\u540D\u79F0\u3002");
+    }
+    if (!state.worldbookOptions.includes(name)) {
+      throw new Error(`\u627E\u4E0D\u5230\u4E16\u754C\u4E66\uFF1A${name}`);
+    }
+    return bindCharacterWorldbookThroughEditor(characterId, name);
+  });
 }
 async function getTavernGlobalWorldbooks() {
-  return readGlobalWorldbooksState();
+  return runTavernWorldbookStateExclusive(() => readGlobalWorldbooksState());
 }
 async function setTavernGlobalWorldbooks(input = {}) {
-  const payload = asRecord(input);
-  const options = await ensureWorldbookNames();
-  const selected = normalizeStringList(payload.selected).filter((name) => options.includes(name));
-  const settings = getWorldInfoSettings();
-  updateWorldInfoSettings(settings, selected);
-  await updateWorldInfoList();
-  return readGlobalWorldbooksState();
+  return runTavernWorldbookStateExclusive(async () => {
+    const payload = asRecord(input);
+    const options = await ensureWorldbookNames();
+    const selected = normalizeStringList(payload.selected).filter((name) => options.includes(name));
+    const settings = getWorldInfoSettings();
+    updateWorldInfoSettings(settings, selected);
+    await updateWorldInfoList();
+    return readGlobalWorldbooksState();
+  });
 }
 async function getTavernWorldbookRuntime(input = {}) {
   const payload = asRecord(input);
@@ -1102,7 +1118,7 @@ async function getTavernWorldbookRuntime(input = {}) {
   const globalScanData = buildGlobalScanData(payload);
   const maxContext = Math.max(1, Number(payload.maxContext) || Number(asRecord(getContext?.() || {}).maxContext) || 4096);
   const sources = collectRuntimeSources(context);
-  return runTavernWorldbookRuntimeExclusive(async () => {
+  return runTavernWorldbookStateExclusive(async () => {
     const snapshot = captureRuntimeState();
     applyRuntimeState({
       context,
