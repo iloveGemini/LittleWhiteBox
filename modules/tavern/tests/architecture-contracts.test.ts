@@ -137,7 +137,7 @@ test('tavern character and global worldbook actions stay on native ST boundaries
     assert.match(appSource, /openWorldbookWorkspace\(targetName\)/);
     assert.doesNotMatch(appSource, /action === 'opened'/);
     assert.doesNotMatch(appSource, /postToHost\('xb-tavern:close'\);[\s\S]*return;[\s\S]*action === 'imported'/);
-    assert.match(worldbookSource, /已启用的世界书（全局有效）[\s\S]*class="preset-command-bar worldbook-command-bar"[\s\S]*class="preset-source-select worldbook-source-select"/);
+    assert.match(worldbookSource, /class="worldbook-section worldbook-global-enable"[\s\S]*全局区[\s\S]*<h3>已启用的世界书<\/h3>[\s\S]*class="worldbook-section worldbook-main-section"[\s\S]*操作区[\s\S]*class="preset-command-bar worldbook-command-bar"[\s\S]*class="preset-source-select worldbook-source-select"/);
     assert.match(worldbookSource, /:disabled="globalWorldbookSaving"/);
     assert.doesNotMatch(worldbookSource, /打开酒馆编辑器/);
     assert.doesNotMatch(worldbookSource, /worldbookSourceSummary/);

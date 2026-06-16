@@ -841,9 +841,9 @@
     }
 
     .chat-scroll-helpers {
-        top: 14%;
+        top: 12%;
         right: 8px;
-        bottom: calc(var(--xb-compose-safe-space) + 14px);
+        bottom: calc(var(--xb-compose-safe-space) + 46px + env(safe-area-inset-bottom, 0px));
     }
 
     .chat-bubble {

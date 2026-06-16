@@ -755,10 +755,45 @@
 
 @media (max-width: 560px) {
 
-    .regex-studio .native-form-grid,
-    .regex-studio .regex-advanced-grid,
+    .regex-studio .native-form-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
     .regex-studio .native-check-row,
     .regex-studio .placement-row {
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px;
+    }
+
+    .regex-studio .regex-editor-switches .inline-check {
+        min-height: 30px;
+        padding: 5px 8px;
+        font-size: 12px;
+    }
+
+    .regex-studio .regex-advanced-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .regex-studio .regex-advanced-grid label:first-child {
+        grid-column: 1 / -1;
+    }
+
+    .regex-studio .regex-advanced-grid label:not(:first-child) {
+        display: grid;
+        grid-template-columns: auto minmax(58px, 1fr);
+        align-items: center;
+        gap: 8px;
+    }
+
+    .regex-studio .regex-advanced-grid label:not(:first-child) span {
+        white-space: nowrap;
+        font-size: 12px;
+    }
+
+    .regex-studio .regex-advanced-grid label:not(:first-child) input {
+        min-height: 32px;
+        text-align: center;
     }
 }

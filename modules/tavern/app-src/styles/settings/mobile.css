@@ -361,6 +361,63 @@
         min-height: 54vh;
     }
 
+    .settings-layout.is-worldbooks-workspace .worldbook-global-enable {
+        gap: 0;
+        padding: 0;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-section-head {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-section h3 {
+        font-size: 14px;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-section-kicker {
+        font-size: 10px;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-global-toggle {
+        min-width: 0;
+        max-width: none;
+        min-height: 34px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        padding: 0 10px;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-global-bar {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 5px;
+        min-height: 0;
+        padding: 6px 12px 8px;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-global-current {
+        font-size: 12px;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-global-list {
+        width: 100%;
+        max-height: 118px;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 4px;
+        padding: 6px 12px;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-global-option {
+        min-height: 28px;
+        font-size: 12px;
+    }
+
+    .settings-layout.is-worldbooks-workspace .worldbook-main-head {
+        min-height: 38px;
+        padding: 8px 12px;
+    }
+
     .settings-layout.is-worldbooks-workspace .worldbook-command-bar {
         grid-template-columns: minmax(0, 1fr);
         gap: 6px;
@@ -534,7 +591,6 @@
         padding: 0 12px calc(12px + env(safe-area-inset-bottom, 0px));
     }
 
-    .settings-layout.is-worldbooks-workspace .worldbook-selected-head,
     .settings-layout.is-worldbooks-workspace .worldbook-metric-grid {
         display: none;
     }
