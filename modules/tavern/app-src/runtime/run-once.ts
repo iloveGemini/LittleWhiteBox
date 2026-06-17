@@ -396,6 +396,7 @@ export type TavernBuildNativeChatPromptRuntime = (input: {
     currentUserMessage: string;
     generationType?: string;
     debugStage?: string;
+    signal?: AbortSignal;
     memoryPrompt?: string;
     chancePrompt?: string;
     actionCheckPrompt?: string;
@@ -488,6 +489,7 @@ async function applyNativeChatPromptBuild(input: {
     baseBuildSnapshot: XbTavernBuildSnapshot;
     currentUserMessage: string;
     generationType: string;
+    signal?: AbortSignal;
     memoryContext?: XbTavernMemoryContext;
     chancePrompt?: string;
     runtimeProtocolMessages?: XbTavernMessage[];
@@ -505,6 +507,7 @@ async function applyNativeChatPromptBuild(input: {
         currentUserMessage: input.currentUserMessage,
         generationType: input.generationType,
         debugStage: input.stage,
+        signal: input.signal,
         memoryPrompt: buildMemoryPromptContent(input.memoryContext),
         chancePrompt: input.chancePrompt || '',
         actionCheckPrompt: joinPromptMessages(input.runtimeProtocolMessages || []),
@@ -2003,6 +2006,7 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
         baseBuildSnapshot: brain.buildSnapshot,
         currentUserMessage,
         generationType: generationTrigger,
+        signal: input.signal,
         memoryContext: filteredMemoryContext,
         chancePrompt: chanceEncounterEvent ? buildChanceEncounterPromptMessage().content : '',
         runtimeProtocolMessages,

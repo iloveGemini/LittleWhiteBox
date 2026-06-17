@@ -245,8 +245,8 @@ test('tavern request log is sourced from runtime request snapshots', () => {
     assert.doesNotMatch(appSource, /simulateXbTavernRequest\(\{[\s\S]*chatPreset: activeChatPreset\.value/);
     assert.doesNotMatch(appSource, /runXbTavernTurn\(\{[\s\S]*chatPreset: activeChatPreset\.value/);
     assert.match(appSource, /runXbTavernTurn\(\{[\s\S]*buildNativeChatPrompt,/);
-    assert.match(appSource, /const NATIVE_PROMPT_BUILD_TIMEOUT_MS = 30000/);
-    assert.match(appSource, /xb-tavern:build-native-chat-prompt[\s\S]*timeoutMs: NATIVE_PROMPT_BUILD_TIMEOUT_MS/);
+    assert.match(appSource, /xb-tavern:build-native-chat-prompt[\s\S]*timeoutMs: 0, signal: input\.signal/);
+    assert.match(appSource, /const timeoutMs = 'timeoutMs' in options \? Number\(options\.timeoutMs\) : HOST_REQUEST_TIMEOUT_MS/);
     assert.match(appSource, /postToHost\('xb-tavern:cancel-request', \{ requestId \}\);/);
     assert.match(appSource, /runtimePendingUserMessage\.value = messageText/);
     assert.match(conversationSource, /class="chat-bubble from-user pending-user"/);
@@ -254,6 +254,7 @@ test('tavern request log is sourced from runtime request snapshots', () => {
     assert.match(runtimeSource, /stage: 'simulate_native_prompt_build'/);
     assert.match(runtimeSource, /stage: 'turn_native_prompt_build'/);
     assert.match(runtimeSource, /debugStage: input\.stage/);
+    assert.match(runtimeSource, /signal: input\.signal/);
     assert.match(runtimeSource, /turn stage start/);
     assert.match(runtimeSource, /turn stage end/);
     assert.match(nativePromptSource, /nativePromptAbortControllers/);

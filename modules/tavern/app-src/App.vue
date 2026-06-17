@@ -167,7 +167,6 @@ const SOURCE_APP = 'xb-tavern-app';
 const SOURCE_HOST = 'xb-tavern-host';
 const HOST_REQUEST_TIMEOUT_MS = 5000;
 const CHARACTER_CONTEXT_TIMEOUT_MS = 15000;
-const NATIVE_PROMPT_BUILD_TIMEOUT_MS = 30000;
 const CHARACTER_ARCHIVE_BATCH_SIZE = 48;
 const CHAT_SIDEBAR_INITIAL_LIMIT = 6;
 const CHAT_SIDEBAR_BATCH_SIZE = 12;
@@ -296,7 +295,7 @@ function readInitialTavernThemeDark(): boolean {
 interface PendingHostRequest {
     resolve: (value: Record<string, unknown>) => void;
     reject: (error: Error) => void;
-    timer: number;
+    timer?: number;
     type: string;
     abort?: () => void;
     signal?: AbortSignal;
@@ -1093,13 +1092,16 @@ function requestHost(type: string, payload: Record<string, unknown> = {}, option
             }
             pendingHostRequests.delete(requestId);
         };
-        const timer = window.setTimeout(() => {
-            cleanup();
-            postToHost('xb-tavern:cancel-request', { requestId });
-            reject(new Error('host_request_timeout'));
-        }, Number(options.timeoutMs) || HOST_REQUEST_TIMEOUT_MS);
+        const timeoutMs = 'timeoutMs' in options ? Number(options.timeoutMs) : HOST_REQUEST_TIMEOUT_MS;
+        const timer = Number.isFinite(timeoutMs) && timeoutMs > 0
+            ? window.setTimeout(() => {
+                cleanup();
+                postToHost('xb-tavern:cancel-request', { requestId });
+                reject(new Error('host_request_timeout'));
+            }, timeoutMs)
+            : undefined;
         const abort = () => {
-            window.clearTimeout(timer);
+            if (timer) {window.clearTimeout(timer);}
             cleanup();
             postToHost('xb-tavern:cancel-request', { requestId });
             reject(createAbortError());
@@ -1695,7 +1697,7 @@ async function getNativeWorldbookRuntime(input: {
 const buildNativeChatPrompt: TavernBuildNativeChatPromptRuntime = async (input) => {
     const response = await requestHost('xb-tavern:build-native-chat-prompt', {
         payload: input,
-    }, { timeoutMs: NATIVE_PROMPT_BUILD_TIMEOUT_MS });
+    }, { timeoutMs: 0, signal: input.signal });
     return (response.result || response) as Awaited<ReturnType<TavernBuildNativeChatPromptRuntime>>;
 };
 
@@ -1781,7 +1783,7 @@ function resolveHostRequest(payload: Record<string, unknown> = {}) {
     const requestId = String(payload.requestId || '');
     const pending = pendingHostRequests.get(requestId);
     if (!pending) {return;}
-    window.clearTimeout(pending.timer);
+    if (pending.timer) {window.clearTimeout(pending.timer);}
     if (pending.abort && pending.signal) {
         pending.signal.removeEventListener('abort', pending.abort);
     }
@@ -4171,7 +4173,7 @@ onUnmounted(() => {
     window.removeEventListener('message', onHostMessage);
     setHostChatCompletionsRequestHeadersProvider(null);
     pendingHostRequests.forEach((request) => {
-        window.clearTimeout(request.timer);
+        if (request.timer) {window.clearTimeout(request.timer);}
         if (request.abort && request.signal) {
             request.signal.removeEventListener('abort', request.abort);
         }
