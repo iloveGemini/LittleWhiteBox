@@ -234,7 +234,7 @@
 }
 
 .tavern-chat.xb-page .manager-compose button.primary-action {
-    min-height: 58px;
+    min-height: 32px;
     padding: 0 14px;
     color: var(--xb-manager-accent);
 }
@@ -900,5 +900,6 @@
 
     .tavern-chat.xb-page .manager-compose button.primary-action {
         min-width: 64px;
+        min-height: 31px;
     }
 }

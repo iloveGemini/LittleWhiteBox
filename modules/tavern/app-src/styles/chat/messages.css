@@ -55,7 +55,9 @@
         var(--xb-chat-scroll-bg);
     padding: var(--xb-chat-scroll-padding);
     scroll-padding: 44px 0 38px;
+    scrollbar-width: none;
     scrollbar-color: transparent transparent;
+    -ms-overflow-style: none;
 }
 
 .xb-os-shell.theme-dark .tavern-chat.xb-page .chat-scroll {
@@ -66,6 +68,11 @@
             rgba(184, 178, 166, 0.016) 39px,
             rgba(184, 178, 166, 0.016) 40px),
         var(--xb-chat-scroll-bg);
+}
+
+.tavern-chat.xb-page .chat-scroll::-webkit-scrollbar {
+    width: 0;
+    height: 0;
 }
 
 .tavern-chat.xb-page .chat-scroll::-webkit-scrollbar-thumb {
@@ -137,6 +144,29 @@
     box-shadow: none;
 }
 
+.chat-bubble .chat-runtime-event.scene-narration {
+    width: 100%;
+    margin: 14px 0 0;
+    padding: 0;
+}
+
+.chat-bubble .chat-runtime-event.scene-narration::before {
+    left: 0;
+    right: 0;
+}
+
+.chat-bubble .chat-runtime-event .scene-tag {
+    background: var(--xb-chat-pop-bg);
+}
+
+.chat-bubble.from-user .chat-runtime-event .scene-tag {
+    background: var(--xb-paper-plain);
+}
+
+.xb-os-shell.theme-dark .chat-bubble .chat-runtime-event .scene-tag {
+    background: var(--xb-chat-panel-bg);
+}
+
 .chat-bubble {
     position: relative;
     align-self: center;
@@ -158,7 +188,6 @@
 }
 
 .chat-bubble.from-assistant {
-    border-left: 4px solid var(--xb-ink);
     background:
         linear-gradient(180deg, rgba(var(--xb-accent-rgb), 0.035), transparent 58%),
         var(--xb-chat-pop-bg);

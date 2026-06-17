@@ -53,25 +53,38 @@ textarea:disabled {
 
 .xb-tavern-code-copy {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    top: 6px;
+    right: 6px;
     display: grid;
     place-items: center;
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
     border: 0;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.10);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.11);
     color: var(--xb-text-main);
     cursor: pointer;
-    font: 600 11px/1 "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
+    font: 650 12px/1 "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
     opacity: 0.82;
     padding: 0;
 }
 
 .xb-tavern-code-copy:hover {
     background: rgba(255, 255, 255, 0.16);
+    opacity: 1;
+}
+
+.xb-tavern-code-copy.is-copied {
+    background: rgba(120, 214, 164, 0.18);
+    color: var(--xb-ok);
+    opacity: 1;
+}
+
+.xb-tavern-code-copy.is-failed {
+    background: rgba(216, 132, 144, 0.16);
+    color: var(--xb-danger);
     opacity: 1;
 }
 
@@ -82,6 +95,16 @@ textarea:disabled {
 
 .xb-os-shell.theme-light .xb-tavern-code-copy:hover {
     background: rgba(26, 26, 26, 0.095);
+}
+
+.xb-os-shell.theme-light .xb-tavern-code-copy.is-copied {
+    background: rgba(62, 112, 80, 0.12);
+    color: var(--xb-ok);
+}
+
+.xb-os-shell.theme-light .xb-tavern-code-copy.is-failed {
+    background: rgba(155, 45, 45, 0.12);
+    color: var(--xb-danger);
 }
 
 .xb-markdown-html-block {

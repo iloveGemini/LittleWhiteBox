@@ -645,7 +645,7 @@ watch(
       <textarea
         :ref="setManagerComposeTextareaRef"
         v-model="managerInputDraft"
-        rows="3"
+        rows="1"
         placeholder="和助手说一句话..."
         :disabled="isManagerAssistantRunning"
         @input="handleComposeInput"
@@ -661,4 +661,3 @@ watch(
     </form>
   </section>
 </template>
-

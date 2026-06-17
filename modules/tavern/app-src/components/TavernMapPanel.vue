@@ -52,6 +52,19 @@ const props = withDefaults(defineProps<{
 const replayKey = ref(0);
 const replayMode = ref<MapReplayMode>('patch');
 const timelineIndex = ref(0);
+const mapSvgRef = ref<SVGSVGElement | null>(null);
+const mapPanOffset = ref<[number, number]>([0, 0]);
+const mapDrag = ref<{
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startPanX: number;
+    startPanY: number;
+    viewWidth: number;
+    viewHeight: number;
+    clientWidth: number;
+    clientHeight: number;
+} | null>(null);
 let timelineTimer: number | undefined;
 
 function cloneValue<T>(value: T): T {
@@ -135,7 +148,17 @@ const removedElements = computed<TavernMapElement[]>(() => {
     return source.filter((item): item is TavernMapElement => !!item && typeof item === 'object' && !Array.isArray(item) && typeof (item as TavernMapElement).id === 'string');
 });
 
-const viewBoxArray = computed<[number, number, number, number]>(() => getTavernMapDisplayViewBox(activeMapDocument.value));
+const baseViewBoxArray = computed<[number, number, number, number]>(() => getTavernMapDisplayViewBox(activeMapDocument.value));
+const viewBoxArray = computed<[number, number, number, number]>(() => {
+    const [x, y, width, height] = baseViewBoxArray.value;
+    const [offsetX, offsetY] = mapPanOffset.value;
+    return [
+        Number((x + offsetX).toFixed(2)),
+        Number((y + offsetY).toFixed(2)),
+        width,
+        height,
+    ];
+});
 const viewBox = computed(() => viewBoxArray.value.join(' '));
 const theme = computed(() => String(activeMapDocument.value?.meta?.theme || 'parchment'));
 const title = computed(() => String(replayMode.value === 'timeline'
@@ -166,6 +189,7 @@ watch(() => props.document?.revision, () => {
     timelineIndex.value = Math.max(0, timelineFrames.value.length - 1);
     replayKey.value += 1;
     mapBadgeExpanded.value = false;
+    resetMapPan();
 });
 
 watch(() => props.patches.length, () => {
@@ -177,6 +201,7 @@ watch(() => props.patches.length, () => {
         clearTimelineTimer();
     }
     mapBadgeExpanded.value = false;
+    resetMapPan();
 });
 
 onBeforeUnmount(() => {
@@ -188,6 +213,11 @@ function clearTimelineTimer() {
         window.clearTimeout(timelineTimer);
         timelineTimer = undefined;
     }
+}
+
+function resetMapPan() {
+    mapPanOffset.value = [0, 0];
+    mapDrag.value = null;
 }
 
 function numberPair(value: unknown, fallback: [number, number] = [0, 0]): [number, number] {
@@ -526,12 +556,14 @@ function replayLatestPatch() {
     clearTimelineTimer();
     replayMode.value = 'patch';
     replayKey.value += 1;
+    resetMapPan();
 }
 
 function replayFullMap() {
     clearTimelineTimer();
     replayMode.value = 'full';
     replayKey.value += 1;
+    resetMapPan();
 }
 
 function replayTimeline() {
@@ -539,6 +571,7 @@ function replayTimeline() {
     replayMode.value = 'timeline';
     timelineIndex.value = 0;
     replayKey.value += 1;
+    resetMapPan();
     scheduleTimelineNext();
 }
 
@@ -550,6 +583,7 @@ function stepTimeline(offset: number) {
     if (!length) {return;}
     timelineIndex.value = (timelineIndex.value + offset + length) % length;
     replayKey.value += 1;
+    resetMapPan();
 }
 
 function toggleMapBadge() {
@@ -558,6 +592,48 @@ function toggleMapBadge() {
 
 function collapseMapBadge() {
     mapBadgeExpanded.value = false;
+}
+
+function handleMapPointerDown(event: PointerEvent) {
+    const svg = event.currentTarget instanceof SVGSVGElement ? event.currentTarget : mapSvgRef.value;
+    if (!svg || event.button !== 0) {return;}
+    const bounds = svg.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) {return;}
+    const [, , viewWidth, viewHeight] = viewBoxArray.value;
+    const [startPanX, startPanY] = mapPanOffset.value;
+    mapDrag.value = {
+        pointerId: event.pointerId,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startPanX,
+        startPanY,
+        viewWidth,
+        viewHeight,
+        clientWidth: bounds.width,
+        clientHeight: bounds.height,
+    };
+    svg.setPointerCapture(event.pointerId);
+}
+
+function handleMapPointerMove(event: PointerEvent) {
+    const drag = mapDrag.value;
+    if (!drag || drag.pointerId !== event.pointerId) {return;}
+    const deltaX = -((event.clientX - drag.startClientX) / drag.clientWidth) * drag.viewWidth;
+    const deltaY = -((event.clientY - drag.startClientY) / drag.clientHeight) * drag.viewHeight;
+    mapPanOffset.value = [
+        Number((drag.startPanX + deltaX).toFixed(2)),
+        Number((drag.startPanY + deltaY).toFixed(2)),
+    ];
+}
+
+function handleMapPointerEnd(event: PointerEvent) {
+    const drag = mapDrag.value;
+    if (!drag || drag.pointerId !== event.pointerId) {return;}
+    const svg = event.currentTarget instanceof SVGSVGElement ? event.currentTarget : mapSvgRef.value;
+    if (svg?.hasPointerCapture(event.pointerId)) {
+        svg.releasePointerCapture(event.pointerId);
+    }
+    mapDrag.value = null;
 }
 </script>
 
@@ -608,7 +684,7 @@ function collapseMapBadge() {
     <div
       v-if="hasRenderableMap"
       class="tavern-map-canvas"
-      :class="[`theme-${theme}`, `mode-${replayMode}`]"
+      :class="[`theme-${theme}`, `mode-${replayMode}`, { 'is-panning': mapDrag }]"
     >
       <div
         v-if="compact"
@@ -617,11 +693,17 @@ function collapseMapBadge() {
         {{ title }}
       </div>
       <svg
+        ref="mapSvgRef"
         :key="replayKey"
         :viewBox="viewBox"
         preserveAspectRatio="xMidYMid meet"
         role="img"
         :aria-label="title"
+        @pointerdown="handleMapPointerDown"
+        @pointermove="handleMapPointerMove"
+        @pointerup="handleMapPointerEnd"
+        @pointercancel="handleMapPointerEnd"
+        @dblclick="resetMapPan"
       >
         <defs>
           <filter

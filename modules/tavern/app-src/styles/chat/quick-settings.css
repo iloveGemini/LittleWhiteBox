@@ -1,6 +1,12 @@
 /* Chat-local settings modal overrides. Imported after settings.css on purpose. */
 
 .settings-layout.chat-quick-settings-layout {
+    --xb-settings-control-bg: var(--xb-bg-card);
+    --xb-settings-control-focus-bg: var(--xb-bg-soft);
+    --xb-settings-soft-bg: var(--xb-bg-card);
+    --xb-settings-subtle-bg: var(--xb-chat-panel-bg);
+    --xb-settings-float-bg: var(--xb-chat-pop-bg);
+    --xb-settings-sheet-bg: var(--xb-chat-pop-bg);
     width: 100%;
     min-height: 0;
     height: auto;
@@ -9,6 +15,15 @@
     grid-template-rows: none;
     overflow: visible;
     background: transparent;
+}
+
+.xb-os-shell.theme-light .settings-layout.chat-quick-settings-layout {
+    --xb-settings-control-bg: var(--xb-paper-plain);
+    --xb-settings-control-focus-bg: #ffffff;
+    --xb-settings-soft-bg: var(--xb-paper-plain);
+    --xb-settings-subtle-bg: var(--xb-paper-warm);
+    --xb-settings-float-bg: var(--xb-paper-plain);
+    --xb-settings-sheet-bg: var(--xb-paper-plain);
 }
 
 .settings-layout.chat-quick-settings-layout .xb-main {
@@ -65,6 +80,7 @@
     min-height: clamp(420px, 64vh, 700px);
     grid-template-columns: minmax(280px, 34%) minmax(0, 1fr);
     border-top: 1px solid var(--xb-line);
+    background: var(--xb-chat-pop-bg);
 }
 
 .settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-sequence-panel {
@@ -83,16 +99,19 @@
 }
 
 .settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .preset-preview-panel {
+    position: relative;
+    z-index: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: transparent;
+    background: var(--xb-settings-sheet-bg);
 }
 
 .settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .preset-preview-head {
     min-height: 46px;
     border-bottom: 1px solid var(--xb-line);
+    background: var(--xb-settings-sheet-bg);
     padding: 0 14px;
 }
 
@@ -102,26 +121,61 @@
 
 .settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-detail-form {
     min-height: 0;
+    background: var(--xb-settings-sheet-bg);
     padding: 16px;
+}
+
+.settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-detail-form input,
+.settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-detail-form select,
+.settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .prompt-detail-form textarea {
+    background-color: var(--xb-settings-control-bg);
 }
 
 .settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .native-workspace {
     display: flex;
     flex-direction: column;
+    background: var(--xb-chat-pop-bg);
 }
 
 .settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-overview-grid {
     min-height: clamp(420px, 64vh, 700px);
     overflow: visible;
+    background: var(--xb-chat-pop-bg);
 }
 
 .settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-overview-detail {
     overflow: visible;
+    background: var(--xb-settings-sheet-bg);
 }
 
 .settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-preview-surface {
     min-height: 0;
+    background: var(--xb-settings-sheet-bg);
     padding: 16px 18px 20px;
+}
+
+.settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-entry-preview[open] {
+    background: var(--xb-settings-sheet-bg);
+}
+
+.settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-entry-body {
+    background: var(--xb-settings-soft-bg);
+}
+
+.settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-entry-editor {
+    position: relative;
+    z-index: 1;
+    border: 1px solid var(--xb-line);
+    border-radius: 8px;
+    background: var(--xb-settings-sheet-bg);
+    padding: 12px;
+}
+
+.settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-entry-editor input[type="text"],
+.settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-entry-editor input[type="number"],
+.settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-entry-editor select,
+.settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-entry-editor textarea {
+    background-color: var(--xb-settings-control-bg);
 }
 
 @media (max-width: 760px) {

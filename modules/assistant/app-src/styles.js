@@ -1574,7 +1574,7 @@ export function injectAssistantStyles(rootId) {
             white-space: nowrap;
         }
         .xb-assistant-compose textarea {
-            min-height: 66px;
+            min-height: 42px;
             resize: vertical;
             max-width: 100%;
             overflow-x: hidden;
@@ -1928,7 +1928,7 @@ export function injectAssistantStyles(rootId) {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
             .xb-assistant-compose textarea {
-                min-height: 60px;
+                min-height: 42px;
                 max-height: min(200px, 32vh);
                 resize: none;
                 overflow-y: auto;

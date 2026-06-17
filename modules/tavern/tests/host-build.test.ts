@@ -68,6 +68,7 @@ test('tavern app requests sanitize payload before postMessage', () => {
 test('tavern chat typography follows host SillyTavern font metrics inside the iframe', () => {
     const hostSource = readRepoFile('modules/tavern/host/sillytavern-context.ts');
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const markdownSource = readRepoFile('modules/agent-core/ui/message-markdown.js');
     const baseCss = readRepoFile('modules/tavern/app-src/styles/base.css');
     const markdownCss = readRepoFile('modules/tavern/app-src/styles/chat/markdown.css');
     const composeCss = readRepoFile('modules/tavern/app-src/styles/chat/compose.css');
@@ -86,7 +87,13 @@ test('tavern chat typography follows host SillyTavern font metrics inside the if
     assert.match(markdownCss, /\.xb-tavern-markdown pre \{[\s\S]*padding: 7px 8px;/);
     assert.doesNotMatch(markdownCss, /\.xb-tavern-markdown pre \{[\s\S]*background: rgba\(10, 12, 18, 0\.28\);/);
     assert.doesNotMatch(baseCss, /\.xb-tavern-codeblock pre \{[\s\S]*padding-top: 34px;/);
-    assert.match(baseCss, /\.xb-tavern-code-copy \{[\s\S]*width: 20px;[\s\S]*height: 20px;[\s\S]*border-radius: 4px;/);
+    assert.match(baseCss, /\.xb-tavern-code-copy \{[\s\S]*width: 24px;[\s\S]*height: 24px;[\s\S]*min-height: 24px;[\s\S]*border-radius: 7px;/);
+    assert.match(baseCss, /\.xb-tavern-code-copy\.is-copied \{[\s\S]*color: var\(--xb-ok\);/);
+    assert.match(baseCss, /\.xb-tavern-code-copy\.is-failed \{[\s\S]*color: var\(--xb-danger\);/);
+    assert.match(markdownSource, /async function copyText\(text = '', ownerDocument = null\)/);
+    assert.match(markdownSource, /const doc = ownerDocument\?\.createElement \? ownerDocument : globalThis\.document;/);
+    assert.match(markdownSource, /const copied = await copyText\(codeText, doc\);/);
+    assert.match(markdownSource, /copyButton\.classList\.toggle\('is-copied', copied\);/);
     assert.match(messagesCss, /\.message-actions \{[\s\S]*border-top: 1px solid rgba\(120, 112, 98, 0\.16\);[\s\S]*padding-top: 10px;/);
     assert.match(messagesCss, /\.xb-os-shell\.theme-dark \.message-actions \{[\s\S]*border-top-color: rgba\(238, 244, 241, 0\.14\);/);
     assert.match(composeCss, /line-height: var\(--xb-host-prose-line-height, 23px\);/);

@@ -73,6 +73,7 @@ const {
     runtimeActionCheckEvents,
     runtimeText,
     runtimeThoughts,
+    runtimeUserMessageVisible,
     saveEditMessage,
     scrollChatToBottom,
     scrollChatToTop,
@@ -160,6 +161,7 @@ const liveAssistantVisible = computed(() => hasRenderableLiveAssistantContent({
     thoughts: runtimeThoughts.value,
     actionCheckEvents: runtimeActionCheckEvents.value,
 }));
+const liveAssistantCanRender = computed(() => isRunning.value && runtimeUserMessageVisible.value);
 const liveAssistantMarkdownVisible = computed(() => hasRenderableLiveAssistantMarkdown({
     text: runtimeText.value,
     actionCheckEvents: runtimeActionCheckEvents.value,
@@ -342,6 +344,16 @@ watch(
               </template>
             </template>
             <div
+              v-for="(event, eventIndex) in (message.role === 'user' ? (message.runtimeEvents || []) : [])"
+              :key="`${message.sessionId}-${message.order}-runtime-event-${event.type}-${eventIndex}`"
+              class="chat-runtime-event scene-narration inline-runtime-event"
+              aria-hidden="true"
+            >
+              <div class="scene-tag">
+                {{ String((event as { label?: string }).label || '') }}
+              </div>
+            </div>
+            <div
               v-if="!isEditingMessage(message)"
               class="message-actions"
               :class="{ 'has-status': !!drawMessageStatusText(message) }"
@@ -411,19 +423,9 @@ watch(
               </button>
             </div>
           </div>
-          <div
-            v-for="(event, eventIndex) in (message.role === 'user' ? (message.runtimeEvents || []) : [])"
-            :key="`${message.sessionId}-${message.order}-runtime-event-${event.type}-${eventIndex}`"
-            class="chat-runtime-event scene-narration"
-            aria-hidden="true"
-          >
-            <div class="scene-tag">
-              {{ String((event as { label?: string }).label || '') }}
-            </div>
-          </div>
         </template>
         <div
-          v-if="isRunning && liveAssistantVisible"
+          v-if="liveAssistantCanRender && liveAssistantVisible"
           data-chat-anchor-key="streaming:content"
           class="chat-bubble from-assistant streaming"
         >
@@ -483,7 +485,7 @@ watch(
           />
         </div>
         <div
-          v-if="isRunning && !liveAssistantVisible"
+          v-if="liveAssistantCanRender && !liveAssistantVisible"
           data-chat-anchor-key="streaming:empty"
           class="chat-bubble from-assistant streaming thinking"
         >
@@ -536,7 +538,7 @@ watch(
       <textarea
         :ref="setChatComposeTextareaRef"
         v-model="currentUserMessage"
-        rows="2"
+        rows="1"
         placeholder="对角色说一句话..."
         :disabled="isRunning"
         @input="handleComposeInput"

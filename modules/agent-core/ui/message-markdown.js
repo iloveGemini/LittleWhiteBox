@@ -185,13 +185,15 @@ export function renderMarkdownToHtml(text) {
     return injectHtmlBlockPlaceholders(escapeHtml(markdownText).replace(/\n/g, '<br>'));
 }
 
-async function copyText(text = '') {
+async function copyText(text = '', ownerDocument = null) {
     const normalized = String(text || '');
     if (!normalized) return false;
+    const doc = ownerDocument?.createElement ? ownerDocument : globalThis.document;
+    const win = doc?.defaultView || globalThis;
 
     try {
-        if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(normalized);
+        if (win.navigator?.clipboard?.writeText) {
+            await win.navigator.clipboard.writeText(normalized);
             return true;
         }
     } catch {
@@ -199,16 +201,20 @@ async function copyText(text = '') {
     }
 
     try {
-        const textarea = document.createElement('textarea');
+        if (!doc?.createElement || !doc.body?.appendChild) return false;
+        const textarea = doc.createElement('textarea');
         textarea.value = normalized;
         textarea.setAttribute('readonly', 'readonly');
         textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '0';
         textarea.style.opacity = '0';
         textarea.style.pointerEvents = 'none';
-        document.body.appendChild(textarea);
+        doc.body.appendChild(textarea);
+        textarea.focus({ preventScroll: true });
         textarea.select();
         textarea.setSelectionRange(0, textarea.value.length);
-        const copied = document.execCommand('copy');
+        const copied = doc.execCommand?.('copy') || false;
         textarea.remove();
         return copied;
     } catch {
@@ -296,12 +302,17 @@ export function enhanceMarkdownCodeBlocks(rootNode, options = {}) {
         copyButton.setAttribute('aria-label', copyButtonTitle);
         copyButton.addEventListener('click', async () => {
             const codeText = pre.querySelector('code')?.textContent || pre.textContent || '';
-            const copied = await copyText(codeText);
+            const copied = await copyText(codeText, doc);
             copyButton.textContent = copied ? '✓' : '!';
             copyButton.title = copied ? copySuccessTitle : copyFailureTitle;
+            copyButton.setAttribute('aria-label', copied ? copySuccessTitle : copyFailureTitle);
+            copyButton.classList.toggle('is-copied', copied);
+            copyButton.classList.toggle('is-failed', !copied);
             setTimeout(() => {
                 copyButton.textContent = '⧉';
                 copyButton.title = copyButtonTitle;
+                copyButton.setAttribute('aria-label', copyButtonTitle);
+                copyButton.classList.remove('is-copied', 'is-failed');
             }, 1200);
         });
 

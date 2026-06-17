@@ -313,18 +313,30 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.doesNotMatch(chatLayoutCss, /--xb-chat-scroll-padding:\s*\d+px\s+(?:8|10|12)px/);
     assert.match(stylesSource, /@import '\.\/styles\/settings\.css';\s*@import '\.\/styles\/chat\/quick-settings\.css';/);
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout \{[\s\S]*display: block;[\s\S]*grid-template-columns: none;[\s\S]*overflow: visible;/);
+    assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout \{[\s\S]*--xb-settings-control-bg: var\(--xb-bg-card\);[\s\S]*--xb-settings-sheet-bg: var\(--xb-chat-pop-bg\);/);
+    assert.match(chatQuickSettingsCss, /\.xb-os-shell\.theme-light \.settings-layout\.chat-quick-settings-layout \{[\s\S]*--xb-settings-control-bg: var\(--xb-paper-plain\);[\s\S]*--xb-settings-control-focus-bg: #ffffff;/);
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout \.xb-main \{[\s\S]*background: transparent;[\s\S]*padding: 0;/);
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-chatPreset-workspace \.prompt-edit-button \{[\s\S]*display: grid;/);
+    assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-chatPreset-workspace \.preset-preview-panel \{[\s\S]*z-index: 1;[\s\S]*background: var\(--xb-settings-sheet-bg\);/);
+    assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-chatPreset-workspace \.prompt-detail-form \{[\s\S]*background: var\(--xb-settings-sheet-bg\);/);
+    assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-worldbooks-workspace \.worldbook-entry-editor \{[\s\S]*z-index: 1;[\s\S]*background: var\(--xb-settings-sheet-bg\);/);
+    assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-worldbooks-workspace \.worldbook-entry-editor input\[type="text"\],[\s\S]*background-color: var\(--xb-settings-control-bg\);/);
     assert.doesNotMatch(settingsControllerSource, /activeView\.value !== 'settings' \|\| options\.activeSettingsWorkspace\.value !== 'worldbooks'/);
     assert.match(settingsControllerSource, /watch\(selectedWorldbookName, \(name\) => \{[\s\S]*activeSettingsWorkspace\.value !== 'worldbooks'[\s\S]*loadSelectedWorldbookPreview\(name\)/);
 });
 
 test('tavern map update badge stays collapsed until requested', () => {
     const mapPanelSource = readRepoFile('modules/tavern/app-src/components/TavernMapPanel.vue');
+    const mapCss = readRepoFile('modules/tavern/app-src/styles/chat/map.css');
 
     assert.match(mapPanelSource, /const mapBadgeExpanded = ref\(false\)/);
     assert.doesNotMatch(mapPanelSource, /mapBadgeExpanded\.value = true/);
     assert.match(mapPanelSource, /function toggleMapBadge\(\) \{[\s\S]*mapBadgeExpanded\.value = !mapBadgeExpanded\.value/);
+    assert.match(mapPanelSource, /const mapPanOffset = ref<\[number, number\]>\(\[0, 0\]\)/);
+    assert.match(mapPanelSource, /function handleMapPointerDown\(event: PointerEvent\)/);
+    assert.match(mapPanelSource, /@pointerdown="handleMapPointerDown"[\s\S]*@pointermove="handleMapPointerMove"[\s\S]*@pointerup="handleMapPointerEnd"[\s\S]*@pointercancel="handleMapPointerEnd"/);
+    assert.match(mapCss, /\.tavern-chat\.xb-page \.tavern-map-canvas svg \{[\s\S]*cursor: grab;[\s\S]*touch-action: none;[\s\S]*user-select: none;/);
+    assert.match(mapCss, /\.tavern-chat\.xb-page \.tavern-map-canvas\.is-panning svg \{[\s\S]*cursor: grabbing;/);
 });
 
 test('tavern UI context is grouped by page responsibility instead of one flat bag', () => {
@@ -461,11 +473,39 @@ test('tavern memory editor actions live outside the app controller', () => {
 });
 
 test('tavern streaming action-check UI renders from live runtime events and keeps dark card styling aligned', () => {
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const conversationPanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
+    const managerPanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernManagerPanel.vue');
+    const contextSource = readRepoFile('modules/tavern/app-src/components/tavern-app-context.ts');
     const cssSource = readRepoFile('modules/tavern/app-src/styles/chat/messages.css');
+    const composeCss = readRepoFile('modules/tavern/app-src/styles/chat/compose.css');
+    const managerCss = readRepoFile('modules/tavern/app-src/styles/chat/manager.css');
     assert.match(conversationPanelSource, /hasRenderableLiveAssistantContent/);
     assert.match(conversationPanelSource, /hasRenderableLiveAssistantMarkdown/);
     assert.match(conversationPanelSource, /runtimeActionCheckEvents/);
+    assert.match(contextSource, /runtimeUserMessageVisible: Ref<boolean>/);
+    assert.match(appSource, /const runtimeUserMessageVisible = ref\(false\)/);
+    assert.match(appSource, /function clearRuntimeAssistantLiveState\(\) \{[\s\S]*runtimeText\.value = '';[\s\S]*runtimeThoughts\.value = \[\];[\s\S]*runtimeActionCheckEvents\.value = \[\];[\s\S]*runtimeUserMessageVisible\.value = false;/);
+    assert.match(appSource, /runtimeUserMessageVisible\.value = false;[\s\S]*runtimeProvider\.value = ''/);
+    assert.match(appSource, /sessionMessages\.value = existingIndex >= 0[\s\S]*runtimeUserMessageVisible\.value = true;/);
+    assert.match(appSource, /onAssistantMessageSaved: async \(sessionId, message\) => \{[\s\S]*sessionMessages\.value = existingIndex >= 0[\s\S]*clearRuntimeAssistantLiveState\(\);/);
+    assert.match(conversationPanelSource, /const liveAssistantCanRender = computed\(\(\) => isRunning\.value && runtimeUserMessageVisible\.value\)/);
+    assert.match(conversationPanelSource, /v-if="liveAssistantCanRender && liveAssistantVisible"[\s\S]*data-chat-anchor-key="streaming:content"/);
+    assert.match(conversationPanelSource, /v-if="liveAssistantCanRender && !liveAssistantVisible"[\s\S]*data-chat-anchor-key="streaming:empty"/);
+    assert.doesNotMatch(conversationPanelSource, /v-if="isRunning && (?:!?)liveAssistantVisible"/);
+    assert.match(conversationPanelSource, /class="chat-runtime-event scene-narration inline-runtime-event"[\s\S]*<\/div>\s*<div\s+v-if="!isEditingMessage\(message\)"\s+class="message-actions"/);
+    assert.doesNotMatch(conversationPanelSource, /<\/div>\s*<\/template>\s*<div\s+v-for="\(\s*event, eventIndex\s*\) in \(message\.role === 'user'/);
+    assert.match(cssSource, /\.chat-bubble \.chat-runtime-event\.scene-narration \{[\s\S]*width: 100%;[\s\S]*margin: 14px 0 0;[\s\S]*padding: 0;/);
+    assert.match(cssSource, /\.tavern-chat\.xb-page \.chat-scroll \{[\s\S]*scrollbar-width: none;[\s\S]*-ms-overflow-style: none;/);
+    assert.match(cssSource, /\.tavern-chat\.xb-page \.chat-scroll::-webkit-scrollbar \{[\s\S]*width: 0;[\s\S]*height: 0;/);
+    assert.match(conversationPanelSource, /v-model="currentUserMessage"[\s\S]*rows="1"/);
+    assert.match(managerPanelSource, /v-model="managerInputDraft"[\s\S]*rows="1"/);
+    assert.match(composeCss, /--xb-compose-safe-space: 44px;/);
+    assert.match(composeCss, /--xb-compose-safe-space: 40px;/);
+    assert.match(composeCss, /\.chat-compose textarea \{[\s\S]*min-height: 32px;[\s\S]*padding: 5px 10px 5px 14px;/);
+    assert.match(managerCss, /\.tavern-chat\.xb-page \.manager-compose button\.primary-action \{[\s\S]*min-height: 32px;/);
+    assert.doesNotMatch(managerCss, /\.tavern-chat\.xb-page \.manager-compose button\.primary-action \{[\s\S]*min-height: 58px;/);
+    assert.doesNotMatch(cssSource, /\.chat-bubble\.from-assistant\s*\{[^}]*border-left:/);
     assert.match(cssSource, /\.xb-os-shell\.theme-dark \.action-check-card-grid>span/);
     assert.doesNotMatch(cssSource, /\.xb-os-shell\.theme-dark \.action-check-card-grid>div/);
 });

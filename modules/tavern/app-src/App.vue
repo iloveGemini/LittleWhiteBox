@@ -207,6 +207,7 @@ const runtimeError = ref('');
 const composeErrorMessage = ref('');
 const runtimeProvider = ref('');
 const runtimeModel = ref('');
+const runtimeUserMessageVisible = ref(false);
 const isRunning = ref(false);
 const isCancellingRun = ref(false);
 const tavernDrawStatus = ref({ provider: 'disabled', enabled: false, ready: false });
@@ -3358,6 +3359,7 @@ function clearRuntimeAssistantLiveState() {
     runtimeText.value = '';
     runtimeThoughts.value = [];
     runtimeActionCheckEvents.value = [];
+    runtimeUserMessageVisible.value = false;
 }
 
 async function appendManagerProtocolMessages(
@@ -3646,6 +3648,7 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
     runtimeText.value = '';
     runtimeThoughts.value = [];
     runtimeActionCheckEvents.value = [];
+    runtimeUserMessageVisible.value = false;
     runtimeProvider.value = '';
     runtimeModel.value = '';
     chatAutoScroll.value = true;
@@ -3690,6 +3693,7 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
                 sessionMessages.value = existingIndex >= 0
                     ? sessionMessages.value.map((item, index) => index === existingIndex ? message : item)
                     : [...sessionMessages.value, message].sort((left, right) => left.order - right.order);
+                runtimeUserMessageVisible.value = true;
                 currentUserMessage.value = '';
                 void nextTick(() => resetTextareaHeight(chatComposeTextareaRef.value));
                 await refreshSessions();
@@ -3912,6 +3916,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
         runtimeText,
         runtimeThoughts,
         runtimeActionCheckEvents,
+        runtimeUserMessageVisible,
         saveEditMessage,
         scrollChatToBottom,
         scrollChatToTop,
