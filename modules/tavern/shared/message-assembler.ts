@@ -1585,31 +1585,25 @@ function buildMemoryBlock(memoryContext: XbTavernMemoryContext = {}): string {
 
     const fileLines = memoryFiles
         .map((file) => {
-            const path = normalizeText(file.path);
-            const title = normalizeText(file.title) || path || '记忆档案';
             const content = normalizeText(file.content);
-            return content ? `### ${title}${path ? ` (${path})` : ''}\n${content}` : '';
+            return content;
         })
         .filter(Boolean);
     if (fileLines.length) {
-        sections.push(`## 固定记忆档案\n${fileLines.join('\n\n')}`);
+        sections.push(`## 记忆\n${fileLines.join('\n\n')}`);
     }
 
     const stateLines = structuredStates
         .map((state) => {
-            const docType = normalizeText(state.docType);
-            const docId = normalizeText(state.docId);
-            const title = normalizeText(state.title) || `${docType}/${docId}`;
             const digest = normalizeText(state.digest);
-            if (!digest) {return '';}
-            return `### ${title}${docType || docId ? ` (${docType}/${docId}, revision ${Number(state.revision) || 0})` : ''}\n${digest}`;
+            return digest;
         })
         .filter(Boolean);
     if (stateLines.length) {
-        sections.push(`## 可视化结构状态摘要\n${stateLines.join('\n\n')}`);
+        sections.push(`## 状态摘要\n${stateLines.join('\n\n')}`);
     }
 
-    return sections.length ? `<session_memory>\n${sections.join('\n\n')}\n</session_memory>` : '';
+    return sections.join('\n\n');
 }
 
 function buildMemoryDepthEntries(memoryContext: XbTavernMemoryContext = {}): ActivatedWorldEntry[] {

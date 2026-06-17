@@ -2383,9 +2383,9 @@ test('xb tavern simulated request injects map digest without full map JSON', asy
         currentUserMessage: '我看向地窖。',
     });
 
-    assert.match(result.buildSnapshot.rawMessagesJson, /可视化结构状态摘要/);
+    assert.match(result.buildSnapshot.rawMessagesJson, /状态摘要/);
     assert.match(result.buildSnapshot.rawMessagesJson, /Hidden Cellar/);
-    assert.match(result.buildSnapshot.rawMessagesJson, /revision 1/);
+    assert.doesNotMatch(result.buildSnapshot.rawMessagesJson, /revision 1|tavern\.map\/main|docId|docType/);
     assert.doesNotMatch(result.buildSnapshot.rawMessagesJson, /"elements"/);
     assert.equal(result.buildSnapshot.structuredStates?.[0]?.docType, 'tavern.map');
     assert.equal(result.buildSnapshot.structuredStates?.[0]?.docId, 'main');
@@ -2506,10 +2506,10 @@ test('xb tavern simulated request injects only structured state when memory arch
         currentUserMessage: '前面有什么路？',
     });
 
-    assert.match(result.buildSnapshot.rawMessagesJson, /可视化结构状态摘要/);
+    assert.match(result.buildSnapshot.rawMessagesJson, /状态摘要/);
     assert.match(result.buildSnapshot.rawMessagesJson, /River Road/);
     assert.doesNotMatch(result.buildSnapshot.rawMessagesJson, /SECRET_MEMORY_NOTE/);
-    assert.doesNotMatch(result.buildSnapshot.rawMessagesJson, /固定记忆档案/);
+    assert.doesNotMatch(result.buildSnapshot.rawMessagesJson, /记忆|memory\/session\.md|tavern\.map\/main|revision/);
     assert.equal(result.buildSnapshot.structuredStates?.[0]?.docId, 'main');
 });
 

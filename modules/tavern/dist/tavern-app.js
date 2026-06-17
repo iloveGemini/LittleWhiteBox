@@ -57,11 +57,11 @@ function SL(e) {
     }
   }), t;
 }
-function De(e) {
+function $e(e) {
   let t = "";
   if (tn(e)) t = e;
   else if (ft(e)) for (let n = 0; n < e.length; n++) {
-    const r = De(e[n]);
+    const r = $e(e[n]);
     r && (t += r + " ");
   }
   else if (Ft(e))
@@ -1872,15 +1872,15 @@ function UO(e, t) {
     }
   }, b = (J, re, pe, ve, oe, Te, xe, Pe) => {
     let ae, G;
-    const { props: Ce, shapeFlag: he, transition: $e, dirs: Ge } = J;
+    const { props: Ce, shapeFlag: he, transition: Ne, dirs: Ge } = J;
     if (ae = J.el = i(J.type, Te, Ce && Ce.is, Ce), he & 8 ? d(ae, J.children) : he & 16 && E(J.children, ae, null, ve, oe, Tg(J, Te), xe, Pe), Ge && ki(J, null, ve, "created"), y(ae, J, J.scopeId, xe, ve), Ce) {
       for (const Je in Ce) Je !== "value" && !nc(Je) && o(ae, Je, null, Ce[Je], Te, ve);
       "value" in Ce && o(ae, "value", null, Ce.value, Te), (G = Ce.onVnodeBeforeMount) && Ss(G, ve, J);
     }
     Ge && ki(J, null, ve, "beforeMount");
-    const Ye = qO(oe, $e);
-    Ye && $e.beforeEnter(ae), r(ae, re, pe), ((G = Ce && Ce.onVnodeMounted) || Ye || Ge) && tr(() => {
-      G && Ss(G, ve, J), Ye && $e.enter(ae), Ge && ki(J, null, ve, "mounted");
+    const Ye = qO(oe, Ne);
+    Ye && Ne.beforeEnter(ae), r(ae, re, pe), ((G = Ce && Ce.onVnodeMounted) || Ye || Ge) && tr(() => {
+      G && Ss(G, ve, J), Ye && Ne.enter(ae), Ge && ki(J, null, ve, "mounted");
     }, oe);
   }, y = (J, re, pe, ve, oe) => {
     if (pe && _(J, pe), ve) for (let Te = 0; Te < ve.length; Te++) _(J, ve[Te]);
@@ -1897,20 +1897,20 @@ function UO(e, t) {
     const Pe = re.el = J.el;
     let { patchFlag: ae, dynamicChildren: G, dirs: Ce } = re;
     ae |= J.patchFlag & 16;
-    const he = J.props || Ut, $e = re.props || Ut;
+    const he = J.props || Ut, Ne = re.props || Ut;
     let Ge;
-    if (pe && Ii(pe, !1), (Ge = $e.onVnodeBeforeUpdate) && Ss(Ge, pe, re, J), Ce && ki(re, J, pe, "beforeUpdate"), pe && Ii(pe, !0), (he.innerHTML && $e.innerHTML == null || he.textContent && $e.textContent == null) && d(Pe, ""), G ? x(J.dynamicChildren, G, Pe, pe, ve, Tg(re, oe), Te) : xe || X(J, re, Pe, null, pe, ve, Tg(re, oe), Te, !1), ae > 0) {
-      if (ae & 16) P(Pe, he, $e, pe, oe);
-      else if (ae & 2 && he.class !== $e.class && o(Pe, "class", null, $e.class, oe), ae & 4 && o(Pe, "style", he.style, $e.style, oe), ae & 8) {
+    if (pe && Ii(pe, !1), (Ge = Ne.onVnodeBeforeUpdate) && Ss(Ge, pe, re, J), Ce && ki(re, J, pe, "beforeUpdate"), pe && Ii(pe, !0), (he.innerHTML && Ne.innerHTML == null || he.textContent && Ne.textContent == null) && d(Pe, ""), G ? x(J.dynamicChildren, G, Pe, pe, ve, Tg(re, oe), Te) : xe || X(J, re, Pe, null, pe, ve, Tg(re, oe), Te, !1), ae > 0) {
+      if (ae & 16) P(Pe, he, Ne, pe, oe);
+      else if (ae & 2 && he.class !== Ne.class && o(Pe, "class", null, Ne.class, oe), ae & 4 && o(Pe, "style", he.style, Ne.style, oe), ae & 8) {
         const Ye = re.dynamicProps;
         for (let Je = 0; Je < Ye.length; Je++) {
-          const tt = Ye[Je], at = he[tt], wt = $e[tt];
+          const tt = Ye[Je], at = he[tt], wt = Ne[tt];
           (wt !== at || tt === "value") && o(Pe, tt, at, wt, oe, pe);
         }
       }
       ae & 1 && J.children !== re.children && d(Pe, re.children);
-    } else !xe && G == null && P(Pe, he, $e, pe, oe);
-    ((Ge = $e.onVnodeUpdated) || Ce) && tr(() => {
+    } else !xe && G == null && P(Pe, he, Ne, pe, oe);
+    ((Ge = Ne.onVnodeUpdated) || Ce) && tr(() => {
       Ge && Ss(Ge, pe, re, J), Ce && ki(re, J, pe, "updated");
     }, ve);
   }, x = (J, re, pe, ve, oe, Te, xe) => {
@@ -1931,8 +1931,8 @@ function UO(e, t) {
     }
   }, D = (J, re, pe, ve, oe, Te, xe, Pe, ae) => {
     const G = re.el = J ? J.el : a(""), Ce = re.anchor = J ? J.anchor : a("");
-    let { patchFlag: he, dynamicChildren: $e, slotScopeIds: Ge } = re;
-    Ge && (Pe = Pe ? Pe.concat(Ge) : Ge), J == null ? (r(G, pe, ve), r(Ce, pe, ve), E(re.children || [], pe, Ce, oe, Te, xe, Pe, ae)) : he > 0 && he & 64 && $e && J.dynamicChildren && J.dynamicChildren.length === $e.length ? (x(J.dynamicChildren, $e, pe, oe, Te, xe, Pe), (re.key != null || oe && re === oe.subTree) && sI(J, re, !0)) : X(J, re, pe, Ce, oe, Te, xe, Pe, ae);
+    let { patchFlag: he, dynamicChildren: Ne, slotScopeIds: Ge } = re;
+    Ge && (Pe = Pe ? Pe.concat(Ge) : Ge), J == null ? (r(G, pe, ve), r(Ce, pe, ve), E(re.children || [], pe, Ce, oe, Te, xe, Pe, ae)) : he > 0 && he & 64 && Ne && J.dynamicChildren && J.dynamicChildren.length === Ne.length ? (x(J.dynamicChildren, Ne, pe, oe, Te, xe, Pe), (re.key != null || oe && re === oe.subTree) && sI(J, re, !0)) : X(J, re, pe, Ce, oe, Te, xe, Pe, ae);
   }, K = (J, re, pe, ve, oe, Te, xe, Pe, ae) => {
     re.slotScopeIds = Pe, J == null ? re.shapeFlag & 512 ? oe.ctx.activate(re, pe, ve, xe, ae) : Z(re, pe, ve, oe, Te, xe, ae) : Q(J, re, ae);
   }, Z = (J, re, pe, ve, oe, Te, xe) => {
@@ -1955,7 +1955,7 @@ function UO(e, t) {
   }, te = (J, re, pe, ve, oe, Te, xe) => {
     const Pe = () => {
       if (J.isMounted) {
-        let { next: he, bu: $e, u: Ge, parent: Ye, vnode: Je } = J;
+        let { next: he, bu: Ne, u: Ge, parent: Ye, vnode: Je } = J;
         {
           const Tt = oI(J);
           if (Tt) {
@@ -1968,17 +1968,17 @@ function UO(e, t) {
           }
         }
         let tt = he, at;
-        Ii(J, !1), he ? (he.el = Je.el, $(J, he, xe)) : he = Je, $e && Wf($e), (at = he.props && he.props.onVnodeBeforeUpdate) && Ss(at, Ye, he, Je), Ii(J, !0);
+        Ii(J, !1), he ? (he.el = Je.el, $(J, he, xe)) : he = Je, Ne && Wf(Ne), (at = he.props && he.props.onVnodeBeforeUpdate) && Ss(at, Ye, he, Je), Ii(J, !0);
         const wt = Sg(J), St = J.subTree;
         J.subTree = wt, T(St, wt, h(St.el), Ee(St), J, oe, Te), he.el = wt.el, tt === null && RO(J, wt.el), Ge && tr(Ge, oe), (at = he.props && he.props.onVnodeUpdated) && tr(() => Ss(at, Ye, he, Je), oe);
       } else {
         let he;
-        const { el: $e, props: Ge } = re, { bm: Ye, m: Je, parent: tt, root: at, type: wt } = J, St = ac(re);
-        if (Ii(J, !1), Ye && Wf(Ye), !St && (he = Ge && Ge.onVnodeBeforeMount) && Ss(he, tt, re), Ii(J, !0), $e && Xe) {
+        const { el: Ne, props: Ge } = re, { bm: Ye, m: Je, parent: tt, root: at, type: wt } = J, St = ac(re);
+        if (Ii(J, !1), Ye && Wf(Ye), !St && (he = Ge && Ge.onVnodeBeforeMount) && Ss(he, tt, re), Ii(J, !0), Ne && Xe) {
           const Tt = () => {
-            J.subTree = Sg(J), Xe($e, J.subTree, J, oe, null);
+            J.subTree = Sg(J), Xe(Ne, J.subTree, J, oe, null);
           };
-          St && wt.__asyncHydrate ? wt.__asyncHydrate($e, J, Tt) : Tt();
+          St && wt.__asyncHydrate ? wt.__asyncHydrate(Ne, J, Tt) : Tt();
         } else {
           at.ce && at.ce._hasShadowRoot() && at.ce._injectChildStyle(wt, J.parent ? J.parent.type : void 0);
           const Tt = J.subTree = Sg(J);
@@ -2001,12 +2001,12 @@ function UO(e, t) {
     const ve = J.vnode.props;
     J.vnode = re, J.next = null, $O(J, re.props, ve, pe), FO(J, re.children, pe), go(), e0(J), vo();
   }, X = (J, re, pe, ve, oe, Te, xe, Pe, ae = !1) => {
-    const G = J && J.children, Ce = J ? J.shapeFlag : 0, he = re.children, { patchFlag: $e, shapeFlag: Ge } = re;
-    if ($e > 0) {
-      if ($e & 128) {
+    const G = J && J.children, Ce = J ? J.shapeFlag : 0, he = re.children, { patchFlag: Ne, shapeFlag: Ge } = re;
+    if (Ne > 0) {
+      if (Ne & 128) {
         ce(G, he, pe, ve, oe, Te, xe, Pe, ae);
         return;
-      } else if ($e & 256) {
+      } else if (Ne & 256) {
         le(G, he, pe, ve, oe, Te, xe, Pe, ae);
         return;
       }
@@ -2015,44 +2015,44 @@ function UO(e, t) {
   }, le = (J, re, pe, ve, oe, Te, xe, Pe, ae) => {
     J = J || nl, re = re || nl;
     const G = J.length, Ce = re.length, he = Math.min(G, Ce);
-    let $e;
-    for ($e = 0; $e < he; $e++) {
-      const Ge = re[$e] = ae ? oo(re[$e]) : Ms(re[$e]);
-      T(J[$e], Ge, pe, null, oe, Te, xe, Pe, ae);
+    let Ne;
+    for (Ne = 0; Ne < he; Ne++) {
+      const Ge = re[Ne] = ae ? oo(re[Ne]) : Ms(re[Ne]);
+      T(J[Ne], Ge, pe, null, oe, Te, xe, Pe, ae);
     }
     G > Ce ? ue(J, oe, Te, !0, !1, he) : E(re, pe, ve, oe, Te, xe, Pe, ae, he);
   }, ce = (J, re, pe, ve, oe, Te, xe, Pe, ae) => {
     let G = 0;
     const Ce = re.length;
-    let he = J.length - 1, $e = Ce - 1;
-    for (; G <= he && G <= $e; ) {
+    let he = J.length - 1, Ne = Ce - 1;
+    for (; G <= he && G <= Ne; ) {
       const Ge = J[G], Ye = re[G] = ae ? oo(re[G]) : Ms(re[G]);
       if (lu(Ge, Ye)) T(Ge, Ye, pe, null, oe, Te, xe, Pe, ae);
       else break;
       G++;
     }
-    for (; G <= he && G <= $e; ) {
-      const Ge = J[he], Ye = re[$e] = ae ? oo(re[$e]) : Ms(re[$e]);
+    for (; G <= he && G <= Ne; ) {
+      const Ge = J[he], Ye = re[Ne] = ae ? oo(re[Ne]) : Ms(re[Ne]);
       if (lu(Ge, Ye)) T(Ge, Ye, pe, null, oe, Te, xe, Pe, ae);
       else break;
-      he--, $e--;
+      he--, Ne--;
     }
     if (G > he) {
-      if (G <= $e) {
-        const Ge = $e + 1, Ye = Ge < Ce ? re[Ge].el : ve;
-        for (; G <= $e; )
+      if (G <= Ne) {
+        const Ge = Ne + 1, Ye = Ge < Ce ? re[Ge].el : ve;
+        for (; G <= Ne; )
           T(null, re[G] = ae ? oo(re[G]) : Ms(re[G]), pe, Ye, oe, Te, xe, Pe, ae), G++;
       }
-    } else if (G > $e) for (; G <= he; )
+    } else if (G > Ne) for (; G <= he; )
       _e(J[G], oe, Te, !0), G++;
     else {
       const Ge = G, Ye = G, Je = /* @__PURE__ */ new Map();
-      for (G = Ye; G <= $e; G++) {
+      for (G = Ye; G <= Ne; G++) {
         const Dt = re[G] = ae ? oo(re[G]) : Ms(re[G]);
         Dt.key != null && Je.set(Dt.key, G);
       }
       let tt, at = 0;
-      const wt = $e - Ye + 1;
+      const wt = Ne - Ye + 1;
       let St = !1, Tt = 0;
       const Bt = new Array(wt);
       for (G = 0; G < wt; G++) Bt[G] = 0;
@@ -2064,7 +2064,7 @@ function UO(e, t) {
         }
         let qt;
         if (Dt.key != null) qt = Je.get(Dt.key);
-        else for (tt = Ye; tt <= $e; tt++) if (Bt[tt - Ye] === 0 && lu(Dt, re[tt])) {
+        else for (tt = Ye; tt <= Ne; tt++) if (Bt[tt - Ye] === 0 && lu(Dt, re[tt])) {
           qt = tt;
           break;
         }
@@ -2102,24 +2102,24 @@ function UO(e, t) {
     }
     if (ve !== 2 && G & 1 && Pe) if (ve === 0) Pe.persisted && !Te[bg] ? r(Te, re, pe) : (Pe.beforeEnter(Te), r(Te, re, pe), tr(() => Pe.enter(Te), oe));
     else {
-      const { leave: Ce, delayLeave: he, afterLeave: $e } = Pe, Ge = () => {
+      const { leave: Ce, delayLeave: he, afterLeave: Ne } = Pe, Ge = () => {
         J.ctx.isUnmounted ? s(Te) : r(Te, re, pe);
       }, Ye = () => {
         const Je = Te._isLeaving || !!Te[bg];
         Te._isLeaving && Te[bg](!0), Pe.persisted && !Je ? Ge() : Ce(Te, () => {
-          Ge(), $e && $e();
+          Ge(), Ne && Ne();
         });
       };
       he ? he(Te, Ge, Ye) : Ye();
     }
     else r(Te, re, pe);
   }, _e = (J, re, pe, ve = !1, oe = !1) => {
-    const { type: Te, props: xe, ref: Pe, children: ae, dynamicChildren: G, shapeFlag: Ce, patchFlag: he, dirs: $e, cacheIndex: Ge, memo: Ye } = J;
+    const { type: Te, props: xe, ref: Pe, children: ae, dynamicChildren: G, shapeFlag: Ce, patchFlag: he, dirs: Ne, cacheIndex: Ge, memo: Ye } = J;
     if (he === -2 && (oe = !1), Pe != null && (go(), ic(Pe, null, pe, J, !0), vo()), Ge != null && (re.renderCache[Ge] = void 0), Ce & 256) {
       re.ctx.deactivate(J);
       return;
     }
-    const Je = Ce & 1 && $e, tt = !ac(J);
+    const Je = Ce & 1 && Ne, tt = !ac(J);
     let at;
     if (tt && (at = xe && xe.onVnodeBeforeUnmount) && Ss(at, re, J), Ce & 6) U(J.component, pe, ve);
     else {
@@ -2317,7 +2317,7 @@ function VO(e, t = null, n = null, r = 0, s = null, o = !1) {
   if (n2(e) && (e = e.__vccOpts), t) {
     t = KO(t);
     let { class: a, style: l } = t;
-    a && !tn(a) && (t.class = De(a)), Ft(l) && (/* @__PURE__ */ K_(l) && !ft(l) && (l = mn({}, l)), t.style = Er(l));
+    a && !tn(a) && (t.class = $e(a)), Ft(l) && (/* @__PURE__ */ K_(l) && !ft(l) && (l = mn({}, l)), t.style = Er(l));
   }
   const i = tn(e) ? 1 : aI(e) ? 128 : lO(e) ? 64 : Ft(e) ? 4 : gt(e) ? 2 : 0;
   return g(e, t, n, r, s, i, o, !0);
@@ -2400,7 +2400,7 @@ function zO(...e) {
   for (let n = 0; n < e.length; n++) {
     const r = e[n];
     for (const s in r) if (s === "class")
-      t.class !== r.class && (t.class = De([t.class, r.class]));
+      t.class !== r.class && (t.class = $e([t.class, r.class]));
     else if (s === "style") t.style = Er([t.style, r.style]);
     else if (kp(s)) {
       const o = t[s], i = r[s];
@@ -6654,7 +6654,7 @@ var ot = /* @__PURE__ */ (function(e) {
   "afterHistory",
   "assistantPrefill"
 ];
-function Ne(e = "") {
+function De(e = "") {
   return String(e || "").trim();
 }
 function ln(e, t) {
@@ -6663,7 +6663,7 @@ function ln(e, t) {
     if (!n || typeof n != "object") return "";
     n = n[r];
   }
-  return Ne(n);
+  return De(n);
 }
 function To(e, t = "system") {
   if (typeof e == "number" && Wv[e]) return Wv[e];
@@ -6676,7 +6676,7 @@ function To(e, t = "system") {
   ].includes(n) ? n : t;
 }
 function fa(e, t, n = {}) {
-  const r = Ne(t);
+  const r = De(t);
   return r ? {
     role: To(e),
     content: r,
@@ -6685,9 +6685,9 @@ function fa(e, t, n = {}) {
 }
 function Vv(e) {
   return Array.isArray(e) ? e.map((t, n) => {
-    const r = t && typeof t == "object" ? t : {}, s = Ne(r.text);
+    const r = t && typeof t == "object" ? t : {}, s = De(r.text);
     return s ? {
-      label: Ne(r.label) || `reasoning ${n + 1}`,
+      label: De(r.label) || `reasoning ${n + 1}`,
       text: s
     } : null;
   }).filter((t) => !!t) : [];
@@ -6697,7 +6697,7 @@ function BF(e = []) {
   return t.length ? [
     "<reasoning>",
     ...t.map((n) => [
-      `<thought label="${Ne(n.label).replace(/"/g, "&quot;")}">`,
+      `<thought label="${De(n.label).replace(/"/g, "&quot;")}">`,
       n.text,
       "</thought>"
     ].join(`
@@ -6718,20 +6718,20 @@ function UF(e) {
   } : n;
 }
 function ub(e) {
-  return e.filter((t) => !!t && !!Ne(t.content));
+  return e.filter((t) => !!t && !!De(t.content));
 }
 function jt(e, t, n = "unknown", r = "", s = {}, o = "") {
   return {
     message: fa(e, t, s),
     layer: n,
     label: r || n,
-    sourceId: Ne(o)
+    sourceId: De(o)
   };
 }
 function qF(e = []) {
   const t = [], n = [];
   return e.forEach((r) => {
-    if (!r.message || !Ne(r.message.content)) return;
+    if (!r.message || !De(r.message.content)) return;
     const s = t.length;
     t.push(r.message);
     const o = r.message.content.length;
@@ -6750,8 +6750,8 @@ function qF(e = []) {
   };
 }
 function Ho(e) {
-  if (Array.isArray(e)) return e.map((n) => Ne(n)).filter(Boolean);
-  const t = Ne(e);
+  if (Array.isArray(e)) return e.map((n) => De(n)).filter(Boolean);
+  const t = De(e);
   return t ? [t] : [];
 }
 function HF(e = "") {
@@ -6774,7 +6774,7 @@ function GF(e) {
   return Object.prototype.hasOwnProperty.call(q0, t) ? q0[t] : ot.after;
 }
 function cb(e = {}, t = 0) {
-  const n = e, r = e.extensions || {}, s = (d, h) => Object.prototype.hasOwnProperty.call(r, d) ? r[d] : n[h], o = HF(e.content || ""), i = e.uid ?? e.id ?? e.comment ?? e.name ?? t + 1, a = Ne(e.sourceWorldBook || e.worldName || e.world), l = o.content || Ne(e.content), u = n.order ?? n.insertion_order;
+  const n = e, r = e.extensions || {}, s = (d, h) => Object.prototype.hasOwnProperty.call(r, d) ? r[d] : n[h], o = HF(e.content || ""), i = e.uid ?? e.id ?? e.comment ?? e.name ?? t + 1, a = De(e.sourceWorldBook || e.worldName || e.world), l = o.content || De(e.content), u = n.order ?? n.insertion_order;
   return {
     ...e,
     uid: i,
@@ -6799,7 +6799,7 @@ function cb(e = {}, t = 0) {
     excludeRecursion: s("exclude_recursion", "excludeRecursion") === !0,
     preventRecursion: s("prevent_recursion", "preventRecursion") === !0,
     delayUntilRecursion: s("delay_until_recursion", "delayUntilRecursion"),
-    group: Ne(s("group", "group")),
+    group: De(s("group", "group")),
     groupOverride: s("group_override", "groupOverride") === !0,
     groupWeight: Number.isFinite(Number(s("group_weight", "groupWeight"))) ? Number(s("group_weight", "groupWeight")) : void 0,
     useGroupScoring: s("use_group_scoring", "useGroupScoring"),
@@ -6809,7 +6809,7 @@ function cb(e = {}, t = 0) {
     cooldown: s("cooldown", "cooldown"),
     delay: s("delay", "delay"),
     triggers: Ho(s("triggers", "triggers")),
-    outletName: Ne(s("outlet_name", "outletName")),
+    outletName: De(s("outlet_name", "outletName")),
     matchPersonaDescription: s("match_persona_description", "matchPersonaDescription"),
     matchCharacterDescription: s("match_character_description", "matchCharacterDescription"),
     matchCharacterPersonality: s("match_character_personality", "matchCharacterPersonality"),
@@ -6818,13 +6818,13 @@ function cb(e = {}, t = 0) {
     matchCreatorNotes: s("match_creator_notes", "matchCreatorNotes"),
     activationReason: "",
     sourceWorldBook: a,
-    worldSourceType: Ne(e.worldSourceType),
+    worldSourceType: De(e.worldSourceType),
     worldSourceIndex: Number.isFinite(Number(e.worldSourceIndex)) ? Number(e.worldSourceIndex) : t,
     contentChars: l.length
   };
 }
 function WF(e, t, n = 0) {
-  return `${Ne(e) || "direct"}\0${Ne(t) || `index:${n}`}`;
+  return `${De(e) || "direct"}\0${De(t) || `index:${n}`}`;
 }
 function db(e) {
   return OF[e] || "after character";
@@ -6908,13 +6908,13 @@ function kI(e, t) {
 function II(e, t) {
   const n = e.characterFilter;
   if (!n || typeof n != "object") return !0;
-  const r = Array.isArray(n.names) ? n.names.map((d) => Ne(d)).filter(Boolean) : [], s = Array.isArray(n.tags) ? n.tags.map((d) => Ne(d)).filter(Boolean) : [];
+  const r = Array.isArray(n.names) ? n.names.map((d) => De(d)).filter(Boolean) : [], s = Array.isArray(n.tags) ? n.tags.map((d) => De(d)).filter(Boolean) : [];
   if (!r.length && !s.length) return !0;
-  const o = new Set((t.characterFilterData?.names || []).map((d) => Ne(d)).filter(Boolean)), i = new Set((t.characterFilterData?.tags || []).map((d) => Ne(d)).filter(Boolean)), a = r.some((d) => o.has(d)), l = s.some((d) => i.has(d)), u = a || l;
+  const o = new Set((t.characterFilterData?.names || []).map((d) => De(d)).filter(Boolean)), i = new Set((t.characterFilterData?.tags || []).map((d) => De(d)).filter(Boolean)), a = r.some((d) => o.has(d)), l = s.some((d) => i.has(d)), u = a || l;
   return n.isExclude ? !u : u;
 }
 function JF(e, t) {
-  if (e.disable === !0 || e.disabled === !0 || e.triggers?.length && !e.triggers.includes(Ne(t.trigger) || "normal") || !II(e, t)) return "";
+  if (e.disable === !0 || e.disabled === !0 || e.triggers?.length && !e.triggers.includes(De(t.trigger) || "normal") || !II(e, t)) return "";
   const n = Number(t.turn) || 0, r = fb(t, e), s = hb(e, t), o = AI(t);
   if (Number(r.delayUntilTurn) > n || Number(e.delay) > 0 && n < Number(e.delay) || Number(r.cooldownUntilTurn) > n && !s || o > 0 && e.excludeRecursion && !s || !kI(e, o) && !s) return "";
   if (e.decorators.includes("@@activate")) return "decorator";
@@ -6929,7 +6929,7 @@ function YF(e, t) {
     status: "disabled",
     activationReason: ""
   };
-  if (e.triggers?.length && !e.triggers.includes(Ne(t.trigger) || "normal")) return {
+  if (e.triggers?.length && !e.triggers.includes(De(t.trigger) || "normal")) return {
     status: "trigger_filtered",
     activationReason: ""
   };
@@ -6983,14 +6983,14 @@ function YF(e, t) {
   };
 }
 function H0(e, t = {}) {
-  const n = Ne(e.worldSourceType);
+  const n = De(e.worldSourceType);
   if (n === "chat") return 0;
   if (n === "persona") return 1;
   const r = Number(t.insertionStrategy ?? 1);
   return n === "character" ? r === 2 ? 3 : 2 : n === "global" ? r === 1 ? 3 : 2 : 4;
 }
 function G0(e, t = {}) {
-  const n = Ne(e.worldSourceType);
+  const n = De(e.worldSourceType);
   if (Number(t.insertionStrategy ?? 1) === 0) {
     if (n === "global") return 0;
     if (n === "character") return 1;
@@ -7036,7 +7036,7 @@ function zf(e = [], t = {}) {
   };
 }
 function W0(e) {
-  return Ne(e.group).split(/,\s*/).map((t) => t.trim()).filter(Boolean);
+  return De(e.group).split(/,\s*/).map((t) => t.trim()).filter(Boolean);
 }
 function QF(e, t = {}) {
   const n = Bp(t, e), r = e.key.filter((o) => n(o)).length;
@@ -7158,7 +7158,7 @@ function tB(e = [], t = [], n = {}, r = zf(t, n)) {
     return {
       uid: l.uid,
       activationKey: l.activationKey,
-      title: Ne(l.comment || l.title || l.name || l.uid),
+      title: De(l.comment || l.title || l.name || l.uid),
       sourceWorldBook: l.sourceWorldBook,
       worldSourceType: l.worldSourceType,
       worldSourceIndex: l.worldSourceIndex,
@@ -7184,14 +7184,14 @@ function tB(e = [], t = [], n = {}, r = zf(t, n)) {
 function nB(e = []) {
   return (Array.isArray(e) ? e : []).map((t, n) => ({
     ...cb(t, n),
-    activationReason: Ne(t.activationReason) || "native"
+    activationReason: De(t.activationReason) || "native"
   })).filter((t) => !!t.content);
 }
 function rB(e = []) {
   return e.map((t) => ({
     uid: t.uid,
     activationKey: t.activationKey,
-    title: Ne(t.comment || t.title || t.name || t.uid),
+    title: De(t.comment || t.title || t.name || t.uid),
     sourceWorldBook: t.sourceWorldBook,
     worldSourceType: t.worldSourceType,
     worldSourceIndex: t.worldSourceIndex,
@@ -7216,7 +7216,7 @@ function sB(e = {}) {
   const t = [];
   let n = 0;
   const r = (o, i, a = {}) => {
-    const l = Ne(o);
+    const l = De(o);
     if (!l) return;
     const u = `native:${i}:${n}`;
     t.push({
@@ -7239,7 +7239,7 @@ function sB(e = {}) {
     }), n += 1;
   };
   r(e.worldInfoBefore, ot.before), r(e.worldInfoAfter, ot.after), (Array.isArray(e.worldInfoExamples) ? e.worldInfoExamples : []).forEach((o) => {
-    const i = Ne(o?.position) === "after" ? ot.EMBottom : ot.EMTop;
+    const i = De(o?.position) === "after" ? ot.EMBottom : ot.EMTop;
     r(o?.content, i);
   }), (Array.isArray(e.anBefore) ? e.anBefore : []).forEach((o) => {
     r(o, ot.ANTop);
@@ -7278,7 +7278,7 @@ function Up(e) {
     case ot.EMBottom:
       return "example messages bottom";
     case ot.outlet:
-      return `outlet:${Ne(e.outletName || e.outlet || "default")}`;
+      return `outlet:${De(e.outletName || e.outlet || "default")}`;
     default:
       return db(e.position);
   }
@@ -7304,7 +7304,7 @@ function oB(e = []) {
           t.atDepth.push(n);
           break;
         case ot.outlet: {
-          const r = Ne(n.outletName || n.outlet || "default");
+          const r = De(n.outletName || n.outlet || "default");
           t.outlet[r] = t.outlet[r] || [], t.outlet[r].push(n);
           break;
         }
@@ -7364,7 +7364,7 @@ function MI(e = {}, t = {}) {
     ["Message Examples", e.mesExample || e.mes_example || ln(n, ["mes_example"])],
     ["User Persona", t.persona || t.description]
   ].map(([s, o]) => {
-    const i = Ne(o);
+    const i = De(o);
     return i ? `## ${s}
 ${i}` : "";
   }).filter(Boolean);
@@ -7375,33 +7375,23 @@ ${r.join(`
 </character_card>` : "";
 }
 function cu(e, t) {
-  const n = Ne(t);
+  const n = De(t);
   return n ? `## ${e}
 ${n}` : "";
 }
 function lB(e = {}) {
-  const t = Array.isArray(e.memoryFiles) ? e.memoryFiles : [], n = Array.isArray(e.structuredStates) ? e.structuredStates : [], r = [], s = t.map((i) => {
-    const a = Ne(i.path), l = Ne(i.title) || a || "记忆档案", u = Ne(i.content);
-    return u ? `### ${l}${a ? ` (${a})` : ""}
-${u}` : "";
-  }).filter(Boolean);
-  s.length && r.push(`## 固定记忆档案
+  const t = Array.isArray(e.memoryFiles) ? e.memoryFiles : [], n = Array.isArray(e.structuredStates) ? e.structuredStates : [], r = [], s = t.map((i) => De(i.content)).filter(Boolean);
+  s.length && r.push(`## 记忆
 ${s.join(`
 
 `)}`);
-  const o = n.map((i) => {
-    const a = Ne(i.docType), l = Ne(i.docId), u = Ne(i.title) || `${a}/${l}`, d = Ne(i.digest);
-    return d ? `### ${u}${a || l ? ` (${a}/${l}, revision ${Number(i.revision) || 0})` : ""}
-${d}` : "";
-  }).filter(Boolean);
-  return o.length && r.push(`## 可视化结构状态摘要
+  const o = n.map((i) => De(i.digest)).filter(Boolean);
+  return o.length && r.push(`## 状态摘要
 ${o.join(`
 
-`)}`), r.length ? `<session_memory>
-${r.join(`
+`)}`), r.join(`
 
-`)}
-</session_memory>` : "";
+`);
 }
 function uB(e = {}) {
   const t = lB(e);
@@ -7425,9 +7415,9 @@ function uB(e = {}) {
 }
 function cB(e = []) {
   return e.map((t, n) => {
-    const r = Ne(t.content);
+    const r = De(t.content);
     if (!r) return null;
-    const s = Ne(t.label) || `runtime depth ${n + 1}`;
+    const s = De(t.label) || `runtime depth ${n + 1}`;
     return {
       uid: `runtime-depth:${n}`,
       activationKey: `runtime-depth:${n}:${s}`,
@@ -7440,7 +7430,7 @@ function cB(e = []) {
       role: To(t.role, "system"),
       order: Number.isFinite(Number(t.order)) ? Number(t.order) : 1e9 + n,
       depth: Number.isFinite(Number(t.depth)) ? Math.max(0, Number(t.depth)) : 1,
-      activationReason: Ne(t.layer) || "runtime",
+      activationReason: De(t.layer) || "runtime",
       sourceWorldBook: "",
       title: s,
       comment: s
@@ -7449,14 +7439,14 @@ function cB(e = []) {
 }
 function dB(e = {}) {
   return (Array.isArray(e.sections) ? e.sections : []).map((t) => ({
-    id: Ne(t.id),
-    label: Ne(t.label),
+    id: De(t.id),
+    label: De(t.label),
     enabled: t.enabled !== !1,
     marker: t.marker === !0,
     role: To(t.role, "system"),
-    content: Ne(t.content),
+    content: De(t.content),
     placement: FF.includes(t.placement) ? t.placement : "beforeHistory",
-    source: Ne(t.source)
+    source: De(t.source)
   })).filter((t) => t.enabled && (t.content || t.marker));
 }
 function Aa(e = [], t = "") {
@@ -7471,7 +7461,7 @@ function ka(e = [], t, n = "preset") {
   }));
 }
 function fB(e = {}) {
-  return Ne(e.id).replace(/^prompt-manager:/, "");
+  return De(e.id).replace(/^prompt-manager:/, "");
 }
 function hB(e) {
   const { presetSections: t, character: n, user: r, worldBuckets: s, conversationUnits: o, runtimeProtocolUnits: i } = e, a = n.data || {}, l = /* @__PURE__ */ new Set(), u = [], d = (h, m) => {
@@ -7585,38 +7575,38 @@ function yB(e = [], t = []) {
 function _B(e = {}) {
   const t = e.character || {}, n = e.user || {}, r = t.data || {};
   return {
-    personaDescription: Ne(n.persona || n.description),
-    characterDescription: Ne(t.description || ln(r, ["description"])),
-    characterPersonality: Ne(t.personality || ln(r, ["personality"])),
-    characterDepthPrompt: Ne(ln(t, ["characterDepthPrompt"]) || ln(t, ["character_depth_prompt"]) || ln(r, [
+    personaDescription: De(n.persona || n.description),
+    characterDescription: De(t.description || ln(r, ["description"])),
+    characterPersonality: De(t.personality || ln(r, ["personality"])),
+    characterDepthPrompt: De(ln(t, ["characterDepthPrompt"]) || ln(t, ["character_depth_prompt"]) || ln(r, [
       "extensions",
       "depth_prompt",
       "prompt"
     ]) || ln(r, ["character_depth_prompt"]) || ln(r, ["depth_prompt"])),
-    scenario: Ne(t.scenario || ln(r, ["scenario"])),
-    creatorNotes: Ne(t.creatorNotes || t.creator_notes || ln(r, ["creator_notes"]))
+    scenario: De(t.scenario || ln(r, ["scenario"])),
+    creatorNotes: De(t.creatorNotes || t.creator_notes || ln(r, ["creator_notes"]))
   };
 }
 function bB(e = {}) {
-  const t = e.character || {}, n = Ne(t.avatar), r = n.split(/[\\/]/).pop() || n, s = Array.isArray(t.tags) ? t.tags : [];
+  const t = e.character || {}, n = De(t.avatar), r = n.split(/[\\/]/).pop() || n, s = Array.isArray(t.tags) ? t.tags : [];
   return {
     names: [
       t.name,
       t.id,
       n,
       r
-    ].map((o) => Ne(o)).filter(Boolean),
-    tags: s.map((o) => Ne(o)).filter(Boolean)
+    ].map((o) => De(o)).filter(Boolean),
+    tags: s.map((o) => De(o)).filter(Boolean)
   };
 }
 function wB(e = {}, t = {}) {
   const n = String(e.content || e.mes || e.message || "");
   if (!n) return "";
-  const r = (e.is_user === !0 ? "user" : To(e.role, "assistant")) === "user" ? t.user?.name : t.character?.name, s = Ne(e.name || r);
+  const r = (e.is_user === !0 ? "user" : To(e.role, "assistant")) === "user" ? t.user?.name : t.character?.name, s = De(e.name || r);
   return s ? `${s}: ${n}` : n;
 }
 function SB(e = {}, t = "", n = !1) {
-  const r = e.history || [], s = n && t ? `${Ne(e.user?.name) || "User"}: ${t}` : t;
+  const r = e.history || [], s = n && t ? `${De(e.user?.name) || "User"}: ${t}` : t;
   return [...r.map((o) => n ? wB(o, e) : o.content || o.mes || o.message || ""), s].map((o) => String(o || "")).filter(Boolean);
 }
 function TB(e = {}) {
@@ -7624,20 +7614,20 @@ function TB(e = {}) {
     ...r,
     sourceWorldBook: r.sourceWorldBook || r.worldName || r.world || ""
   })) : [], n = (Array.isArray(e.worldBooks) ? e.worldBooks : []).flatMap((r) => {
-    const s = Ne(r.worldSourceType), o = Number(r.worldSourceIndex);
+    const s = De(r.worldSourceType), o = Number(r.worldSourceIndex);
     return Array.isArray(r.entries) ? r.entries.map((i) => ({
       ...i,
       sourceWorldBook: i.sourceWorldBook || i.worldName || i.world || r.name,
-      worldSourceType: Ne(i.worldSourceType) || s,
+      worldSourceType: De(i.worldSourceType) || s,
       worldSourceIndex: Number.isFinite(Number(i.worldSourceIndex)) ? Number(i.worldSourceIndex) : Number.isFinite(o) ? o : void 0
     })) : [];
   });
   return CB([...t, ...n]);
 }
 function EB(e = {}) {
-  const t = Ne(e.sourceWorldBook || e.worldName || e.world) || "direct", n = Ne(e.uid ?? e.id);
+  const t = De(e.sourceWorldBook || e.worldName || e.world) || "direct", n = De(e.uid ?? e.id);
   if (n) return `${t}\0uid\0${n}`;
-  const r = Ne(e.comment || e.title || e.name), s = Ne(e.content);
+  const r = De(e.comment || e.title || e.name), s = De(e.content);
   return `${t}\0body\0${r}\0${Ho(e.key).join("")}\0${[...Ho(e.keysecondary), ...Ho(e.secondary_keys)].join("")}\0${s}`;
 }
 function CB(e = []) {
@@ -7779,7 +7769,7 @@ function $I(e = {}, t, n) {
 function AB(e, t = []) {
   const n = ub(t.map((r) => ({
     ...r,
-    content: Ne(r.content)
+    content: De(r.content)
   })));
   return {
     ...e,
@@ -7809,15 +7799,15 @@ async function IB(e = {}, t = {}, n = {}, r = {}) {
   if (r.transformWorldEntries) {
     s.activatedWorldEntries = (await r.transformWorldEntries(s.activatedWorldEntries)).map((a) => ({
       ...a,
-      content: Ne(a.content),
-      contentChars: Ne(a.content).length
+      content: De(a.content),
+      contentChars: De(a.content).length
     })).filter((a) => !!a.content);
     const i = new Map(s.activatedWorldEntries.map((a) => [a.activationKey, a]));
     s.localStateWorldEntries = s.localStateWorldEntries.map((a) => i.get(a.activationKey) || a).filter((a) => !!a.content);
   }
   r.transformConversationMessages && (s.promptConversationMessages = ub((await r.transformConversationMessages(NI(s, t))).map((i) => ({
     ...i,
-    content: Ne(i.content)
+    content: De(i.content)
   }))));
   const o = $I(t, s, r.regexApplications);
   return r.transformFinalMessages ? AB(o, await r.transformFinalMessages(o.messages)) : o;
@@ -7825,18 +7815,18 @@ async function IB(e = {}, t = {}, n = {}, r = {}) {
 function DI(e = {}, t = {}, n, r = void 0) {
   const s = e.character || {}, o = e.user || {}, i = Array.isArray(e.worldBooks) ? e.worldBooks : [], a = new Map(n.worldEntryCandidates.map((l) => [l.activationKey, l]));
   return {
-    chatPresetId: Ne(t.id),
-    chatPresetName: Ne(t.name),
-    presetId: Ne(t.id),
-    presetName: Ne(t.name),
-    characterId: Ne(s.id),
-    characterName: Ne(s.name),
-    userName: Ne(o.name),
+    chatPresetId: De(t.id),
+    chatPresetName: De(t.name),
+    presetId: De(t.id),
+    presetName: De(t.name),
+    characterId: De(s.id),
+    characterName: De(s.name),
+    userName: De(o.name),
     historyCount: Array.isArray(e.history) ? e.history.length : 0,
     worldBooks: i.map((l) => ({
-      name: Ne(l.name),
+      name: De(l.name),
       entries: Array.isArray(l.entries) ? l.entries.length : 0,
-      ...l.error ? { error: Ne(l.error) } : {}
+      ...l.error ? { error: De(l.error) } : {}
     })),
     messageCount: n.messages.length,
     messageChars: n.messages.reduce((l, u) => l + String(u.content || "").length, 0),
@@ -7848,25 +7838,25 @@ function DI(e = {}, t = {}, n, r = void 0) {
       return {
         uid: l.uid,
         sourceWorldBook: l.sourceWorldBook,
-        title: u?.title || Ne(l.comment || l.title || l.name || l.uid),
+        title: u?.title || De(l.comment || l.title || l.name || l.uid),
         activationReason: l.activationReason,
         insertionTarget: u?.insertionTarget || Up(l),
         contentChars: l.contentChars
       };
     }),
     ...e.nativeWorldInfo ? { nativeWorldInfo: {
-      trigger: Ne(e.nativeWorldInfo.trigger),
+      trigger: De(e.nativeWorldInfo.trigger),
       sourceNames: Array.isArray(e.nativeWorldInfo.sourceNames) ? e.nativeWorldInfo.sourceNames.map((l) => ({
-        name: Ne(l.name),
+        name: De(l.name),
         ...l.sourceType ? { sourceType: l.sourceType } : {},
         ...Number.isFinite(Number(l.sourceIndex)) ? { sourceIndex: Number(l.sourceIndex) } : {}
       })) : []
     } } : {},
     ...n.meta.structuredStates?.length ? { structuredStates: n.meta.structuredStates.map((l) => ({
-      docType: Ne(l.docType),
-      docId: Ne(l.docId),
+      docType: De(l.docType),
+      docId: De(l.docId),
       revision: Number(l.revision) || 0,
-      digestChars: Ne(l.digest).length
+      digestChars: De(l.digest).length
     })) } : {},
     worldBudget: n.meta.worldBudget,
     worldPositionCounts: n.meta.worldPositionCounts,
@@ -14681,18 +14671,8 @@ function np(e) {
 }
 function Xb(e, t = 0) {
   if (e.meta.status !== "active" || !Wb(e.elements)) return "";
-  const n = Vt(e.meta.name || "Map", 80) || "Map", r = /* @__PURE__ */ new Map();
-  e.elements.forEach((a) => {
-    const l = r.get(a.cat) || [];
-    l.push(a), r.set(a.cat, l);
-  });
-  const s = e.elements.filter((a) => typeof a.text == "string" && a.text.trim()).map((a) => Vt(a.text, 40)).filter(Boolean).slice(0, 8), o = (r.get("door") || []).map((a) => a.id).slice(0, 8), i = (r.get("danger") || []).map((a) => a.id).slice(0, 8);
-  return [
-    `Map: ${n} (revision ${t}, ${e.elements.length} elements)`,
-    s.length ? `Labels: ${s.join(", ")}` : "",
-    o.length ? `Doors/Routes: ${o.join(", ")}` : "",
-    i.length ? `Danger/Markers: ${i.join(", ")}` : ""
-  ].filter(Boolean).join(`
+  const n = Vt(e.meta.name || "Map", 80) || "Map", r = e.elements.filter((s) => typeof s.text == "string" && s.text.trim()).map((s) => Vt(s.text, 40)).filter(Boolean).slice(0, 8);
+  return [`地图：${n}`, r.length ? `标注：${r.join(", ")}` : ""].filter(Boolean).join(`
 `);
 }
 function rp(e) {
@@ -40519,7 +40499,7 @@ var B7 = ["title", "aria-label"], U7 = {
   ],
   setup(e, { emit: t }) {
     const n = t;
-    return (r, s) => (B(), q("div", { class: De(["home-corner-actions", { "page-corner-actions": e.includeHome || e.compact }]) }, [
+    return (r, s) => (B(), q("div", { class: $e(["home-corner-actions", { "page-corner-actions": e.includeHome || e.compact }]) }, [
       e.includeChatPreset ? (B(), q("button", {
         key: 0,
         type: "button",
@@ -40841,7 +40821,7 @@ var K7 = { class: "xb-page character-select-page" }, z7 = { class: "character-de
       e.pendingError ? (B(), q("div", X7, " [SYS_ERROR] " + ee(e.pendingError), 1)) : Se("", !0),
       e.characters.length ? (B(), q("section", {
         key: 1,
-        class: De(["character-archive", { "has-character-selection": !!e.selectedCharacter }])
+        class: $e(["character-archive", { "has-character-selection": !!e.selectedCharacter }])
       }, [g("aside", Q7, [
         g("div", Z7, [g("label", j7, [C[17] || (C[17] = g("span", { class: "icon" }, "⌕", -1)), g("input", {
           value: e.searchText,
@@ -40859,7 +40839,7 @@ var K7 = { class: "xb-page character-select-page" }, z7 = { class: "character-de
         }, [(B(!0), q(Fe, null, rt(e.visibleCharacters, (R) => (B(), q("button", {
           key: R.id,
           type: "button",
-          class: De(["character-card-option", {
+          class: $e(["character-card-option", {
             current: R.id === e.liveCharacterId,
             selected: R.id === e.selectedCharacter?.id,
             pending: R.id === e.pendingCharacterSessionId
@@ -40894,7 +40874,7 @@ var K7 = { class: "xb-page character-select-page" }, z7 = { class: "character-de
         g("p", vX, " ID: " + ee(e.selectedCharacter.id.substring(0, 8) || "UNKNOWN"), 1),
         g("div", yX, [g("h3", null, ee(e.selectedCharacter.name), 1), g("div", _X, [g("button", {
           type: "button",
-          class: De(["os-system-act-btn character-worldbook-button", {
+          class: $e(["os-system-act-btn character-worldbook-button", {
             "is-loading": e.characterWorldbookBusy,
             "is-bound": m.value
           }]),
@@ -40913,7 +40893,7 @@ var K7 = { class: "xb-page character-select-page" }, z7 = { class: "character-de
           d: "M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18ZM3.8 9h16.4M3.8 15h16.4M12 3c2 2.2 3 5.2 3 9s-1 6.8-3 9M12 3c-2 2.2-3 5.2-3 9s1 6.8 3 9"
         })], -1)])], 10, bX), g("button", {
           type: "button",
-          class: De(["os-system-act-btn enter-chat-button", { "is-loading": e.selectedCharacter.id === e.pendingCharacterSessionId }]),
+          class: $e(["os-system-act-btn enter-chat-button", { "is-loading": e.selectedCharacter.id === e.pendingCharacterSessionId }]),
           disabled: !!e.pendingCharacterSessionId,
           onClick: C[5] || (C[5] = (R) => M.$emit("enter-selected"))
         }, ee(e.selectedCharacter.id === e.pendingCharacterSessionId ? "进入中..." : "进入聊天"), 11, wX)])]),
@@ -40923,12 +40903,12 @@ var K7 = { class: "xb-page character-select-page" }, z7 = { class: "character-de
         g("div", MX, ee(l.value), 1),
         g("details", {
           open: S(i).isOpen(T("greetings")),
-          class: De(["data-section greeting-picker", { "is-empty": !u.value }]),
+          class: $e(["data-section greeting-picker", { "is-empty": !u.value }]),
           onToggle: C[6] || (C[6] = (R) => S(i).setOpenFromEvent(T("greetings"), R))
         }, [C[21] || (C[21] = g("summary", { class: "data-section-title" }, " 切换开场白 ", -1)), u.value && S(i).isOpen(T("greetings")) ? (B(), q("div", RX, [(B(!0), q(Fe, null, rt(a.value, (R, L) => (B(), q("button", {
           key: `${e.selectedCharacter.id}-greeting-${L}`,
           type: "button",
-          class: De(["greeting-choice", { selected: L === e.selectedGreetingIndex }]),
+          class: $e(["greeting-choice", { selected: L === e.selectedGreetingIndex }]),
           disabled: !!e.pendingCharacterSessionId,
           onClick: (p) => M.$emit("select-greeting", L)
         }, [g("span", $X, ee(k(L)), 1), g("span", DX, ee(e.shortText(R, 120)), 1)], 10, NX))), 128))])) : Se("", !0)], 42, PX)
@@ -41251,10 +41231,10 @@ var hQ = {
         class: "tavern-contract-tier"
       }, [g("div", gQ, [g("span", null, ee(S(Yq)[a.tier]), 1)]), (B(!0), q(Fe, null, rt(a.mandates, (l) => (B(), q("article", {
         key: l.key,
-        class: De(["tavern-contract-mandate", { "is-off": !e.draftContract[l.key] }])
+        class: $e(["tavern-contract-mandate", { "is-off": !e.draftContract[l.key] }])
       }, [g("button", {
         type: "button",
-        class: De(["tavern-contract-seal", { active: e.draftContract[l.key] }]),
+        class: $e(["tavern-contract-seal", { active: e.draftContract[l.key] }]),
         "aria-pressed": e.draftContract[l.key] ? "true" : "false",
         onClick: (u) => o.$emit("toggle", l.key)
       }, [g("span", null, ee(l.icon), 1)], 10, vQ), g("div", yQ, [g("h3", null, ee(l.title), 1), g("p", _Q, ee(l.description), 1)])], 2))), 128))]))), 128))]),
@@ -41363,7 +41343,7 @@ var AQ = { class: "chat-side xb-sidebar" }, kQ = { class: "chat-profile xb-brand
     return (H, O) => (B(), q("aside", AQ, [
       g("button", {
         type: "button",
-        class: De(["chat-mobile-sheet-handle", { "is-dragging": S(X) }]),
+        class: $e(["chat-mobile-sheet-handle", { "is-dragging": S(X) }]),
         title: "收起目录",
         "aria-label": "收起目录",
         onClick: $,
@@ -41383,17 +41363,17 @@ var AQ = { class: "chat-side xb-sidebar" }, kQ = { class: "chat-profile xb-brand
         g("div", PQ, [
           g("button", {
             type: "button",
-            class: De(["xb-layout-button", { "is-active": S(a) === "chat" }]),
+            class: $e(["xb-layout-button", { "is-active": S(a) === "chat" }]),
             onClick: O[5] || (O[5] = (U) => a.value = "chat")
           }, " 聊天 ", 2),
           g("button", {
             type: "button",
-            class: De(["xb-layout-button", { "is-active": S(a) === "balanced" }]),
+            class: $e(["xb-layout-button", { "is-active": S(a) === "balanced" }]),
             onClick: O[6] || (O[6] = (U) => a.value = "balanced")
           }, " 平衡 ", 2),
           g("button", {
             type: "button",
-            class: De(["xb-layout-button", { "is-active": S(a) === "editor" }]),
+            class: $e(["xb-layout-button", { "is-active": S(a) === "editor" }]),
             onClick: O[7] || (O[7] = (U) => a.value = "editor")
           }, " 记忆 ", 2)
         ])
@@ -41402,19 +41382,19 @@ var AQ = { class: "chat-side xb-sidebar" }, kQ = { class: "chat-profile xb-brand
         type: "button",
         role: "tab",
         "aria-selected": S(d) === "memory",
-        class: De({ active: S(d) === "memory" }),
+        class: $e({ active: S(d) === "memory" }),
         onClick: O[8] || (O[8] = (U) => d.value = "memory")
       }, [O[12] || (O[12] = g("strong", null, "记忆", -1)), g("span", null, ee(S(b).length), 1)], 10, NQ), g("button", {
         type: "button",
         role: "tab",
         "aria-selected": S(d) === "sessions",
-        class: De({ active: S(d) === "sessions" }),
+        class: $e({ active: S(d) === "sessions" }),
         onClick: O[9] || (O[9] = (U) => d.value = "sessions")
       }, [O[13] || (O[13] = g("strong", null, "会话", -1)), g("span", null, ee(S(_)), 1)], 10, $Q)]),
       S(d) === "sessions" ? (B(), q("section", DQ, [g("div", LQ, [O[14] || (O[14] = g("strong", null, "会话目录", -1)), g("span", null, ee(S(_)), 1)]), g("div", OQ, [
         (B(!0), q(Fe, null, rt(S(u), (U) => (B(), q("div", {
           key: U.id,
-          class: De(["session-card compact", { active: U.id === S(k) }])
+          class: $e(["session-card compact", { active: U.id === S(k) }])
         }, [g("button", {
           type: "button",
           class: "session-open",
@@ -41447,7 +41427,7 @@ var AQ = { class: "chat-side xb-sidebar" }, kQ = { class: "chat-profile xb-brand
         }, [g("div", VQ, [g("span", null, ee(U.title), 1), g("em", null, ee(U.totalCount), 1)]), g("div", KQ, [(B(!0), q(Fe, null, rt(U.files, (ue) => (B(), q("button", {
           key: ue.path,
           type: "button",
-          class: De(["memory-file", {
+          class: $e(["memory-file", {
             active: S(Z) === ue.path,
             stale: ue.status === "stale"
           }]),
@@ -41513,7 +41493,7 @@ var tZ = { class: "panel-head preset-page-head" }, nZ = { class: "panel-pills" }
     }
     return dt(n, (le) => {
       le !== "chatPreset" && (K.value = !1);
-    }), (le, ce) => Nn((B(), q("div", { class: De(["panel step-panel preset-workspace", { "is-mobile-editor-open": K.value }]) }, [
+    }), (le, ce) => Nn((B(), q("div", { class: $e(["panel step-panel preset-workspace", { "is-mobile-editor-open": K.value }]) }, [
       g("div", tZ, [ce[9] || (ce[9] = g("div", null, [g("h2", null, "聊天预设")], -1)), g("div", nZ, [S(d) ? (B(), q("span", rZ, "未保存")) : Se("", !0), g("span", sZ, ee(S(h).length) + " 条 · " + ee(S(_)) + " 字", 1)])]),
       g("div", oZ, [g("label", iZ, [g("select", {
         value: D.value,
@@ -41562,7 +41542,7 @@ var tZ = { class: "panel-head preset-page-head" }, nZ = { class: "panel-pills" }
         }, null, 512), [[si, S(C)]])]), g("p", null, " 显示 " + ee(Math.min(S(i).length, S(R))) + " / " + ee(S(i).length) + "，共 " + ee(S(T).length) + " 条 ", 1)]),
         g("div", wZ, [S(P).length ? Se("", !0) : (B(), q("div", SZ, " 没有匹配的提示词条目。 ")), (B(!0), q(Fe, null, rt(S(P), (fe) => (B(), q("div", {
           key: fe.identifier,
-          class: De(["prompt-manager-row", {
+          class: $e(["prompt-manager-row", {
             selected: S(y) === fe.identifier,
             disabled: !fe.enabled,
             marker: fe.marker
@@ -41672,15 +41652,15 @@ var tZ = { class: "panel-head preset-page-head" }, nZ = { class: "panel-pills" }
   },
   emits: ["top", "bottom"],
   setup(e) {
-    return (t, n) => (B(), q("div", { class: De(["chat-scroll-helpers", [e.extraClass, { active: e.active }]]) }, [g("button", {
+    return (t, n) => (B(), q("div", { class: $e(["chat-scroll-helpers", [e.extraClass, { active: e.active }]]) }, [g("button", {
       type: "button",
-      class: De({ visible: e.showTop }),
+      class: $e({ visible: e.showTop }),
       title: "回到顶部",
       "aria-label": "回到顶部",
       onClick: n[0] || (n[0] = (r) => t.$emit("top"))
     }, " ▲ ", 2), g("button", {
       type: "button",
-      class: De({ visible: e.showBottom }),
+      class: $e({ visible: e.showBottom }),
       title: "回到底部",
       "aria-label": "回到底部",
       onClick: n[1] || (n[1] = (r) => t.$emit("bottom"))
@@ -41821,7 +41801,7 @@ var ZZ = ["aria-hidden"], jZ = {
   __name: "TavernConversationPanel",
   emits: ["open-contract"],
   setup(e, { emit: t }) {
-    const n = t, r = _d(), s = bm(), { activeView: o, homeThemeDark: i, openPromptInspector: a, rememberBrokenAvatar: l } = r, { actionFeedback: u, cancelEditMessage: d, canDrawMessage: h, canEditMessage: m, canRerunMessage: _, canSendMessage: w, chatComposeTextareaRef: T, chatFocus: k, chatMessages: M, chatMessageWindow: C, chatScrollControlsActive: R, chatScrollRef: L, currentUserMessage: p, deleteMessageTurn: b, displayMessageContent: y, displayMessageRenderProjection: E, displayMessageThoughtBlocks: I, displayRuntimeRenderProjection: x, displayRuntimeThoughtBlocks: P, drawMessage: D, drawMessageStatusClass: K, drawMessageStatusText: Z, drawMessageTitle: Q, formatMessageTime: te, handleChatScroll: $, handleChatSubmit: X, handleChatTouchMove: le, handleChatTouchStart: ce, handleChatWheel: fe, handleComposeInput: _e, handleComposeKeydown: H, isDrawingMessage: O, isEditingMessage: U, isCancellingRun: ue, isRunning: Ee, latestErrorMessage: Re, markdownSignature: Oe, messageKey: Qe, renderChatMarkdown: ze, rerunFromMessage: Xe, revealOlderChatMessages: J, roleLabel: re, runtimeActionCheckEvents: pe, runtimeText: ve, runtimeThoughts: oe, runtimeUserMessageVisible: Te, saveEditMessage: xe, scrollChatToBottom: Pe, scrollChatToTop: ae, selectedSessionId: G, showChatScrollBottom: Ce, showChatScrollTop: he, startEditMessage: $e, thoughtBlocks: Ge, thoughtSummaryLabel: Ye, visibleCharacterAvatar: Je, visibleChatMessages: tt, visibleUserAvatar: at } = s;
+    const n = t, r = _d(), s = bm(), { activeView: o, homeThemeDark: i, openPromptInspector: a, rememberBrokenAvatar: l } = r, { actionFeedback: u, cancelEditMessage: d, canDrawMessage: h, canEditMessage: m, canRerunMessage: _, canSendMessage: w, chatComposeTextareaRef: T, chatFocus: k, chatMessages: M, chatMessageWindow: C, chatScrollControlsActive: R, chatScrollRef: L, currentUserMessage: p, deleteMessageTurn: b, displayMessageContent: y, displayMessageRenderProjection: E, displayMessageThoughtBlocks: I, displayRuntimeRenderProjection: x, displayRuntimeThoughtBlocks: P, drawMessage: D, drawMessageStatusClass: K, drawMessageStatusText: Z, drawMessageTitle: Q, formatMessageTime: te, handleChatScroll: $, handleChatSubmit: X, handleChatTouchMove: le, handleChatTouchStart: ce, handleChatWheel: fe, handleComposeInput: _e, handleComposeKeydown: H, isDrawingMessage: O, isEditingMessage: U, isCancellingRun: ue, isRunning: Ee, latestErrorMessage: Re, markdownSignature: Oe, messageKey: Qe, renderChatMarkdown: ze, rerunFromMessage: Xe, revealOlderChatMessages: J, roleLabel: re, runtimeActionCheckEvents: pe, runtimeText: ve, runtimeThoughts: oe, runtimeUserMessageVisible: Te, saveEditMessage: xe, scrollChatToBottom: Pe, scrollChatToTop: ae, selectedSessionId: G, showChatScrollBottom: Ce, showChatScrollTop: he, startEditMessage: Ne, thoughtBlocks: Ge, thoughtSummaryLabel: Ye, visibleCharacterAvatar: Je, visibleChatMessages: tt, visibleUserAvatar: at } = s;
     function wt(V) {
       L.value = V instanceof HTMLElement ? V : null;
     }
@@ -41959,7 +41939,7 @@ var ZZ = ["aria-hidden"], jZ = {
         }, " 展开较早记录 " + ee(S(C).hiddenBefore) + " 条 ", 41, sj)) : Se("", !0),
         (B(!0), q(Fe, null, rt(S(tt), (ne) => (B(), q(Fe, { key: `${ne.sessionId}-${ne.order}` }, [g("div", {
           "data-chat-anchor-key": `${ne.sessionId}:${ne.order}`,
-          class: De(["chat-bubble", [
+          class: $e(["chat-bubble", [
             ne.role === "user" ? "from-user" : "from-assistant",
             { "is-error": ne.error },
             { "is-action-tray-open": Zt(ne) }
@@ -41987,18 +41967,18 @@ var ZZ = ["aria-hidden"], jZ = {
           ])])]),
           S(U)(ne) ? Se("", !0) : (B(), q("div", {
             key: 0,
-            class: De(["message-actions", { "has-status": !!S(Z)(ne) }]),
+            class: $e(["message-actions", { "has-status": !!S(Z)(ne) }]),
             onClick: me[8] || (me[8] = un(() => {
             }, ["stop"]))
           }, [
             S(Z)(ne) ? (B(), q("span", {
               key: 0,
-              class: De(["message-draw-status", S(K)(ne)])
+              class: $e(["message-draw-status", S(K)(ne)])
             }, ee(S(Z)(ne)), 3)) : Se("", !0),
             g("button", {
               type: "button",
               disabled: !S(h)(ne),
-              class: De([S(u)(ne, "draw"), { "is-running": S(O)(ne) }]),
+              class: $e([S(u)(ne, "draw"), { "is-running": S(O)(ne) }]),
               title: S(Q)(ne),
               "aria-label": S(Q)(ne),
               onClick: (Le) => S(D)(ne)
@@ -42006,10 +41986,10 @@ var ZZ = ["aria-hidden"], jZ = {
             g("button", {
               type: "button",
               disabled: !S(m)(ne),
-              class: De(S(u)(ne, "edit")),
+              class: $e(S(u)(ne, "edit")),
               title: "编辑",
               "aria-label": "编辑",
-              onClick: (Le) => S($e)(ne)
+              onClick: (Le) => S(Ne)(ne)
             }, [...me[21] || (me[21] = [g("svg", {
               "aria-hidden": "true",
               viewBox: "0 0 24 24"
@@ -42017,7 +41997,7 @@ var ZZ = ["aria-hidden"], jZ = {
             g("button", {
               type: "button",
               disabled: !S(_)(ne),
-              class: De(S(u)(ne, "rerun")),
+              class: $e(S(u)(ne, "rerun")),
               title: ne.role === "user" ? "发送最后一楼" : "重新生成最后回复",
               "aria-label": ne.role === "user" ? "发送最后一楼" : "重新生成最后回复",
               onClick: (Le) => S(Xe)(ne)
@@ -42032,7 +42012,7 @@ var ZZ = ["aria-hidden"], jZ = {
             g("button", {
               type: "button",
               disabled: S(Ee),
-              class: De(S(u)(ne, "delete")),
+              class: $e(S(u)(ne, "delete")),
               title: "从这里删除后续剧情",
               "aria-label": "从这里删除后续剧情",
               onClick: (Le) => S(b)(ne)
@@ -42197,7 +42177,7 @@ var ZZ = ["aria-hidden"], jZ = {
   __name: "TavernManagerPanel",
   emits: ["open-contract"],
   setup(e, { emit: t }) {
-    const n = t, r = _d(), s = bm(), o = MN(), { activeView: i, shortText: a } = r, { chatFocus: l, cancelEditMessage: u, formatMessageTime: d, handleComposeInput: h, markdownSignature: m, renderChatMarkdown: _, roleLabel: w, thoughtBlocks: T, thoughtSummaryLabel: k } = s, { activeMemoryFiles: M, archivedManagerRuns: C, canEditManagerMessage: R, canRerunManagerMessage: L, canSendManagerMessage: p, copyManagerMessage: b, currentManagerWorkRun: y, deleteManagerMessageTurn: E, editingMessageDraft: I, formatRunActivityLine: x, formatRunIssueLine: P, formatRunInputLine: D, formatRunMapLine: K, formatRunMemoryLine: Z, formatRunModelLine: Q, handleEditInput: te, handleManagerComposeKeydown: $, handleManagerEditKeydown: X, handleManagerScroll: le, handleManagerSubmit: ce, handleManagerTouchMove: fe, handleManagerTouchStart: _e, handleManagerWheel: H, hiddenManagerRunCount: O, isEditingManagerMessage: U, isEditingManagerMessageDirty: ue, isManagerAssistantCancelling: Ee, isManagerAssistantRunning: Re, isManagerRunRetrying: Oe, liveManagerChatDisplayItems: Qe, managerActionFeedback: ze, managerBusy: Xe, managerCompactionOverlay: J, managerComposeTextareaRef: re, managerInputDraft: pe, managerInputStatus: ve, managerMessageWindow: oe, managerRuns: Te, managerRunTone: xe, managerScrollControlsActive: Pe, managerScrollRef: ae, managerStatusLabel: G, managerToolStatusLabel: Ce, managerToolTone: he, managerToolTraceItems: $e, managerToolTurnPreview: Ge, managerToolTurnSummary: Ye, memoryFileDisplayName: Je, memoryFiles: tt, memoryIndexStatusLine: at, retryManagerRun: wt, revealOlderManagerMessages: St, rerunFromManagerMessage: Tt, saveEditManagerMessage: Bt, scrollManagerToBottom: xt, scrollManagerToTop: Dt, selectedMemoryFile: qt, showManagerScrollBottom: Lt, showManagerScrollTop: Cn, startEditManagerMessage: Zr, toolTraceSummary: dn, visibleManagerChatItems: Zn } = o;
+    const n = t, r = _d(), s = bm(), o = MN(), { activeView: i, shortText: a } = r, { chatFocus: l, cancelEditMessage: u, formatMessageTime: d, handleComposeInput: h, markdownSignature: m, renderChatMarkdown: _, roleLabel: w, thoughtBlocks: T, thoughtSummaryLabel: k } = s, { activeMemoryFiles: M, archivedManagerRuns: C, canEditManagerMessage: R, canRerunManagerMessage: L, canSendManagerMessage: p, copyManagerMessage: b, currentManagerWorkRun: y, deleteManagerMessageTurn: E, editingMessageDraft: I, formatRunActivityLine: x, formatRunIssueLine: P, formatRunInputLine: D, formatRunMapLine: K, formatRunMemoryLine: Z, formatRunModelLine: Q, handleEditInput: te, handleManagerComposeKeydown: $, handleManagerEditKeydown: X, handleManagerScroll: le, handleManagerSubmit: ce, handleManagerTouchMove: fe, handleManagerTouchStart: _e, handleManagerWheel: H, hiddenManagerRunCount: O, isEditingManagerMessage: U, isEditingManagerMessageDirty: ue, isManagerAssistantCancelling: Ee, isManagerAssistantRunning: Re, isManagerRunRetrying: Oe, liveManagerChatDisplayItems: Qe, managerActionFeedback: ze, managerBusy: Xe, managerCompactionOverlay: J, managerComposeTextareaRef: re, managerInputDraft: pe, managerInputStatus: ve, managerMessageWindow: oe, managerRuns: Te, managerRunTone: xe, managerScrollControlsActive: Pe, managerScrollRef: ae, managerStatusLabel: G, managerToolStatusLabel: Ce, managerToolTone: he, managerToolTraceItems: Ne, managerToolTurnPreview: Ge, managerToolTurnSummary: Ye, memoryFileDisplayName: Je, memoryFiles: tt, memoryIndexStatusLine: at, retryManagerRun: wt, revealOlderManagerMessages: St, rerunFromManagerMessage: Tt, saveEditManagerMessage: Bt, scrollManagerToBottom: xt, scrollManagerToTop: Dt, selectedMemoryFile: qt, showManagerScrollBottom: Lt, showManagerScrollTop: Cn, startEditManagerMessage: Zr, toolTraceSummary: dn, visibleManagerChatItems: Zn } = o;
     function qn(Zt) {
       ae.value = Zt instanceof HTMLElement ? Zt : null;
     }
@@ -42240,7 +42220,7 @@ var ZZ = ["aria-hidden"], jZ = {
       }, [
         S(J)?.active ? (B(), q("div", {
           key: 0,
-          class: De(["manager-compaction-overlay", { resolved: S(J).resolved }]),
+          class: $e(["manager-compaction-overlay", { resolved: S(J).resolved }]),
           role: "status",
           "aria-live": "polite"
         }, [g("strong", null, ee(S(J).status), 1), g("small", null, [rr(ee(S(J).currentTokens) + " / " + ee(S(J).triggerTokens || "...") + " ", 1), S(J).yieldTokens ? (B(), q("span", eee, " → " + ee(S(J).yieldTokens), 1)) : Se("", !0)])], 2)) : Se("", !0),
@@ -42256,7 +42236,7 @@ var ZZ = ["aria-hidden"], jZ = {
         (B(!0), q(Fe, null, rt(S(Zn), (W) => (B(), q(Fe, { key: W.key }, [W.kind === "message" ? (B(), q("article", {
           key: 0,
           "data-manager-anchor-key": W.anchorKey,
-          class: De(["manager-card manager-message", W.message.role === "user" ? "manager-message-user" : "manager-message-assistant"])
+          class: $e(["manager-card manager-message", W.message.role === "user" ? "manager-message-user" : "manager-message-assistant"])
         }, [
           g("div", ree, [g("strong", null, ee(W.message.role === "user" ? S(w)("user") : "助手"), 1), g("small", null, ee(S(d)(W.message.createdAt)), 1)]),
           S(U)(W.message) ? (B(), q("div", see, [Nn(g("textarea", {
@@ -42292,7 +42272,7 @@ var ZZ = ["aria-hidden"], jZ = {
           S(U)(W.message) ? Se("", !0) : (B(), q("div", cee, [
             g("button", {
               type: "button",
-              class: De(S(ze)(W.message, "copy")),
+              class: $e(S(ze)(W.message, "copy")),
               title: "复制",
               "aria-label": "复制",
               onClick: (V) => S(b)(W.message)
@@ -42300,7 +42280,7 @@ var ZZ = ["aria-hidden"], jZ = {
             g("button", {
               type: "button",
               disabled: !S(R)(W.message),
-              class: De(S(ze)(W.message, "edit")),
+              class: $e(S(ze)(W.message, "edit")),
               title: "编辑",
               "aria-label": "编辑",
               onClick: (V) => S(Zr)(W.message)
@@ -42308,7 +42288,7 @@ var ZZ = ["aria-hidden"], jZ = {
             g("button", {
               type: "button",
               disabled: !S(L)(W.message),
-              class: De(S(ze)(W.message, "rerun")),
+              class: $e(S(ze)(W.message, "rerun")),
               title: W.message.role === "user" ? "从这里重问助手" : "重新生成这条助手回复",
               "aria-label": W.message.role === "user" ? "从这里重问助手" : "重新生成这条助手回复",
               onClick: (V) => S(Tt)(W.message)
@@ -42316,7 +42296,7 @@ var ZZ = ["aria-hidden"], jZ = {
             g("button", {
               type: "button",
               disabled: S(Re),
-              class: De(S(ze)(W.message, "delete")),
+              class: $e(S(ze)(W.message, "delete")),
               title: "删除",
               "aria-label": "删除",
               onClick: (V) => S(E)(W.message)
@@ -42354,7 +42334,7 @@ var ZZ = ["aria-hidden"], jZ = {
           }, null, 8, _ee)) : Se("", !0),
           (B(!0), q(Fe, null, rt(V.calls, (ne) => (B(), q("div", {
             key: ne.id,
-            class: De(["manager-tool-item", ne.ok ? "is-resolved" : "is-error"])
+            class: $e(["manager-tool-item", ne.ok ? "is-resolved" : "is-error"])
           }, [
             g("div", bee, [g("span", null, ee(ne.name), 1), g("em", null, ee(ne.toolMessage ? ne.ok ? "已返回" : "失败" : "等待返回"), 1)]),
             ne.argumentsText ? (B(), q("small", wee, ee(ne.argumentsText), 1)) : Se("", !0),
@@ -42364,7 +42344,7 @@ var ZZ = ["aria-hidden"], jZ = {
         (B(!0), q(Fe, null, rt(S(Qe), (W) => (B(), q(Fe, { key: `live:${W.key}` }, [W.kind === "message" ? (B(), q("article", {
           key: 0,
           "data-manager-anchor-key": `live:${W.anchorKey}`,
-          class: De(["manager-card manager-message manager-message-live", W.message.role === "user" ? "manager-message-user" : "manager-message-assistant"])
+          class: $e(["manager-card manager-message manager-message-live", W.message.role === "user" ? "manager-message-user" : "manager-message-assistant"])
         }, [g("div", Tee, [g("strong", null, ee(W.message.role === "user" ? S(w)("user") : "助手"), 1), z[20] || (z[20] = g("small", null, "正在处理", -1))]), g("div", {
           class: "xb-tavern-markdown",
           "data-markdown-signature": S(m)(W.message.content),
@@ -42401,7 +42381,7 @@ var ZZ = ["aria-hidden"], jZ = {
           }, null, 8, xee)) : Se("", !0),
           (B(!0), q(Fe, null, rt(V.calls, (ne) => (B(), q("div", {
             key: `live:${ne.id}`,
-            class: De(["manager-tool-item", ne.ok ? "is-resolved" : "is-error"])
+            class: $e(["manager-tool-item", ne.ok ? "is-resolved" : "is-error"])
           }, [
             g("div", Mee, [g("span", null, ee(ne.name), 1), g("em", null, ee(ne.toolMessage ? ne.ok ? "已返回" : "失败" : "等待返回"), 1)]),
             ne.argumentsText ? (B(), q("small", Pee, ee(ne.argumentsText), 1)) : Se("", !0),
@@ -42418,7 +42398,7 @@ var ZZ = ["aria-hidden"], jZ = {
         }, [g("summary", null, [z[23] || (z[23] = g("strong", null, "工作记录", -1)), S(y) ? (B(), q("span", $ee, ee(S(Oe)(S(y)) ? "重试中" : S(G)(S(y).status)) + " · " + ee(S(D)(S(y))), 1)) : (B(), q("span", Dee, ee(S(M).length) + "/" + ee(S(tt).length) + " 份档案", 1))]), S(yt).isOpen(lt("work-drawer")) ? (B(), q(Fe, { key: 0 }, [S(y) ? (B(), q("article", {
           key: 0,
           "data-manager-anchor-key": `run:${S(y).id}`,
-          class: De(["manager-card manager-message manager-message-run manager-work-current", [
+          class: $e(["manager-card manager-message manager-message-run manager-work-current", [
             `is-${S(y).status}`,
             `tone-${S(xe)(S(y))}`,
             { "is-retrying": S(Oe)(S(y)) }
@@ -42432,14 +42412,14 @@ var ZZ = ["aria-hidden"], jZ = {
           g("div", Uee, [g("p", null, ee(S(Z)(S(y))), 1), g("p", null, ee(S(K)(S(y))), 1)]),
           S(y).outputText ? (B(), q("p", qee, " 结果：" + ee(S(a)(S(y).outputText, 180)), 1)) : Se("", !0),
           S(P)(S(y)) ? (B(), q("p", Hee, ee(S(P)(S(y))), 1)) : Se("", !0),
-          S($e)(S(y).toolTrace).length ? (B(), q("details", {
+          S(Ne)(S(y).toolTrace).length ? (B(), q("details", {
             key: 2,
             class: "manager-work-debug",
             open: S(yt).isOpen(lt("work-debug", S(y).id)),
             onToggle: z[7] || (z[7] = (W) => S(yt).setOpenFromEvent(lt("work-debug", S(y).id), W))
-          }, [g("summary", null, ee(S(dn)(S(y).toolTrace)), 1), S(yt).isOpen(lt("work-debug", S(y).id)) ? (B(), q("div", Wee, [(B(!0), q(Fe, null, rt(S($e)(S(y).toolTrace), (W) => (B(), q("div", {
+          }, [g("summary", null, ee(S(dn)(S(y).toolTrace)), 1), S(yt).isOpen(lt("work-debug", S(y).id)) ? (B(), q("div", Wee, [(B(!0), q(Fe, null, rt(S(Ne)(S(y).toolTrace), (W) => (B(), q("div", {
             key: W.id,
-            class: De(["manager-tool-item", S(he)(W)])
+            class: $e(["manager-tool-item", S(he)(W)])
           }, [
             g("div", Vee, [g("span", null, ee(W.name), 1), g("em", null, [rr(ee(S(Ce)(W)), 1), W.elapsedLabel ? (B(), q(Fe, { key: 0 }, [rr(" · " + ee(W.elapsedLabel), 1)], 64)) : Se("", !0)])]),
             W.thoughts.length ? (B(), q("details", {
@@ -42479,7 +42459,7 @@ var ZZ = ["aria-hidden"], jZ = {
           onToggle: z[9] || (z[9] = (W) => S(yt).setOpenFromEvent(lt("work-history"), W))
         }, [g("summary", null, [z[26] || (z[26] = g("strong", null, "历史记录", -1)), g("span", null, ee(S(C).length + S(O)) + " 条", 1)]), S(yt).isOpen(lt("work-history")) ? (B(), q(Fe, { key: 0 }, [(B(!0), q(Fe, null, rt(S(C), (W) => (B(), q("div", {
           key: W.id,
-          class: De(["manager-history-row", [`tone-${S(xe)(W)}`]])
+          class: $e(["manager-history-row", [`tone-${S(xe)(W)}`]])
         }, [g("div", null, [g("strong", null, ee(S(G)(W.status)), 1), g("small", null, ee(S(D)(W)), 1)]), g("span", null, ee(S(dn)(W.toolTrace) || S(x)(W)), 1)], 2))), 128)), S(O) ? (B(), q("p", nte, " 更早 " + ee(S(O)) + " 条已收起。 ", 1)) : Se("", !0)], 64)) : Se("", !0)], 40, tte)) : Se("", !0)], 64)) : Se("", !0)], 40, Nee)) : Se("", !0),
         S(Zn).length ? Se("", !0) : (B(), q("p", rte, " 还没有和助手对话。 "))
       ], 32), kt(DN, {
@@ -42945,7 +42925,7 @@ var wte = {
         anchor: "middle"
       }), an;
     }
-    const $e = de(() => (R.value?.elements || []).flatMap((z, W) => he(z, W))), Ge = de(() => $e.value.filter((z) => z.layer === "fill")), Ye = de(() => $e.value.filter((z) => z.layer === "line")), Je = de(() => $e.value.filter((z) => z.layer === "label")), tt = de(() => E.value.flatMap((z, W) => he(z, W, "remove"))), at = de(() => tt.value.filter((z) => z.layer === "fill")), wt = de(() => tt.value.filter((z) => z.layer === "line")), St = de(() => tt.value.filter((z) => z.layer === "label")), Tt = de(() => $e.value.filter((z) => r.value === "full" || z.opKind !== "stable")), Bt = de(() => {
+    const Ne = de(() => (R.value?.elements || []).flatMap((z, W) => he(z, W))), Ge = de(() => Ne.value.filter((z) => z.layer === "fill")), Ye = de(() => Ne.value.filter((z) => z.layer === "line")), Je = de(() => Ne.value.filter((z) => z.layer === "label")), tt = de(() => E.value.flatMap((z, W) => he(z, W, "remove"))), at = de(() => tt.value.filter((z) => z.layer === "fill")), wt = de(() => tt.value.filter((z) => z.layer === "line")), St = de(() => tt.value.filter((z) => z.layer === "label")), Tt = de(() => Ne.value.filter((z) => r.value === "full" || z.opKind !== "stable")), Bt = de(() => {
       const z = Tt.value;
       return z.length ? Math.max(...z.map((W) => W.delayMs + W.durationMs)) + 360 : 1200;
     }), xt = de(() => ({ "--map-progress-duration": `${Bt.value}ms` })), Dt = de(() => {
@@ -43032,7 +43012,7 @@ var wte = {
       const V = z.currentTarget instanceof SVGSVGElement ? z.currentTarget : o.value;
       V?.hasPointerCapture(z.pointerId) && V.releasePointerCapture(z.pointerId), a.value = null;
     }
-    return (z, W) => (B(), q("aside", { class: De(["tavern-map-panel xb-editor", { "is-compact": e.compact }]) }, [
+    return (z, W) => (B(), q("aside", { class: $e(["tavern-map-panel xb-editor", { "is-compact": e.compact }]) }, [
       e.compact ? Se("", !0) : (B(), q("header", wte, [g("div", Ste, [
         W[2] || (W[2] = g("span", { class: "tavern-map-kicker" }, "LIVE CARTOGRAPHY", -1)),
         g("strong", null, ee(K.value), 1),
@@ -43040,26 +43020,26 @@ var wte = {
       ]), g("div", Ete, [
         g("button", {
           type: "button",
-          class: De(["tavern-editor-mode-button", { active: r.value === "patch" }]),
+          class: $e(["tavern-editor-mode-button", { active: r.value === "patch" }]),
           disabled: !_.value,
           onClick: Zr
         }, " 最近回合 ", 10, Cte),
         g("button", {
           type: "button",
-          class: De(["tavern-editor-mode-button", { active: r.value === "full" }]),
+          class: $e(["tavern-editor-mode-button", { active: r.value === "full" }]),
           disabled: !_e.value,
           onClick: dn
         }, " 完整重绘 ", 10, Ate),
         g("button", {
           type: "button",
-          class: De(["tavern-editor-mode-button", { active: r.value === "timeline" }]),
+          class: $e(["tavern-editor-mode-button", { active: r.value === "timeline" }]),
           disabled: !M.value,
           onClick: Zn
         }, " 回合回放 ", 10, kte)
       ])])),
       _e.value ? (B(), q("div", {
         key: 1,
-        class: De(["tavern-map-canvas", [
+        class: $e(["tavern-map-canvas", [
           `theme-${D.value}`,
           `mode-${r.value}`,
           { "is-panning": a.value }
@@ -43085,7 +43065,7 @@ var wte = {
             key: V.id,
             d: V.path,
             fill: V.fill,
-            class: De(Cn(V)),
+            class: $e(Cn(V)),
             style: Er(Lt(V))
           }, null, 14, Pte))), 128))]),
           g("g", Rte, [(B(!0), q(Fe, null, rt(Ye.value, (V) => (B(), q("path", {
@@ -43097,7 +43077,7 @@ var wte = {
             "stroke-dasharray": V.dash,
             "stroke-linecap": "round",
             "stroke-linejoin": "round",
-            class: De(Cn(V)),
+            class: $e(Cn(V)),
             style: Er(Lt(V))
           }, null, 14, Nte))), 128))]),
           g("g", $te, [(B(!0), q(Fe, null, rt(Je.value, (V) => (B(), q("text", {
@@ -43107,7 +43087,7 @@ var wte = {
             "font-size": V.fontSize,
             fill: V.color,
             "text-anchor": V.anchor,
-            class: De(Cn(V)),
+            class: $e(Cn(V)),
             style: Er(Lt(V))
           }, ee(V.text), 15, Dte))), 128))]),
           g("g", Lte, [
@@ -43115,7 +43095,7 @@ var wte = {
               key: `removed-fill-${V.id}`,
               d: V.path,
               fill: V.fill,
-              class: De(Cn(V)),
+              class: $e(Cn(V)),
               style: Er(Lt(V))
             }, null, 14, Ote))), 128)),
             (B(!0), q(Fe, null, rt(wt.value, (V) => (B(), q("path", {
@@ -43127,7 +43107,7 @@ var wte = {
               "stroke-dasharray": V.dash,
               "stroke-linecap": "round",
               "stroke-linejoin": "round",
-              class: De(Cn(V)),
+              class: $e(Cn(V)),
               style: Er(Lt(V))
             }, null, 14, Fte))), 128)),
             (B(!0), q(Fe, null, rt(St.value, (V) => (B(), q("text", {
@@ -43137,7 +43117,7 @@ var wte = {
               "font-size": V.fontSize,
               fill: V.color,
               "text-anchor": V.anchor,
-              class: De(Cn(V)),
+              class: $e(Cn(V)),
               style: Er(Lt(V))
             }, ee(V.text), 15, Bte))), 128))
           ])
@@ -43154,7 +43134,7 @@ var wte = {
         }, null, 4)),
         H.value ? (B(), q("div", {
           key: 1,
-          class: De(["tavern-map-badge-shell", { "is-open": w.value }])
+          class: $e(["tavern-map-badge-shell", { "is-open": w.value }])
         }, [g("button", {
           type: "button",
           class: "tavern-map-badge-toggle",
@@ -43225,13 +43205,13 @@ var wte = {
       g("header", Yte, [g("div", Xte, [
         g("button", {
           type: "button",
-          class: De(["tavern-editor-mode-button", { active: e.mode === "edit" }]),
+          class: $e(["tavern-editor-mode-button", { active: e.mode === "edit" }]),
           disabled: !e.documentAvailable || e.readOnly,
           onClick: o[0] || (o[0] = (i) => s.$emit("enter-edit"))
         }, " 编辑 ", 10, Qte),
         g("button", {
           type: "button",
-          class: De(["tavern-editor-mode-button", { active: e.mode === "preview" }]),
+          class: $e(["tavern-editor-mode-button", { active: e.mode === "preview" }]),
           disabled: !e.documentAvailable,
           onClick: o[1] || (o[1] = (i) => s.$emit("preview"))
         }, " 阅读 ", 10, Zte),
@@ -43311,7 +43291,7 @@ var wte = {
     return (Qe, ze) => (B(), q("aside", fne, [
       g("button", {
         type: "button",
-        class: De(["chat-mobile-sheet-handle", { "is-dragging": S(H) }]),
+        class: $e(["chat-mobile-sheet-handle", { "is-dragging": S(H) }]),
         title: "收起记忆面板",
         "aria-label": "收起记忆面板",
         onClick: _e,
@@ -43322,11 +43302,11 @@ var wte = {
       }, null, 34),
       g("div", hne, [g("button", {
         type: "button",
-        class: De({ active: S(o) === "state" }),
+        class: $e({ active: S(o) === "state" }),
         onClick: ze[4] || (ze[4] = (Xe) => o.value = "state")
       }, " 状态 ", 2), g("button", {
         type: "button",
-        class: De({ active: S(o) === "memory" }),
+        class: $e({ active: S(o) === "memory" }),
         onClick: ze[5] || (ze[5] = (Xe) => o.value = "memory")
       }, " 记忆 ", 2)]),
       S(o) === "state" ? (B(), q("section", pne, [kt(zte, {
@@ -43340,7 +43320,7 @@ var wte = {
         innerHTML: ce.value
       }, null, 8, gne)) : (B(), q("div", vne, " 暂无当前状态。 "))])])) : (B(), q("section", {
         key: 1,
-        class: De(["tavern-memory-workspace", { "is-memory-directory-open": e.mobileMemoryDirectoryOpen }])
+        class: $e(["tavern-memory-workspace", { "is-memory-directory-open": e.mobileMemoryDirectoryOpen }])
       }, [
         g("aside", yne, [
           g("header", _ne, [ze[8] || (ze[8] = g("strong", null, "记忆文档", -1)), g("span", null, ee(S(i).length), 1)]),
@@ -43355,7 +43335,7 @@ var wte = {
           }, [g("div", Sne, [g("span", null, ee(Xe.title), 1), g("em", null, ee(Xe.totalCount), 1)]), g("div", Tne, [(B(!0), q(Fe, null, rt(Xe.files, (J) => (B(), q("button", {
             key: J.path,
             type: "button",
-            class: De(["memory-file", {
+            class: $e(["memory-file", {
               active: S(K) === J.path,
               stale: J.status === "stale"
             }]),
@@ -43369,7 +43349,7 @@ var wte = {
         ]),
         g("button", {
           type: "button",
-          class: De(["tavern-mobile-memory-picker", { "is-open": e.mobileMemoryDirectoryOpen }]),
+          class: $e(["tavern-mobile-memory-picker", { "is-open": e.mobileMemoryDirectoryOpen }]),
           disabled: !S(b).length,
           title: "选择记忆文档",
           "aria-label": "选择记忆文档",
@@ -43619,10 +43599,10 @@ var wte = {
       return `${Number(ae.position) || 0}:${Number(ae.position) === 4 ? Number(ae.role) || 0 : ""}`;
     }
     function Xe(ae) {
-      const [G, Ce = ""] = ae.target.value.split(":"), he = Number(G), $e = Number(Ce), Ge = Number.isFinite(he) ? he : 0;
+      const [G, Ce = ""] = ae.target.value.split(":"), he = Number(G), Ne = Number(Ce), Ge = Number.isFinite(he) ? he : 0;
       T({
         position: Ge,
-        role: Number.isFinite($e) ? $e : 0,
+        role: Number.isFinite(Ne) ? Ne : 0,
         depth: Ge === 4 ? C.value?.depth ?? 4 : null
       });
     }
@@ -43710,7 +43690,7 @@ var wte = {
           g("span", null, [g("strong", null, ee(S(b).totalChars), 1), G[35] || (G[35] = g("small", null, "正文字符", -1))])
         ]), S(b).entries.length ? (B(), q("div", sre, [(B(!0), q(Fe, null, rt(S(b).entries, (Ce) => (B(), q("details", {
           key: te(Ce),
-          class: De(["worldbook-entry-preview", { disabled: !Ce.enabled }]),
+          class: $e(["worldbook-entry-preview", { disabled: !Ce.enabled }]),
           open: S(I).isOpen(te(Ce)),
           onToggle: (he) => S(I).setOpenFromEvent(te(Ce), he)
         }, [g("summary", null, [
@@ -43823,7 +43803,7 @@ var wte = {
             rows: "9",
             onInput: G[10] || (G[10] = (he) => S(T)({ content: he.target.value }))
           }, null, 40, Vre)]),
-          g("div", { class: De(["worldbook-entry-advanced", { open: S(I).isOpen($(S(C))) }]) }, [g("button", {
+          g("div", { class: $e(["worldbook-entry-advanced", { open: S(I).isOpen($(S(C))) }]) }, [g("button", {
             type: "button",
             class: "worldbook-entry-advanced-toggle",
             "aria-expanded": S(I).isOpen($(S(C))),
@@ -43941,7 +43921,7 @@ var wte = {
             g("div", pse, [G[71] || (G[71] = g("span", null, "额外匹配源", -1)), (B(), q(Fe, null, rt(K, (he) => g("label", { key: he.key }, [g("input", {
               type: "checkbox",
               checked: !!S(C)[he.key],
-              onChange: ($e) => X(he.key, $e.target.checked)
+              onChange: (Ne) => X(he.key, Ne.target.checked)
             }, null, 40, mse), g("span", null, ee(he.label), 1)])), 64))])
           ], 64)) : Se("", !0)], 2)
         ], 32)) : (B(), q(Fe, { key: 1 }, [
@@ -44090,7 +44070,7 @@ var wte = {
       }), P = null, D = null, w(), M();
     }), (ve, oe) => S(i) === "chat" ? (B(), q("section", {
       key: 0,
-      class: De(["tavern-chat xb-page", [
+      class: $e(["tavern-chat xb-page", [
         `chat-focus-${S(a)}`,
         `chat-layout-${S(h)}`,
         {
@@ -44118,7 +44098,7 @@ var wte = {
           type: "button",
           role: "tab",
           "aria-selected": S(a) === "chat",
-          class: De({ active: S(a) === "chat" }),
+          class: $e({ active: S(a) === "chat" }),
           onClick: oe[5] || (oe[5] = (Te) => {
             a.value = "chat", fe();
           })
@@ -44127,7 +44107,7 @@ var wte = {
           type: "button",
           role: "tab",
           "aria-selected": S(a) === "manager",
-          class: De({ active: S(a) === "manager" }),
+          class: $e({ active: S(a) === "manager" }),
           onClick: oe[6] || (oe[6] = (Te) => {
             a.value = "manager", fe();
           })
@@ -44219,14 +44199,14 @@ var wte = {
       ])]), g("div", Nse, [
         g("button", {
           type: "button",
-          class: De(["chat-mobile-context-button", { "is-active": X.value === "directory" }]),
+          class: $e(["chat-mobile-context-button", { "is-active": X.value === "directory" }]),
           title: "会话",
           "aria-label": "会话",
           onClick: H
         }, " 会话 ", 2),
         g("button", {
           type: "button",
-          class: De(["chat-mobile-context-button", { "is-active": X.value === "workspace" }]),
+          class: $e(["chat-mobile-context-button", { "is-active": X.value === "workspace" }]),
           title: "状态",
           "aria-label": "状态",
           onClick: oe[12] || (oe[12] = (Te) => O("state"))
@@ -44261,7 +44241,7 @@ var wte = {
         onClick: U,
         onClose: fe
       }),
-      g("section", { class: De(["chat-workbench", { "is-manager": S(a) === "manager" }]) }, [g("div", $se, [kt(Yj, { onOpenContract: Ee }), kt(lte, { onOpenContract: Ee })])], 2),
+      g("section", { class: $e(["chat-workbench", { "is-manager": S(a) === "manager" }]) }, [g("div", $se, [kt(Yj, { onOpenContract: Ee }), kt(lte, { onOpenContract: Ee })])], 2),
       kt(Rne, {
         "mobile-memory-directory-open": le.value,
         onClose: fe,
@@ -44302,7 +44282,7 @@ var wte = {
         class: "tavern-api-settings chat-quick-api-root"
       })) : (B(), q("div", {
         key: 1,
-        class: De(["settings-layout chat-quick-settings-layout", Qe.value])
+        class: $e(["settings-layout chat-quick-settings-layout", Qe.value])
       }, [g("section", Bse, [kt($N), kt(FN)])], 2))])])])) : Se("", !0)
     ], 2)) : Se("", !0);
   }
@@ -44597,11 +44577,11 @@ var Vse = {
       }, " 关闭 ")]),
       g("div", zse, [g("button", {
         type: "button",
-        class: De({ active: e.tab === "history" }),
+        class: $e({ active: e.tab === "history" }),
         onClick: o[1] || (o[1] = (i) => s.$emit("update:tab", "history"))
       }, " 上次调用 ", 2), g("button", {
         type: "button",
-        class: De({ active: e.tab === "simulate" }),
+        class: $e({ active: e.tab === "simulate" }),
         onClick: o[2] || (o[2] = (i) => s.$emit("update:tab", "simulate"))
       }, " 模拟发送 ", 2)]),
       g("div", Jse, [Nn(g("section", Yse, [g("div", Xse, [
@@ -44638,7 +44618,7 @@ var Vse = {
     return (r, s) => (B(), q("aside", aoe, [g("div", loe, [s[0] || (s[0] = g("h2", null, "设置", -1)), g("div", uoe, [(B(!0), q(Fe, null, rt(e.items, (o) => (B(), q("button", {
       key: o.key,
       type: "button",
-      class: De(["guide-step", { active: e.active === o.key }]),
+      class: $e(["guide-step", { active: e.active === o.key }]),
       onClick: (i) => n("select", o.key)
     }, [g("strong", null, [g("span", doe, ee(o.label), 1), g("span", foe, ee(o.mobileLabel || o.label), 1)]), o.badge ? (B(), q("em", hoe, ee(o.badge), 1)) : Se("", !0)], 10, coe))), 128))])])]));
   }
@@ -44776,7 +44756,7 @@ var Vse = {
     }
     return dt(t, (H) => {
       H !== "regex" && (E.value = !1, P.value = !1);
-    }), (H, O) => Nn((B(), q("div", { class: De(["panel step-panel native-workspace", { "is-mobile-editor-open": E.value }]) }, [
+    }), (H, O) => Nn((B(), q("div", { class: $e(["panel step-panel native-workspace", { "is-mobile-editor-open": E.value }]) }, [
       g("div", Foe, [O[13] || (O[13] = g("div", null, [g("h2", null, "正则")], -1)), g("div", Boe, [S(u) ? (B(), q("span", Uoe, "未保存")) : Se("", !0), g("span", qoe, ee(S(T).length) + " 条", 1)])]),
       g("div", Hoe, [
         g("label", Goe, [Nn(g("select", { "onUpdate:modelValue": O[0] || (O[0] = (U) => x.value = U) }, [O[14] || (O[14] = g("option", { value: "" }, " 全部正则 ", -1)), (B(!0), q(Fe, null, rt(S(_), (U) => (B(), q("option", {
@@ -44789,7 +44769,7 @@ var Vse = {
           "aria-label": "筛选正则",
           placeholder: "名称、匹配式或替换文本"
         }, null, 512), [[si, S(k)]])]),
-        g("div", Koe, [g("div", { class: De(["regex-create-menu", { open: P.value }]) }, [g("button", {
+        g("div", Koe, [g("div", { class: $e(["regex-create-menu", { open: P.value }]) }, [g("button", {
           type: "button",
           class: "settings-icon-tool regex-create-trigger",
           title: "新增正则",
@@ -44813,7 +44793,7 @@ var Vse = {
         g("div", joe, [g("strong", null, ee(U.label), 1), g("span", null, ee(U.allowed === !1 ? "未允许" : `${U.visibleRows.length} / ${U.filteredCount} / ${U.totalCount} 条`), 1)]),
         (B(!0), q(Fe, null, rt(U.visibleRows, (ue) => (B(), q("div", {
           key: ue.key,
-          class: De(["native-list-row regex-list-row", {
+          class: $e(["native-list-row regex-list-row", {
             selected: S(R) === ue.key,
             disabled: ue.script.disabled
           }]),
@@ -45088,7 +45068,7 @@ var Vse = {
       g("div", rae, [g("aside", sae, [x[12] || (x[12] = g("div", { class: "assistant-preset-nav-head" }, [g("strong", null, "记忆档案")], -1)), (B(!0), q(Fe, null, rt(S(o), (P) => (B(), q("button", {
         key: P.id,
         type: "button",
-        class: De(["assistant-preset-nav-row", { selected: S(w)?.id === P.id }]),
+        class: $e(["assistant-preset-nav-row", { selected: S(w)?.id === P.id }]),
         onClick: (D) => S(_)(P.id)
       }, [g("strong", null, ee(P.label), 1), g("small", null, ee(S(T)(P.content || "未填写职责。", 54)), 1)], 10, oae))), 128))]), g("section", iae, [g("div", aae, [g("div", null, [g("strong", null, ee(S(w)?.label || "记忆档案"), 1)])]), S(w) ? (B(), q("div", lae, [g("label", null, [x[13] || (x[13] = g("span", null, "职责说明", -1)), g("textarea", {
         value: S(w).content,
@@ -45104,7 +45084,7 @@ var Vse = {
     const t = fi(), n = _d(), { activeSettingsWorkspace: r, selectSettingsWorkspace: s, settingsNavItems: o } = t, { activeView: i, homeThemeDark: a } = n;
     return (l, u) => S(i) === "settings" ? (B(), q("section", {
       key: 0,
-      class: De(["xb-layout xb-page settings-layout", `is-${S(r)}-workspace`])
+      class: $e(["xb-layout xb-page settings-layout", `is-${S(r)}-workspace`])
     }, [
       kt(yd, {
         "include-home": "",
@@ -45641,7 +45621,7 @@ function Iae(e = {}) {
   function $(H) {
     if (!t.config) return;
     te(H);
-    const O = R(), U = O.provider || "openai-compatible", ue = _(U), Ee = O.delegateProvider || "openai-compatible", Re = _(Ee, "delegate"), Oe = H.querySelector("#xb-assistant-tool-mode-wrap"), Qe = H.querySelector("#xb-assistant-tool-mode"), ze = H.querySelector("#xb-assistant-reasoning-enabled"), Xe = H.querySelector("#xb-assistant-reasoning-effort-wrap"), J = H.querySelector("#xb-assistant-reasoning-effort"), re = H.querySelector("#xb-assistant-permission-mode"), pe = H.querySelector("#xb-assistant-jsapi-permission"), ve = H.querySelector("#xb-assistant-model-pulled"), oe = H.querySelector("#xb-assistant-preset-select"), Te = H.querySelector("#xb-assistant-preset-name"), xe = H.querySelector("#xb-assistant-delegate-preset-select"), Pe = H.querySelector("#xb-assistant-delegate-provider"), ae = H.querySelector("#xb-assistant-delegate-base-url"), G = H.querySelector("#xb-assistant-delegate-model"), Ce = H.querySelector("#xb-assistant-delegate-api-key"), he = H.querySelector("#xb-assistant-tavily-api-key"), $e = H.querySelector("#xb-assistant-delegate-model-pulled"), Ge = H.querySelector("#xb-assistant-delegate-tool-mode-wrap"), Ye = H.querySelector("#xb-assistant-delegate-tool-mode"), Je = H.querySelector("#xb-assistant-delegate-reasoning-enabled"), tt = H.querySelector("#xb-assistant-delegate-reasoning-effort-wrap"), at = H.querySelector("#xb-assistant-delegate-reasoning-effort");
+    const O = R(), U = O.provider || "openai-compatible", ue = _(U), Ee = O.delegateProvider || "openai-compatible", Re = _(Ee, "delegate"), Oe = H.querySelector("#xb-assistant-tool-mode-wrap"), Qe = H.querySelector("#xb-assistant-tool-mode"), ze = H.querySelector("#xb-assistant-reasoning-enabled"), Xe = H.querySelector("#xb-assistant-reasoning-effort-wrap"), J = H.querySelector("#xb-assistant-reasoning-effort"), re = H.querySelector("#xb-assistant-permission-mode"), pe = H.querySelector("#xb-assistant-jsapi-permission"), ve = H.querySelector("#xb-assistant-model-pulled"), oe = H.querySelector("#xb-assistant-preset-select"), Te = H.querySelector("#xb-assistant-preset-name"), xe = H.querySelector("#xb-assistant-delegate-preset-select"), Pe = H.querySelector("#xb-assistant-delegate-provider"), ae = H.querySelector("#xb-assistant-delegate-base-url"), G = H.querySelector("#xb-assistant-delegate-model"), Ce = H.querySelector("#xb-assistant-delegate-api-key"), he = H.querySelector("#xb-assistant-tavily-api-key"), Ne = H.querySelector("#xb-assistant-delegate-model-pulled"), Ge = H.querySelector("#xb-assistant-delegate-tool-mode-wrap"), Ye = H.querySelector("#xb-assistant-delegate-tool-mode"), Je = H.querySelector("#xb-assistant-delegate-reasoning-enabled"), tt = H.querySelector("#xb-assistant-delegate-reasoning-effort-wrap"), at = H.querySelector("#xb-assistant-delegate-reasoning-effort");
     if (!oe || !Te) return;
     const wt = (t.config.presetNames || []).map((xt) => ({
       value: xt,
@@ -45652,10 +45632,10 @@ function Iae(e = {}) {
       label: xt
     })), "手动填写"), ve.value = ue.includes(O.model) ? O.model : "", Pe && (Pe.value = Ee), ae && (ae.value = O.delegateBaseUrl || ""), G && (G.value = O.delegateModel || ""), Ce && (Ce.value = O.delegateApiKey || "");
     const St = H.querySelector("#xb-assistant-delegate-temperature"), Tt = H.querySelector("#xb-assistant-delegate-send-temperature");
-    St && (St.value = String(Sr(O.delegateTemperature, 0.2))), Tt && (Tt.checked = !!(O.delegateSendTemperature ?? !0)), Ge && (Ge.style.display = Oa(Ee) ? "" : "none"), Ye && (Cs(Ye, xA), Ye.value = O.delegateToolMode || "native"), at && (Cs(at, A_), at.value = wr(O.delegateReasoningEffort)), Je && (Je.checked = !!O.delegateReasoningEnabled), tt && (tt.style.display = O.delegateReasoningEnabled ? "" : "none"), $e && (Cs($e, Re.map((xt) => ({
+    St && (St.value = String(Sr(O.delegateTemperature, 0.2))), Tt && (Tt.checked = !!(O.delegateSendTemperature ?? !0)), Ge && (Ge.style.display = Oa(Ee) ? "" : "none"), Ye && (Cs(Ye, xA), Ye.value = O.delegateToolMode || "native"), at && (Cs(at, A_), at.value = wr(O.delegateReasoningEffort)), Je && (Je.checked = !!O.delegateReasoningEnabled), tt && (tt.style.display = O.delegateReasoningEnabled ? "" : "none"), Ne && (Cs(Ne, Re.map((xt) => ({
       value: xt,
       label: xt
-    })), "手动填写"), $e.value = Re.includes(O.delegateModel) ? O.delegateModel : ""), Q(H, "#xb-assistant-model-pull-status", d(U)), Q(H, "#xb-assistant-delegate-model-pull-status", d(Ee, "delegate"));
+    })), "手动填写"), Ne.value = Re.includes(O.delegateModel) ? O.delegateModel : ""), Q(H, "#xb-assistant-model-pull-status", d(U)), Q(H, "#xb-assistant-delegate-model-pull-status", d(Ee, "delegate"));
     const Bt = H.querySelector("#xb-assistant-runtime");
     if (Bt) {
       const xt = t.configPage === "delegate";
@@ -46309,7 +46289,7 @@ function Bae(e) {
     pullStateByProvider: {},
     modelOptionsByProvider: {}
   };
-  let $e = null;
+  let Ne = null;
   const Ge = (F = i.value) => JSON.stringify(F || {}), Ye = (F = m.value) => JSON.stringify(F || {}), Je = de(() => Ge(i.value) !== d.value), tt = de(() => Ye(m.value) !== M.value), at = de(() => Kw(e.agentConfig.value)), wt = de(() => at.value.readiness.ok), St = de(() => at.value.readiness.message), Tt = de(() => {
     const F = at.value;
     return `预设「${F.currentPresetName || "默认"}」 · ${F.providerLabel} / ${F.model || "未选择模型"}`;
@@ -47091,7 +47071,7 @@ function Bae(e) {
   }
   function zs() {
     const F = r.value;
-    F && ($e || ($e = Iae({
+    F && (Ne || (Ne = Iae({
       state: he,
       render: zs,
       describeError: e.describeError,
@@ -47110,7 +47090,7 @@ function Bae(e) {
       delegatePresetHint: "记忆整理会复用这里的分身 API；当前聊天仍使用主 API。",
       isBusy: e.isRunning.value,
       canDeletePreset: Object.keys(he.config?.presets || {}).length > 1
-    }), $e.syncConfigToForm(F), $e.bindSettingsPanelEvents(F));
+    }), Ne.syncConfigToForm(F), Ne.bindSettingsPanelEvents(F));
   }
   function Lm(F) {
     if (F.ok === !0) {
@@ -47332,7 +47312,7 @@ var Uae = { class: "xb-os-stage" }, qae = { class: "character-worldbook-picker" 
       provider: "disabled",
       enabled: !1,
       ready: !1
-    }), ce = /* @__PURE__ */ ie(""), fe = /* @__PURE__ */ ie(""), _e = /* @__PURE__ */ ie("idle"), H = /* @__PURE__ */ ie(""), O = /* @__PURE__ */ ie([]), U = /* @__PURE__ */ ie(""), ue = /* @__PURE__ */ ie([]), Ee = /* @__PURE__ */ ie({}), Re = /* @__PURE__ */ ie([]), Oe = /* @__PURE__ */ ie([]), Qe = /* @__PURE__ */ ie(null), ze = /* @__PURE__ */ ie(Jg()), Xe = /* @__PURE__ */ ie(""), J = /* @__PURE__ */ ie(null), re = /* @__PURE__ */ ie(null), pe = /* @__PURE__ */ ie(""), ve = /* @__PURE__ */ ie(""), oe = /* @__PURE__ */ ie(""), Te = /* @__PURE__ */ ie("preview"), xe = /* @__PURE__ */ ie(""), Pe = /* @__PURE__ */ ie("state"), ae = /* @__PURE__ */ ie(null), G = /* @__PURE__ */ ie([]), Ce = /* @__PURE__ */ ie(""), he = /* @__PURE__ */ ie(""), $e = /* @__PURE__ */ ie(""), Ge = /* @__PURE__ */ ie(""), Ye = /* @__PURE__ */ ie([]), Je = /* @__PURE__ */ ie(!1), tt = /* @__PURE__ */ ie(!1), at = /* @__PURE__ */ ie(null), wt = /* @__PURE__ */ ie([]), St = /* @__PURE__ */ ie(null), Tt = /* @__PURE__ */ ie(""), Bt = /* @__PURE__ */ ie(Gf), xt = /* @__PURE__ */ ie(""), Dt = /* @__PURE__ */ ie({}), qt = /* @__PURE__ */ ie(ek), Lt = /* @__PURE__ */ ie({});
+    }), ce = /* @__PURE__ */ ie(""), fe = /* @__PURE__ */ ie(""), _e = /* @__PURE__ */ ie("idle"), H = /* @__PURE__ */ ie(""), O = /* @__PURE__ */ ie([]), U = /* @__PURE__ */ ie(""), ue = /* @__PURE__ */ ie([]), Ee = /* @__PURE__ */ ie({}), Re = /* @__PURE__ */ ie([]), Oe = /* @__PURE__ */ ie([]), Qe = /* @__PURE__ */ ie(null), ze = /* @__PURE__ */ ie(Jg()), Xe = /* @__PURE__ */ ie(""), J = /* @__PURE__ */ ie(null), re = /* @__PURE__ */ ie(null), pe = /* @__PURE__ */ ie(""), ve = /* @__PURE__ */ ie(""), oe = /* @__PURE__ */ ie(""), Te = /* @__PURE__ */ ie("preview"), xe = /* @__PURE__ */ ie(""), Pe = /* @__PURE__ */ ie("state"), ae = /* @__PURE__ */ ie(null), G = /* @__PURE__ */ ie([]), Ce = /* @__PURE__ */ ie(""), he = /* @__PURE__ */ ie(""), Ne = /* @__PURE__ */ ie(""), Ge = /* @__PURE__ */ ie(""), Ye = /* @__PURE__ */ ie([]), Je = /* @__PURE__ */ ie(!1), tt = /* @__PURE__ */ ie(!1), at = /* @__PURE__ */ ie(null), wt = /* @__PURE__ */ ie([]), St = /* @__PURE__ */ ie(null), Tt = /* @__PURE__ */ ie(""), Bt = /* @__PURE__ */ ie(Gf), xt = /* @__PURE__ */ ie(""), Dt = /* @__PURE__ */ ie({}), qt = /* @__PURE__ */ ie(ek), Lt = /* @__PURE__ */ ie({});
     function Cn() {
       const [v] = String(window.location.hash || "").replace(/^#\/?/, "").split("/");
       return v === "chat" || v === "characters" || v === "settings" || v === "about" ? v : "home";
@@ -47662,7 +47642,7 @@ var Uae = { class: "xb-os-stage" }, qae = { class: "character-worldbook-picker" 
     ].join(":")).join("|")), qm = de(() => WA(Ye.value)), y$ = de(() => {
       const v = at.value;
       return !v || v.sessionId !== U.value ? [] : v.draft ? [...v.messages, v.draft] : v.messages;
-    }), dS = de(() => WA(y$.value)), Hm = de(() => qv({ uiMessageWindowLimit: Sd.value }, qm.value.length, { defaultLimit: o.value })), Gm = de(() => qm.value.slice(Hm.value.startIndex)), _$ = de(() => Gm.value.filter((v) => v.kind === "message").map((v) => v.message)), b$ = de(() => Gm.value.map((v) => v.kind === "message" ? `${v.message.sessionId}:${v.message.order}:${An(v.message.content)}` : `${v.key}:${An(v.assistantMessage.content)}:${v.calls.map((A) => `${A.id}:${An(A.resultText)}`).join(",")}`).join("|")), w$ = de(() => dS.value.map((v) => v.kind === "message" ? `${v.message.sessionId}:${v.message.order}:${An(v.message.content)}` : `${v.key}:${An(v.assistantMessage.content)}:${v.calls.map((A) => `${A.id}:${An(A.resultText)}`).join(",")}`).join("|")), fS = de(() => U.value ? oS(lt.value) : "写一句话后会自动创建独立会话。"), S$ = de(() => !X.value && ($.value || !!E.value.trim())), T$ = de(() => !tt.value && (Je.value || !!U.value && !!$e.value.trim()));
+    }), dS = de(() => WA(y$.value)), Hm = de(() => qv({ uiMessageWindowLimit: Sd.value }, qm.value.length, { defaultLimit: o.value })), Gm = de(() => qm.value.slice(Hm.value.startIndex)), _$ = de(() => Gm.value.filter((v) => v.kind === "message").map((v) => v.message)), b$ = de(() => Gm.value.map((v) => v.kind === "message" ? `${v.message.sessionId}:${v.message.order}:${An(v.message.content)}` : `${v.key}:${An(v.assistantMessage.content)}:${v.calls.map((A) => `${A.id}:${An(A.resultText)}`).join(",")}`).join("|")), w$ = de(() => dS.value.map((v) => v.kind === "message" ? `${v.message.sessionId}:${v.message.order}:${An(v.message.content)}` : `${v.key}:${An(v.assistantMessage.content)}:${v.calls.map((A) => `${A.id}:${An(A.resultText)}`).join(",")}`).join("|")), fS = de(() => U.value ? oS(lt.value) : "写一句话后会自动创建独立会话。"), S$ = de(() => !X.value && ($.value || !!E.value.trim())), T$ = de(() => !tt.value && (Je.value || !!U.value && !!Ne.value.trim()));
     function E$(v) {
       const A = /* @__PURE__ */ new WeakSet();
       try {
@@ -49430,10 +49410,10 @@ ${be}`), console.error("[小白酒馆] host request failed", {
         tt.value || (tt.value = !0, Ge.value = "正在停止..."), mi.value?.abort();
         return;
       }
-      const v = $e.value.trim();
+      const v = Ne.value.trim();
       if (!v || !U.value) return;
       const A = U.value;
-      $e.value = "", zt(() => ug($r.value)), await zS(A, v);
+      Ne.value = "", zt(() => ug($r.value)), await zS(A, v);
     }
     function iL() {
       !$.value || !Gs.value || (X.value || (X.value = !0, x.value = x.value || "正在停止..."), Gs.value.abort());
@@ -49701,7 +49681,7 @@ ${be}`), console.error("[小白酒馆] host request failed", {
         managerBusy: rS,
         managerCompactionOverlay: St,
         managerComposeTextareaRef: $r,
-        managerInputDraft: $e,
+        managerInputDraft: Ne,
         managerInputStatus: Ge,
         managerMessageWindow: Hm,
         managerRuns: Re,
@@ -49785,7 +49765,7 @@ ${be}`), console.error("[小白酒馆] host request failed", {
         window.clearTimeout(v.timer), v.abort && v.signal && v.signal.removeEventListener("abort", v.abort), v.reject(/* @__PURE__ */ new Error("tavern_unmounted"));
       }), dn.clear(), Gs.value?.abort(), mi.value?.abort(), es.value?.abort(), Gt.cleanup(), sn.cleanup(), cr && (window.clearTimeout(cr), cr = null), va && (window.clearInterval(va), va = null), mS(), WS(), ou();
     }), (v, A) => (B(), q("main", {
-      class: De(["xb-tavern xb-os-shell", {
+      class: $e(["xb-tavern xb-os-shell", {
         "is-home-view": V.value === "home" || V.value === "about",
         "theme-dark": ne.value,
         "theme-light": !ne.value

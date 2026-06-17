@@ -109,7 +109,9 @@ test('xb tavern assembler honors SillyTavern prompt manager marker order', () =>
         if (content.includes('After marker prompt.')) {return 'jailbreak';}
         return 'other';
     }), ['main', 'description', 'world', 'history', 'memory', 'current', 'runtime-protocol', 'jailbreak']);
-    assert.match(contents.find((content) => content.includes('Prompt manager memory note.')) || '', /<session_memory>[\s\S]*Prompt manager memory note/);
+    const memoryContent = contents.find((content) => content.includes('Prompt manager memory note.')) || '';
+    assert.match(memoryContent, /## 记忆[\s\S]*Prompt manager memory note/);
+    assert.doesNotMatch(memoryContent, /<session_memory|memory\/session\.md|Session/);
     assert.doesNotMatch(contents.join('\n'), /<world_info_depth/);
     assert.doesNotMatch(contents.join('\n'), /<character_card>/);
     assert.equal(result.messageLayers.find((layer) => layer.label === 'Char Description')?.sourceId, 'prompt-manager:charDescription');
@@ -1395,7 +1397,8 @@ test('xb tavern assembler treats memory as D1 system depth injection inside chat
     assert.ok(protocolIndex > currentIndex);
     assert.ok(afterIndex > protocolIndex);
     assert.equal(result.messages[depthIndex]?.role, 'system');
-    assert.match(contents[depthIndex] || '', /<session_memory>[\s\S]*Memory D1 note\.[\s\S]*World D1 lore\./);
+    assert.match(contents[depthIndex] || '', /## 记忆[\s\S]*Memory D1 note\.[\s\S]*World D1 lore\./);
+    assert.doesNotMatch(contents[depthIndex] || '', /<session_memory|memory\/session\.md|Session/);
     assert.doesNotMatch(contents[depthIndex] || '', /<world_info_depth/);
     assert.equal(result.messageLayers.find((layer) => layer.index === depthIndex)?.layer, 'world-depth');
     assert.equal(result.messageLayers.find((layer) => layer.index === depthIndex)?.label, 'world info depth 1');

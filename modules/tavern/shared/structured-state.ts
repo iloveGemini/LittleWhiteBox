@@ -617,26 +617,17 @@ function normalizeMapDocumentFromRecord(document: TavernStructuredStateDocumentR
 }
 
 function createMapDigest(document: TavernMapDocument, revision = 0): string {
+    void revision;
     if (document.meta.status !== 'active' || !hasSpatialMapContent(document.elements)) {return '';}
     const title = normalizeText(document.meta.name || 'Map', 80) || 'Map';
-    const byCat = new Map<string, TavernMapElement[]>();
-    document.elements.forEach((element) => {
-        const group = byCat.get(element.cat) || [];
-        group.push(element);
-        byCat.set(element.cat, group);
-    });
     const labels = document.elements
         .filter((element) => typeof element.text === 'string' && element.text.trim())
         .map((element) => normalizeText(element.text, 40))
         .filter(Boolean)
         .slice(0, 8);
-    const doors = (byCat.get('door') || []).map((element) => element.id).slice(0, 8);
-    const dangers = (byCat.get('danger') || []).map((element) => element.id).slice(0, 8);
     return [
-        `Map: ${title} (revision ${revision}, ${document.elements.length} elements)`,
-        labels.length ? `Labels: ${labels.join(', ')}` : '',
-        doors.length ? `Doors/Routes: ${doors.join(', ')}` : '',
-        dangers.length ? `Danger/Markers: ${dangers.join(', ')}` : '',
+        `地图：${title}`,
+        labels.length ? `标注：${labels.join(', ')}` : '',
     ].filter(Boolean).join('\n');
 }
 
