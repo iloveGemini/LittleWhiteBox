@@ -43,6 +43,7 @@ import {
     runTavernOnce,
     runXbTavernTurn,
     simulateXbTavernRequest,
+    trimFinalAssistantMessageEnd,
     type XbTavernRunResult,
     type TavernRunOnceOptions,
 } from '../app-src/runtime/run-once';
@@ -135,6 +136,92 @@ test('xb tavern run turn saves user and assistant messages and updates session s
     assert.equal(session?.state?.turn, 1);
     assert.equal(Object.keys(session?.state?.worldEntryStates || {}).some((key) => key.includes('sticky-entry')), true);
     assert.equal(session?.state?.lastProvider, 'fake-provider');
+});
+
+test('xb tavern provider requests trim only the last assistant message content end', () => {
+    type ProviderMessage = Parameters<typeof trimFinalAssistantMessageEnd>[0][number];
+    const cases: Array<{
+        name: string;
+        messages: ProviderMessage[];
+        expected: ProviderMessage[];
+    }> = [
+        {
+            name: 'assistant at end',
+            messages: [
+                { role: 'user', content: 'hello' },
+                { role: 'assistant', content: 'prefill \n\t' },
+            ],
+            expected: [
+                { role: 'user', content: 'hello' },
+                { role: 'assistant', content: 'prefill' },
+            ],
+        },
+        {
+            name: 'assistant followed by system',
+            messages: [
+                { role: 'system', content: '<meta_protocol>' },
+                { role: 'assistant', content: 'prefill \n\t' },
+                { role: 'system', content: '</meta_protocol>' },
+            ],
+            expected: [
+                { role: 'system', content: '<meta_protocol>' },
+                { role: 'assistant', content: 'prefill' },
+                { role: 'system', content: '</meta_protocol>' },
+            ],
+        },
+        {
+            name: 'assistant followed by user',
+            messages: [
+                { role: 'assistant', content: 'history prefill \n\t' },
+                { role: 'user', content: 'current turn' },
+            ],
+            expected: [
+                { role: 'assistant', content: 'history prefill' },
+                { role: 'user', content: 'current turn' },
+            ],
+        },
+        {
+            name: 'system before assistant',
+            messages: [
+                { role: 'system', content: 'rules' },
+                { role: 'assistant', content: 'prefill \n\t' },
+            ],
+            expected: [
+                { role: 'system', content: 'rules' },
+                { role: 'assistant', content: 'prefill' },
+            ],
+        },
+        {
+            name: 'multiple assistants',
+            messages: [
+                { role: 'assistant', content: 'history \n\t' },
+                { role: 'user', content: 'continue' },
+                { role: 'assistant', content: 'prefill \n\t' },
+                { role: 'system', content: 'tail marker' },
+            ],
+            expected: [
+                { role: 'assistant', content: 'history \n\t' },
+                { role: 'user', content: 'continue' },
+                { role: 'assistant', content: 'prefill' },
+                { role: 'system', content: 'tail marker' },
+            ],
+        },
+        {
+            name: 'no assistant',
+            messages: [
+                { role: 'system', content: 'rules \n\t' },
+                { role: 'user', content: 'hello \n\t' },
+            ],
+            expected: [
+                { role: 'system', content: 'rules \n\t' },
+                { role: 'user', content: 'hello \n\t' },
+            ],
+        },
+    ];
+
+    for (const item of cases) {
+        assert.deepEqual(trimFinalAssistantMessageEnd(item.messages), item.expected, item.name);
+    }
 });
 
 test('xb tavern run turn skips random encounters when contract disables them', async () => {

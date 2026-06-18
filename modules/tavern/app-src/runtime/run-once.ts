@@ -268,10 +268,18 @@ function joinPromptMessages(messages: XbTavernMessage[] = []): string {
         .join('\n\n');
 }
 
-function trimFinalAssistantMessageEnd(messages: XbTavernMessage[] = []): XbTavernMessage[] {
+export function trimFinalAssistantMessageEnd(messages: XbTavernMessage[] = []): XbTavernMessage[] {
     if (!messages.length) {return [];}
+    let finalAssistantIndex = -1;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (messages[index]?.role === 'assistant') {
+            finalAssistantIndex = index;
+            break;
+        }
+    }
+    if (finalAssistantIndex < 0) {return messages;}
     return messages.map((message, index) => {
-        if (index !== messages.length - 1 || message.role !== 'assistant') {
+        if (index !== finalAssistantIndex) {
             return message;
         }
         const content = String(message.content || '').trimEnd();

@@ -39270,14 +39270,20 @@ function W7(e = []) {
 `);
 }
 function PN(e = []) {
-  return e.length ? e.map((t, n) => {
-    if (n !== e.length - 1 || t.role !== "assistant") return t;
-    const r = String(t.content || "").trimEnd();
-    return r === t.content ? t : {
-      ...t,
-      content: r
+  if (!e.length) return [];
+  let t = -1;
+  for (let n = e.length - 1; n >= 0; n -= 1) if (e[n]?.role === "assistant") {
+    t = n;
+    break;
+  }
+  return t < 0 ? e : e.map((n, r) => {
+    if (r !== t) return n;
+    const s = String(n.content || "").trimEnd();
+    return s === n.content ? n : {
+      ...n,
+      content: s
     };
-  }) : [];
+  });
 }
 function G7(e = [], t = "sillytavern-native") {
   return e.map((n, r) => {
@@ -42443,8 +42449,8 @@ var Gj = ["aria-hidden"], Vj = {
           g("span", Eee, X(S(ie)("user")), 1),
           Re[28] || (Re[28] = g("span", { class: "bubble-meta-line" }, [g("small", { class: "bubble-time-tag" }, "发送中")], -1))
         ])])]), (F(), U("div", {
-          class: "xb-tavern-markdown",
           key: `pending-user:${Xt.value.signature}`,
+          class: "xb-tavern-markdown",
           "data-markdown-signature": Xt.value.signature,
           innerHTML: It(Xt.value.text)
         }, null, 8, Cee))])) : _e("", !0),
@@ -42465,8 +42471,8 @@ var Gj = ["aria-hidden"], Vj = {
             class: "tavern-thought-block"
           }, [g("div", $ee, X(Gn.label), 1), g("pre", null, X(Gn.text), 1)]))), 128))], 64))), 128)) : _e("", !0)], 40, Nee)) : _e("", !0)], 64))), 128)),
           rr.value ? (F(), U("div", {
-            class: "xb-tavern-markdown",
             key: `live-assistant:${un.value.signature}`,
+            class: "xb-tavern-markdown",
             "data-action-check-groups": un.value.actionCheckGroups || void 0,
             "data-markdown-signature": un.value.signature,
             innerHTML: It(un.value.text)
@@ -42695,8 +42701,8 @@ var Gj = ["aria-hidden"], Vj = {
             }, " 取消 ")
           ])])) : _e("", !0),
           S(ke)(te.message) ? _e("", !0) : (F(), U("div", {
-            class: "xb-tavern-markdown",
             key: `history-message:${te.key}:${Xt(te.message.content)}`,
+            class: "xb-tavern-markdown",
             "data-markdown-signature": Xt(te.message.content),
             innerHTML: S(w)(te.message.content)
           }, null, 8, hte)),
@@ -42758,8 +42764,8 @@ var Gj = ["aria-hidden"], Vj = {
             class: "chat-thought-block"
           }, [g("strong", null, X(Qe.label), 1), g("pre", null, X(Qe.text), 1)]))), 128)) : _e("", !0)], 40, Ste)) : _e("", !0),
           fe.assistantMessage.content ? (F(), U("div", {
-            class: "manager-tool-preface xb-tavern-markdown",
             key: `history-tool-preface:${te.key}:${fe.assistantMessage.order}:${Xt(fe.assistantMessage.content)}`,
+            class: "manager-tool-preface xb-tavern-markdown",
             "data-markdown-signature": Xt(fe.assistantMessage.content),
             innerHTML: S(w)(fe.assistantMessage.content)
           }, null, 8, Tte)) : _e("", !0),
@@ -42777,8 +42783,8 @@ var Gj = ["aria-hidden"], Vj = {
           "data-manager-anchor-key": `live:${te.anchorKey}`,
           class: Ue(["manager-card manager-message manager-message-live", te.message.role === "user" ? "manager-message-user" : "manager-message-assistant"])
         }, [g("div", kte, [g("strong", null, X(te.message.role === "user" ? S(E)("user") : "助手"), 1), Z[20] || (Z[20] = g("small", null, "正在处理", -1))]), (F(), U("div", {
-          class: "xb-tavern-markdown",
           key: `live-message:${te.key}:${Xt(te.message.content)}`,
+          class: "xb-tavern-markdown",
           "data-markdown-signature": Xt(te.message.content),
           innerHTML: S(w)(te.message.content)
         }, null, 8, xte))], 10, Ate)) : (F(), U("details", {
@@ -42806,8 +42812,8 @@ var Gj = ["aria-hidden"], Vj = {
             class: "chat-thought-block"
           }, [g("strong", null, X(Qe.label), 1), g("pre", null, X(Qe.text), 1)]))), 128)) : _e("", !0)], 40, Rte)) : _e("", !0),
           fe.assistantMessage.content ? (F(), U("div", {
-            class: "manager-tool-preface xb-tavern-markdown",
             key: `live-tool-preface:${te.key}:${fe.assistantMessage.order}:${Xt(fe.assistantMessage.content)}`,
+            class: "manager-tool-preface xb-tavern-markdown",
             "data-markdown-signature": Xt(fe.assistantMessage.content),
             innerHTML: S(w)(fe.assistantMessage.content)
           }, null, 8, Nte)) : _e("", !0),
@@ -42864,8 +42870,8 @@ var Gj = ["aria-hidden"], Vj = {
               class: "chat-thought-block"
             }, [g("strong", null, X(fe.label), 1), g("pre", null, X(fe.text), 1)]))), 128)) : _e("", !0)], 40, Xte)) : _e("", !0),
             te.preface ? (F(), U("div", {
-              class: "manager-tool-preface xb-tavern-markdown",
               key: `work-tool-preface:${S(T).id}:${te.id}:${Xt(te.preface)}`,
+              class: "manager-tool-preface xb-tavern-markdown",
               "data-markdown-signature": Xt(te.preface),
               innerHTML: S(w)(te.preface)
             }, null, 8, Qte)) : _e("", !0),
