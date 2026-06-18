@@ -586,7 +586,9 @@ function handleFrameMessage(event) {
   switch (data.type) {
     case "xb-tavern:frame-ready":
       frameReady = true;
-      void sendInitialConfigToFrame().then(flushPendingMessages);
+      void sendInitialConfigToFrame().catch((error) => {
+        console.warn("[LittleWhiteBox][Tavern] failed to send initial config", error);
+      }).finally(flushPendingMessages);
       break;
     case "xb-tavern:close":
       closeTavern();

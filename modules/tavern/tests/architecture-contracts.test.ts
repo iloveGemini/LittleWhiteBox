@@ -74,7 +74,7 @@ test('tavern startup posts frame-ready before heavy app tasks and prewarms host 
     assert.match(hostSource, /function prepareInitialConfig\(\): void \{[\s\S]*initialConfigPromise = promise;/);
     assert.match(hostSource, /async function sendInitialConfigToFrame\(\): Promise<void> \{[\s\S]*const promise = initialConfigPromise \|\| buildFrameConfigPayload\(\);[\s\S]*postToFrame\('xb-tavern:config', await promise\);/);
     assert.match(hostSource, /async function openTavern\(\): Promise<void> \{[\s\S]*prepareInitialConfig\(\);[\s\S]*await createOverlay\(\);/);
-    assert.match(hostSource, /case 'xb-tavern:frame-ready':[\s\S]*void sendInitialConfigToFrame\(\)\.then\(flushPendingMessages\);/);
+    assert.match(hostSource, /case 'xb-tavern:frame-ready':[\s\S]*void sendInitialConfigToFrame\(\)\.catch\(\(error\) => \{[\s\S]*failed to send initial config[\s\S]*\}\)\.finally\(flushPendingMessages\);/);
 });
 
 test('tavern worldbook bridge edits named entries through native save boundary', () => {
