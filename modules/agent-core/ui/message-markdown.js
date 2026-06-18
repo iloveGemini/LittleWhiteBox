@@ -479,6 +479,10 @@ function buildHtmlPreview(doc, code = '') {
 
 function createHtmlBlockNode(doc, entry = {}, options = {}) {
     const code = String(entry.code || '');
+    if (options.htmlBlockMode === 'code') {
+        return buildHtmlCodeView(doc, code);
+    }
+
     if (options.htmlBlockMode === 'preview') {
         const block = doc.createElement('div');
         block.className = 'xb-markdown-html-block xb-markdown-html-block-auto';

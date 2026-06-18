@@ -896,6 +896,9 @@ async function setupSettings() {
                 initRenderer();
                 setTimeout(() => processExistingMessages(), 100);
             }
+            try {
+                window.xiaobaixTavern?.refreshContext?.({ includeWorldbooks: false });
+            } catch (e) {}
         });
 
         const normalizeMaxRendered = (raw) => {

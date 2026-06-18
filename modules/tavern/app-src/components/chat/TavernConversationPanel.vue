@@ -67,6 +67,7 @@ const {
     isRunning,
     latestErrorMessage,
     markdownSignature,
+    htmlRenderEnabled,
     messageKey,
     renderChatMarkdown,
     rerunFromMessage,
@@ -118,6 +119,7 @@ function roleplayMarkdownSignature(text = '', extra = '') {
         extra,
         options.userName,
         options.characterName,
+        htmlRenderEnabled.value ? 'html-render:on' : 'html-render:off',
     ].join('\u0000'));
 }
 

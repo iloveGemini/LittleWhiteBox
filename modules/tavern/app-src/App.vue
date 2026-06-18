@@ -179,6 +179,7 @@ const context = ref<XbTavernContext>({});
 const diagnostics = ref<TavernDiagnostics>({});
 const agentConfig = ref<Record<string, unknown>>({});
 const tavernDisplaySettings = ref<TavernDisplaySettings>(normalizeTavernDisplaySettings({}));
+const htmlRenderEnabled = ref(true);
 const hiddenOutsideCount = computed(() => normalizeHiddenOutsideCount(tavernDisplaySettings.value.hiddenOutsideCount));
 const loadBatchSize = computed(() => normalizeMessageLoadBatchSize(tavernDisplaySettings.value.loadBatchSize));
 const hostRequestHeaders = ref<Record<string, unknown>>({});
@@ -417,6 +418,7 @@ const {
 } = useTavernMarkdownTools({
     chatScrollRef,
     managerScrollRef,
+    htmlRenderEnabled,
     requestHost,
 });
 const characterOptionCache = new Map<string, { signature: string; option: TavernCharacterOption }>();
@@ -938,11 +940,13 @@ const visibleManagerMarkdownSignature = computed(() => visibleManagerChatItems.v
     .map((item) => item.kind === 'message'
         ? `${item.message.sessionId}:${item.message.order}:${markdownSignature(item.message.content)}`
         : `${item.key}:${markdownSignature(item.assistantMessage.content)}:${item.calls.map((call) => `${call.id}:${markdownSignature(call.resultText)}`).join(',')}`)
+    .concat(htmlRenderEnabled.value ? 'html-render:on' : 'html-render:off')
     .join('|'));
 const liveManagerMarkdownSignature = computed(() => liveManagerChatDisplayItems.value
     .map((item) => item.kind === 'message'
         ? `${item.message.sessionId}:${item.message.order}:${markdownSignature(item.message.content)}`
         : `${item.key}:${markdownSignature(item.assistantMessage.content)}:${item.calls.map((call) => `${call.id}:${markdownSignature(call.resultText)}`).join(',')}`)
+    .concat(htmlRenderEnabled.value ? 'html-render:on' : 'html-render:off')
     .join('|'));
 const chatSubtitle = computed(() => {
     if (!selectedSessionId.value) {return '写一句话后会自动创建独立会话。';}
@@ -1828,6 +1832,9 @@ function applyHostPayload(payload: Record<string, unknown>) {
     }
     if ('tavernDisplaySettings' in payload) {
         tavernDisplaySettings.value = normalizeTavernDisplaySettings(payload.tavernDisplaySettings);
+    }
+    if ('htmlRenderEnabled' in payload) {
+        htmlRenderEnabled.value = payload.htmlRenderEnabled !== false;
     }
     applyHostChatPreset(payload);
     availableCharacters.value = payload.availableCharacters as TavernCharacterOption[] || availableCharacters.value;
@@ -3804,6 +3811,7 @@ watch([
     () => runtimePendingUserMessage.value,
     () => runtimeThoughtsSignature.value,
     () => runtimeActionCheckSignature.value,
+    () => htmlRenderEnabled.value,
     () => activeView.value,
     () => chatFocus.value,
 ], () => {
@@ -3969,6 +3977,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
         isRunning,
         latestErrorMessage,
         markdownSignature,
+        htmlRenderEnabled,
         messageKey,
         normalizeTavernSessionState,
         removeSession,

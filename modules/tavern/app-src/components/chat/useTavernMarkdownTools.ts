@@ -11,6 +11,7 @@ const TAVERN_IMAGE_MARKER_REGEX = /\[tavern-image:([a-z0-9\-_]+)\]/gi;
 export interface TavernMarkdownToolsOptions {
     chatScrollRef: Ref<HTMLElement | null>;
     managerScrollRef: Ref<HTMLElement | null>;
+    htmlRenderEnabled: Ref<boolean>;
     requestHost: (type: string, payload?: { payload?: object }) => Promise<{ result?: unknown } & Record<string, unknown>>;
 }
 
@@ -401,7 +402,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
                 codeBlockClassName: 'xb-tavern-codeblock',
                 codeCopyClassName: 'xb-tavern-code-copy',
                 flattenPreCode: true,
-                htmlBlockMode: 'preview',
+                htmlBlockMode: options.htmlRenderEnabled.value ? 'preview' : 'code',
             });
             enhanceTavernImageMarkers(node);
             enhanceRoleplayDialogue(node);
@@ -420,6 +421,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
                 codeBlockClassName: 'xb-tavern-codeblock',
                 codeCopyClassName: 'xb-tavern-code-copy',
                 flattenPreCode: true,
+                htmlBlockMode: options.htmlRenderEnabled.value ? undefined : 'code',
             });
             node.dataset.markdownEnhanced = signature;
         });

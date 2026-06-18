@@ -275,6 +275,7 @@ export interface TavernChatContext {
     isRunning: Ref<boolean>;
     latestErrorMessage: TavernReadable<string>;
     markdownSignature: TavernCommand<[text?: string], string>;
+    htmlRenderEnabled: Ref<boolean>;
     messageKey: TavernCommand<[message: TavernMessageRecord], string>;
     normalizeTavernSessionState: TavernCommand<[value?: unknown], { turn?: number }>;
     removeSession: TavernCommand<[sessionId: string, event?: Event], Promise<void>>;

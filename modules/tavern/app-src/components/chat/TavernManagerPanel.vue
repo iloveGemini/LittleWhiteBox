@@ -20,6 +20,7 @@ const {
     cancelEditMessage,
     formatMessageTime,
     handleComposeInput,
+    htmlRenderEnabled,
     markdownSignature,
     renderChatMarkdown,
     roleLabel,
@@ -104,6 +105,13 @@ function openContractModal() {
 }
 
 const managerDisclosure = useTavernEphemeralDisclosureScope();
+
+function managerMarkdownSignature(text = '') {
+    return markdownSignature([
+        text,
+        htmlRenderEnabled.value ? 'html-render:on' : 'html-render:off',
+    ].join('\u0000'));
+}
 
 function managerDisclosureId(kind: string, ...parts: Array<string | number | undefined>) {
     return `manager:${kind}:${parts.map((part) => String(part ?? '')).join(':')}`;
@@ -239,7 +247,7 @@ watch(
             <div
               v-if="!isEditingManagerMessage(item.message)"
               class="xb-tavern-markdown"
-              :data-markdown-signature="markdownSignature(item.message.content)"
+              :data-markdown-signature="managerMarkdownSignature(item.message.content)"
               v-html="renderChatMarkdown(item.message.content)"
             />
             <div
@@ -336,7 +344,7 @@ watch(
                 <div
                   v-if="round.assistantMessage.content"
                   class="manager-tool-preface xb-tavern-markdown"
-                  :data-markdown-signature="markdownSignature(round.assistantMessage.content)"
+                  :data-markdown-signature="managerMarkdownSignature(round.assistantMessage.content)"
                   v-html="renderChatMarkdown(round.assistantMessage.content)"
                 />
                 <div
@@ -373,7 +381,7 @@ watch(
             </div>
             <div
               class="xb-tavern-markdown"
-              :data-markdown-signature="markdownSignature(item.message.content)"
+              :data-markdown-signature="managerMarkdownSignature(item.message.content)"
               v-html="renderChatMarkdown(item.message.content)"
             />
           </article>
@@ -426,7 +434,7 @@ watch(
                 <div
                   v-if="round.assistantMessage.content"
                   class="manager-tool-preface xb-tavern-markdown"
-                  :data-markdown-signature="markdownSignature(round.assistantMessage.content)"
+                  :data-markdown-signature="managerMarkdownSignature(round.assistantMessage.content)"
                   v-html="renderChatMarkdown(round.assistantMessage.content)"
                 />
                 <div
@@ -545,7 +553,7 @@ watch(
                     <div
                       v-if="tool.preface"
                       class="manager-tool-preface xb-tavern-markdown"
-                      :data-markdown-signature="markdownSignature(tool.preface)"
+                      :data-markdown-signature="managerMarkdownSignature(tool.preface)"
                       v-html="renderChatMarkdown(tool.preface)"
                     />
                     <small v-if="tool.args">{{ tool.args }}</small>

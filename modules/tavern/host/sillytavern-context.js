@@ -7,6 +7,7 @@ import { getTagKeyForEntity, tag_map } from "../../../../../../tags.js";
 import { getCharaFilename } from "../../../../../../utils.js";
 import { getWorldInfoSettings, selected_world_info, world_info } from "../../../../../../world-info.js";
 import { characters as sillyTavernCharacters, chat_metadata, getOneCharacter, getRequestHeaders, getThumbnailUrl, unshallowCharacter } from "../../../../../../../script.js";
+const LITTLE_WHITE_BOX_EXT_ID = "LittleWhiteBox";
 function normalizeText(value = "") {
   return String(value || "").trim();
 }
@@ -29,6 +30,9 @@ function getHostTypographyMetrics() {
     hostMainFontSizePx: formatPx(mainFontSizePx, "15px"),
     hostProseLineHeightPx: formatPx(proseLineHeightPx, "23px")
   };
+}
+function isHtmlRenderEnabled() {
+  return asRecord(extension_settings?.[LITTLE_WHITE_BOX_EXT_ID]).renderEnabled !== false;
 }
 function isSystemCharacterName(value = "") {
   return /^(sillytavern\s+system|system)\b/i.test(normalizeText(value));
@@ -497,6 +501,7 @@ async function buildTavernContext(options = {}) {
     },
     availableCharacters: listCharacters(ctx),
     selectedCharacterId: normalizeText(resolveCharacterId(ctx, options)),
+    htmlRenderEnabled: isHtmlRenderEnabled(),
     ...getHostTypographyMetrics()
   };
 }

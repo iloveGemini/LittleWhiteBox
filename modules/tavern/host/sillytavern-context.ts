@@ -7,6 +7,8 @@ import { getCharaFilename } from '../../../../../../utils.js';
 import { getWorldInfoSettings, selected_world_info, world_info } from '../../../../../../world-info.js';
 import { characters as sillyTavernCharacters, chat_metadata, getOneCharacter, getRequestHeaders, getThumbnailUrl, unshallowCharacter } from '../../../../../../../script.js';
 
+const LITTLE_WHITE_BOX_EXT_ID = 'LittleWhiteBox';
+
 interface TavernHostOptions {
     characterId?: string | number;
     includeHistory?: boolean;
@@ -39,6 +41,7 @@ interface TavernHostContextPayload {
     diagnostics: TavernHostDiagnostics;
     availableCharacters: TavernHostCharacterOption[];
     selectedCharacterId: string;
+    htmlRenderEnabled: boolean;
     hostMainFontSizePx: string;
     hostProseLineHeightPx: string;
 }
@@ -76,6 +79,10 @@ function getHostTypographyMetrics(): Pick<TavernHostContextPayload, 'hostMainFon
         hostMainFontSizePx: formatPx(mainFontSizePx, '15px'),
         hostProseLineHeightPx: formatPx(proseLineHeightPx, '23px'),
     };
+}
+
+function isHtmlRenderEnabled(): boolean {
+    return asRecord(extension_settings?.[LITTLE_WHITE_BOX_EXT_ID]).renderEnabled !== false;
 }
 
 function isSystemCharacterName(value: unknown = ''): boolean {
@@ -551,6 +558,7 @@ export async function buildTavernContext(options: TavernHostOptions = {}): Promi
         },
         availableCharacters: listCharacters(ctx),
         selectedCharacterId: normalizeText(resolveCharacterId(ctx, options)),
+        htmlRenderEnabled: isHtmlRenderEnabled(),
         ...getHostTypographyMetrics(),
     };
 }
