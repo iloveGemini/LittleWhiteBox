@@ -947,7 +947,7 @@
     }
 
     .chat-bubble {
-        --xb-chat-bubble-x: 5px;
+        --xb-chat-bubble-x: 7px;
 
         margin-top: 12px;
         border-radius: 9px;
