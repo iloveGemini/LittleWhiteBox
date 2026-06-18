@@ -230,6 +230,7 @@ export interface TavernChatContext {
     canEditMessage: TavernCommand<[message: TavernMessageRecord], boolean>;
     canRerunMessage: TavernCommand<[message: TavernMessageRecord], boolean>;
     canSendMessage: TavernReadable<boolean>;
+    createNewChatSession: TavernCommand<[], Promise<void>>;
     CHAT_SIDEBAR_BATCH_SIZE: number;
     chatAutoScroll: Ref<boolean>;
     chatFocus: Ref<string>;

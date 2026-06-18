@@ -17,6 +17,7 @@ import type { TavernMessageRecord } from '../../../shared/session-db';
 
 const emit = defineEmits<{
     (event: 'open-contract'): void;
+    (event: 'open-session-archive'): void;
 }>();
 
 const shell = useTavernShellContext();
@@ -34,6 +35,7 @@ const {
     canEditMessage,
     canRerunMessage,
     canSendMessage,
+    createNewChatSession,
     chatComposeTextareaRef,
     chatFocus,
     chatMessages,
@@ -179,6 +181,7 @@ const thoughtDisclosure = useTavernEphemeralDisclosureScope();
 const runtimeThoughtDisclosureId = 'chat:runtime-thoughts';
 const isMobileActionTrayViewport = useTavernMediaQuery('(max-width: 760px)');
 const activeMessageActionsKey = ref('');
+const composeMenuOpen = ref(false);
 
 function messageThoughtDisclosureId(message: TavernMessageRecord) {
     return `chat:thought:${messageKey(message)}`;
@@ -197,12 +200,31 @@ function clearMessageActionTray() {
     activeMessageActionsKey.value = '';
 }
 
+function closeComposeMenu() {
+    composeMenuOpen.value = false;
+}
+
+function toggleComposeMenu() {
+    composeMenuOpen.value = !composeMenuOpen.value;
+}
+
+async function createSessionFromComposeMenu() {
+    closeComposeMenu();
+    await createNewChatSession();
+}
+
+function openSessionArchiveFromComposeMenu() {
+    closeComposeMenu();
+    emit('open-session-archive');
+}
+
 watch(
     [activeView, chatFocus, selectedSessionId],
     ([view, focus]) => {
         if (view !== 'chat' || focus !== 'chat') {
             thoughtDisclosure.reset();
             clearMessageActionTray();
+            closeComposeMenu();
         }
     },
 );
@@ -212,6 +234,7 @@ watch(
     () => {
         thoughtDisclosure.reset();
         clearMessageActionTray();
+        closeComposeMenu();
     },
 );
 
@@ -226,7 +249,7 @@ watch(isMobileActionTrayViewport, (isMobile) => {
   <section
     class="chat-face chat-face-front chat-main"
     :aria-hidden="chatFocus === 'manager'"
-    @click="clearMessageActionTray"
+    @click="clearMessageActionTray(); closeComposeMenu()"
   >
     <div
       v-if="visibleCharacterAvatar"
@@ -610,42 +633,95 @@ watch(isMobileActionTrayViewport, (isMobile) => {
         @bottom="scrollChatToBottom(true, { collapseWindow: true, revealHelpers: true })"
       />
     </div>
-    <form
-      class="chat-compose"
-      @submit.prevent="handleChatSubmit"
-    >
+    <div class="chat-compose-dock">
       <div
-        v-if="latestErrorMessage"
-        class="compose-error"
+        class="chat-compose-shell"
+        :class="{ 'has-text': !!currentUserMessage.trim() }"
       >
-        {{ latestErrorMessage }}
-      </div>
-      <textarea
-        :ref="setChatComposeTextareaRef"
-        v-model="currentUserMessage"
-        rows="1"
-        placeholder="对角色说一句话..."
-        :disabled="isRunning"
-        @input="handleComposeInput"
-        @keydown="handleComposeKeydown"
-      />
-      <button
-        type="submit"
-        class="primary-action"
-        :disabled="!canSendMessage"
-        :aria-label="isCancellingRun ? '正在停止' : isRunning ? '停止' : '发送'"
-      >
-        <span
-          class="compose-send-icon"
-          aria-hidden="true"
+        <div
+          v-if="latestErrorMessage"
+          class="compose-error"
         >
-          {{ isCancellingRun ? '...' : isRunning ? '■' : '➤' }}
-        </span>
-        <span class="compose-send-label">
-          {{ isCancellingRun ? '正在停止' : isRunning ? '停止' : '发送' }}
-        </span>
-      </button>
-    </form>
+          {{ latestErrorMessage }}
+        </div>
+        <div class="compose-menu-shell">
+          <button
+            type="button"
+            class="compose-menu-button"
+            title="聊天操作"
+            aria-label="聊天操作"
+            :aria-expanded="composeMenuOpen ? 'true' : 'false'"
+            aria-controls="xb-tavern-compose-menu"
+            :disabled="isRunning || isCancellingRun"
+            @click.stop="toggleComposeMenu"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="M4 6h16" />
+              <path d="M4 12h16" />
+              <path d="M4 18h16" />
+            </svg>
+          </button>
+          <div
+            v-if="composeMenuOpen"
+            id="xb-tavern-compose-menu"
+            class="compose-menu-popover"
+            role="menu"
+            @click.stop
+          >
+            <button
+              type="button"
+              role="menuitem"
+              class="compose-menu-item"
+              @click="createSessionFromComposeMenu"
+            >
+              新建会话
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class="compose-menu-item"
+              @click="openSessionArchiveFromComposeMenu"
+            >
+              会话档案
+            </button>
+          </div>
+        </div>
+        <form
+          class="chat-compose"
+          @submit.prevent="handleChatSubmit"
+        >
+          <textarea
+            :ref="setChatComposeTextareaRef"
+            v-model="currentUserMessage"
+            rows="1"
+            placeholder="对角色说一句话..."
+            :disabled="isRunning"
+            @input="handleComposeInput"
+            @keydown="handleComposeKeydown"
+            @focus="closeComposeMenu"
+          />
+          <button
+            type="submit"
+            class="primary-action"
+            :disabled="!canSendMessage"
+            :aria-label="isCancellingRun ? '正在停止' : isRunning ? '停止' : '发送'"
+          >
+            <span
+              class="compose-send-icon"
+              aria-hidden="true"
+            >
+              {{ isCancellingRun ? '...' : isRunning ? '■' : '➤' }}
+            </span>
+            <span class="compose-send-label">
+              {{ isCancellingRun ? '正在停止' : isRunning ? '停止' : '发送' }}
+            </span>
+          </button>
+        </form>
+      </div>
+    </div>
   </section>
 </template>
 

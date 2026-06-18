@@ -381,10 +381,7 @@
     }
 
     .tavern-chat.xb-page .tavern-workspace-tabs {
-        flex: 0 0 auto;
-        min-height: 40px;
-        justify-content: center;
-        padding: 6px 16px 0;
+        display: none;
     }
 
     .tavern-chat.xb-page .tavern-state-panel .tavern-map-panel {

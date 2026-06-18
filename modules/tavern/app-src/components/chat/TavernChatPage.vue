@@ -80,9 +80,10 @@ function toggleMobileChatPanel(panel: 'directory' | 'workspace') {
     mobileChatPanel.value = mobileChatPanel.value === panel ? 'none' : panel;
 }
 
-function toggleMobileSessionsPanel() {
+function openMobileSessionsPanel() {
     chatSidePanel.value = 'sessions';
-    toggleMobileChatPanel('directory');
+    mobileChatPanel.value = 'directory';
+    mobileMemoryDirectoryOpen.value = false;
 }
 
 function toggleMobileWorkspacePanel(panel: 'state' | 'memory') {
@@ -424,22 +425,22 @@ onUpdated(() => {
         <button
           type="button"
           class="chat-mobile-context-button"
-          :class="{ 'is-active': mobileChatPanel === 'directory' }"
-          title="会话"
-          aria-label="会话"
-          @click="toggleMobileSessionsPanel"
-        >
-          会话
-        </button>
-        <button
-          type="button"
-          class="chat-mobile-context-button"
-          :class="{ 'is-active': mobileChatPanel === 'workspace' }"
+          :class="{ 'is-active': mobileChatPanel === 'workspace' && chatWorkspacePanel === 'state' }"
           title="状态"
           aria-label="状态"
           @click="toggleMobileWorkspacePanel('state')"
         >
           状态
+        </button>
+        <button
+          type="button"
+          class="chat-mobile-context-button"
+          :class="{ 'is-active': mobileChatPanel === 'workspace' && chatWorkspacePanel === 'memory' }"
+          title="记忆"
+          aria-label="记忆"
+          @click="toggleMobileWorkspacePanel('memory')"
+        >
+          记忆
         </button>
         <button
           type="button"
@@ -478,7 +479,10 @@ onUpdated(() => {
       :class="{ 'is-manager': chatFocus === 'manager' }"
     >
       <div class="chat-flip-card">
-        <TavernConversationPanel @open-contract="openContractModal" />
+        <TavernConversationPanel
+          @open-contract="openContractModal"
+          @open-session-archive="openMobileSessionsPanel"
+        />
         <TavernManagerPanel @open-contract="openContractModal" />
       </div>
     </section>

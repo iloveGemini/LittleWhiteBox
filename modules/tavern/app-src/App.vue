@@ -2286,6 +2286,15 @@ async function createSessionAndOpenChat(options: { contextSnapshot?: XbTavernCon
     scrollChatToBottom(true);
 }
 
+async function createNewChatSession() {
+    if (isRunning.value || isCancellingRun.value) {return;}
+    const snapshotContext = selectedSessionId.value
+        ? await resolveRuntimeContextForSession(selectedSessionId.value)
+        : context.value;
+    resetSessionPreviewState();
+    await createSessionAndOpenChat({ contextSnapshot: snapshotContext });
+}
+
 async function handleHomePrimaryAction() {
     if (canResumeSelectedSession.value) {
         openChatView();
@@ -3915,6 +3924,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
         canEditMessage,
         canRerunMessage,
         canSendMessage,
+        createNewChatSession,
         CHAT_SIDEBAR_BATCH_SIZE,
         chatAutoScroll,
         chatFocus,

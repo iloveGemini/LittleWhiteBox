@@ -5,20 +5,16 @@
     --xb-compose-breathing-space: 0px;
 }
 
-.tavern-chat.xb-page .chat-compose {
+.tavern-chat.xb-page .chat-compose-dock {
     position: relative;
     z-index: 2;
     flex: 0 0 auto;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 50px;
-    align-items: center;
-    gap: 0;
     border-top: 0;
     background: transparent;
     padding: 8px 10px 9px;
 }
 
-.tavern-chat.xb-page .chat-main > .chat-compose {
+.tavern-chat.xb-page .chat-main > .chat-compose-dock {
     position: absolute;
     right: 0;
     bottom: 0;
@@ -35,21 +31,134 @@
     pointer-events: none;
 }
 
-.tavern-chat.xb-page .chat-compose::before {
-    content: "";
-    position: absolute;
-    inset: 5px 10px 6px;
-    z-index: -1;
+.tavern-chat.xb-page .chat-compose-shell {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    align-items: stretch;
+    min-width: 0;
     border: 1px solid var(--xb-rule);
-    border-radius: 12px;
+    border-radius: 14px;
     background: var(--xb-chat-pop-bg);
     box-shadow:
         1px 1px 0 rgba(26, 26, 26, 0.026),
         0 8px 22px rgba(26, 26, 26, 0.046);
+    overflow: visible;
+    transition:
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.18s ease;
 }
 
-.xb-os-shell.theme-dark .tavern-chat.xb-page .chat-compose::before {
+.tavern-chat.xb-page .chat-compose-shell:focus-within {
+    border-color: var(--xb-stamp);
+    box-shadow:
+        0 0 0 3px var(--xb-stamp-soft),
+        0 12px 34px rgba(26, 26, 26, 0.055);
+    transform: translateY(-1px);
+}
+
+.xb-os-shell.theme-dark .tavern-chat.xb-page .chat-compose-shell {
     box-shadow: none;
+}
+
+.compose-menu-shell {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    align-self: stretch;
+}
+
+.compose-menu-button {
+    align-self: center;
+    justify-self: stretch;
+    display: inline-grid;
+    place-items: center;
+    gap: 3px;
+    width: auto;
+    min-width: 0;
+    min-height: 100%;
+    border: 0;
+    border-radius: 14px 0 0 14px;
+    background: transparent;
+    color: var(--xb-ink-faint);
+    padding: 0;
+}
+
+.compose-menu-button svg {
+    width: 22px;
+    height: 22px;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    transition: transform 0.18s ease;
+}
+
+.compose-menu-button:hover:not(:disabled) svg,
+.compose-menu-button:focus-visible:not(:disabled) svg,
+.compose-menu-button[aria-expanded="true"] svg {
+    transform: scale(1.06);
+}
+
+.compose-menu-button:hover:not(:disabled),
+.compose-menu-button:focus-visible:not(:disabled),
+.compose-menu-button[aria-expanded="true"] {
+    outline: none;
+    background: var(--xb-stamp-soft);
+    color: var(--xb-stamp);
+}
+
+.compose-menu-popover {
+    position: absolute;
+    z-index: 20;
+    bottom: calc(100% + 10px);
+    left: 0;
+    display: grid;
+    min-width: 142px;
+    border: 1px solid var(--xb-rule);
+    border-radius: 10px;
+    background: var(--xb-chat-pop-bg);
+    box-shadow: 0 14px 38px rgba(26, 26, 26, 0.18);
+    padding: 5px;
+}
+
+.tavern-chat.xb-page .chat-compose {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 36px;
+    align-items: center;
+    min-width: 0;
+    min-height: 32px;
+    border-radius: 0 14px 14px 0;
+    background: var(--xb-chat-panel-bg);
+    box-shadow: inset 2px 2px 5px rgba(26, 26, 26, 0.018);
+    padding: 0;
+}
+
+.compose-menu-item {
+    justify-content: start;
+    width: 100%;
+    min-height: 32px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--xb-ink);
+    padding: 0 10px;
+    font: 700 13px/1 var(--xb-font-ui);
+    text-align: left;
+}
+
+.compose-menu-item:hover,
+.compose-menu-item:focus-visible {
+    outline: none;
+    background: var(--xb-stamp-soft);
+    color: var(--xb-stamp);
+}
+
+.xb-os-shell.theme-dark .compose-menu-popover {
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.38);
 }
 
 .chat-compose textarea {
@@ -60,7 +169,7 @@
     border-radius: 0;
     background: transparent;
     color: var(--xb-ink);
-    padding: 5px 10px 5px 14px;
+    padding: 5px 6px 5px 12px;
     font-family: var(--xb-font-serif);
     font-size: var(--xb-host-main-font-size, 15px);
     line-height: var(--xb-host-prose-line-height, 23px);
@@ -77,29 +186,18 @@
     outline: none;
 }
 
-.tavern-chat.xb-page .chat-compose:focus-within::before {
-    border-color: var(--xb-stamp);
-    box-shadow:
-        0 0 0 3px var(--xb-stamp-soft),
-        0 12px 34px rgba(26, 26, 26, 0.055);
-}
-
-.xb-os-shell.theme-dark .tavern-chat.xb-page .chat-compose:focus-within::before {
-    box-shadow:
-        0 0 0 2px var(--xb-stamp-soft);
-}
-
-.chat-compose button {
+.chat-compose>button {
     position: relative;
     align-self: center;
-    justify-self: stretch;
+    justify-self: center;
     display: inline-grid;
     place-items: center;
-    min-width: 0;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
     min-height: 32px;
     border: 0;
-    border-left: 1px solid var(--xb-rule);
-    border-radius: 0 12px 12px 0;
+    border-radius: 999px;
     background: transparent;
     color: var(--xb-stamp);
     padding: 0;
@@ -110,26 +208,37 @@
         transform 0.18s ease;
 }
 
-.chat-compose button.primary-action,
+.chat-compose>button.primary-action,
 .primary-action {
-    border-color: var(--xb-rule);
+    border-color: transparent;
     background: transparent;
     color: var(--xb-stamp);
 }
 
-.chat-compose button:hover:not(:disabled),
-.chat-compose button:focus-visible:not(:disabled) {
+.chat-compose>button:hover:not(:disabled),
+.chat-compose>button:focus-visible:not(:disabled) {
     outline: none;
-    background: var(--xb-stamp-soft);
+    background: transparent;
     color: var(--xb-stamp);
 }
 
-.chat-compose button:active:not(:disabled) {
+.chat-compose>button:hover:not(:disabled) .compose-send-icon,
+.chat-compose>button:focus-visible:not(:disabled) .compose-send-icon {
+    background: var(--xb-stamp-soft);
+}
+
+.chat-compose>button:active:not(:disabled) {
     transform: translateY(1px);
 }
 
-.chat-compose button:disabled {
+.chat-compose>button:disabled {
     color: var(--xb-ink-faint);
+}
+
+.chat-compose-shell.has-text .chat-compose>button:not(:disabled) .compose-send-icon {
+    background: var(--xb-stamp);
+    color: var(--xb-paper-plain);
+    box-shadow: 0 2px 8px rgba(var(--xb-accent-rgb), 0.24);
 }
 
 .chat-compose .compose-send-icon {
@@ -163,6 +272,13 @@
     font-size: 12px;
 }
 
+.chat-compose-shell>.compose-error {
+    grid-column: 1 / -1;
+    margin: 0;
+    border-bottom: 1px solid var(--xb-rule);
+    background: transparent;
+}
+
 @media (max-width: 980px) {
     .tavern-chat.xb-page .chat-main {
         --xb-compose-safe-space: 40px;
@@ -173,32 +289,39 @@
         scroll-padding-bottom: calc(var(--xb-compose-safe-space) + var(--xb-compose-breathing-space));
     }
 
-    .tavern-chat.xb-page .chat-compose {
-        grid-template-columns: minmax(0, 1fr) 46px;
-        gap: 0;
+    .tavern-chat.xb-page .chat-compose-dock {
         padding: 7px 8px 8px;
     }
 
-    .tavern-chat.xb-page .chat-compose::before {
-        inset: 5px 8px 6px;
+    .tavern-chat.xb-page .chat-compose-shell {
+        grid-template-columns: 42px minmax(0, 1fr);
+    }
+
+    .tavern-chat.xb-page .chat-compose {
+        grid-template-columns: minmax(0, 1fr) 34px;
+        min-height: 31px;
     }
 
     .chat-compose textarea {
         min-height: 31px;
         max-height: 76px;
-        padding: 4px 8px 4px 14px;
+        padding: 4px 5px 4px 11px;
     }
 
-    .chat-compose button {
-        justify-self: stretch;
+    .compose-menu-button {
+        min-height: 31px;
+    }
+
+    .chat-compose>button {
+        justify-self: center;
         align-self: center;
-        width: auto;
-        min-width: 0;
+        width: 31px;
+        min-width: 31px;
+        height: 31px;
         min-height: 31px;
         margin: 0;
         border: 0;
-        border-left: 1px solid var(--xb-rule);
-        border-radius: 0 12px 12px 0;
+        border-radius: 999px;
         padding: 0;
     }
 }
