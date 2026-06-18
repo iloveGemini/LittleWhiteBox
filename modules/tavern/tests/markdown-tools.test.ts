@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { preprocessTavernRoleplayMarkdown } from '../app-src/components/chat/useTavernMarkdownTools';
 
-test('roleplay markdown hides XML wrapper tags while preserving prose and formatting tags', () => {
+test('roleplay markdown only substitutes display macros before shared ST-style sanitization', () => {
     const text = [
         '<maintext>',
         '办公楼下的旋转门不知疲倦地转动着。',
@@ -21,8 +21,9 @@ test('roleplay markdown hides XML wrapper tags while preserving prose and format
         characterName: '许知夏',
     });
 
-    assert.doesNotMatch(rendered, /<\/?maintext/i);
-    assert.doesNotMatch(rendered, /<\/?Status_block/i);
+    assert.match(rendered, /<maintext>/i);
+    assert.match(rendered, /<\/maintext><Status_block>/i);
+    assert.match(rendered, /<\/Status_block>/i);
     assert.match(rendered, /办公楼下的旋转门/);
     assert.match(rendered, /林舟走出大门，一眼就看到了许知夏。/);
     assert.match(rendered, /<details><summary>\[角色状态\]<\/summary>/);

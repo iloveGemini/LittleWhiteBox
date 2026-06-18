@@ -20,8 +20,6 @@ export interface TavernRoleplayMarkdownOptions {
     characterName?: string;
 }
 
-const ROLEPLAY_FORMAT_TAGS = new Set(['details', 'summary']);
-
 function normalizeDisplayName(value = '', fallback = '') {
     return String(value || '').trim() || fallback;
 }
@@ -36,31 +34,8 @@ function replaceRoleplayMacros(text = '', options: TavernRoleplayMarkdownOptions
         .replace(/\{\{\s*(?:char|bot)\s*\}\}/gi, characterName);
 }
 
-function stripRoleplayXmlTags(text = '') {
-    return String(text || '').replace(/<\/?([a-z][\w:-]*)(?:\s[^<>]*)?>/gi, (match, tagName) => {
-        const normalized = String(tagName || '').toLowerCase();
-        return ROLEPLAY_FORMAT_TAGS.has(normalized) ? match : '';
-    });
-}
-
 export function preprocessTavernRoleplayMarkdown(text = '', options: TavernRoleplayMarkdownOptions = {}) {
-    const withMacros = replaceRoleplayMacros(text, options);
-    const fenceRegex = /(^|\n)(`{3,}|~{3,})[ \t]*([^\n]*)\n([\s\S]*?)\n\2[ \t]*(?=\n|$)/g;
-    let result = '';
-    let lastIndex = 0;
-    let match: RegExpExecArray | null = null;
-
-    while ((match = fenceRegex.exec(withMacros)) !== null) {
-        const leadingBreak = match[1] || '';
-        const blockStart = match.index + leadingBreak.length;
-        const fenceEnd = fenceRegex.lastIndex;
-        result += stripRoleplayXmlTags(withMacros.slice(lastIndex, blockStart));
-        result += withMacros.slice(blockStart, fenceEnd);
-        lastIndex = fenceEnd;
-    }
-
-    result += stripRoleplayXmlTags(withMacros.slice(lastIndex));
-    return result;
+    return replaceRoleplayMacros(text, options);
 }
 
 export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
@@ -76,14 +51,13 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
     }
 
     function renderChatMarkdown(text = '', renderOptions: TavernRoleplayMarkdownOptions = {}) {
-        // renderMarkdownToHtml keeps executable HTML fenced into iframe previews and
-        // sanitizes ordinary Markdown before Vue inserts it into the chat DOM.
+        // Ordinary message HTML follows the ST message sanitizer path; fenced HTML
+        // code blocks remain isolated iframe previews.
         const raw = renderOptions.roleplay
             ? preprocessTavernRoleplayMarkdown(text, renderOptions)
             : String(text || '');
         const canCache = !/(^|\n)(`{3,}|~{3,})[ \t]*(html|htm|xhtml|xml|svg|vue|svelte)?\b/i.test(raw)
-            && !/^<!doctype\s+html/i.test(raw.trim())
-            && !/^<html[\s>]/i.test(raw.trim());
+            && !renderOptions.roleplay;
         const cacheKey = markdownSignature(raw);
         if (canCache && markdownHtmlCache.has(cacheKey)) {
             return markdownHtmlCache.get(cacheKey) || '';

@@ -6062,9 +6062,10 @@ test('Book renderer reuses assistant markdown rendering for tables', async () =>
     }
 });
 
-test('Shared markdown renderer does not mount raw HTML directly', () => {
+test('Shared markdown renderer lets raw HTML reach the message sanitizer', () => {
     const previousShowdown = globalThis.showdown;
     const previousDOMPurify = globalThis.DOMPurify;
+    const calls = [];
     globalThis.showdown = {
         Converter: class {
             makeHtml(text) {
@@ -6073,15 +6074,18 @@ test('Shared markdown renderer does not mount raw HTML directly', () => {
         },
     };
     globalThis.DOMPurify = {
-        sanitize(html) {
+        sanitize(html, config) {
+            calls.push({ html, config });
             return html;
         },
     };
 
     try {
         const html = renderMarkdownToHtml('<div class="demo">Hello</div>');
-        assert.doesNotMatch(html, /<div class="demo">Hello<\/div>/);
-        assert.match(html, /&lt;div class="demo"&gt;Hello&lt;\/div&gt;/);
+        assert.match(html, /<div class="demo">Hello<\/div>/);
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].config.MESSAGE_SANITIZE, true);
+        assert.deepEqual(calls[0].config.ADD_TAGS, ['custom-style']);
     } finally {
         globalThis.showdown = previousShowdown;
         globalThis.DOMPurify = previousDOMPurify;
@@ -6118,9 +6122,9 @@ test('Shared markdown renderer does not fold non-document raw tags into HTML pre
         ].join('\n'));
         assert.doesNotMatch(html, /xb-markdown-html-placeholder/);
         assert.doesNotMatch(html, /@@XBHTMLBLOCK/);
-        assert.match(html, /&lt;note&gt;/);
+        assert.match(html, /<note>/);
         assert.match(html, /Keep this as ordinary prose/);
-        assert.match(html, /&lt;marker&gt;inline marker&lt;\/marker&gt;/);
+        assert.match(html, /<marker>inline marker<\/marker>/);
         assert.match(html, /<details>/);
         assert.match(html, /<summary>\[角色状态\]<\/summary>/);
     } finally {

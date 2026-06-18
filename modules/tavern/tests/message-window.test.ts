@@ -57,6 +57,9 @@ test('tavern scroll handlers collapse expanded message windows when returning to
     assert.doesNotMatch(appSource, /function handleChatScroll\(\)/);
     assert.doesNotMatch(appSource, /function handleManagerScroll\(\)/);
     assert.match(scrollPaneSource, /function handleScroll\(\)[\s\S]*collapseMessageWindowIfBottom\(\);/);
+    assert.match(scrollPaneSource, /const previousScrollTop = lastScrollTop;[\s\S]*const scrollingTowardBottom = currentScrollTop > previousScrollTop;[\s\S]*lastScrollTop = currentScrollTop;/);
+    assert.match(scrollPaneSource, /else if \(currentScrollTop < previousScrollTop\) \{[\s\S]*autoScroll\.value = false;/);
+    assert.doesNotMatch(scrollPaneSource, /else \{\s*autoScroll\.value = false;\s*\}/);
     assert.match(scrollPaneSource, /function scrollToBottom\([\s\S]*scrollOptions\.collapseWindow \|\| autoScroll\.value[\s\S]*collapseMessageWindowIfBottom\(true\);/);
     assert.match(scrollPaneSource, /watch\(\(\) => normalizeHiddenOutsideCount/);
 });

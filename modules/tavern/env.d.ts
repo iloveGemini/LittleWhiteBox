@@ -187,6 +187,7 @@ declare module '*.js' {
         providerConfig?: Record<string, unknown>,
         options?: Record<string, unknown>,
     ): Array<{ id: string; name: string; arguments: string }>;
+    export const HTML_PREVIEW_SANDBOX: string;
     export function renderMarkdownToHtml(text: string): string;
     export function enhanceMarkdownContent(rootNode: ParentNode, options?: Record<string, unknown>): ParentNode;
     export function createAgentSettingsPanel(deps?: Record<string, unknown>): {

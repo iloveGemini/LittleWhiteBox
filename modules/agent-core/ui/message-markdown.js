@@ -3,9 +3,49 @@ import showdown from 'showdown';
 let markdownConverter = null;
 let htmlBlockSerial = 0;
 const htmlBlockStore = new Map();
+let htmlBoundarySerial = 0;
+const htmlBoundaryStore = new Map();
 
 const HTML_BLOCK_LANGUAGES = new Set(['html', 'htm', 'xhtml', 'xml', 'svg', 'vue', 'svelte']);
-const SAFE_MARKDOWN_HTML_TAGS = new Set(['details', 'summary']);
+const HTML_MARKDOWN_BOUNDARY_TAGS = new Set([
+    'address',
+    'article',
+    'aside',
+    'blockquote',
+    'details',
+    'dialog',
+    'div',
+    'dl',
+    'fieldset',
+    'figcaption',
+    'figure',
+    'footer',
+    'form',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'header',
+    'hr',
+    'li',
+    'main',
+    'nav',
+    'ol',
+    'p',
+    'pre',
+    'section',
+    'summary',
+    'table',
+    'tbody',
+    'td',
+    'tfoot',
+    'th',
+    'thead',
+    'tr',
+    'ul',
+]);
 export const HTML_PREVIEW_SANDBOX = 'allow-scripts';
 
 function escapeHtml(text) {
@@ -20,6 +60,11 @@ function escapeHtml(text) {
 function createHtmlBlockId() {
     htmlBlockSerial += 1;
     return `html-${Date.now().toString(36)}-${htmlBlockSerial.toString(36)}`;
+}
+
+function createHtmlBoundaryId() {
+    htmlBoundarySerial += 1;
+    return `raw-${Date.now().toString(36)}-${htmlBoundarySerial.toString(36)}`;
 }
 
 function formatHtmlBlockSize(code = '') {
@@ -44,11 +89,6 @@ function looksLikeHtmlCode(code = '') {
     return tagMatches.length >= 3 && /<\/[a-z][\w:-]*>/i.test(text);
 }
 
-function looksLikeStandaloneHtmlDocument(code = '') {
-    const text = String(code || '').trim();
-    return /^<!doctype\s+html/i.test(text) || /^<html[\s>]/i.test(text);
-}
-
 function storeHtmlBlock(code = '', language = 'html') {
     const id = createHtmlBlockId();
     htmlBlockStore.set(id, {
@@ -58,36 +98,59 @@ function storeHtmlBlock(code = '', language = 'html') {
     return `@@XBHTMLBLOCK:${id}@@`;
 }
 
-function escapeRawHtmlTags(text = '', options = {}) {
-    const allowSafeHtmlTags = options.allowSafeHtmlTags === true;
-    return String(text || '').replace(/<\/?([a-z][\w:-]*)(?:\s[^<>]*)?>/gi, (match, tagName) => {
-        const normalized = String(tagName || '').toLowerCase();
-        if (allowSafeHtmlTags && SAFE_MARKDOWN_HTML_TAGS.has(normalized)) {
-            const closing = /^<\s*\//.test(match);
-            if (closing) {
-                return `</${normalized}>`;
-            }
-            if (normalized === 'details' && /\sopen(?:\s|=|>|\/)/i.test(match)) {
-                return '<details open>';
-            }
-            return `<${normalized}>`;
+function storeHtmlBoundary(html = '') {
+    const id = createHtmlBoundaryId();
+    htmlBoundaryStore.set(id, String(html || ''));
+    return `@@XBHTMLRAW:${id}@@`;
+}
+
+function isHtmlBoundaryLine(line = '') {
+    const trimmed = String(line || '').trim();
+    if (!trimmed || !trimmed.startsWith('<') || !trimmed.endsWith('>')) return false;
+    if (/^<!--[\s\S]*-->$/.test(trimmed) || /^<!doctype\b/i.test(trimmed) || /^<\?xml\b/i.test(trimmed)) return false;
+
+    let hasBoundaryTag = false;
+    const tagRegex = /<\/?\s*([a-z][\w:-]*)\b[^>]*>/gi;
+    let match = null;
+    while ((match = tagRegex.exec(trimmed)) !== null) {
+        const tagName = String(match[1] || '').toLowerCase();
+        if (HTML_MARKDOWN_BOUNDARY_TAGS.has(tagName)) {
+            hasBoundaryTag = true;
+            break;
         }
-        return match.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    });
-}
-
-function preprocessNonFenceMarkdown(text = '', options = {}) {
-    const segment = String(text || '');
-    const trimmed = segment.trim();
-    if (looksLikeStandaloneHtmlDocument(trimmed)) {
-        const leading = segment.match(/^\s*/)?.[0] || '';
-        const trailing = segment.match(/\s*$/)?.[0] || '';
-        return `${leading}${storeHtmlBlock(trimmed, 'html')}${trailing}`;
     }
-    return escapeRawHtmlTags(segment, options);
+    if (!hasBoundaryTag) return false;
+
+    const textOutsideTags = trimmed.replace(/<\/?\s*[a-z][\w:-]*\b[^>]*>/gi, '').trim();
+    return !textOutsideTags || !/(^|\s)(?:#{1,6}\s|[-+*]\s|\d+\.\s|```|~~~|>\s)/.test(textOutsideTags);
 }
 
-function preprocessMarkdownInput(raw = '', options = {}) {
+function preprocessNonFenceMarkdown(text = '') {
+    const normalized = String(text || '');
+    if (!normalized.trim()) return normalized;
+    const lines = normalized.split(/\r?\n/);
+    const protectedLines = [];
+    lines.forEach((line, index) => {
+        if (!isHtmlBoundaryLine(line)) {
+            protectedLines.push(line);
+            return;
+        }
+
+        const previousLine = protectedLines[protectedLines.length - 1] ?? '';
+        if (protectedLines.length && previousLine.trim()) {
+            protectedLines.push('');
+        }
+        protectedLines.push(storeHtmlBoundary(line));
+
+        const nextLine = lines[index + 1] ?? '';
+        if (nextLine.trim()) {
+            protectedLines.push('');
+        }
+    });
+    return protectedLines.join('\n');
+}
+
+function preprocessMarkdownInput(raw = '') {
     const text = String(raw || '');
     const fenceRegex = /(^|\n)(`{3,}|~{3,})[ \t]*([^\n]*)\n([\s\S]*?)\n\2[ \t]*(?=\n|$)/g;
     let result = '';
@@ -102,7 +165,7 @@ function preprocessMarkdownInput(raw = '', options = {}) {
         const code = String(match[4] || '');
         const shouldFoldAsHtml = isHtmlBlockLanguage(rawLanguage) || (!rawLanguage && looksLikeHtmlCode(code));
 
-        result += preprocessNonFenceMarkdown(text.slice(lastIndex, blockStart), options);
+        result += preprocessNonFenceMarkdown(text.slice(lastIndex, blockStart));
         if (shouldFoldAsHtml) {
             result += storeHtmlBlock(code, rawLanguage || 'html');
         } else {
@@ -111,7 +174,7 @@ function preprocessMarkdownInput(raw = '', options = {}) {
         lastIndex = fenceEnd;
     }
 
-    result += preprocessNonFenceMarkdown(text.slice(lastIndex), options);
+    result += preprocessNonFenceMarkdown(text.slice(lastIndex));
     return result;
 }
 
@@ -121,11 +184,12 @@ function injectHtmlBlockPlaceholders(html = '') {
     ));
 }
 
-function repairSafeMarkdownHtmlBlocks(html = '') {
-    return String(html || '')
-        .replace(/<p>\s*(<details\b[^>]*>\s*(?:<summary\b[^>]*>[\s\S]*?<\/summary>\s*)?)<\/p>/gi, '$1')
-        .replace(/<p>\s*(<summary\b[^>]*>[\s\S]*?<\/summary>)\s*<\/p>/gi, '$1')
-        .replace(/<p>\s*(<\/details>)\s*<\/p>/gi, '$1');
+function injectHtmlBoundaryPlaceholders(html = '') {
+    return String(html || '').replace(/(?:<p>\s*)?@@XBHTMLRAW:([a-z0-9-]+)@@(?:\s*<\/p>)?/g, (_match, id) => {
+        const raw = htmlBoundaryStore.get(id) || '';
+        htmlBoundaryStore.delete(id);
+        return raw;
+    });
 }
 
 function decodeHtmlAttribute(value = '') {
@@ -146,7 +210,7 @@ function isDangerousUrl(value = '') {
     return /^(?:javascript|vbscript|data):/.test(normalized);
 }
 
-function sanitizeMarkdownHtml(html = '') {
+function sanitizeMarkdownHtmlFallback(html = '') {
     return String(html || '')
         .replace(/<\/?(?:script|style|iframe|object|embed|link|meta|base|form|input|button|textarea|select|option)[^>]*>/gi, '')
         .replace(/\s+on[a-z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+)/gi, '')
@@ -156,27 +220,62 @@ function sanitizeMarkdownHtml(html = '') {
         });
 }
 
+function readSanitizerFrom(value) {
+    return typeof value?.sanitize === 'function' ? value : null;
+}
+
+function getStMessageSanitizer() {
+    try {
+        const parentSanitizer = globalThis.parent && globalThis.parent !== globalThis
+            ? readSanitizerFrom(globalThis.parent.DOMPurify)
+            : null;
+        if (parentSanitizer) return parentSanitizer;
+    } catch {
+        // Cross-origin parent access can throw; fall back below.
+    }
+
+    return readSanitizerFrom(globalThis.DOMPurify);
+}
+
+function sanitizeMarkdownHtml(html = '') {
+    const raw = String(html || '');
+    const sanitizer = getStMessageSanitizer();
+    const config = {
+        RETURN_DOM: false,
+        RETURN_DOM_FRAGMENT: false,
+        RETURN_TRUSTED_TYPE: false,
+        MESSAGE_SANITIZE: true,
+        ADD_TAGS: ['custom-style'],
+    };
+    if (sanitizer) {
+        try {
+            return String(sanitizer.sanitize(raw, config) || '');
+        } catch {
+            // Fall through to the local test fallback.
+        }
+    }
+    return sanitizeMarkdownHtmlFallback(raw);
+}
+
 export function renderMarkdownToHtml(text) {
     const raw = String(text || '').trim();
     if (!raw) return '';
-    const markdownText = preprocessMarkdownInput(raw, {
-        allowSafeHtmlTags: true,
-    });
+    const markdownText = preprocessMarkdownInput(raw);
 
     try {
         if (!markdownConverter) {
             markdownConverter = new showdown.Converter({
+                emoji: true,
+                literalMidWordUnderscores: true,
+                parseImgDimensions: true,
                 simpleLineBreaks: true,
                 strikethrough: true,
                 tables: true,
-                tasklists: true,
-                ghCodeBlocks: true,
-                simplifiedAutoLink: true,
-                openLinksInNewWindow: true,
-                emoji: false,
+                underline: true,
+                disableForced4SpacesIndentedSublists: true,
             });
         }
-        const html = repairSafeMarkdownHtmlBlocks(markdownConverter.makeHtml(markdownText));
+        const html = injectHtmlBoundaryPlaceholders(markdownConverter.makeHtml(markdownText));
         return injectHtmlBlockPlaceholders(sanitizeMarkdownHtml(html));
     } catch {
         // Fall through to escaped plain text below.

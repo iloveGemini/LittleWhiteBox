@@ -135,8 +135,9 @@ export function useTavernScrollPane(options: TavernScrollPaneOptions) {
         const node = scrollRef.value;
         if (!node) {return;}
         if (revealOlderMessages()) {return;}
+        const previousScrollTop = lastScrollTop;
         const currentScrollTop = Number(node.scrollTop || 0);
-        const scrollingTowardBottom = currentScrollTop > lastScrollTop;
+        const scrollingTowardBottom = currentScrollTop > previousScrollTop;
         lastScrollTop = currentScrollTop;
         const nearBottom = isNearBottom();
         if (nearBottom) {
@@ -144,7 +145,7 @@ export function useTavernScrollPane(options: TavernScrollPaneOptions) {
                 autoScroll.value = true;
                 collapseMessageWindowIfBottom();
             }
-        } else {
+        } else if (currentScrollTop < previousScrollTop) {
             autoScroll.value = false;
         }
         if (scrollTicking) {return;}
