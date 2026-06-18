@@ -123,6 +123,11 @@
     padding: 5px;
 }
 
+.compose-menu-popover.is-author-note {
+    width: min(360px, calc(100vw - 24px));
+    padding: 8px;
+}
+
 .tavern-chat.xb-page .chat-compose {
     position: relative;
     z-index: 1;
@@ -155,6 +160,167 @@
     outline: none;
     background: var(--xb-stamp-soft);
     color: var(--xb-stamp);
+}
+
+.compose-author-note-panel {
+    display: grid;
+    gap: 10px;
+    color: var(--xb-ink);
+}
+
+.compose-author-note-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid var(--xb-rule);
+    padding: 2px 2px 8px;
+}
+
+.compose-author-note-head div {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.compose-author-note-head strong {
+    font: 800 14px/1.2 var(--xb-font-ui);
+}
+
+.compose-author-note-head span,
+.compose-author-note-actions span {
+    color: var(--xb-ink-faint);
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.compose-author-note-back {
+    position: relative;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
+    border: 1px solid var(--xb-rule);
+    border-radius: 50%;
+    background: var(--xb-chat-panel-bg);
+    color: var(--xb-ink);
+    padding: 0;
+}
+
+.compose-author-note-back::before,
+.compose-author-note-back::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 11px;
+    height: 1.5px;
+    border-radius: 999px;
+    background: currentColor;
+    transform-origin: center;
+}
+
+.compose-author-note-back::before {
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.compose-author-note-back::after {
+    transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.compose-author-note-field {
+    display: grid;
+    gap: 6px;
+}
+
+.compose-author-note-field > span,
+.compose-author-note-check span {
+    color: var(--xb-ink-soft);
+    font: 700 12px/1.2 var(--xb-font-ui);
+}
+
+.compose-author-note-field textarea,
+.compose-author-note-field input {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--xb-rule);
+    border-radius: 7px;
+    background: var(--xb-chat-panel-bg);
+    color: var(--xb-ink);
+    font: 500 13px/1.45 var(--xb-font-ui);
+    padding: 8px 9px;
+}
+
+.compose-author-note-field textarea {
+    resize: vertical;
+    min-height: 112px;
+    max-height: 220px;
+}
+
+.compose-author-note-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+}
+
+.compose-author-note-segments {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    border: 1px solid var(--xb-rule);
+    border-radius: 8px;
+    background: var(--xb-chat-panel-bg);
+    padding: 4px;
+}
+
+.compose-author-note-segments button {
+    min-height: 30px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--xb-ink-soft);
+    font: 700 12px/1.15 var(--xb-font-ui);
+    padding: 0 6px;
+}
+
+.compose-author-note-segments button.selected {
+    background: var(--xb-stamp-soft);
+    color: var(--xb-stamp);
+}
+
+.compose-author-note-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.compose-author-note-check input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--xb-stamp);
+}
+
+.compose-author-note-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    border-top: 1px solid var(--xb-rule);
+    padding-top: 8px;
+}
+
+.compose-author-note-actions button {
+    min-height: 32px;
+    border: 0;
+    border-radius: 7px;
+    background: var(--xb-stamp);
+    color: var(--xb-paper);
+    font: 800 13px/1 var(--xb-font-ui);
+    padding: 0 14px;
+}
+
+.compose-author-note-actions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
 }
 
 .xb-os-shell.theme-dark .compose-menu-popover {
@@ -310,6 +476,34 @@
 
     .compose-menu-button {
         min-height: 31px;
+    }
+
+    .compose-menu-popover {
+        position: fixed;
+        right: 10px;
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        left: 10px;
+        z-index: 97;
+        width: auto;
+        max-height: calc(100vh - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        max-height: calc(100dvh - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        overflow: auto;
+        border-radius: 16px;
+        padding: 8px;
+    }
+
+    .compose-menu-popover.is-author-note {
+        width: auto;
+        max-height: calc(100vh - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        max-height: calc(100dvh - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    }
+
+    .compose-author-note-field textarea {
+        max-height: min(190px, 34vh);
+    }
+
+    .compose-author-note-grid {
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .chat-compose>button {

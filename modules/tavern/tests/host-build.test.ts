@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '../../..');
@@ -40,6 +40,19 @@ test('tavern host build script compiles shared runtime modules imported by host 
     assert.deepEqual(
         sharedImports.filter((path) => !entryPoints.includes(path)),
         [],
+    );
+});
+
+test('tavern generated shared host runtime files are packaged for assistant lookup', () => {
+    const buildSource = readRepoFile('scripts/build-tavern-host.mjs');
+    const manifest = JSON.parse(readRepoFile('modules/assistant/assistant-file-manifest.json')) as { files?: Array<{ relativePath?: string }> };
+    const generatedPath = 'modules/tavern/shared/message-assembler.js';
+
+    assert.match(buildSource, /['"]modules\/tavern\/shared\/message-assembler\.ts['"]/);
+    assert.equal(existsSync(resolve(root, generatedPath)), true);
+    assert.equal(
+        (manifest.files || []).some((file) => file.relativePath === generatedPath),
+        true,
     );
 });
 
@@ -241,6 +254,7 @@ test('tavern worldbook sync uses native source overview with current context', (
     const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
     const contextSource = readRepoFile('modules/tavern/host/sillytavern-context.ts');
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const worldbookSource = readRepoFile('modules/tavern/host/worldbooks.ts');
     assert.match(
         settingsControllerSource,
         /requestHost\('xb-tavern:list-worldbook-sources', \{\s*payload: \{\s*context: options\.effectiveContext\.value,/,
@@ -268,6 +282,16 @@ test('tavern worldbook sync uses native source overview with current context', (
     assert.match(contextSource, /authorNote: normalizeAuthorNote\(ctx, options\)/);
     assert.match(appSource, /function preserveSessionAuthorNote/);
     assert.match(appSource, /const nextContext = preserveSessionAuthorNote\(payload\.context as XbTavernContext \|\| context\.value, session\);/);
+    assert.match(worldbookSource, /function applyAuthorNoteInjectScanPrompt/);
+    assert.match(worldbookSource, /setExtensionPrompt\(\s*NOTE_MODULE_NAME/);
+    assert.match(worldbookSource, /state\.shouldAddPrompt && state\.scan/);
+    assert.match(worldbookSource, /applyAuthorNoteInjectScanPrompt\(context, payload\.currentUserMessage \|\| ''\)/);
+    assert.match(worldbookSource, /function captureExtensionPrompts\(\): ExtensionPromptSnapshot \{[\s\S]*\{ \.\.\.asRecord\(value\) \}/);
+    assert.match(worldbookSource, /function restoreExtensionPrompts\(snapshot: ExtensionPromptSnapshot\): void \{[\s\S]*extension_prompts\[key\] = \{ \.\.\.value \};/);
+    assert.match(worldbookSource, /extensionPrompts: captureExtensionPrompts\(\)/);
+    assert.match(worldbookSource, /restoreExtensionPrompts\(snapshot\.extensionPrompts\)/);
+    assert.doesNotMatch(worldbookSource, /extensionPrompts: cloneJson\(extension_prompts/);
+    assert.doesNotMatch(worldbookSource, /extension_prompts\[key\] = cloneJson\(value\)/);
     assert.match(contextSource, /worldbookSources,/);
     assert.match(contextSource, /worldbookSourcesSynced: true/);
     assert.match(appSource, /syncSessionCharacterContext\(\{ sessionId: targetSessionId, force: true \}\)/);
@@ -377,9 +401,10 @@ test('tavern native prompt builder injects LittleWhiteBox state without host cha
     assert.match(nativeSource, /\|\| legacyDepthPrompt\.prompt[\s\S]*\|\| \(typeof data\.depth_prompt === 'string' \? data\.depth_prompt : ''\)/);
     assert.match(nativeSource, /function addCharacterDepthPrompt[\s\S]*const prompt = readCharacterDepthPrompt\(context\)/);
     assert.match(nativeSource, /addInChatPrompt\(\s*'xb_tavern_character_depth_prompt'/);
-    assert.match(nativeSource, /function resolveAuthorNoteState/);
-    assert.match(nativeSource, /const note = asRecord\(context\.authorNote\)/);
-    assert.match(nativeSource, /countUserMessages\(context, currentUserMessage\)/);
+    assert.match(nativeSource, /resolveXbTavernAuthorNoteState/);
+    assert.doesNotMatch(nativeSource, /function resolveAuthorNoteState/);
+    assert.doesNotMatch(nativeSource, /const note = asRecord\(context\.authorNote\)/);
+    assert.doesNotMatch(nativeSource, /function countUserMessages/);
     assert.match(nativeSource, /state\.shouldAddPrompt[\s\S]*\[\.\.\.before, state\.prompt, \.\.\.after\]/);
     assert.match(nativeSource, /setExtensionPrompt\(\s*NOTE_MODULE_NAME/);
     assert.doesNotMatch(nativeSource, /setFloatingPrompt/);

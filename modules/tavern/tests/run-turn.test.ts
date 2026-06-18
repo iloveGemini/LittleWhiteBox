@@ -375,6 +375,136 @@ test('xb tavern run turn sends the same ST-native prompt shape used by simulatio
     assert.equal(getChanceEncounterEvent(result.userMessage.runtimeEvents)?.label, CHANCE_ENCOUNTER_LABEL);
 });
 
+test('xb tavern session author note reaches native prompt for real and simulated requests', async () => {
+    await resetDb();
+    const preset = createDefaultXbTavernPreset();
+    const session = await createTavernSession({
+        title: 'Author note session',
+        characterId: 'char-note',
+        characterName: 'Aster',
+        contextSnapshot: {
+            character: { id: 'char-note', name: 'Aster', description: 'Pilot.' },
+            authorNote: {
+                prompt: 'PLAYER_AUTHOR_NOTE',
+                interval: 1,
+                position: 1,
+                depth: 4,
+                role: 0,
+                scan: false,
+            },
+        },
+    });
+
+    let realNativeAuthorNote: unknown = null;
+    let realMessages: Array<{ role?: string; content?: string }> = [];
+    await runXbTavernTurn({
+        sessionId: session.id,
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot: session.contextSnapshot || {},
+        preset,
+        currentUserMessage: 'Use the note.',
+        buildNativeChatPrompt: async (input) => {
+            realNativeAuthorNote = input.context?.authorNote;
+            return {
+                source: 'test-native-builder',
+                promptMessageCount: 1,
+                messages: [{ role: 'system', content: String((input.context?.authorNote as { prompt?: string } | undefined)?.prompt || '') }],
+            };
+        },
+        executeRunOnce: async (options: TavernRunOnceOptions) => {
+            realMessages = options.messages.map((message) => ({ role: message.role, content: message.content }));
+            return {
+                text: 'Done.',
+                provider: 'fake-provider',
+                model: 'fake-model',
+                requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
+            };
+        },
+    });
+
+    assert.equal((realNativeAuthorNote as { prompt?: string } | null)?.prompt, 'PLAYER_AUTHOR_NOTE');
+    assert.deepEqual(realMessages, [{ role: 'system', content: 'PLAYER_AUTHOR_NOTE' }]);
+
+    const simulated = await simulateXbTavernRequest({
+        sessionId: session.id,
+        agentConfig: {
+            currentPresetName: '酒馆 OpenAI',
+            presets: {
+                '酒馆 OpenAI': {
+                    provider: 'sillytavern-openai-compatible',
+                    modelConfigs: {
+                        'sillytavern-openai-compatible': { model: 'fake-model' },
+                    },
+                },
+            },
+        },
+        contextSnapshot: session.contextSnapshot || {},
+        preset,
+        currentUserMessage: 'Preview the note.',
+        buildNativeChatPrompt: async (input) => ({
+            source: 'test-native-builder',
+            promptMessageCount: 1,
+            messages: [{ role: 'system', content: String((input.context?.authorNote as { prompt?: string } | undefined)?.prompt || '') }],
+        }),
+    });
+    assert.match(simulated.requestSnapshot.rawMessagesJson || '', /PLAYER_AUTHOR_NOTE/);
+    assert.match(simulated.requestSnapshot.rawRequestJson || '', /PLAYER_AUTHOR_NOTE/);
+});
+
+test('xb tavern author note world scan can activate local worldbook without consuming chat depth', async () => {
+    await resetDb();
+    const preset = createDefaultXbTavernPreset();
+    const session = await createTavernSession({
+        title: 'Author note scan session',
+        characterId: 'char-note-scan',
+        characterName: 'Aster',
+        contextSnapshot: {
+            character: { id: 'char-note-scan', name: 'Aster', description: 'Pilot.' },
+            authorNote: {
+                prompt: 'NOTE_SCAN_KEY',
+                interval: 1,
+                position: 1,
+                depth: 4,
+                role: 0,
+                scan: true,
+            },
+            worldEntries: [
+                { uid: 'note-entry', content: 'Author note triggered lore.', key: ['NOTE_SCAN_KEY'], order: 10 },
+                { uid: 'chat-entry', content: 'Current chat triggered lore.', key: ['current-chat-key'], order: 20 },
+                { uid: 'old-entry', content: 'Old chat lore.', key: ['old-chat-key'], order: 30 },
+            ],
+        },
+    });
+    const simulated = await simulateXbTavernRequest({
+        sessionId: session.id,
+        agentConfig: {
+            currentPresetName: '酒馆 OpenAI',
+            presets: {
+                '酒馆 OpenAI': {
+                    provider: 'sillytavern-openai-compatible',
+                    modelConfigs: {
+                        'sillytavern-openai-compatible': { model: 'fake-model' },
+                    },
+                },
+            },
+        },
+        contextSnapshot: session.contextSnapshot || {},
+        preset,
+        currentUserMessage: 'current-chat-key',
+        runtimeState: {
+            worldSettings: {
+                scanDepth: 1,
+            },
+        },
+    });
+
+    assert.equal(simulated.buildResult.meta.scanText, 'current-chat-key');
+    assert.deepEqual(simulated.buildResult.activatedWorldEntries.map((entry) => entry.uid).sort(), ['chat-entry', 'note-entry']);
+    assert.match(simulated.requestSnapshot.rawMessagesJson || '', /Author note triggered lore/);
+    assert.match(simulated.requestSnapshot.rawMessagesJson || '', /Current chat triggered lore/);
+    assert.doesNotMatch(simulated.requestSnapshot.rawMessagesJson || '', /Old chat lore/);
+});
+
 test('xb tavern rerun reuses an existing chance encounter without rerolling', async () => {
     await resetDb();
     const preset = createDefaultXbTavernPreset();

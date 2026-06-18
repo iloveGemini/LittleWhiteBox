@@ -17,6 +17,12 @@ export enum XBTavernPromptRole {
     ASSISTANT = 2,
 }
 
+export enum XBTavernAuthorNotePosition {
+    AFTER_MAIN = 0,
+    IN_CHAT = 1,
+    BEFORE_MAIN = 2,
+}
+
 export enum XBTavernSelectiveLogic {
     AND_ANY = 0,
     NOT_ALL = 1,
@@ -91,6 +97,104 @@ export interface XbTavernAuthorNote {
     characterPrompt?: string;
     characterUse?: boolean;
     characterPosition?: number;
+}
+
+export const DEFAULT_XB_TAVERN_AUTHOR_NOTE: Required<Pick<XbTavernAuthorNote, 'prompt' | 'interval' | 'position' | 'depth' | 'role' | 'scan'>> = {
+    prompt: '',
+    interval: 1,
+    position: XBTavernAuthorNotePosition.IN_CHAT,
+    depth: 4,
+    role: XBTavernPromptRole.SYSTEM,
+    scan: false,
+};
+
+function normalizedRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function normalizeNonNegativeInteger(value: unknown, fallback = 0): number {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? Math.max(0, Math.floor(numberValue)) : fallback;
+}
+
+function normalizeAuthorNotePosition(value: unknown): XBTavernAuthorNotePosition {
+    const position = Number(value);
+    if (position === XBTavernAuthorNotePosition.AFTER_MAIN) {return XBTavernAuthorNotePosition.AFTER_MAIN;}
+    if (position === XBTavernAuthorNotePosition.BEFORE_MAIN) {return XBTavernAuthorNotePosition.BEFORE_MAIN;}
+    return XBTavernAuthorNotePosition.IN_CHAT;
+}
+
+function normalizeAuthorNoteRole(value: unknown): XBTavernPromptRole {
+    const role = Number(value);
+    if (role === XBTavernPromptRole.USER) {return XBTavernPromptRole.USER;}
+    if (role === XBTavernPromptRole.ASSISTANT) {return XBTavernPromptRole.ASSISTANT;}
+    return XBTavernPromptRole.SYSTEM;
+}
+
+export function normalizeXbTavernAuthorNote(value: unknown = {}): XbTavernAuthorNote {
+    const source = normalizedRecord(value);
+    return {
+        prompt: normalizeText(source.prompt),
+        interval: normalizeNonNegativeInteger(source.interval, DEFAULT_XB_TAVERN_AUTHOR_NOTE.interval),
+        position: normalizeAuthorNotePosition(source.position),
+        depth: normalizeNonNegativeInteger(source.depth, DEFAULT_XB_TAVERN_AUTHOR_NOTE.depth),
+        role: normalizeAuthorNoteRole(source.role),
+        scan: source.scan === true,
+        characterName: normalizeText(source.characterName),
+        characterPrompt: normalizeText(source.characterPrompt),
+        characterUse: source.characterUse === true,
+        characterPosition: normalizeNonNegativeInteger(source.characterPosition, 0),
+    };
+}
+
+function countAuthorNoteUserMessages(context: XbTavernContext = {}, currentUserMessage = ''): number {
+    const history = Array.isArray(context.history) ? context.history : [];
+    const historyCount = history.filter((message) => normalizeRole(message.role ?? message.is_user) === 'user').length;
+    return historyCount + (normalizeText(currentUserMessage) ? 1 : 0);
+}
+
+export function resolveXbTavernAuthorNoteState(context: XbTavernContext = {}, currentUserMessage = ''): {
+    shouldAddPrompt: boolean;
+    prompt: string;
+    position: number;
+    depth: number;
+    role: number;
+    scan: boolean;
+} {
+    const note = normalizeXbTavernAuthorNote(context.authorNote);
+    let userMessageCount = countAuthorNoteUserMessages(context, currentUserMessage);
+    if (note.interval === 1) {userMessageCount = 1;}
+    const shouldAddPrompt = userMessageCount > 0
+        && note.interval > 0
+        && (userMessageCount >= note.interval ? userMessageCount % note.interval === 0 : false);
+    let prompt = shouldAddPrompt ? normalizeText(note.prompt) : '';
+    if (shouldAddPrompt && note.characterUse === true) {
+        const characterPrompt = normalizeText(note.characterPrompt);
+        switch (note.characterPosition) {
+            case 1:
+                prompt = [characterPrompt, prompt].filter(Boolean).join('\n');
+                break;
+            case 2:
+                prompt = [prompt, characterPrompt].filter(Boolean).join('\n');
+                break;
+            default:
+                prompt = characterPrompt;
+                break;
+        }
+    }
+    return {
+        shouldAddPrompt,
+        prompt,
+        position: note.position,
+        depth: note.depth,
+        role: note.role,
+        scan: note.scan === true,
+    };
+}
+
+export function buildAuthorNoteInjectScanText(context: XbTavernContext = {}, currentUserMessage = ''): string {
+    const state = resolveXbTavernAuthorNoteState(context, currentUserMessage);
+    return state.scan && state.shouldAddPrompt ? normalizeText(state.prompt) : '';
 }
 
 export interface XbTavernHistoryMessage {
@@ -349,6 +453,7 @@ export interface XbTavernWorldEntryState {
 
 export interface XbTavernWorldSettings {
     scanText?: string;
+    injectScanText?: string;
     scanMessages?: string[];
     scanDepth?: number;
     globalScanData?: {
@@ -814,8 +919,9 @@ function buildEntryScanText(settings: XbTavernWorldSettings = {}, entry?: XbTave
     const baseScanText = Array.isArray(settings.scanMessages)
         ? buildScanTextFromMessages(settings.scanMessages, scanDepth)
         : String(settings.scanText || '');
+    const injectScanText = normalizeText(settings.injectScanText);
     const recursionText = String((settings as XbTavernWorldSettings & { recursionText?: string }).recursionText || '');
-    const source = [baseScanText, recursionText];
+    const source = [baseScanText, injectScanText, recursionText];
     const globalScanData = settings.globalScanData || {};
     if (entry?.matchPersonaDescription && globalScanData.personaDescription) {
         source.push(globalScanData.personaDescription);
@@ -2043,12 +2149,19 @@ function prepareXbTavernMessageBuild(
     const runtimeWorldSettings = runtimeState.worldSettings || {};
     const explicitScanText = typeof runtimeState.worldScanText === 'string';
     const scanMessages = buildScanMessages(context, currentUserMessage, runtimeWorldSettings.includeNames === true);
-    const scanText = explicitScanText ? String(runtimeState.worldScanText || '') : buildScanTextFromMessages(scanMessages, normalizeScanDepth(runtimeWorldSettings.scanDepth ?? 2, 2));
+    const scanText = explicitScanText
+        ? String(runtimeState.worldScanText || '')
+        : buildScanTextFromMessages(scanMessages, normalizeScanDepth(runtimeWorldSettings.scanDepth ?? 2, 2));
+    const injectScanText = [
+        normalizeText(runtimeWorldSettings.injectScanText),
+        buildAuthorNoteInjectScanText(context, currentUserMessage),
+    ].filter(Boolean).join('\n');
     const nativeActivatedEntries = normalizeNativeActivatedEntries(context.nativeWorldInfo?.activatedEntries);
     const nativePromptEntries = buildNativePromptEntries(context.nativeWorldInfo);
     const worldSettings = {
         ...runtimeWorldSettings,
         scanText,
+        injectScanText,
         scanMessages: explicitScanText ? undefined : scanMessages,
         globalScanData: runtimeWorldSettings.globalScanData || buildGlobalScanData(context),
         characterFilterData: runtimeWorldSettings.characterFilterData || buildCharacterFilterData(context),

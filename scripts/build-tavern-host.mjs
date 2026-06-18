@@ -13,6 +13,7 @@ await build({
         'modules/tavern/host/display-settings.ts',
         'modules/tavern/host/users.ts',
         'modules/tavern/host/worldbooks.ts',
+        'modules/tavern/shared/message-assembler.ts',
         'modules/tavern/shared/settings.ts',
     ],
     outbase: 'modules/tavern',

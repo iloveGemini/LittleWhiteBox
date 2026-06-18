@@ -4,6 +4,7 @@ import type {
     TavernAssistantPreset,
 } from '../../shared/assistant-presets';
 import type {
+    XbTavernAuthorNote,
     TavernChatPromptPresetBundle,
 } from '../../shared/message-assembler';
 import type { ManagerChatDisplayItem } from '../manager-tool-display';
@@ -231,6 +232,7 @@ export interface TavernChatContext {
     canRerunMessage: TavernCommand<[message: TavernMessageRecord], boolean>;
     canSendMessage: TavernReadable<boolean>;
     createNewChatSession: TavernCommand<[], Promise<void>>;
+    currentAuthorNote: TavernReadable<XbTavernAuthorNote>;
     CHAT_SIDEBAR_BATCH_SIZE: number;
     chatAutoScroll: Ref<boolean>;
     chatFocus: Ref<string>;
@@ -293,6 +295,7 @@ export interface TavernChatContext {
     scrollChatToTop: TavernCommand;
     selectedSessionId: Ref<string>;
     selectSession: TavernCommand<[sessionId: string], Promise<void>>;
+    saveCurrentAuthorNote: TavernCommand<[note: XbTavernAuthorNote], Promise<void>>;
     sessionDisplayTitle: TavernCommand<[session?: TavernSessionRecord | null], string>;
     sessionFloorLabel: TavernCommand<[session?: TavernSessionRecord | null], string>;
     sessions: Ref<TavernSessionRecord[]>;

@@ -9,9 +9,13 @@ import {
   setCharacterId,
   setCharacterName,
   getMaxPromptTokens,
+  extension_prompts,
+  setExtensionPrompt,
+  extension_prompt_types,
   this_chid,
   unshallowCharacter
 } from "../../../../../../../script.js";
+import { NOTE_MODULE_NAME } from "../../../../../../authors-note.js";
 import { getContext } from "../../../../../../extensions.js";
 import { power_user } from "../../../../../../power-user.js";
 import {
@@ -27,6 +31,9 @@ import {
   updateWorldInfoList,
   world_names
 } from "../../../../../../world-info.js";
+import {
+  resolveXbTavernAuthorNoteState
+} from "../shared/message-assembler.js";
 function asRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -114,6 +121,19 @@ function cloneJson(value) {
   } catch {
     return value;
   }
+}
+function captureExtensionPrompts() {
+  return Object.fromEntries(
+    Object.entries(extension_prompts || {}).map(([key, value]) => [key, { ...asRecord(value) }])
+  );
+}
+function restoreExtensionPrompts(snapshot) {
+  Object.keys(extension_prompts || {}).forEach((key) => {
+    delete extension_prompts[key];
+  });
+  Object.entries(snapshot).forEach(([key, value]) => {
+    extension_prompts[key] = { ...value };
+  });
 }
 function readWorldbookEntries(data) {
   const entries = asRecord(data).entries;
@@ -540,6 +560,9 @@ function buildHistoryScanLines(context = {}, currentUserMessage = "", includeNam
   }
   return lines.reverse();
 }
+function buildExplicitScanLines(scanText = "") {
+  return String(scanText || "").split(/\r?\n/).map((line) => normalizeText(line)).filter(Boolean).reverse();
+}
 function buildGlobalScanData(input = {}) {
   const context = input.context || {};
   const character = context.character || {};
@@ -637,8 +660,6 @@ function buildActivatedPromptEntries(entries, sources) {
   }).filter((entry) => !!normalizeText(entry.content));
 }
 function captureRuntimeState() {
-  const context = asRecord(getContext?.() || {});
-  const extensionPrompts = asRecord(context.extensionPrompts);
   return {
     selectedWorldInfo: Array.isArray(selected_world_info) ? [...selected_world_info] : [],
     chatLore: normalizeText(chat_metadata?.[METADATA_KEY]),
@@ -646,7 +667,7 @@ function captureRuntimeState() {
     characterId: normalizeText(this_chid),
     characterName: normalizeText(name2),
     timedState: normalizeTimedState(chat_metadata?.timedWorldInfo),
-    authorNote: cloneJson(extensionPrompts.note),
+    extensionPrompts: captureExtensionPrompts(),
     emit: eventSource?.emit
   };
 }
@@ -670,6 +691,17 @@ function applyRuntimeState(input) {
     eventSource.emit = async () => void 0;
   }
 }
+function applyAuthorNoteInjectScanPrompt(context = {}, currentUserMessage = "") {
+  const state = resolveXbTavernAuthorNoteState(context, currentUserMessage);
+  setExtensionPrompt(
+    NOTE_MODULE_NAME,
+    state.shouldAddPrompt ? state.prompt : "",
+    state.shouldAddPrompt ? state.position : Number(extension_prompt_types.NONE),
+    state.depth,
+    state.shouldAddPrompt && state.scan,
+    state.role
+  );
+}
 function restoreRuntimeState(snapshot) {
   replaceSelectedWorldInfo(snapshot.selectedWorldInfo);
   if (snapshot.chatLore) {
@@ -681,11 +713,7 @@ function restoreRuntimeState(snapshot) {
   setCharacterId(snapshot.characterId || void 0);
   setCharacterName(snapshot.characterName || "");
   chat_metadata.timedWorldInfo = cloneJson(snapshot.timedState);
-  const context = asRecord(getContext?.() || {});
-  const extensionPrompts = asRecord(context.extensionPrompts);
-  if (snapshot.authorNote !== void 0) {
-    extensionPrompts.note = cloneJson(snapshot.authorNote);
-  }
+  restoreExtensionPrompts(snapshot.extensionPrompts);
   if (eventSource) {
     eventSource.emit = snapshot.emit;
   }
@@ -1116,7 +1144,7 @@ async function getTavernWorldbookRuntime(input = {}) {
   const payload = asRecord(input);
   const context = payload.context || {};
   const includeNames = context.worldSettings?.includeNames === true || getWorldInfoSettings().world_info_include_names === true;
-  const chatLines = buildHistoryScanLines(context, payload.currentUserMessage, includeNames);
+  const chatLines = typeof context.worldSettings?.scanText === "string" ? buildExplicitScanLines(context.worldSettings.scanText) : buildHistoryScanLines(context, payload.currentUserMessage, includeNames);
   const globalScanData = buildGlobalScanData(payload);
   const maxContext = Math.max(
     1,
@@ -1130,6 +1158,7 @@ async function getTavernWorldbookRuntime(input = {}) {
       sources,
       timedState: normalizeTimedState(payload.timedState)
     });
+    applyAuthorNoteInjectScanPrompt(context, payload.currentUserMessage || "");
     try {
       const activated = await checkWorldInfo(chatLines, maxContext, false, globalScanData);
       const activatedPromptEntries = buildActivatedPromptEntries(

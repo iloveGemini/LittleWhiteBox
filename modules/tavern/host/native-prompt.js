@@ -14,6 +14,9 @@ import { NOTE_MODULE_NAME } from "../../../../../../authors-note.js";
 import { parseExampleIntoIndividual, prepareOpenAIMessages, promptManager } from "../../../../../../openai.js";
 import { power_user } from "../../../../../../power-user.js";
 import { persona_description_positions } from "../../../../../../personas.js";
+import {
+  resolveXbTavernAuthorNoteState
+} from "../shared/message-assembler.js";
 let nativePromptQueue = Promise.resolve();
 const nativePromptAbortControllers = /* @__PURE__ */ new Map();
 function nowMs() {
@@ -351,48 +354,8 @@ function applyPromptManagerActiveCharacter(context = {}) {
   }
   promptManager.activeCharacter = character;
 }
-function countUserMessages(context = {}, currentUserMessage = "") {
-  const history = Array.isArray(context.history) ? context.history : [];
-  const historyCount = history.filter((message) => normalizeRole(message.role ?? message.is_user) === "user").length;
-  return historyCount + (normalizeText(currentUserMessage) ? 1 : 0);
-}
-function resolveAuthorNoteState(context = {}, currentUserMessage = "") {
-  const note = asRecord(context.authorNote);
-  const interval = Number(note.interval ?? 0);
-  const position = Number(note.position ?? extension_prompt_types.IN_CHAT);
-  const depth = Number(note.depth ?? 4);
-  const role = Number(note.role ?? extension_prompt_roles.SYSTEM);
-  let userMessageCount = countUserMessages(context, currentUserMessage);
-  if (interval === 1) {
-    userMessageCount = 1;
-  }
-  const shouldAddPrompt = userMessageCount > 0 && interval > 0 && (userMessageCount >= interval ? userMessageCount % interval === 0 : false);
-  let prompt = shouldAddPrompt ? normalizeText(note.prompt) : "";
-  if (shouldAddPrompt && note.characterUse === true) {
-    const charaPrompt = normalizeText(note.characterPrompt);
-    switch (Number(note.characterPosition)) {
-      case 1:
-        prompt = [charaPrompt, prompt].filter(Boolean).join("\n");
-        break;
-      case 2:
-        prompt = [prompt, charaPrompt].filter(Boolean).join("\n");
-        break;
-      default:
-        prompt = charaPrompt;
-        break;
-    }
-  }
-  return {
-    shouldAddPrompt,
-    prompt,
-    position,
-    depth,
-    role,
-    scan: note.scan === true
-  };
-}
 function applyAuthorNotePrompt(context = {}, currentUserMessage = "", runtime = {}) {
-  const state = resolveAuthorNoteState(context, currentUserMessage);
+  const state = resolveXbTavernAuthorNoteState(context, currentUserMessage);
   const before = (Array.isArray(runtime.anBefore) ? runtime.anBefore : []).map(normalizeText).filter(Boolean);
   const after = (Array.isArray(runtime.anAfter) ? runtime.anAfter : []).map(normalizeText).filter(Boolean);
   const value = state.shouldAddPrompt ? [...before, state.prompt, ...after].filter(Boolean).join("\n") : "";
@@ -401,7 +364,7 @@ function applyAuthorNotePrompt(context = {}, currentUserMessage = "", runtime = 
     value,
     state.shouldAddPrompt ? state.position : Number(extension_prompt_types.NONE),
     state.depth,
-    state.scan,
+    state.shouldAddPrompt && state.scan,
     state.role
   );
 }

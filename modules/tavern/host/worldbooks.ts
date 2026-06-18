@@ -8,9 +8,13 @@ import {
     setCharacterId,
     setCharacterName,
     getMaxPromptTokens,
+    extension_prompts,
+    setExtensionPrompt,
+    extension_prompt_types,
     this_chid,
     unshallowCharacter,
 } from '../../../../../../../script.js';
+import { NOTE_MODULE_NAME } from '../../../../../../authors-note.js';
 import { getContext } from '../../../../../../extensions.js';
 import { power_user } from '../../../../../../power-user.js';
 import {
@@ -26,14 +30,15 @@ import {
     updateWorldInfoList,
     world_names,
 } from '../../../../../../world-info.js';
-import type {
-    XbTavernContext,
-    XbTavernHistoryMessage,
-    XbTavernNativeWorldInfoRuntime,
-    XbTavernNativeWorldInfoSource,
-    XbTavernNativeWorldInfoTimedEffect,
-    XbTavernNativeWorldInfoTimedState,
-    XbTavernWorldEntry,
+import {
+    resolveXbTavernAuthorNoteState,
+    type XbTavernContext,
+    type XbTavernHistoryMessage,
+    type XbTavernNativeWorldInfoRuntime,
+    type XbTavernNativeWorldInfoSource,
+    type XbTavernNativeWorldInfoTimedEffect,
+    type XbTavernNativeWorldInfoTimedState,
+    type XbTavernWorldEntry,
 } from '../shared/message-assembler.js';
 
 type TavernWorldbookSourceType = 'chat' | 'persona' | 'character' | 'global' | string;
@@ -182,6 +187,8 @@ interface TavernCharacterEditorSnapshot {
     jqueryData: TavernCharacterEditorDataSnapshot[];
 }
 
+type ExtensionPromptSnapshot = Record<string, Record<string, unknown>>;
+
 interface TavernWorldbookRuntimeInput {
     context?: XbTavernContext;
     currentUserMessage?: string;
@@ -274,6 +281,21 @@ function cloneJson<T>(value: T): T {
     } catch {
         return value;
     }
+}
+
+function captureExtensionPrompts(): ExtensionPromptSnapshot {
+    return Object.fromEntries(
+        Object.entries(extension_prompts || {}).map(([key, value]) => [key, { ...asRecord(value) }]),
+    );
+}
+
+function restoreExtensionPrompts(snapshot: ExtensionPromptSnapshot): void {
+    Object.keys(extension_prompts || {}).forEach((key) => {
+        delete extension_prompts[key];
+    });
+    Object.entries(snapshot).forEach(([key, value]) => {
+        extension_prompts[key] = { ...value };
+    });
 }
 
 function readWorldbookEntries(data: unknown): Record<string, unknown>[] {
@@ -647,6 +669,14 @@ function buildHistoryScanLines(context: XbTavernContext = {}, currentUserMessage
     return lines.reverse();
 }
 
+function buildExplicitScanLines(scanText = ''): string[] {
+    return String(scanText || '')
+        .split(/\r?\n/)
+        .map((line) => normalizeText(line))
+        .filter(Boolean)
+        .reverse();
+}
+
 function buildGlobalScanData(input: TavernWorldbookRuntimeInput = {}): Record<string, unknown> {
     const context = input.context || {};
     const character = context.character || {};
@@ -758,11 +788,9 @@ function captureRuntimeState(): {
     characterId: string;
     characterName: string;
     timedState: XbTavernNativeWorldInfoTimedState;
-    authorNote: unknown;
+    extensionPrompts: ExtensionPromptSnapshot;
     emit: unknown;
 } {
-    const context = asRecord(getContext?.() || {});
-    const extensionPrompts = asRecord(context.extensionPrompts);
     return {
         selectedWorldInfo: Array.isArray(selected_world_info) ? [...selected_world_info] : [],
         chatLore: normalizeText(chat_metadata?.[METADATA_KEY]),
@@ -770,7 +798,7 @@ function captureRuntimeState(): {
         characterId: normalizeText(this_chid),
         characterName: normalizeText(name2),
         timedState: normalizeTimedState(chat_metadata?.timedWorldInfo),
-        authorNote: cloneJson(extensionPrompts.note),
+        extensionPrompts: captureExtensionPrompts(),
         emit: eventSource?.emit,
     };
 }
@@ -803,6 +831,18 @@ function applyRuntimeState(input: {
     }
 }
 
+function applyAuthorNoteInjectScanPrompt(context: XbTavernContext = {}, currentUserMessage = ''): void {
+    const state = resolveXbTavernAuthorNoteState(context, currentUserMessage);
+    setExtensionPrompt(
+        NOTE_MODULE_NAME,
+        state.shouldAddPrompt ? state.prompt : '',
+        state.shouldAddPrompt ? state.position : Number(extension_prompt_types.NONE),
+        state.depth,
+        state.shouldAddPrompt && state.scan,
+        state.role,
+    );
+}
+
 function restoreRuntimeState(snapshot: ReturnType<typeof captureRuntimeState>): void {
     replaceSelectedWorldInfo(snapshot.selectedWorldInfo);
     if (snapshot.chatLore) {
@@ -814,11 +854,7 @@ function restoreRuntimeState(snapshot: ReturnType<typeof captureRuntimeState>): 
     setCharacterId(snapshot.characterId || undefined);
     setCharacterName(snapshot.characterName || '');
     chat_metadata.timedWorldInfo = cloneJson(snapshot.timedState);
-    const context = asRecord(getContext?.() || {});
-    const extensionPrompts = asRecord(context.extensionPrompts);
-    if (snapshot.authorNote !== undefined) {
-        extensionPrompts.note = cloneJson(snapshot.authorNote);
-    }
+    restoreExtensionPrompts(snapshot.extensionPrompts);
     if (eventSource) {
         eventSource.emit = snapshot.emit as typeof eventSource.emit;
     }
@@ -1295,7 +1331,9 @@ export async function getTavernWorldbookRuntime(input: unknown = {}): Promise<Xb
     const payload = asRecord(input) as TavernWorldbookRuntimeInput;
     const context = payload.context || {};
     const includeNames = context.worldSettings?.includeNames === true || getWorldInfoSettings().world_info_include_names === true;
-    const chatLines = buildHistoryScanLines(context, payload.currentUserMessage, includeNames);
+    const chatLines = typeof context.worldSettings?.scanText === 'string'
+        ? buildExplicitScanLines(context.worldSettings.scanText)
+        : buildHistoryScanLines(context, payload.currentUserMessage, includeNames);
     const globalScanData = buildGlobalScanData(payload);
     const maxContext = Math.max(
         1,
@@ -1312,6 +1350,7 @@ export async function getTavernWorldbookRuntime(input: unknown = {}): Promise<Xb
             sources,
             timedState: normalizeTimedState(payload.timedState),
         });
+        applyAuthorNoteInjectScanPrompt(context, payload.currentUserMessage || '');
         try {
             const activated = await checkWorldInfo(chatLines, maxContext, false, globalScanData);
             const activatedPromptEntries = buildActivatedPromptEntries(

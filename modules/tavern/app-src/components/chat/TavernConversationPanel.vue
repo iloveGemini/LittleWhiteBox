@@ -13,6 +13,13 @@ import {
     type getActionCheckEvents,
     injectActionCheckRenderMarkers,
 } from '../../../shared/runtime-events';
+import {
+    DEFAULT_XB_TAVERN_AUTHOR_NOTE,
+    XBTavernAuthorNotePosition,
+    XBTavernPromptRole,
+    normalizeXbTavernAuthorNote,
+    type XbTavernAuthorNote,
+} from '../../../shared/message-assembler';
 import type { TavernMessageRecord } from '../../../shared/session-db';
 
 const emit = defineEmits<{
@@ -36,6 +43,7 @@ const {
     canRerunMessage,
     canSendMessage,
     createNewChatSession,
+    currentAuthorNote,
     chatComposeTextareaRef,
     chatFocus,
     chatMessages,
@@ -82,6 +90,7 @@ const {
     scrollChatToBottom,
     scrollChatToTop,
     selectedSessionId,
+    saveCurrentAuthorNote,
     showChatScrollBottom,
     showChatScrollTop,
     startEditMessage,
@@ -184,6 +193,21 @@ const runtimeThoughtDisclosureId = 'chat:runtime-thoughts';
 const isMobileActionTrayViewport = useTavernMediaQuery('(max-width: 760px)');
 const activeMessageActionsKey = ref('');
 const composeMenuOpen = ref(false);
+const composeMenuView = ref<'menu' | 'authorNote'>('menu');
+const authorNoteDraft = ref<XbTavernAuthorNote>(normalizeXbTavernAuthorNote(DEFAULT_XB_TAVERN_AUTHOR_NOTE));
+const authorNoteSaving = ref(false);
+const authorNoteStatus = ref('');
+
+const authorNotePositionOptions = [
+    { value: XBTavernAuthorNotePosition.AFTER_MAIN, label: '主提示词后' },
+    { value: XBTavernAuthorNotePosition.BEFORE_MAIN, label: '主提示词前' },
+    { value: XBTavernAuthorNotePosition.IN_CHAT, label: '聊天内 @ Depth' },
+];
+const authorNoteRoleOptions = [
+    { value: XBTavernPromptRole.SYSTEM, label: 'System' },
+    { value: XBTavernPromptRole.USER, label: 'User' },
+    { value: XBTavernPromptRole.ASSISTANT, label: 'Assistant' },
+];
 
 function messageThoughtDisclosureId(message: TavernMessageRecord) {
     return `chat:thought:${messageKey(message)}`;
@@ -204,10 +228,12 @@ function clearMessageActionTray() {
 
 function closeComposeMenu() {
     composeMenuOpen.value = false;
+    composeMenuView.value = 'menu';
 }
 
 function toggleComposeMenu() {
     composeMenuOpen.value = !composeMenuOpen.value;
+    composeMenuView.value = 'menu';
 }
 
 async function createSessionFromComposeMenu() {
@@ -218,6 +244,36 @@ async function createSessionFromComposeMenu() {
 function openSessionArchiveFromComposeMenu() {
     closeComposeMenu();
     emit('open-session-archive');
+}
+
+function openAuthorNoteFromComposeMenu() {
+    composeMenuOpen.value = true;
+    composeMenuView.value = 'authorNote';
+    authorNoteDraft.value = normalizeXbTavernAuthorNote(currentAuthorNote.value);
+    authorNoteStatus.value = '';
+}
+
+function patchAuthorNoteDraft(patch: Partial<XbTavernAuthorNote>) {
+    authorNoteDraft.value = normalizeXbTavernAuthorNote({
+        ...authorNoteDraft.value,
+        ...patch,
+    });
+}
+
+async function saveAuthorNoteDraft() {
+    if (authorNoteSaving.value) {return;}
+    authorNoteSaving.value = true;
+    authorNoteStatus.value = '';
+    try {
+        const normalized = normalizeXbTavernAuthorNote(authorNoteDraft.value);
+        await saveCurrentAuthorNote(normalized);
+        authorNoteDraft.value = normalized;
+        authorNoteStatus.value = '已保存';
+    } catch (error) {
+        authorNoteStatus.value = error instanceof Error ? error.message : String(error || '保存失败');
+    } finally {
+        authorNoteSaving.value = false;
+    }
 }
 
 watch(
@@ -672,25 +728,125 @@ watch(isMobileActionTrayViewport, (isMobile) => {
             v-if="composeMenuOpen"
             id="xb-tavern-compose-menu"
             class="compose-menu-popover"
+            :class="{ 'is-author-note': composeMenuView === 'authorNote' }"
             role="menu"
             @click.stop
           >
-            <button
-              type="button"
-              role="menuitem"
-              class="compose-menu-item"
-              @click="createSessionFromComposeMenu"
+            <template v-if="composeMenuView === 'menu'">
+              <button
+                type="button"
+                role="menuitem"
+                class="compose-menu-item"
+                @click="createSessionFromComposeMenu"
+              >
+                新建会话
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                class="compose-menu-item"
+                @click="openSessionArchiveFromComposeMenu"
+              >
+                会话档案
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                class="compose-menu-item"
+                @click="openAuthorNoteFromComposeMenu"
+              >
+                玩家便签
+              </button>
+            </template>
+            <form
+              v-else
+              class="compose-author-note-panel"
+              @submit.prevent="saveAuthorNoteDraft"
             >
-              新建会话
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              class="compose-menu-item"
-              @click="openSessionArchiveFromComposeMenu"
-            >
-              会话档案
-            </button>
+              <header class="compose-author-note-head">
+                <div>
+                  <strong>玩家便签</strong>
+                  <span>只对当前会话生效。</span>
+                </div>
+                <button
+                  type="button"
+                  class="compose-author-note-back"
+                  aria-label="返回聊天操作"
+                  @click="composeMenuView = 'menu'"
+                />
+              </header>
+              <label class="compose-author-note-field">
+                <span>便签内容</span>
+                <textarea
+                  v-model="authorNoteDraft.prompt"
+                  rows="6"
+                />
+              </label>
+              <div class="compose-author-note-field">
+                <span>插入位置</span>
+                <div class="compose-author-note-segments">
+                  <button
+                    v-for="item in authorNotePositionOptions"
+                    :key="item.value"
+                    type="button"
+                    :class="{ selected: Number(authorNoteDraft.position) === item.value }"
+                    @click="patchAuthorNoteDraft({ position: item.value })"
+                  >
+                    {{ item.label }}
+                  </button>
+                </div>
+              </div>
+              <div class="compose-author-note-grid">
+                <label class="compose-author-note-field">
+                  <span>Depth</span>
+                  <input
+                    v-model.number="authorNoteDraft.depth"
+                    type="number"
+                    min="0"
+                    max="9999"
+                  >
+                </label>
+                <label class="compose-author-note-field">
+                  <span>插入频率</span>
+                  <input
+                    v-model.number="authorNoteDraft.interval"
+                    type="number"
+                    min="0"
+                    max="9999"
+                  >
+                </label>
+              </div>
+              <div class="compose-author-note-field">
+                <span>Role</span>
+                <div class="compose-author-note-segments">
+                  <button
+                    v-for="item in authorNoteRoleOptions"
+                    :key="item.value"
+                    type="button"
+                    :class="{ selected: Number(authorNoteDraft.role) === item.value }"
+                    @click="patchAuthorNoteDraft({ role: item.value })"
+                  >
+                    {{ item.label }}
+                  </button>
+                </div>
+              </div>
+              <label class="compose-author-note-check">
+                <input
+                  v-model="authorNoteDraft.scan"
+                  type="checkbox"
+                >
+                <span>参与世界书扫描</span>
+              </label>
+              <footer class="compose-author-note-actions">
+                <span>{{ authorNoteStatus || '0 禁用，1 每次，N 每 N 次用户输入' }}</span>
+                <button
+                  type="submit"
+                  :disabled="authorNoteSaving"
+                >
+                  {{ authorNoteSaving ? '保存中...' : '保存' }}
+                </button>
+              </footer>
+            </form>
           </div>
         </div>
         <form

@@ -2,11 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+    XBTavernAuthorNotePosition,
+    XBTavernPromptRole,
     XBTavernSelectiveLogic,
     XBTavernWorldPosition,
+    buildAuthorNoteInjectScanText,
     activateWorldEntries,
     buildXbTavernMessages,
     createXbTavernBuildSnapshot,
+    normalizeXbTavernAuthorNote,
+    resolveXbTavernAuthorNoteState,
     squashChatHistory,
 } from '../shared/message-assembler';
 import {
@@ -912,6 +917,96 @@ test('xb tavern world scan can include chat speaker names like SillyTavern', () 
 
     assert.deepEqual(withNames.activatedWorldEntries.map((entry) => entry.uid), ['speaker']);
     assert.deepEqual(withoutNames.activatedWorldEntries.map((entry) => entry.uid), []);
+});
+
+test('xb tavern author note normalizes defaults and follows insertion interval', () => {
+    assert.deepEqual(normalizeXbTavernAuthorNote({}), {
+        prompt: '',
+        interval: 1,
+        position: XBTavernAuthorNotePosition.IN_CHAT,
+        depth: 4,
+        role: XBTavernPromptRole.SYSTEM,
+        scan: false,
+        characterName: '',
+        characterPrompt: '',
+        characterUse: false,
+        characterPosition: 0,
+    });
+    assert.deepEqual(normalizeXbTavernAuthorNote({
+        prompt: 'main',
+        characterName: 'Aster',
+        characterPrompt: 'character note',
+        characterUse: true,
+        characterPosition: 2,
+    }), {
+        prompt: 'main',
+        interval: 1,
+        position: XBTavernAuthorNotePosition.IN_CHAT,
+        depth: 4,
+        role: XBTavernPromptRole.SYSTEM,
+        scan: false,
+        characterName: 'Aster',
+        characterPrompt: 'character note',
+        characterUse: true,
+        characterPosition: 2,
+    });
+
+    const disabled = resolveXbTavernAuthorNoteState({
+        history: [{ role: 'user', content: 'first' }],
+        authorNote: { prompt: 'NOTE_KEYWORD', interval: 0, position: XBTavernAuthorNotePosition.IN_CHAT, depth: 7, role: XBTavernPromptRole.ASSISTANT },
+    }, 'second');
+    assert.equal(disabled.shouldAddPrompt, false);
+    assert.equal(disabled.prompt, '');
+    assert.equal(disabled.position, XBTavernAuthorNotePosition.IN_CHAT);
+    assert.equal(disabled.depth, 7);
+    assert.equal(disabled.role, XBTavernPromptRole.ASSISTANT);
+
+    const everyTurn = resolveXbTavernAuthorNoteState({
+        authorNote: { prompt: 'NOTE_KEYWORD', interval: 1 },
+    }, 'first');
+    assert.equal(everyTurn.shouldAddPrompt, true);
+    assert.equal(everyTurn.prompt, 'NOTE_KEYWORD');
+
+    const everySecond = resolveXbTavernAuthorNoteState({
+        history: [{ role: 'user', content: 'first' }],
+        authorNote: { prompt: 'SECOND_KEYWORD', interval: 2 },
+    }, 'second');
+    assert.equal(everySecond.shouldAddPrompt, true);
+    assert.equal(everySecond.prompt, 'SECOND_KEYWORD');
+});
+
+test('xb tavern author note participates in world scan only when enabled for this turn', () => {
+    assert.equal(buildAuthorNoteInjectScanText({
+        authorNote: { prompt: 'NOTE_KEYWORD', interval: 1, scan: false },
+    }, 'hello'), '');
+    assert.equal(buildAuthorNoteInjectScanText({
+        authorNote: { prompt: 'NOTE_KEYWORD', interval: 0, scan: true },
+    }, 'hello'), '');
+    assert.equal(buildAuthorNoteInjectScanText({
+        authorNote: { prompt: 'NOTE_KEYWORD', interval: 1, scan: true },
+    }, 'hello'), 'NOTE_KEYWORD');
+});
+
+test('xb tavern author note world scan does not consume chat scan depth', () => {
+    const result = buildXbTavernMessages({
+        authorNote: { prompt: 'NOTE_SCAN_KEY', interval: 1, scan: true },
+        history: [
+            { role: 'assistant', content: 'old-chat-key' },
+        ],
+        worldEntries: [
+            { uid: 'author-note', content: 'Author note lore.', key: ['NOTE_SCAN_KEY'], order: 10 },
+            { uid: 'current-chat', content: 'Current chat lore.', key: ['current-chat-key'], order: 20 },
+            { uid: 'old-chat', content: 'Old chat lore.', key: ['old-chat-key'], order: 30 },
+        ],
+    }, {}, {
+        currentUserMessage: 'current-chat-key',
+        worldSettings: {
+            scanDepth: 1,
+        },
+    });
+
+    assert.equal(result.meta.scanText, 'current-chat-key');
+    assert.deepEqual(result.activatedWorldEntries.map((entry) => entry.uid).sort(), ['author-note', 'current-chat']);
 });
 
 test('xb tavern world scan depth zero scans no chat text', () => {

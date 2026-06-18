@@ -10,6 +10,8 @@ import { useTavernMarkdownTools } from './components/chat/useTavernMarkdownTools
 import { useTavernScrollPane } from './components/chat/useTavernScrollPane';
 import { setHostChatCompletionsRequestHeadersProvider } from '../../../shared/host-llm/chat-completions/client.js';
 import {
+    normalizeXbTavernAuthorNote,
+    type XbTavernAuthorNote,
     type XbTavernCharacter,
     type XbTavernContext,
     type XbTavernMessage,
@@ -354,6 +356,7 @@ function normalizeTextList(value: unknown): string[] {
 }
 
 const selectedSession = computed(() => sessions.value.find((item) => item.id === selectedSessionId.value) || null);
+const currentAuthorNote = computed<XbTavernAuthorNote>(() => normalizeXbTavernAuthorNote(selectedSession.value?.contextSnapshot?.authorNote));
 const sessionRuntimeState = computed(() => normalizeTavernSessionState(selectedSession.value?.state || {}));
 const sessionContract = computed<TavernSessionContract>(() => normalizeTavernSessionContract(sessionRuntimeState.value.contract));
 const canResumeSelectedSession = computed(() => !!(
@@ -1750,6 +1753,32 @@ function preserveSessionAuthorNote(nextContext: XbTavernContext = {}, session?: 
         ...nextContext,
         authorNote: { ...(authorNote as Record<string, unknown>) },
     };
+}
+
+async function saveCurrentAuthorNote(note: XbTavernAuthorNote): Promise<void> {
+    const sessionId = String(selectedSessionId.value || '').trim();
+    const session = selectedSession.value;
+    if (!sessionId || !session) {
+        throw new Error('当前没有可保存的会话。');
+    }
+    const normalized = normalizeXbTavernAuthorNote(note);
+    const contextBase = selectedSessionId.value === sessionId
+        ? (context.value || session.contextSnapshot || {})
+        : (session.contextSnapshot || context.value || {});
+    const nextContext: XbTavernContext = {
+        ...contextBase,
+        authorNote: normalized,
+    };
+    const updatedSession = await updateTavernSessionSnapshot(sessionId, {
+        contextSnapshot: nextContext,
+        characterId: String(nextContext.character?.id || session.characterId || ''),
+        characterName: String(nextContext.character?.name || session.characterName || ''),
+    });
+    if (updatedSession) {
+        sessions.value = sessions.value.map((item) => item.id === updatedSession.id ? updatedSession : item);
+    }
+    if (selectedSessionId.value !== sessionId) {return;}
+    context.value = nextContext;
 }
 
 async function syncSessionCharacterContext(options: { sessionId?: string; force?: boolean } = {}): Promise<XbTavernContext> {
@@ -4042,6 +4071,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
         canRerunMessage,
         canSendMessage,
         createNewChatSession,
+        currentAuthorNote,
         CHAT_SIDEBAR_BATCH_SIZE,
         chatAutoScroll,
         chatFocus,
@@ -4104,6 +4134,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
         scrollChatToTop,
         selectedSessionId,
         selectSession,
+        saveCurrentAuthorNote,
         sessionDisplayTitle,
         sessionFloorLabel,
         sessions,

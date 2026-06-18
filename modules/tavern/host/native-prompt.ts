@@ -13,13 +13,13 @@ import { NOTE_MODULE_NAME } from '../../../../../../authors-note.js';
 import { parseExampleIntoIndividual, prepareOpenAIMessages, promptManager } from '../../../../../../openai.js';
 import { power_user } from '../../../../../../power-user.js';
 import { persona_description_positions } from '../../../../../../personas.js';
-import type {
-    XbTavernContext,
-    XbTavernAuthorNote,
-    XbTavernHistoryMessage,
-    XbTavernMessage,
-    XbTavernNativeWorldInfoRuntime,
-    TavernChatPromptPresetBundle,
+import {
+    resolveXbTavernAuthorNoteState,
+    type TavernChatPromptPresetBundle,
+    type XbTavernContext,
+    type XbTavernHistoryMessage,
+    type XbTavernMessage,
+    type XbTavernNativeWorldInfoRuntime,
 } from '../shared/message-assembler.js';
 
 interface TavernNativePromptInput {
@@ -51,15 +51,6 @@ interface PromptManagerSnapshot {
     activeCharacter: unknown;
     prompts: unknown;
     promptOrder: unknown;
-}
-
-interface AuthorNoteState {
-    shouldAddPrompt: boolean;
-    prompt: string;
-    position: number;
-    depth: number;
-    role: number;
-    scan: boolean;
 }
 
 let nativePromptQueue: Promise<unknown> = Promise.resolve();
@@ -441,48 +432,8 @@ function applyPromptManagerActiveCharacter(context: XbTavernContext = {}): void 
     (promptManager as typeof promptManager & { activeCharacter?: unknown }).activeCharacter = character;
 }
 
-function countUserMessages(context: XbTavernContext = {}, currentUserMessage = ''): number {
-    const history = Array.isArray(context.history) ? context.history : [];
-    const historyCount = history.filter((message) => normalizeRole(message.role ?? message.is_user) === 'user').length;
-    return historyCount + (normalizeText(currentUserMessage) ? 1 : 0);
-}
-
-function resolveAuthorNoteState(context: XbTavernContext = {}, currentUserMessage = ''): AuthorNoteState {
-    const note = asRecord(context.authorNote) as XbTavernAuthorNote;
-    const interval = Number(note.interval ?? 0);
-    const position = Number(note.position ?? extension_prompt_types.IN_CHAT);
-    const depth = Number(note.depth ?? 4);
-    const role = Number(note.role ?? extension_prompt_roles.SYSTEM);
-    let userMessageCount = countUserMessages(context, currentUserMessage);
-    if (interval === 1) {userMessageCount = 1;}
-    const shouldAddPrompt = userMessageCount > 0 && interval > 0 && (userMessageCount >= interval ? userMessageCount % interval === 0 : false);
-    let prompt = shouldAddPrompt ? normalizeText(note.prompt) : '';
-    if (shouldAddPrompt && note.characterUse === true) {
-        const charaPrompt = normalizeText(note.characterPrompt);
-        switch (Number(note.characterPosition)) {
-            case 1:
-                prompt = [charaPrompt, prompt].filter(Boolean).join('\n');
-                break;
-            case 2:
-                prompt = [prompt, charaPrompt].filter(Boolean).join('\n');
-                break;
-            default:
-                prompt = charaPrompt;
-                break;
-        }
-    }
-    return {
-        shouldAddPrompt,
-        prompt,
-        position,
-        depth,
-        role,
-        scan: note.scan === true,
-    };
-}
-
 function applyAuthorNotePrompt(context: XbTavernContext = {}, currentUserMessage = '', runtime: XbTavernNativeWorldInfoRuntime = {}): void {
-    const state = resolveAuthorNoteState(context, currentUserMessage);
+    const state = resolveXbTavernAuthorNoteState(context, currentUserMessage);
     const before = (Array.isArray(runtime.anBefore) ? runtime.anBefore : []).map(normalizeText).filter(Boolean);
     const after = (Array.isArray(runtime.anAfter) ? runtime.anAfter : []).map(normalizeText).filter(Boolean);
     const value = state.shouldAddPrompt
@@ -493,7 +444,7 @@ function applyAuthorNotePrompt(context: XbTavernContext = {}, currentUserMessage
         value,
         state.shouldAddPrompt ? state.position : Number(extension_prompt_types.NONE),
         state.depth,
-        state.scan,
+        state.shouldAddPrompt && state.scan,
         state.role,
     );
 }
