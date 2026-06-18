@@ -770,6 +770,30 @@
         gap: 5px;
     }
 
+    .settings-layout.is-api-workspace .tavern-api-settings .xb-assistant-preset-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: auto 40px;
+        gap: 7px;
+    }
+
+    .settings-layout.is-api-workspace .tavern-api-settings .xb-assistant-preset-tools {
+        grid-template-columns: repeat(4, 32px);
+        gap: 5px;
+    }
+
+    .settings-layout.is-api-workspace .tavern-api-settings .xb-assistant-preset-tools.is-single {
+        grid-template-columns: 32px;
+    }
+
+    .settings-layout.is-api-workspace .tavern-api-settings .xb-assistant-icon-button {
+        width: 32px;
+        min-width: 32px;
+        height: 32px;
+        min-height: 32px;
+        border-radius: 9px;
+        padding: 0;
+    }
+
     .settings-layout.is-api-workspace .tavern-api-settings .xb-assistant-config label > span:first-child,
     .settings-layout.is-api-workspace .tavern-api-settings .xb-assistant-config-note {
         font-size: 12px;
@@ -866,12 +890,4 @@
         margin: 0;
     }
 
-    .settings-layout.is-api-workspace .tavern-api-settings .xb-assistant-actions {
-        gap: 7px;
-    }
-
-    .settings-layout.is-api-workspace .tavern-api-settings .xb-assistant-actions button {
-        min-height: 36px;
-        padding: 0 13px;
-    }
 }

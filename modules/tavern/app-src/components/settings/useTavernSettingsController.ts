@@ -381,6 +381,8 @@ function normalizeTavernUsersPayload(value: unknown): { users: TavernUserOption[
     };
 }
 
+const API_CONFIG_SAVE_TIMEOUT_MS = 5000;
+
 export function readInitialSettingsWorkspace(): TavernSettingsWorkspaceKey {
     const hash = String(window.location.hash || '').replace(/^#\/?/, '');
     const key = hash.split('/')[1];
@@ -394,6 +396,8 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
     const apiSettingsRootRef = ref<HTMLElement | null>(null);
     const apiConfigSave = ref({ status: 'idle', requestId: '', error: '' });
     const apiConfigStatus = ref('');
+    let apiConfigSaveTimeout: number | null = null;
+    let apiConfigSaveResetTimer: number | null = null;
     const preset = ref<TavernChatPromptPresetBundle>(initialChatPreset);
     const activeChatPreset = ref<TavernChatPromptPresetBundle>(initialChatPreset);
     const chatPresetList = ref<Record<string, unknown>>({});
@@ -1612,13 +1616,44 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         apiSettingsPanelState.configFormSyncPending = true;
     }
     function beginApiConfigSave(requestId = '') {
+        if (apiConfigSaveTimeout !== null) {
+            window.clearTimeout(apiConfigSaveTimeout);
+            apiConfigSaveTimeout = null;
+        }
+        if (apiConfigSaveResetTimer !== null) {
+            window.clearTimeout(apiConfigSaveResetTimer);
+            apiConfigSaveResetTimer = null;
+        }
         apiConfigSave.value = { status: 'saving', requestId, error: '' };
         apiSettingsPanelState.configSave = apiConfigSave.value;
         apiConfigStatus.value = '正在保存共享 API 配置...';
+        apiConfigSaveTimeout = window.setTimeout(() => {
+            apiConfigSaveTimeout = null;
+            if (apiConfigSave.value.requestId !== requestId || apiConfigSave.value.status !== 'saving') {return;}
+            apiConfigSave.value = { status: 'error', requestId, error: '保存超时，请重试' };
+            apiSettingsPanelState.configSave = apiConfigSave.value;
+            apiConfigStatus.value = '保存失败：保存超时，请重试';
+            apiConfigSaveResetTimer = window.setTimeout(() => {
+                if (apiConfigSave.value.requestId !== requestId || apiConfigSave.value.status !== 'error') {return;}
+                apiConfigSave.value = { status: 'idle', requestId: '', error: '' };
+                apiSettingsPanelState.configSave = apiConfigSave.value;
+                apiConfigStatus.value = '';
+                void nextTick(renderApiSettingsPanel);
+            }, 1800);
+            void nextTick(renderApiSettingsPanel);
+        }, API_CONFIG_SAVE_TIMEOUT_MS);
         void nextTick(renderApiSettingsPanel);
     }
     function completeApiConfigSave(requestId = '', result: { ok?: boolean; error?: string } = {}) {
         if (requestId && apiConfigSave.value.requestId && requestId !== apiConfigSave.value.requestId) {return;}
+        if (apiConfigSaveTimeout !== null) {
+            window.clearTimeout(apiConfigSaveTimeout);
+            apiConfigSaveTimeout = null;
+        }
+        if (apiConfigSaveResetTimer !== null) {
+            window.clearTimeout(apiConfigSaveResetTimer);
+            apiConfigSaveResetTimer = null;
+        }
         apiConfigSave.value = {
             status: result.ok ? 'success' : 'error',
             requestId,
@@ -1626,13 +1661,14 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         };
         apiSettingsPanelState.configSave = apiConfigSave.value;
         apiConfigStatus.value = result.ok ? '' : `保存失败：${result.error || 'unknown_error'}`;
-        window.setTimeout(() => {
-            if (apiConfigSave.value.requestId !== requestId || apiConfigSave.value.status !== 'success') {return;}
+        const completedStatus = apiConfigSave.value.status;
+        apiConfigSaveResetTimer = window.setTimeout(() => {
+            if (apiConfigSave.value.requestId !== requestId || apiConfigSave.value.status !== completedStatus) {return;}
             apiConfigSave.value = { status: 'idle', requestId: '', error: '' };
             apiSettingsPanelState.configSave = apiConfigSave.value;
             apiConfigStatus.value = '';
             void nextTick(renderApiSettingsPanel);
-        }, 1400);
+        }, 1800);
         void nextTick(renderApiSettingsPanel);
     }
     function handleApiConfigSave(payload: { requestId?: string; payload?: Record<string, unknown> }) {

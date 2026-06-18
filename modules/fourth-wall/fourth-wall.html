@@ -858,6 +858,95 @@ body {
     color: #334245;
 }
 
+.fw-agent-settings-body .xb-assistant-preset-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto 36px;
+    align-items: center;
+    gap: 8px;
+}
+
+.fw-agent-settings-body .xb-assistant-preset-field {
+    display: contents;
+    min-width: 0;
+}
+
+.fw-agent-settings-body .xb-assistant-preset-field > span:first-child {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.fw-agent-settings-body .xb-assistant-preset-field > select {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.fw-agent-settings-body .xb-assistant-preset-tools {
+    display: grid;
+    grid-column: 2;
+    grid-row: 2;
+    grid-template-columns: repeat(4, 32px);
+    align-self: center;
+    gap: 6px;
+}
+
+.fw-agent-settings-body .xb-assistant-preset-tools.is-single {
+    grid-template-columns: 32px;
+}
+
+.fw-agent-settings-body .xb-assistant-icon-button {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    border: 1px solid rgba(31, 42, 44, 0.14);
+    background: rgba(255,255,255,0.78);
+    color: var(--text-secondary);
+    padding: 0;
+    border-radius: 10px;
+    line-height: 1;
+}
+
+.fw-agent-settings-body .xb-assistant-icon-button svg {
+    width: 15px;
+    height: 15px;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    vector-effect: non-scaling-stroke;
+}
+
+.fw-agent-settings-body .xb-assistant-icon-button:hover:not(:disabled),
+.fw-agent-settings-body .xb-assistant-icon-button:focus-visible {
+    outline: none;
+    background: rgba(47, 125, 133, 0.1);
+    border-color: rgba(47, 125, 133, 0.24);
+    color: var(--text-primary);
+}
+
+.fw-agent-settings-body .xb-assistant-icon-button.xb-assistant-save-button.is-success,
+.fw-agent-settings-body .xb-assistant-icon-button.xb-assistant-save-button.is-error {
+    background: rgba(255,255,255,0.78) !important;
+    border-color: rgba(31, 42, 44, 0.14) !important;
+    color: var(--text-secondary) !important;
+}
+
+.fw-agent-settings-body .xb-assistant-icon-button.xb-assistant-save-button.is-success {
+    background: rgba(79, 141, 105, 0.12) !important;
+    border-color: rgba(79, 141, 105, 0.28) !important;
+    color: #4f8d69 !important;
+}
+
+.fw-agent-settings-body .xb-assistant-icon-button.xb-assistant-save-button.is-error {
+    background: rgba(178, 93, 82, 0.10) !important;
+    border-color: rgba(178, 93, 82, 0.28) !important;
+    color: var(--danger) !important;
+}
+
 .fw-agent-settings-body .xb-assistant-config input,
 .fw-agent-settings-body .xb-assistant-config select {
     width: 100%;
@@ -934,14 +1023,6 @@ body {
     accent-color: var(--accent);
 }
 
-.fw-agent-settings-body .xb-assistant-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 2px;
-}
-
-.fw-agent-settings-body .xb-assistant-actions button,
 .fw-agent-settings-body .xb-assistant-inline-input button {
     min-height: 34px;
     padding: 7px 13px;
@@ -953,7 +1034,6 @@ body {
     cursor: pointer;
 }
 
-.fw-agent-settings-body .xb-assistant-actions button:hover,
 .fw-agent-settings-body .xb-assistant-inline-input button:hover {
     background: rgba(47, 125, 133, 0.1);
     border-color: rgba(47, 125, 133, 0.24);
@@ -966,13 +1046,15 @@ body {
 }
 
 .fw-agent-settings-body .xb-assistant-save-button.is-success {
-    background: #4f8d69 !important;
-    border-color: #4f8d69 !important;
+    background: rgba(79, 141, 105, 0.12) !important;
+    border-color: rgba(79, 141, 105, 0.28) !important;
+    color: #4f8d69 !important;
 }
 
 .fw-agent-settings-body .xb-assistant-save-button.is-error {
-    background: var(--danger) !important;
-    border-color: var(--danger) !important;
+    background: rgba(178, 93, 82, 0.10) !important;
+    border-color: rgba(178, 93, 82, 0.28) !important;
+    color: var(--danger) !important;
 }
 
 .fw-agent-settings-body .xb-assistant-inline-status,
@@ -989,15 +1071,7 @@ body {
     color: var(--danger);
 }
 
-.fw-agent-settings-body .xb-assistant-save-spinner {
-    width: 12px;
-    height: 12px;
-    border: 2px solid rgba(255,255,255,0.42);
-    border-top-color: #fff;
-    border-radius: 999px;
-    display: inline-block;
-    margin-right: 7px;
-    vertical-align: -2px;
+.fw-agent-settings-body .xb-assistant-save-button.is-saving svg {
     animation: fwSpin 0.8s linear infinite;
 }
 
@@ -1884,17 +1958,30 @@ html.theme-dark .fw-agent-settings-body .xb-assistant-checkbox-row {
     border-color: var(--fw-line);
 }
 
-html.theme-dark .fw-agent-settings-body .xb-assistant-actions button,
 html.theme-dark .fw-agent-settings-body .xb-assistant-inline-input button {
     background: rgba(255, 255, 255, 0.07);
     border-color: var(--fw-line);
     color: var(--fw-ink);
 }
 
-html.theme-dark .fw-agent-settings-body .xb-assistant-actions button:hover,
+html.theme-dark .fw-agent-settings-body .xb-assistant-icon-button,
+html.theme-dark .fw-agent-settings-body .xb-assistant-icon-button.xb-assistant-save-button.is-success,
+html.theme-dark .fw-agent-settings-body .xb-assistant-icon-button.xb-assistant-save-button.is-error {
+    background: rgba(255, 255, 255, 0.07) !important;
+    border-color: var(--fw-line) !important;
+    color: var(--fw-ink-soft) !important;
+}
+
 html.theme-dark .fw-agent-settings-body .xb-assistant-inline-input button:hover {
     background: rgba(111, 184, 189, 0.14);
     border-color: rgba(111, 184, 189, 0.28);
+}
+
+html.theme-dark .fw-agent-settings-body .xb-assistant-icon-button:hover:not(:disabled),
+html.theme-dark .fw-agent-settings-body .xb-assistant-icon-button:focus-visible {
+    background: rgba(111, 184, 189, 0.14) !important;
+    border-color: rgba(111, 184, 189, 0.28) !important;
+    color: var(--fw-ink) !important;
 }
 
 html.theme-dark .fw-agent-settings-body .xb-assistant-save-button {
@@ -2262,6 +2349,7 @@ let activeVoiceRequestId = null;
 let agentUiBridge = null;
 let agentSettingsPanel = null;
 let configSaveResetTimer = null;
+const CONFIG_SAVE_TIMEOUT_MS = 5000;
 const pendingAgentConfigSaves = new Map();
 const FW_MESSAGE_WINDOW_DEFAULT = 5;
 const FW_MESSAGE_WINDOW_CHUNK = 20;
@@ -2358,7 +2446,7 @@ async function loadAgentSettingsUi() {
                     pendingAgentConfigSaves.delete(requestId);
                     completeConfigSave(requestId, { ok: false, error: '保存超时，请重试' });
                     reject(new Error('保存超时，请重试'));
-                }, 6000);
+                }, CONFIG_SAVE_TIMEOUT_MS);
                 pendingAgentConfigSaves.set(requestId, { resolve, reject, config, timer });
                 postToParent({ type: 'SAVE_AGENT_CONFIG', requestId, payload });
             });

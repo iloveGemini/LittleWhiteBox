@@ -849,9 +849,22 @@ export function createAgentSettingsPanel(deps = {}) {
         });
     }
 
-    function saveConfigFromForm(root) {
+    function buildConfigSavePayload(config) {
+        return {
+            workspaceFileName: config?.workspaceFileName || '',
+            jsApiPermission: normalizeJsApiPermission(config?.jsApiPermission),
+            tavilyApiKey: String(config?.tavilyApiKey || ''),
+            tavilyBaseUrl: normalizeTavilyBaseUrl(config?.tavilyBaseUrl || DEFAULT_TAVILY_BASE_URL),
+            currentPresetName: config?.currentPresetName || DEFAULT_PRESET_NAME,
+            delegatePresetName: config?.delegatePresetName || config?.currentPresetName || DEFAULT_PRESET_NAME,
+            delegateConfig: config?.delegateConfig || {},
+            presets: config?.presets || {},
+        };
+    }
+
+    function saveConfigFromForm(root, options = {}) {
         const draft = syncConfigDraft(root);
-        const nextPresetName = normalizePresetName(draft.presetDraftName);
+        const nextPresetName = normalizePresetName(options.presetName || draft.presetDraftName);
         const currentPresetName = normalizePresetName(draft.currentPresetName || state.config?.currentPresetName || DEFAULT_PRESET_NAME);
         const currentPreset = (state.config?.presets || {})[currentPresetName] || buildDefaultPreset();
         const draftModelConfigs = normalizeModelConfigs(draft.modelConfigs || currentPreset.modelConfigs || {});
@@ -867,10 +880,11 @@ export function createAgentSettingsPanel(deps = {}) {
                 },
             },
         };
-        const nextPresets = {
-            ...(state.config?.presets || {}),
-            [nextPresetName]: nextPreset,
-        };
+        const nextPresets = { ...(state.config?.presets || {}) };
+        if (options.renameCurrentPreset && nextPresetName !== currentPresetName) {
+            delete nextPresets[currentPresetName];
+        }
+        nextPresets[nextPresetName] = nextPreset;
         state.config = normalizeAgentConfig({
             ...state.config,
             jsApiPermission: normalizeJsApiPermission(draft.jsApiPermission),
@@ -884,18 +898,49 @@ export function createAgentSettingsPanel(deps = {}) {
         state.configDraft = buildDraftFromPreset(nextPresetName, nextPreset, state.config);
         requestConfigFormSync();
         postSaveConfig({
-            requestId: createRequestId('save-config'),
+            requestId: createRequestId(options.requestPrefix || 'save-config'),
             config: state.config,
-            payload: {
-                workspaceFileName: state.config?.workspaceFileName || '',
-                jsApiPermission: normalizeJsApiPermission(state.config?.jsApiPermission),
-                tavilyApiKey: String(state.config?.tavilyApiKey || ''),
-                tavilyBaseUrl: normalizeTavilyBaseUrl(state.config?.tavilyBaseUrl || DEFAULT_TAVILY_BASE_URL),
-                currentPresetName: state.config?.currentPresetName || DEFAULT_PRESET_NAME,
-                delegatePresetName: state.config?.delegatePresetName || state.config?.currentPresetName || DEFAULT_PRESET_NAME,
-                delegateConfig: state.config?.delegateConfig || {},
-                presets: state.config?.presets || {},
-            },
+            payload: buildConfigSavePayload(state.config),
+        });
+    }
+
+    function promptForPresetName(message, fallback = '') {
+        const current = normalizePresetName(fallback || DEFAULT_PRESET_NAME);
+        const next = typeof window !== 'undefined' && typeof window.prompt === 'function'
+            ? window.prompt(message, current)
+            : current;
+        if (next === null) {return '';}
+        return normalizePresetName(next);
+    }
+
+    function createPresetFromForm(root) {
+        const draft = syncConfigDraft(root);
+        const nextPresetName = promptForPresetName('输入新预设名称：', `${draft.currentPresetName || DEFAULT_PRESET_NAME} 副本`);
+        if (!nextPresetName) {
+            showToast?.('预设名称不能为空');
+            return;
+        }
+        root.querySelector('#xb-assistant-preset-name').value = nextPresetName;
+        saveConfigFromForm(root, {
+            presetName: nextPresetName,
+            requestPrefix: 'create-preset',
+        });
+    }
+
+    function renameCurrentPreset(root) {
+        const draft = syncConfigDraft(root);
+        const currentPresetName = normalizePresetName(draft.currentPresetName || state.config?.currentPresetName || DEFAULT_PRESET_NAME);
+        const nextPresetName = promptForPresetName('输入预设名称：', draft.presetDraftName || currentPresetName);
+        if (!nextPresetName) {
+            showToast?.('预设名称不能为空');
+            return;
+        }
+        if (nextPresetName === currentPresetName) {return;}
+        root.querySelector('#xb-assistant-preset-name').value = nextPresetName;
+        saveConfigFromForm(root, {
+            presetName: nextPresetName,
+            renameCurrentPreset: true,
+            requestPrefix: 'rename-preset',
         });
     }
 
@@ -928,16 +973,7 @@ export function createAgentSettingsPanel(deps = {}) {
         postSaveConfig({
             requestId: createRequestId('delete-preset'),
             config: state.config,
-            payload: {
-                workspaceFileName: state.config?.workspaceFileName || '',
-                jsApiPermission: normalizeJsApiPermission(state.config?.jsApiPermission),
-                tavilyApiKey: String(state.config?.tavilyApiKey || ''),
-                tavilyBaseUrl: normalizeTavilyBaseUrl(state.config?.tavilyBaseUrl || DEFAULT_TAVILY_BASE_URL),
-                currentPresetName: state.config?.currentPresetName || DEFAULT_PRESET_NAME,
-                delegatePresetName: state.config?.delegatePresetName || state.config?.currentPresetName || DEFAULT_PRESET_NAME,
-                delegateConfig: state.config?.delegateConfig || {},
-                presets: state.config?.presets || {},
-            },
+            payload: buildConfigSavePayload(state.config),
         });
         render?.();
     }
@@ -973,7 +1009,7 @@ export function createAgentSettingsPanel(deps = {}) {
             render?.();
         });
 
-        root.querySelector('#xb-assistant-preset-name').addEventListener('input', () => {
+        root.querySelector('#xb-assistant-preset-name')?.addEventListener('input', () => {
             syncPresetDraftName(root);
         });
 
@@ -1161,8 +1197,20 @@ export function createAgentSettingsPanel(deps = {}) {
             render?.();
         });
 
+        root.querySelector('#xb-assistant-new-preset')?.addEventListener('click', () => {
+            createPresetFromForm(root);
+        });
+
+        root.querySelector('#xb-assistant-rename-preset')?.addEventListener('click', () => {
+            renameCurrentPreset(root);
+        });
+
         root.querySelector('#xb-assistant-save').addEventListener('click', () => {
             saveConfigFromForm(root);
+        });
+
+        root.querySelector('#xb-assistant-delegate-save')?.addEventListener('click', () => {
+            saveConfigFromForm(root, { requestPrefix: 'save-delegate-config' });
         });
 
         root.querySelector('#xb-assistant-delete-preset').addEventListener('click', () => {

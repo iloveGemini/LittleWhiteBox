@@ -310,6 +310,35 @@ test('tavern split UI keeps App-owned DOM refs explicitly wired', () => {
     assert.doesNotMatch(`${chatPageSource}\n${conversationPanelSource}\n${managerPanelSource}\n${apiPanelSource}`, /ref="(?:apiSettingsRootRef|chatScrollRef|chatComposeTextareaRef|managerScrollRef|managerComposeTextareaRef)"/);
 });
 
+test('agent API settings keep preset actions compact and model controls before temperature', () => {
+    const markupSource = readRepoFile('modules/agent-core/ui/settings-markup.js');
+    const panelSource = readRepoFile('modules/agent-core/ui/settings-panel.js');
+    const apiCss = readRepoFile('modules/tavern/app-src/styles/settings/api.css');
+    assert.match(markupSource, /function buildPresetActionIcon/);
+    assert.match(markupSource, /function getAgentConfigSaveIconName/);
+    assert.match(markupSource, /saving: '<path class="xb-assistant-save-spinner"/);
+    assert.match(markupSource, /success: '<path d="M20 6 9 17l-5-5"/);
+    assert.match(markupSource, /error: '<path d="M18 6 6 18"/);
+    assert.match(markupSource, /class="xb-assistant-preset-row"[\s\S]*id="xb-assistant-preset-select"[\s\S]*id="xb-assistant-new-preset"[\s\S]*buildPresetActionIcon\('add'\)[\s\S]*id="xb-assistant-rename-preset"[\s\S]*buildPresetActionIcon\('rename'\)[\s\S]*id="xb-assistant-save"[\s\S]*buildPresetActionIcon\(saveIcon\)[\s\S]*id="xb-assistant-delete-preset"[\s\S]*buildPresetActionIcon\('delete'\)/);
+    assert.match(markupSource, /id="xb-assistant-delegate-preset-select"[\s\S]*id="xb-assistant-delegate-save"[\s\S]*buildPresetActionIcon\(saveIcon\)/);
+    assert.doesNotMatch(markupSource, />(?:➕|✏|💾|🗑)/u);
+    assert.match(markupSource, /id="xb-assistant-model"[\s\S]*id="xb-assistant-model-pulled"[\s\S]*id="xb-assistant-temperature"/);
+    assert.match(markupSource, /id="xb-assistant-delegate-model"[\s\S]*id="xb-assistant-delegate-model-pulled"[\s\S]*id="xb-assistant-delegate-temperature"/);
+    assert.doesNotMatch(markupSource, /<span>预设名称<\/span>/);
+    assert.doesNotMatch(markupSource, /class="xb-assistant-actions"/);
+    assert.match(panelSource, /function createPresetFromForm/);
+    assert.match(panelSource, /function renameCurrentPreset/);
+    assert.match(panelSource, /#xb-assistant-new-preset/);
+    assert.match(panelSource, /#xb-assistant-rename-preset/);
+    assert.match(panelSource, /#xb-assistant-delegate-save/);
+    assert.match(apiCss, /\.tavern-api-settings \.xb-assistant-preset-row \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto;/);
+    assert.match(apiCss, /xb-tavern-api-save-spin/);
+    assert.match(apiCss, /\.tavern-api-settings \.xb-assistant-preset-row \{[\s\S]*grid-template-rows: auto 40px;/);
+    assert.match(apiCss, /\.tavern-api-settings \.xb-assistant-preset-tools \{[\s\S]*grid-row: 2;[\s\S]*grid-template-columns: repeat\(4, 34px\);/);
+    assert.match(apiCss, /\.tavern-api-settings \.xb-assistant-preset-tools\.is-single \{[\s\S]*grid-template-columns: 34px;/);
+    assert.match(apiCss, /\.tavern-api-settings \.xb-assistant-icon-button svg \{[\s\S]*stroke: currentColor;/);
+});
+
 test('tavern chat exposes local settings modals without leaving the session', () => {
     const cornerSource = readRepoFile('modules/tavern/app-src/components/TavernCornerActions.vue');
     const chatPageSource = readRepoFile('modules/tavern/app-src/components/chat/TavernChatPage.vue');

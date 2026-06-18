@@ -24,7 +24,7 @@ import { enhanceMarkdownContent } from '../../agent-core/ui/message-markdown.js'
 import { formatDraftMetrics } from './text-metrics.js';
 import { escapeHtml } from './text-utils.js';
 
-const CONFIG_SAVE_TIMEOUT_MS = 3000;
+const CONFIG_SAVE_TIMEOUT_MS = 5000;
 const CONFIG_SAVE_RESULT_MS = 1800;
 const CHAPTER_PATH_REGEX = /^book\/chapters\/.+\.md$/;
 const EBOOK_IMAGE_MARKER_REGEX = /\[ebook-image:[a-z0-9\-_]+\]/gi;

@@ -2107,6 +2107,74 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
             color: var(--xb-text-main);
             font-size: 13px;
         }
+        .xb-ebook-settings-body .xb-assistant-preset-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-rows: auto 40px;
+            align-items: center;
+            gap: 8px;
+        }
+        .xb-ebook-settings-body .xb-assistant-preset-field { display: contents; min-width: 0; }
+        .xb-ebook-settings-body .xb-assistant-preset-field > span:first-child { grid-column: 1; grid-row: 1; }
+        .xb-ebook-settings-body .xb-assistant-preset-field > select { grid-column: 1; grid-row: 2; }
+        .xb-ebook-settings-body .xb-assistant-preset-tools {
+            display: grid;
+            grid-column: 2;
+            grid-row: 2;
+            grid-template-columns: repeat(4, 34px);
+            align-self: center;
+            gap: 6px;
+        }
+        .xb-ebook-settings-body .xb-assistant-preset-tools.is-single {
+            grid-template-columns: 34px;
+        }
+        .xb-ebook-settings-body .xb-assistant-icon-button {
+            display: grid;
+            place-items: center;
+            width: 34px;
+            min-width: 34px;
+            height: 34px;
+            min-height: 34px;
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.26);
+            color: var(--xb-text-muted);
+            padding: 0;
+            line-height: 1;
+        }
+        .xb-ebook-settings-body .xb-assistant-icon-button svg {
+            width: 16px;
+            height: 16px;
+            stroke: currentColor;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+            vector-effect: non-scaling-stroke;
+        }
+        .xb-ebook-settings-body .xb-assistant-icon-button:hover:not(:disabled),
+        .xb-ebook-settings-body .xb-assistant-icon-button:focus-visible {
+            outline: none;
+            border-color: rgba(125, 211, 252, 0.32);
+            background: rgba(125, 211, 252, 0.10);
+            color: var(--xb-text-main);
+        }
+        .xb-ebook-settings-body .xb-assistant-icon-button.xb-assistant-save-button.is-success,
+        .xb-ebook-settings-body .xb-assistant-icon-button.xb-assistant-save-button.is-error {
+            background: rgba(0, 0, 0, 0.26);
+            color: var(--xb-text-muted);
+            border-color: rgba(255, 255, 255, 0.10);
+        }
+        .xb-ebook-settings-body .xb-assistant-icon-button.xb-assistant-save-button.is-success {
+            background: rgba(34, 197, 94, 0.12);
+            color: #bbf7d0;
+            border-color: rgba(34, 197, 94, 0.28);
+        }
+        .xb-ebook-settings-body .xb-assistant-icon-button.xb-assistant-save-button.is-error {
+            background: rgba(244, 63, 94, 0.10);
+            color: #fecdd3;
+            border-color: rgba(244, 63, 94, 0.28);
+        }
         .xb-ebook-settings-body .xb-assistant-config input,
         .xb-ebook-settings-body .xb-assistant-config select {
             width: 100%;
@@ -2162,35 +2230,17 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
             height: 16px;
             accent-color: var(--xb-cyan);
         }
-        .xb-ebook-settings-body .xb-assistant-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-        .xb-ebook-settings-body .xb-assistant-actions button {
-            min-height: 38px;
-            padding: 0 14px;
-            border-radius: 999px;
-        }
         .xb-assistant-save-button.is-success {
-            background: rgba(34, 197, 94, 0.22);
+            background: rgba(34, 197, 94, 0.12);
             color: #bbf7d0;
-            border-color: rgba(34, 197, 94, 0.34);
+            border-color: rgba(34, 197, 94, 0.28);
         }
         .xb-assistant-save-button.is-error {
-            background: rgba(244, 63, 94, 0.18);
+            background: rgba(244, 63, 94, 0.10);
             color: #fecdd3;
-            border-color: rgba(244, 63, 94, 0.36);
+            border-color: rgba(244, 63, 94, 0.28);
         }
-        .xb-assistant-save-spinner {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            margin-right: 6px;
-            border: 2px solid rgba(255, 255, 255, 0.32);
-            border-top-color: currentColor;
-            border-radius: 50%;
-            vertical-align: -2px;
+        .xb-assistant-save-button.is-saving svg {
             animation: xb-spin 0.8s linear infinite;
         }
         @keyframes xb-spin { to { transform: rotate(360deg); } }

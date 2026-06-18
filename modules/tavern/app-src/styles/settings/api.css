@@ -59,6 +59,7 @@
 }
 
 .tavern-api-settings .xb-assistant-config-page > label,
+.tavern-api-settings .xb-assistant-preset-row,
 .tavern-api-settings .xb-assistant-inline-input.xb-assistant-model-row,
 .tavern-api-settings .xb-assistant-config-note,
 .tavern-api-settings .xb-assistant-inline-status {
@@ -78,6 +79,103 @@
     gap: 7px;
     min-width: 0;
     margin: 0;
+}
+
+.tavern-api-settings .xb-assistant-preset-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto 40px;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.tavern-api-settings .xb-assistant-preset-field {
+    display: contents;
+    min-width: 0;
+}
+
+.tavern-api-settings .xb-assistant-preset-field > span:first-child {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.tavern-api-settings .xb-assistant-preset-field > select {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.tavern-api-settings .xb-assistant-preset-tools {
+    display: grid;
+    grid-column: 2;
+    grid-row: 2;
+    grid-template-columns: repeat(4, 34px);
+    align-self: center;
+    gap: 6px;
+}
+
+.tavern-api-settings .xb-assistant-preset-tools.is-single {
+    grid-template-columns: 34px;
+}
+
+.tavern-api-settings .xb-assistant-icon-button {
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    border: 1px solid var(--xb-line);
+    border-radius: 10px;
+    background: var(--xb-settings-control-bg);
+    color: var(--xb-text-muted);
+    padding: 0;
+    line-height: 1;
+}
+
+.tavern-api-settings .xb-assistant-icon-button svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    vector-effect: non-scaling-stroke;
+}
+
+.tavern-api-settings .xb-assistant-icon-button:hover:not(:disabled),
+.tavern-api-settings .xb-assistant-icon-button:focus-visible {
+    outline: none;
+    border-color: rgba(var(--xb-accent-rgb), 0.34);
+    background: rgba(var(--xb-accent-rgb), 0.09);
+    color: var(--xb-text-main);
+}
+
+.tavern-api-settings .xb-assistant-icon-button.xb-assistant-save-button.is-success,
+.tavern-api-settings .xb-assistant-icon-button.xb-assistant-save-button.is-error {
+    background: var(--xb-settings-control-bg);
+    color: var(--xb-text-muted);
+    border-color: var(--xb-line);
+}
+
+.tavern-api-settings .xb-assistant-icon-button.xb-assistant-save-button.is-saving svg {
+    animation: xb-tavern-api-save-spin 0.85s linear infinite;
+}
+
+.tavern-api-settings .xb-assistant-icon-button.xb-assistant-save-button.is-success {
+    color: #3f8f5a;
+    border-color: rgba(63, 143, 90, 0.26);
+}
+
+.tavern-api-settings .xb-assistant-icon-button.xb-assistant-save-button.is-error {
+    color: #b65a55;
+    border-color: rgba(182, 90, 85, 0.26);
+}
+
+@keyframes xb-tavern-api-save-spin {
+    to { transform: rotate(360deg); }
 }
 
 .tavern-api-settings .xb-assistant-config label > span:first-child,
@@ -149,8 +247,7 @@
     color: #17202c;
 }
 
-.tavern-api-settings .xb-assistant-inline-input button,
-.tavern-api-settings .xb-assistant-actions button {
+.tavern-api-settings .xb-assistant-inline-input button {
     min-height: 40px;
     border-radius: 12px;
     padding: 0 14px;
@@ -244,13 +341,6 @@
     min-height: 22px;
     color: var(--xb-text-muted);
     font-size: 12px;
-}
-
-.tavern-api-settings .xb-assistant-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    padding-top: 2px;
 }
 
 .tavern-api-settings .xb-assistant-runtime {
@@ -491,19 +581,6 @@
         width: 16px;
         height: 16px;
         accent-color: var(--xb-cyan);
-    }
-
-    .settings-layout .tavern-api-settings .xb-assistant-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        padding-top: 2px;
-    }
-
-    .settings-layout .tavern-api-settings .xb-assistant-actions button {
-        min-height: 38px;
-        border-radius: 999px;
-        padding: 0 14px;
     }
 
     .preset-workspace .prompt-detail-form,

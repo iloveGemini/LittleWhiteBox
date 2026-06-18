@@ -3781,8 +3781,8 @@ test('Book renderer defers stored tool round details while keeping folded previe
             { role: 'user', content: '检查章节。' },
             {
                 role: 'assistant',
-                content: 'UNIQUE_LAZY_PREFACE',
-                thoughts: [{ label: 'thinking', text: 'UNIQUE_LAZY_THOUGHT' }],
+                content: 'UNIQUE-LAZY-PREFACE',
+                thoughts: [{ label: 'thinking', text: 'UNIQUE-LAZY-THOUGHT' }],
                 toolCalls: [{
                     id: 'call-lazy-tool',
                     name: EBOOK_TOOL_NAMES.READ,
@@ -3793,7 +3793,7 @@ test('Book renderer defers stored tool round details while keeping folded previe
                 role: 'tool',
                 toolCallId: 'call-lazy-tool',
                 toolName: EBOOK_TOOL_NAMES.READ,
-                content: '{"ok":true,"summary":"UNIQUE_LAZY_TOOL_DETAIL"}',
+                content: '{"ok":true,"summary":"UNIQUE-LAZY-TOOL-DETAIL"}',
             },
             { role: 'assistant', content: '检查完成。' },
         ],
@@ -3817,9 +3817,9 @@ test('Book renderer defers stored tool round details while keeping folded previe
     assert.match(foldedHtml, /data-lazy-tool-turn="true"/);
     assert.match(foldedHtml, /data-tool-detail-mode="preview"/);
     assert.match(foldedHtml, /展开查看思考、说明和完整工具轮次/);
-    assert.match(foldedHtml, /UNIQUE_LAZY_TOOL_DETAIL/);
-    assert.match(foldedHtml, /UNIQUE_LAZY_PREFACE/);
-    assert.doesNotMatch(foldedHtml, /UNIQUE_LAZY_THOUGHT/);
+    assert.match(foldedHtml, /UNIQUE-LAZY-TOOL-DETAIL/);
+    assert.match(foldedHtml, /UNIQUE-LAZY-PREFACE/);
+    assert.doesNotMatch(foldedHtml, /UNIQUE-LAZY-THOUGHT/);
 
     const storedMessagesBeforeToggle = JSON.stringify(state.messages);
     const providerMessagesBeforeToggle = JSON.stringify(buildEbookProviderMessagesFromHistory(state.messages));
@@ -3833,9 +3833,9 @@ test('Book renderer defers stored tool round details while keeping folded previe
 
     assert.doesNotMatch(openHtml, /data-lazy-tool-turn="true"/);
     assert.match(openHtml, /data-tool-detail-mode="full"/);
-    assert.match(openHtml, /UNIQUE_LAZY_TOOL_DETAIL/);
-    assert.match(openHtml, /UNIQUE_LAZY_PREFACE/);
-    assert.match(openHtml, /UNIQUE_LAZY_THOUGHT/);
+    assert.match(openHtml, /UNIQUE-LAZY-TOOL-DETAIL/);
+    assert.match(openHtml, /UNIQUE-LAZY-PREFACE/);
+    assert.match(openHtml, /UNIQUE-LAZY-THOUGHT/);
 
     state.openToolTurnKeys = [];
     const closedAgainHtml = renderEbookShell({
@@ -3847,7 +3847,7 @@ test('Book renderer defers stored tool round details while keeping folded previe
 
     assert.match(closedAgainHtml, /data-lazy-tool-turn="true"/);
     assert.match(closedAgainHtml, /data-tool-detail-mode="preview"/);
-    assert.doesNotMatch(closedAgainHtml, /UNIQUE_LAZY_THOUGHT/);
+    assert.doesNotMatch(closedAgainHtml, /UNIQUE-LAZY-THOUGHT/);
     assert.equal(JSON.stringify(state.messages), storedMessagesBeforeToggle);
     assert.equal(JSON.stringify(buildEbookProviderMessagesFromHistory(state.messages)), providerMessagesBeforeToggle);
 });
@@ -5921,6 +5921,12 @@ test('Ebook settings open as an in-app shared config panel instead of jumping to
     assert.match(html, /主助手 API/);
     assert.match(html, /分身 API/);
     assert.match(html, /id="xb-assistant-preset-select"/);
+    assert.match(html, /id="xb-assistant-new-preset"/);
+    assert.match(html, /id="xb-assistant-rename-preset"/);
+    assert.match(html, /id="xb-assistant-save"[\s\S]*<svg/);
+    assert.match(html, /id="xb-assistant-delete-preset"[\s\S]*<svg/);
+    assert.match(html, /id="xb-assistant-delegate-save"[\s\S]*<svg/);
+    assert.doesNotMatch(html, />(?:➕|✏|💾|🗑)/u);
     assert.match(html, /id="xb-assistant-provider"/);
     assert.match(html, /id="xb-assistant-temperature"/);
     assert.match(html, /id="xb-assistant-send-temperature"/);
@@ -5933,7 +5939,8 @@ test('Ebook settings open as an in-app shared config panel instead of jumping to
     assert.match(html, /id="xb-assistant-delegate-send-temperature"/);
     assert.match(html, /id="xb-assistant-delegate-tool-mode"/);
     assert.match(html, /id="xb-assistant-delegate-pull-models"/);
-    assert.match(html, /id="xb-assistant-save"/);
+    assert.doesNotMatch(html, /<span>预设名称<\/span>/);
+    assert.doesNotMatch(html, /class="xb-assistant-actions"/);
     assert.match(html, /Tavily API Key（全局）/);
     assert.doesNotMatch(html, /id="xb-assistant-tavily-base-url"/);
     assert.doesNotMatch(html, /id="xb-assistant-delegate-tavily-api-key"/);
