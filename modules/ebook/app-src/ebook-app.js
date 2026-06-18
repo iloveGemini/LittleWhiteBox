@@ -399,6 +399,7 @@ export function createEbookApp(options = {}) {
 
     let bookController;
     let agentRunner;
+    let startupHydrationPromise = null;
     const conversationStore = createEbookConversationStore({ state });
     const settingsPanel = createAgentSettingsPanel({
         state,
@@ -811,6 +812,7 @@ export function createEbookApp(options = {}) {
             persistConversation: conversationStore.persistConversation,
             clearConversation: conversationStore.clearConversation,
             showToast,
+            hydrateStartup: hydrateEbookStartup,
         });
         const shouldAutoScrollAgent = shouldForceAgentScrollToBottom(state, agentScroll);
         restoreScrollState(root, agentScroll, '.xb-agent-main', {
@@ -894,14 +896,40 @@ export function createEbookApp(options = {}) {
         bookController.handleTtsState(payload);
     }
 
-    async function start() {
+    async function hydrateEbookStartup() {
+        if (startupHydrationPromise) return startupHydrationPromise;
+        state.isShelfLoading = true;
+        state.shelfLoadError = '';
+        state.status = '正在打开书架...';
+        render();
+        startupHydrationPromise = (async () => {
+            try {
+                await bookController.initializeBook();
+                state.isShelfLoading = false;
+                state.status = '就绪';
+                render();
+                void bookController.refreshDrawStatus({ renderAfter: true });
+                void bookController.refreshTtsStatus({ renderAfter: true });
+            } catch (error) {
+                state.isShelfLoading = false;
+                state.shelfLoadError = error?.message || String(error || 'shelf_load_failed');
+                state.status = `书架加载失败：${state.shelfLoadError}`;
+                render();
+            } finally {
+                startupHydrationPromise = null;
+            }
+        })();
+        return startupHydrationPromise;
+    }
+
+    function start() {
         injectEbookStyles(rootId);
-        await bookController.initializeBook();
-        state.status = '就绪';
+        state.isShelfLoading = true;
+        state.shelfLoadError = '';
+        state.status = '正在打开书架...';
         render();
         hostBridge.postToHost('xb-ebook:frame-ready');
-        void bookController.refreshDrawStatus({ renderAfter: true });
-        void bookController.refreshTtsStatus({ renderAfter: true });
+        void hydrateEbookStartup();
     }
 
     return {

@@ -95,6 +95,31 @@ async function resetDb() {
     await db.open();
 }
 
+test('ebook startup posts frame-ready before shelf hydration and host config is prewarmed', () => {
+    const appSource = readFileSync(new URL('../app-src/ebook-app.js', import.meta.url), 'utf8');
+    const stateSource = readFileSync(new URL('../app-src/state.js', import.meta.url), 'utf8');
+    const rendererSource = readFileSync(new URL('../app-src/renderer.js', import.meta.url), 'utf8');
+    const hostSource = readFileSync(new URL('../ebook.js', import.meta.url), 'utf8');
+    const startIndex = appSource.indexOf('function start() {');
+    const readyIndex = appSource.indexOf("hostBridge.postToHost('xb-ebook:frame-ready');", startIndex);
+    assert.notEqual(startIndex, -1);
+    assert.notEqual(readyIndex, -1);
+    const beforeReady = appSource.slice(startIndex, readyIndex);
+    assert.doesNotMatch(beforeReady, /initializeBook\(\)|refreshDrawStatus\(|refreshTtsStatus\(/);
+    assert.match(appSource, /function start\(\) \{[\s\S]*render\(\);\s*hostBridge\.postToHost\('xb-ebook:frame-ready'\);\s*void hydrateEbookStartup\(\);/);
+    assert.match(appSource, /async function hydrateEbookStartup\(\) \{[\s\S]*await bookController\.initializeBook\(\);[\s\S]*refreshDrawStatus\(\{ renderAfter: true \}\);[\s\S]*refreshTtsStatus\(\{ renderAfter: true \}\);/);
+    assert.match(appSource, /catch \(error\) \{[\s\S]*state\.shelfLoadError = error\?\.message \|\| String\(error \|\| 'shelf_load_failed'\);[\s\S]*state\.status = `书架加载失败：\$\{state\.shelfLoadError\}`;[\s\S]*render\(\);/);
+    assert.match(stateSource, /isShelfLoading: true,/);
+    assert.match(stateSource, /shelfLoadError: '',/);
+    assert.match(rendererSource, /id="xb-library-retry-shelf"/);
+    assert.match(rendererSource, /state\.isBusy \|\| state\.isShelfLoading \|\| state\.shelfLoadError/);
+    assert.match(hostSource, /let initialConfigPromise = null;/);
+    assert.match(hostSource, /function prepareInitialConfig\(\) \{[\s\S]*initialConfigPromise = promise;/);
+    assert.match(hostSource, /async function sendInitialConfigToFrame\(\) \{[\s\S]*const promise = initialConfigPromise \|\| buildEbookFrameConfig\(\);[\s\S]*postToFrame\('xb-ebook:config', await promise\);/);
+    assert.match(hostSource, /async function openEbook\(\) \{[\s\S]*prepareInitialConfig\(\);[\s\S]*await createOverlay\(\);/);
+    assert.match(hostSource, /case 'xb-ebook:frame-ready':[\s\S]*void sendInitialConfigToFrame\(\)\.then\(\(\) => \{/);
+});
+
 test('Ebook package helpers collect referenced image slots and normalize files', () => {
     const files = [
         { path: 'book/chapters/002.md', content: '正文\n[ebook-image:slot-a]\n[ebook-image:slot-b]' },

@@ -445,7 +445,7 @@ export function createBookController(deps = {}) {
     }
 
     async function selectBook(bookId = '') {
-        if (state.isBusy) return;
+        if (state.isShelfLoading || state.shelfLoadError || state.isBusy) return;
         const book = await getBook(bookId);
         if (!book) return;
         if (isEditorDirty() && !confirm('当前文件还没保存，确定切换书籍吗？')) return;
@@ -730,7 +730,7 @@ export function createBookController(deps = {}) {
     }
 
     async function createNewBook() {
-        if (state.isBusy) return;
+        if (state.isShelfLoading || state.shelfLoadError || state.isBusy) return;
         const title = prompt('新书名', '新书稿');
         if (title === null) return;
         if (isEditorDirty() && !confirm('当前文件还没保存，确定新建书籍吗？')) return;
@@ -759,7 +759,7 @@ export function createBookController(deps = {}) {
     }
 
     function openExportDialog() {
-        if (state.isBusy || state.bookTransferProgress) return;
+        if (state.isShelfLoading || state.shelfLoadError || state.isBusy || state.bookTransferProgress) return;
         state.isBookExportOpen = true;
         render();
     }
@@ -788,7 +788,7 @@ export function createBookController(deps = {}) {
     }
 
     async function exportBookPackage(bookId = '') {
-        if (state.isBusy || state.bookTransferProgress) return;
+        if (state.isShelfLoading || state.shelfLoadError || state.isBusy || state.bookTransferProgress) return;
         const id = String(bookId || '').trim();
         if (!id) return;
         const book = state.books.find((item) => item.id === id) || await getBook(id);
@@ -831,7 +831,7 @@ export function createBookController(deps = {}) {
     }
 
     async function importBookPackageFile(file) {
-        if (state.isBusy || state.bookTransferProgress || !file) return;
+        if (state.isShelfLoading || state.shelfLoadError || state.isBusy || state.bookTransferProgress || !file) return;
         await showBookTransferProgress('import', file.name || '作品包', '正在读取作品包...');
         try {
             const text = await readFileAsText(file);

@@ -329,14 +329,19 @@ export function bindEbookEvents(options = {}) {
         persistConversation,
         clearConversation,
         showToast,
+        hydrateStartup,
     } = options;
     if (!root) return;
 
     root.querySelector('#xb-close')?.addEventListener('click', () => postToHost('xb-ebook:close'));
     root.querySelector('#xb-library-link')?.addEventListener('click', () => void bookController.showLibrary());
-    root.querySelector('#xb-library-new-book')?.addEventListener('click', () => void bookController.createNewBook());
+    root.querySelector('#xb-library-retry-shelf')?.addEventListener('click', () => void hydrateStartup?.());
+    root.querySelector('#xb-library-new-book')?.addEventListener('click', () => {
+        if (state.isShelfLoading || state.shelfLoadError) return;
+        void bookController.createNewBook();
+    });
     root.querySelector('#xb-library-import-book')?.addEventListener('click', () => {
-        if (state.isBusy || state.bookTransferProgress) return;
+        if (state.isShelfLoading || state.shelfLoadError || state.isBusy || state.bookTransferProgress) return;
         openBookPackageFilePicker(bookController);
     });
     root.querySelector('#xb-library-export-book')?.addEventListener('click', () => void bookController.openExportDialog());
@@ -417,6 +422,7 @@ export function bindEbookEvents(options = {}) {
     });
     root.querySelectorAll('.xb-library-book').forEach((button) => {
         button.addEventListener('click', () => {
+            if (state.isShelfLoading || state.shelfLoadError) return;
             const bookId = button.dataset.bookId || '';
             if (!bookId) return;
             void bookController.selectBook(bookId);

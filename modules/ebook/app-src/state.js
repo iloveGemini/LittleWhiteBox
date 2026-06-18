@@ -38,6 +38,8 @@ export function createEbookState() {
         contextStatsRequestSerial: 0,
         compactionOverlay: null,
         protocolNotice: null,
+        isShelfLoading: true,
+        shelfLoadError: '',
         isBusy: false,
         isCancellingRun: false,
         activeController: null,

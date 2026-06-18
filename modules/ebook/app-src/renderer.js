@@ -805,6 +805,17 @@ function renderReaderMarkdownBlock(text = '', paragraphIndex = 0) {
 }
 
 function renderBookCards(state = {}) {
+    if (state.isShelfLoading) {
+        return `<div class="xb-empty xb-library-empty">${escapeHtml(state.status || '正在打开书架...')}</div>`;
+    }
+    if (state.shelfLoadError) {
+        return `
+            <div class="xb-empty xb-library-empty">
+                <p>${escapeHtml(state.status || '书架加载失败')}</p>
+                <button id="xb-library-retry-shelf" class="xb-shelf-action" type="button">重试打开书架</button>
+            </div>
+        `;
+    }
     if (!state.books.length) {
         return '<div class="xb-empty xb-library-empty">书架上还没有书。</div>';
     }
@@ -817,7 +828,7 @@ function renderBookCards(state = {}) {
             : `data-book-id="${escapeHtml(book.id)}"`;
         const chapterCount = getBookChapterCount(book, state);
         return `
-            <button class="xb-library-book${active}${modeClass}" ${dataAttr} ${state.isBusy ? 'disabled' : ''}>
+            <button class="xb-library-book${active}${modeClass}" ${dataAttr} ${state.isBusy || state.isShelfLoading || state.shelfLoadError ? 'disabled' : ''}>
                 <span class="xb-book-spine"></span>
                 <span class="xb-library-book-main">
                     <strong>${escapeHtml(book.title || '未命名书稿')}</strong>
@@ -846,10 +857,11 @@ function getBookChapterCount(book = {}, state = {}) {
 
 function renderLibraryShelfActions(state = {}, bookCount = 0) {
     const deleteMode = !!state.isDeleteBookOpen;
-    const canDelete = bookCount > 0 && !state.isBusy;
+    const shelfBusy = !!state.isShelfLoading || !!state.shelfLoadError;
+    const canDelete = bookCount > 0 && !state.isBusy && !shelfBusy;
     return `
         <div class="xb-shelf-actions" aria-label="书架操作">
-            <button id="xb-library-new-book" class="xb-shelf-action" type="button" title="新建书稿" aria-label="新建书稿" ${state.isBusy ? 'disabled' : ''}>
+            <button id="xb-library-new-book" class="xb-shelf-action" type="button" title="新建书稿" aria-label="新建书稿" ${state.isBusy || shelfBusy ? 'disabled' : ''}>
                 <span class="xb-shelf-action-ring" aria-hidden="true">+</span>
                 <strong>新建书稿</strong>
             </button>
@@ -986,6 +998,11 @@ function renderLibraryShell(options = {}) {
     const themeToggleIcon = renderThemeToggleIcon(state.colorTheme);
     const themeToggleTitle = state.colorTheme === 'light' ? '切换为深色视觉' : '切换为白底黑字';
     const transferActive = !!state.bookTransferProgress;
+    const shelfBusy = !!state.isShelfLoading || !!state.shelfLoadError;
+    const shelfStatus = String(state.status || '').trim();
+    const metaText = state.isShelfLoading || state.shelfLoadError
+        ? shelfStatus || '正在打开书架...'
+        : (bookCount ? `${bookCount} 本书稿 · 本地书架` : '本地书架 · 等待第一本书稿');
     return `
         <div class="xb-ebook-screen xb-library-screen ${escapeHtml(themeClass)}${state.isDeleteBookOpen ? ' is-delete-mode' : ''}">
             <div class="xb-ambient-aurora"></div>
@@ -993,11 +1010,11 @@ function renderLibraryShell(options = {}) {
                 <div class="xb-archive-title-block">
                     <h1>小白电纸书</h1>
                     <p class="xb-archive-subtitle">Agent 沉浸式创作与阅读平台</p>
-                    <div class="xb-archive-meta">${bookCount ? `${bookCount} 本书稿 · 本地书架` : '本地书架 · 等待第一本书稿'}</div>
+                    <div class="xb-archive-meta">${escapeHtml(metaText)}</div>
                 </div>
                 <div class="xb-global-actions">
-                    <button id="xb-library-import-book" class="xb-glass-button xb-transfer-button" type="button" title="导入作品包" aria-label="导入作品包" ${state.isBusy || transferActive ? 'disabled' : ''}>${renderImportIcon()}</button>
-                    <button id="xb-library-export-book" class="xb-glass-button xb-transfer-button" type="button" title="导出作品包" aria-label="导出作品包" ${bookCount && !state.isBusy && !transferActive ? '' : 'disabled'}>${renderExportIcon()}</button>
+                    <button id="xb-library-import-book" class="xb-glass-button xb-transfer-button" type="button" title="导入作品包" aria-label="导入作品包" ${state.isBusy || transferActive || shelfBusy ? 'disabled' : ''}>${renderImportIcon()}</button>
+                    <button id="xb-library-export-book" class="xb-glass-button xb-transfer-button" type="button" title="导出作品包" aria-label="导出作品包" ${bookCount && !state.isBusy && !transferActive && !shelfBusy ? '' : 'disabled'}>${renderExportIcon()}</button>
                     <button id="xb-theme-toggle" class="xb-glass-button xb-theme-button" type="button" title="${escapeHtml(themeToggleTitle)}" aria-label="${escapeHtml(themeToggleTitle)}">${themeToggleIcon}</button>
                     <button id="xb-close" class="xb-glass-button xb-exit-button" type="button" title="退出电纸书" aria-label="退出电纸书">${renderExitIcon()}</button>
                 </div>

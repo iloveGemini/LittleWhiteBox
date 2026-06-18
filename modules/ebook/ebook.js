@@ -18,6 +18,7 @@ const HTML_PATH = `${extensionFolderPath}/modules/ebook/ebook.html`;
 const BUILD_INFO_PATH = `${extensionFolderPath}/modules/ebook/dist/ebook-build.json`;
 
 let ebookCacheKey = '';
+let initialConfigPromise = null;
 
 async function loadEbookCacheKey() {
     if (ebookCacheKey) return ebookCacheKey;
@@ -126,6 +127,22 @@ function flushPendingMessages() {
     pendingMessages = [];
 }
 
+function prepareInitialConfig() {
+    const promise = buildEbookFrameConfig();
+    initialConfigPromise = promise;
+    void promise.catch(() => {
+        if (initialConfigPromise === promise) {
+            initialConfigPromise = null;
+        }
+    });
+}
+
+async function sendInitialConfigToFrame() {
+    const promise = initialConfigPromise || buildEbookFrameConfig();
+    initialConfigPromise = null;
+    postToFrame('xb-ebook:config', await promise);
+}
+
 async function sendConfigToFrame() {
     postToFrame('xb-ebook:config', await buildEbookFrameConfig());
 }
@@ -195,6 +212,7 @@ async function openEbook() {
     if (document.getElementById(OVERLAY_ID)) return;
     frameReady = false;
     pendingMessages = [];
+    prepareInitialConfig();
     installMessageHandler();
     await createOverlay();
 }
@@ -204,6 +222,7 @@ function openEbookSettings() {
     if (!document.getElementById(OVERLAY_ID)) {
         frameReady = false;
         pendingMessages = [];
+        prepareInitialConfig();
         installMessageHandler();
         void createOverlay();
     }
@@ -221,6 +240,7 @@ function closeEbook() {
     removeOverlayResizeHandler();
     frameReady = false;
     pendingMessages = [];
+    initialConfigPromise = null;
     pendingOpenSettings = false;
 }
 
@@ -509,7 +529,7 @@ function handleFrameMessage(event) {
     switch (data.type) {
         case 'xb-ebook:frame-ready':
             frameReady = true;
-            void sendConfigToFrame().then(() => {
+            void sendInitialConfigToFrame().then(() => {
                 flushPendingMessages();
                 if (pendingOpenSettings) {
                     revealEbookSettings();
