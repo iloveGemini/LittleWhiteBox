@@ -38,8 +38,6 @@ interface TavernCharacterSessionOption {
     createdAt: number;
     updatedAt: number;
     summary?: string;
-    chatPresetName?: string;
-    presetName?: string;
 }
 
 const props = defineProps<{
@@ -60,6 +58,7 @@ const props = defineProps<{
     hiddenCount: number;
     batchSize: number;
     avatarAvailable: (avatar?: string) => boolean;
+    sessionFloorLabel: (session: TavernCharacterSessionOption) => string;
     shortText: (text: string, limit?: number) => string;
 }>();
 
@@ -80,6 +79,7 @@ const emit = defineEmits<{
 
 const listRef = ref<HTMLElement | null>(null);
 const sessionArchiveOpen = ref(false);
+const characterDefinitionOpen = ref(false);
 const advancedDefinitionDisclosure = useTavernEphemeralDisclosureScope();
 
 const greetingOptions = computed(() => {
@@ -97,6 +97,16 @@ const selectedGreetingText = computed(() => {
 });
 const hasMultipleGreetings = computed(() => greetingOptions.value.length > 1);
 const selectedCharacterSessionCount = computed(() => props.selectedCharacterSessions.length);
+const characterDefinitionFields = computed(() => {
+    const character = props.selectedCharacter;
+    return [
+        { label: '性格摘要', value: character?.personality || '' },
+        { label: '情景', value: character?.scenario || '' },
+        { label: '角色备注', value: character?.characterDepthPrompt || '' },
+        { label: '制作者备注', value: character?.creatorNotes || '' },
+        { label: '示例对话', value: character?.mesExample || '' },
+    ];
+});
 
 const selectedCharacterPreviewLoading = computed(() => (
     !!props.selectedCharacter
@@ -153,8 +163,7 @@ function sessionArchiveTitle(session: TavernCharacterSessionOption) {
 }
 
 function sessionArchiveMeta(session: TavernCharacterSessionOption) {
-    const preset = String(session.chatPresetName || session.presetName || '').trim();
-    return preset ? `${formatSessionTime(session.updatedAt || session.createdAt)} · ${preset}` : formatSessionTime(session.updatedAt || session.createdAt);
+    return `${formatSessionTime(session.updatedAt || session.createdAt)} · ${props.sessionFloorLabel(session)}`;
 }
 
 function openSessionArchive() {
@@ -164,6 +173,15 @@ function openSessionArchive() {
 
 function closeSessionArchive() {
     sessionArchiveOpen.value = false;
+}
+
+function openCharacterDefinition() {
+    if (!props.selectedCharacter) {return;}
+    characterDefinitionOpen.value = true;
+}
+
+function closeCharacterDefinition() {
+    characterDefinitionOpen.value = false;
 }
 
 function openSession(sessionId: string) {
@@ -177,6 +195,7 @@ watch(
     () => props.selectedCharacter?.id,
     () => {
         advancedDefinitionDisclosure.reset();
+        closeCharacterDefinition();
         closeSessionArchive();
         scrollSelectedIntoView();
     },
@@ -332,6 +351,33 @@ defineExpose({ scrollSelectedIntoView, openSessionArchive });
                 <div class="dossier-title-actions">
                   <button
                     type="button"
+                    class="os-system-act-btn character-definition-button"
+                    title="角色卡详情"
+                    aria-label="角色卡详情"
+                    @click="openCharacterDefinition"
+                  >
+                    <svg
+                      class="character-definition-icon"
+                      aria-hidden="true"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.7"
+                        d="M5.5 4.7c1.8-.9 4.1-.9 6.5.3 2.4-1.2 4.7-1.2 6.5-.3v14.4c-1.8-.8-4.1-.7-6.5.5-2.4-1.2-4.7-1.3-6.5-.5V4.7Z"
+                      />
+                      <path
+                        stroke-linecap="round"
+                        stroke-width="1.3"
+                        d="M12 5v14.2M8 8.5h1.9M8 11.5h1.9M14.1 8.5H16M14.1 11.5H16"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
                     class="os-system-act-btn character-worldbook-button"
                     :class="{ 'is-loading': characterWorldbookBusy, 'is-bound': characterWorldbookBound }"
                     :disabled="!!pendingCharacterSessionId || characterWorldbookBusy"
@@ -400,7 +446,7 @@ defineExpose({ scrollSelectedIntoView, openSessionArchive });
                       :class="{ 'is-empty': !hasMultipleGreetings }"
                       @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('greetings'), $event)"
                     >
-                      <summary class="data-section-title">
+                      <summary class="greeting-section-title">
                         切换开场白
                       </summary>
                       <div
@@ -437,94 +483,43 @@ defineExpose({ scrollSelectedIntoView, openSessionArchive });
                 </dd>
               </div>
             </dl>
-            <div class="character-data-list">
-              <details
-                class="data-section character-data-section"
-                :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('description'))"
-                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('description'), $event)"
-              >
-                <summary class="data-section-title">
-                  角色描述 <span>Description</span>
-                </summary>
-                <template v-if="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('description'))">
-                  <div class="data-block">
-                    {{ selectedCharacter.description || '未填写' }}
-                  </div>
-                </template>
-              </details>
-              <details
-                class="data-section character-data-section"
-                :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('personality'))"
-                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('personality'), $event)"
-              >
-                <summary class="data-section-title">
-                  性格摘要 <span>Personality</span>
-                </summary>
-                <template v-if="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('personality'))">
-                  <div class="data-block">
-                    {{ selectedCharacter.personality || '未填写' }}
-                  </div>
-                </template>
-              </details>
-              <details
-                class="data-section character-data-section"
-                :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('scenario'))"
-                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('scenario'), $event)"
-              >
-                <summary class="data-section-title">
-                  情景 <span>Scenario</span>
-                </summary>
-                <template v-if="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('scenario'))">
-                  <div class="data-block">
-                    {{ selectedCharacter.scenario || '未填写' }}
-                  </div>
-                </template>
-              </details>
-              <details
-                class="data-section character-data-section"
-                :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('depth'))"
-                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('depth'), $event)"
-              >
-                <summary class="data-section-title">
-                  角色备注 <span>Character's Note</span>
-                </summary>
-                <template v-if="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('depth'))">
-                  <div class="data-block">
-                    {{ selectedCharacter.characterDepthPrompt || '未填写' }}
-                  </div>
-                </template>
-              </details>
-              <details
-                class="data-section character-data-section"
-                :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('creator'))"
-                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('creator'), $event)"
-              >
-                <summary class="data-section-title">
-                  制作者备注 <span>Creator's Notes</span>
-                </summary>
-                <template v-if="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('creator'))">
-                  <div class="data-block">
-                    {{ selectedCharacter.creatorNotes || '未填写' }}
-                  </div>
-                </template>
-              </details>
-              <details
-                class="data-section character-data-section"
-                :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('examples'))"
-                @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('examples'), $event)"
-              >
-                <summary class="data-section-title">
-                  示例对话 <span>Example dialogue</span>
-                </summary>
-                <template v-if="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('examples'))">
-                  <div class="data-block">
-                    {{ selectedCharacter.mesExample || '未填写' }}
-                  </div>
-                </template>
-              </details>
-            </div>
           </div>
         </main>
+
+        <div
+          v-if="characterDefinitionOpen && selectedCharacter"
+          class="character-definition-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="角色卡详情"
+        >
+          <section class="character-definition-dialog">
+            <header>
+              <div>
+                <strong>角色卡详情</strong>
+                <span>{{ selectedCharacter.name }}</span>
+              </div>
+              <button
+                type="button"
+                class="session-archive-close character-definition-close"
+                aria-label="关闭角色卡详情"
+                @click="closeCharacterDefinition"
+              />
+            </header>
+            <dl class="character-definition-list">
+              <div
+                v-for="field in characterDefinitionFields"
+                :key="field.label"
+                class="character-definition-section"
+              >
+                <dt>{{ field.label }}</dt>
+                <dd :class="{ 'is-empty': !field.value }">
+                  {{ field.value || (selectedCharacterPreviewLoading ? '正在读取角色卡...' : '未填写') }}
+                </dd>
+              </div>
+            </dl>
+          </section>
+        </div>
 
         <div
           v-if="sessionArchiveOpen && selectedCharacter"

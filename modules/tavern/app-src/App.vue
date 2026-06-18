@@ -735,11 +735,15 @@ function sessionFloorCount(session?: TavernSessionRecord | null) {
 }
 
 function sessionFloorLabel(session?: TavernSessionRecord | null) {
+    const id = String(session?.id || '').trim();
+    if (id && id !== selectedSessionId.value && !(id in sessionMessageCounts.value)) {
+        return '统计中';
+    }
     return `第 ${sessionFloorCount(session)} 楼`;
 }
 
-async function refreshVisibleSessionMessageCounts() {
-    const visibleIds = chatSidebarSessions.value
+async function refreshSessionMessageCountsForSessions(targetSessions: TavernSessionRecord[] = []) {
+    const visibleIds = targetSessions
         .map((session) => String(session.id || '').trim())
         .filter(Boolean);
     const missingIds = [...new Set(visibleIds)]
@@ -752,6 +756,10 @@ async function refreshVisibleSessionMessageCounts() {
         next[id] = Math.max(0, Math.floor(Number(count) || 0));
     });
     sessionMessageCounts.value = next;
+}
+
+async function refreshVisibleSessionMessageCounts() {
+    await refreshSessionMessageCountsForSessions(chatSidebarSessions.value);
 }
 
 const activeMemoryFiles = computed(() => memoryFiles.value.filter((file) => file.status !== 'stale'));
@@ -1040,6 +1048,10 @@ watch([
 
 watch(() => chatSidebarSessions.value.map((session) => session.id).join('|'), () => {
     void refreshVisibleSessionMessageCounts();
+}, { immediate: true });
+
+watch(() => selectedCharacterSessions.value.map((session) => session.id).join('|'), () => {
+    void refreshSessionMessageCountsForSessions(selectedCharacterSessions.value);
 }, { immediate: true });
 
 function describeError(error: unknown) {
@@ -4346,6 +4358,7 @@ onUnmounted(() => {
         :hidden-count="hiddenCharacterCount"
         :batch-size="CHARACTER_ARCHIVE_BATCH_SIZE"
         :avatar-available="avatarAvailable"
+        :session-floor-label="sessionFloorLabel"
         :short-text="shortText"
         @toggle-theme="homeThemeDark = !homeThemeDark"
         @back="activeView = 'home'"

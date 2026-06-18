@@ -771,11 +771,32 @@ test('tavern character archive separates new chat from existing session selectio
     const characterSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterSelectPage.vue');
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const previewCss = readRepoFile('modules/tavern/app-src/styles/characters/preview.css');
+    const sessionDbSource = readRepoFile('modules/tavern/shared/session-db.ts');
 
     assert.match(appSource, /const selectedCharacterSessions = computed<TavernSessionRecord\[\]>/);
     assert.match(appSource, /:selected-character-sessions="selectedCharacterSessions"/);
+    assert.match(appSource, /:session-floor-label="sessionFloorLabel"/);
+    assert.match(appSource, /function sessionFloorLabel\(session\?: TavernSessionRecord \| null\)[\s\S]*return '统计中'/);
+    assert.match(appSource, /async function refreshSessionMessageCountsForSessions\(targetSessions: TavernSessionRecord\[\] = \[\]\)/);
+    assert.match(appSource, /watch\(\(\) => selectedCharacterSessions\.value\.map\(\(session\) => session\.id\)\.join\('\|'\)[\s\S]*refreshSessionMessageCountsForSessions\(selectedCharacterSessions\.value\)/);
+    assert.match(sessionDbSource, /export async function countTavernMessages[\s\S]*\.where\('sessionId'\)\.equals\(id\)\.count\(\)/);
+    assert.doesNotMatch(sessionDbSource, /countTavernMessages[\s\S]*toArray\(\)\)\.length/);
     assert.match(appSource, /@open-session="selectSession"/);
     assert.match(characterSource, /selectedCharacterSessions: TavernCharacterSessionOption\[\]/);
+    assert.match(characterSource, /sessionFloorLabel: \(session: TavernCharacterSessionOption\) => string;/);
+    assert.match(characterSource, /function sessionArchiveMeta\(session: TavernCharacterSessionOption\)[\s\S]*props\.sessionFloorLabel\(session\)/);
+    assert.doesNotMatch(characterSource, /sessionArchiveMeta[\s\S]*chatPresetName|sessionArchiveMeta[\s\S]*presetName/);
+    assert.match(characterSource, /class="dossier-summary"[\s\S]*selectedCharacter\.description[\s\S]*selectedCharacter\.personality[\s\S]*selectedCharacter\.scenario/);
+    assert.doesNotMatch(characterSource, /class="data-section-title"/);
+    assert.doesNotMatch(characterSource, /class="character-data-list"/);
+    assert.match(characterSource, /class="os-system-act-btn character-definition-button"[\s\S]*aria-label="角色卡详情"[\s\S]*class="os-system-act-btn character-worldbook-button"/);
+    assert.match(characterSource, /const characterDefinitionFields = computed[\s\S]*label: '性格摘要'[\s\S]*personality/);
+    assert.match(characterSource, /const characterDefinitionFields = computed[\s\S]*label: '情景'[\s\S]*scenario/);
+    assert.match(characterSource, /const characterDefinitionFields = computed[\s\S]*label: '角色备注'[\s\S]*characterDepthPrompt/);
+    assert.match(characterSource, /const characterDefinitionFields = computed[\s\S]*label: '制作者备注'[\s\S]*creatorNotes/);
+    assert.match(characterSource, /const characterDefinitionFields = computed[\s\S]*label: '示例对话'[\s\S]*mesExample/);
+    assert.match(characterSource, /class="character-definition-overlay"[\s\S]*aria-label="角色卡详情"/);
+    assert.match(characterSource, /v-for="field in characterDefinitionFields"/);
     assert.match(characterSource, />\s*会话档案\s*</);
     assert.match(characterSource, /新建中\.\.\.' : '新建聊天/);
     assert.match(characterSource, /class="character-session-archive-overlay"/);
@@ -787,10 +808,14 @@ test('tavern character archive separates new chat from existing session selectio
     assert.match(characterSource, /@click="\$emit\('enter-selected'\)"/);
     assert.match(characterSource, /<main\s+v-if="!selectedCharacter"\s+class="character-preview-panel dossier-empty"/);
     assert.doesNotMatch(characterSource, /@dblclick="\$emit\('enter-character'/);
-    assert.match(previewCss, /\.dossier-title-actions \{[\s\S]*display: flex;[\s\S]*gap: 10px;/);
+    assert.match(previewCss, /\.dossier-title-actions \{[\s\S]*display: flex;[\s\S]*gap: 8px;/);
+    assert.match(previewCss, /\.character-definition-button,\n\.character-worldbook-button/);
     assert.match(previewCss, /\.session-archive-button/);
+    assert.match(previewCss, /\.dossier-title-actions \.session-archive-button,\n\.dossier-title-actions \.enter-chat-button \{[\s\S]*padding-left: 16px;[\s\S]*padding-right: 16px;/);
+    assert.match(previewCss, /\.character-definition-dialog \{[\s\S]*width: min\(560px, 100%\);/);
+    assert.match(previewCss, /\.character-definition-section dd \{[\s\S]*white-space: pre-wrap;/);
     assert.match(previewCss, /\.character-session-archive \{[\s\S]*width: min\(520px, 100%\);/);
-    assert.match(previewCss, /grid-template-columns: 42px minmax\(0, 1fr\) minmax\(0, 1fr\);/);
+    assert.match(previewCss, /grid-template-columns: 42px 42px minmax\(0, 1fr\) minmax\(0, 1fr\);/);
 });
 
 test('tavern deleting a selected chat never falls through to another character session', () => {
@@ -821,7 +846,8 @@ test('tavern heavy disclosure details bind to ephemeral state instead of keeping
     const conversationSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
     const managerSource = readRepoFile('modules/tavern/app-src/components/chat/TavernManagerPanel.vue');
     assert.match(characterSource, /useTavernEphemeralDisclosureScope/);
-    assert.match(characterSource, /<template\s+v-if="advancedDefinitionDisclosure\.isOpen/);
+    assert.match(characterSource, /:open="advancedDefinitionDisclosure\.isOpen[\s\S]*class="data-section greeting-picker"/);
+    assert.match(characterSource, /v-if="hasMultipleGreetings && advancedDefinitionDisclosure\.isOpen/);
     assert.match(conversationSource, /useTavernEphemeralDisclosureScope/);
     assert.match(conversationSource, /class="tavern-thought-details"[\s\S]*:open="thoughtDisclosure\.isOpen/);
     assert.match(conversationSource, /v-if="thoughtDisclosure\.isOpen\(messageThoughtDisclosureId\(message\)\)"/);

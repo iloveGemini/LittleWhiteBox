@@ -877,7 +877,7 @@ export async function listTavernMessages(sessionId = ''): Promise<TavernMessageR
 export async function countTavernMessages(sessionId = ''): Promise<number> {
     const id = String(sessionId || '').trim();
     if (!id) {return 0;}
-    return (await tavernMessagesTable.where('sessionId').equals(id).toArray()).length;
+    return tavernMessagesTable.where('sessionId').equals(id).count();
 }
 
 export async function appendTavernManagerMessage(
