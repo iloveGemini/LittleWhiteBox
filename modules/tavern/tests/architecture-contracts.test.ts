@@ -384,6 +384,7 @@ test('agent API settings keep preset actions compact and model controls before t
 test('tavern chat exposes local settings modals without leaving the session', () => {
     const cornerSource = readRepoFile('modules/tavern/app-src/components/TavernCornerActions.vue');
     const chatPageSource = readRepoFile('modules/tavern/app-src/components/chat/TavernChatPage.vue');
+    const settingsPageSource = readRepoFile('modules/tavern/app-src/components/settings/TavernSettingsPage.vue');
     const chatLayoutCss = readRepoFile('modules/tavern/app-src/styles/chat/layout.css');
     const chatQuickSettingsCss = readRepoFile('modules/tavern/app-src/styles/chat/quick-settings.css');
     const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
@@ -396,6 +397,7 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.match(cornerSource, /homeLast\?: boolean/);
     assert.match(cornerSource, /v-if="includeChatPreset"[\s\S]*class="home-icon-button page-chat-preset-button"[\s\S]*v-if="includeApi"[\s\S]*class="home-icon-button page-api-button"[\s\S]*v-if="includeWorldbooks"[\s\S]*class="home-icon-button page-worldbooks-button"[\s\S]*class="home-icon-button home-theme-button"[\s\S]*v-if="includeHome && homeLast"[\s\S]*class="home-icon-button page-home-button"/);
     assert.match(chatPageSource, /<TavernCornerActions[\s\S]*include-api[\s\S]*include-chat-preset[\s\S]*include-home[\s\S]*include-worldbooks[\s\S]*home-last[\s\S]*@api="openQuickSettingsModal\('api'\)"[\s\S]*@chat-preset="openQuickSettingsModal\('chatPreset'\)"[\s\S]*@worldbooks="openQuickSettingsModal\('worldbooks'\)"/);
+    assert.match(settingsPageSource, /<TavernCornerActions[\s\S]*include-home[\s\S]*home-last[\s\S]*@home="activeView = 'home'"[\s\S]*@toggle-theme="homeThemeDark = !homeThemeDark"/);
     assert.match(chatPageSource, /class="chat-mobile-action-group"[\s\S]*title="聊天预设"[\s\S]*title="API 配置"[\s\S]*title="世界书"[\s\S]*title="首页"/);
     assert.match(chatPageSource, /const quickSettingsOpen = ref<'api' \| 'chatPreset' \| 'worldbooks' \| null>\(null\)/);
     assert.match(chatPageSource, /function openQuickSettingsModal\(workspace: 'api' \| 'chatPreset' \| 'worldbooks'\)[\s\S]*activeSettingsWorkspace\.value = workspace;[\s\S]*syncChatPresetFromHost\(\)[\s\S]*syncWorldbooksForCurrentCharacter\(\)[\s\S]*syncGlobalWorldbooksFromHost\(\)/);
@@ -408,9 +410,9 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.match(chatLayoutCss, /\.chat-quick-settings-overlay \{[\s\S]*position: absolute;[\s\S]*backdrop-filter: blur\(16px\);/);
     assert.match(chatLayoutCss, /\.chat-quick-settings-dialog \{[\s\S]*max-height: min\(88vh, 900px\);/);
     assert.match(chatLayoutCss, /\.chat-quick-settings-dialog \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\);/);
-    assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 34px 0 38px;/);
-    assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 22px 0 28px;/);
-    assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 18px 0 22px;/);
+    assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 34px 0 0;/);
+    assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 22px 0 0;/);
+    assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 18px 0 0;/);
     assert.doesNotMatch(chatLayoutCss, /--xb-chat-scroll-padding:\s*\d+px\s+(?:8|10|12)px/);
     assert.match(stylesSource, /@import '\.\/styles\/settings\.css';\s*@import '\.\/styles\/chat\/quick-settings\.css';/);
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout \{[\s\S]*display: block;[\s\S]*grid-template-columns: none;[\s\S]*overflow: visible;/);
@@ -499,6 +501,12 @@ test('tavern settings controller owns settings page state and host sync', () => 
     assert.doesNotMatch(appSource, /apiSettingsPanelState/);
     assert.match(baseCss, /\.base-settings-section \{[\s\S]*border-bottom: 2px solid var\(--xb-line-strong\);/);
     assert.match(baseCss, /\.base-setting-row input \{[\s\S]*text-align: center;/);
+});
+
+test('tavern settings pages let main workspace content fill the page width', () => {
+    const layoutCss = readRepoFile('modules/tavern/app-src/styles/settings/layout.css');
+
+    assert.match(layoutCss, /\.settings-layout \.xb-main \{[\s\S]*padding: 0;/);
 });
 
 test('tavern-only settings normalization stays out of agent core', () => {

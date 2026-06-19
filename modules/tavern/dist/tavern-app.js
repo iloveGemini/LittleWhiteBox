@@ -43551,6 +43551,7 @@ var rie = {
     }, [
       Ot(Fd, {
         "include-home": "",
+        "home-last": "",
         dark: S(a),
         onHome: u[0] || (u[0] = (d) => i.value = "home"),
         onToggleTheme: u[1] || (u[1] = (d) => a.value = !S(a))

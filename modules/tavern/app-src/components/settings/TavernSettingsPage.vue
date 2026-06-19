@@ -30,6 +30,7 @@ const {
   >
     <TavernCornerActions
       include-home
+      home-last
       :dark="homeThemeDark"
       @home="activeView = 'home'"
       @toggle-theme="homeThemeDark = !homeThemeDark"
