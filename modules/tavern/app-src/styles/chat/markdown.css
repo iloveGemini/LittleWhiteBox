@@ -188,21 +188,285 @@
 
 .xb-tavern-markdown .xb-tavern-image {
     display: block;
-    width: min(100%, 520px);
-    margin: 14px 0;
-    border: 1px solid rgba(var(--xb-accent-rgb), 0.18);
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 auto;
+    border: 0;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.24);
+    background: transparent;
+    padding: 4px;
+    overflow: visible;
+}
+
+.xb-tavern-markdown .xb-tavern-image[data-state="preview"] {
+    border: 1px dashed rgba(255, 152, 0, 0.35);
+}
+
+.xb-tavern-markdown .xb-tavern-image[data-state="failed"] {
+    width: 100%;
+    border: 1px dashed rgba(248, 113, 113, 0.5);
+    background: rgba(248, 113, 113, 0.05);
+    padding: 20px;
+}
+
+.xb-tavern-markdown .xb-tavern-image-wrap {
+    position: relative;
+    display: block;
     overflow: hidden;
+    border-radius: 10px;
+    touch-action: pan-y pinch-zoom;
+}
+
+.xb-tavern-markdown .xb-tavern-image-failed-wrap {
+    display: grid;
+    gap: 12px;
+    justify-items: center;
 }
 
 .xb-tavern-markdown .xb-tavern-image img {
     display: block;
-    width: 100%;
+    width: auto;
     height: auto;
-    max-height: 620px;
-    object-fit: contain;
-    background: rgba(0, 0, 0, 0.08);
+    max-width: 100%;
+    border-radius: 10px;
+    box-shadow: 0 3px 15px rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-drag: none;
+    transition: transform 0.25s ease, opacity 0.2s ease;
+}
+
+.xb-tavern-markdown .xb-tavern-image.is-busy img {
+    opacity: 0.5;
+}
+
+.xb-tavern-markdown .xb-tavern-image-nav {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: 32px;
+    min-height: 32px;
+    border-radius: 20px;
+    background: rgba(0, 0, 0, 0.75);
+    color: rgba(255, 255, 255, 0.9);
+    padding: 4px 6px;
+    font-size: 12px;
+    font-weight: 500;
+    user-select: none;
+    opacity: 0.85;
+    transition: opacity 0.2s;
+}
+
+.xb-tavern-markdown .xb-tavern-image-nav:hover {
+    opacity: 1;
+}
+
+.xb-tavern-markdown .xb-tavern-image-nav-button,
+.xb-tavern-markdown .xb-tavern-image-menu-trigger,
+.xb-tavern-markdown .xb-tavern-image-dropdown button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-family: var(--xb-font-ui);
+}
+
+.xb-tavern-markdown .xb-tavern-image-nav-button {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    padding: 0;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 14px;
+    line-height: 1;
+    transition: background 0.15s, color 0.15s;
+}
+
+.xb-tavern-markdown .xb-tavern-image-nav-button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.xb-tavern-markdown .xb-tavern-image-nav-button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.xb-tavern-markdown .xb-tavern-image-nav-text {
+    min-width: 36px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    padding: 0 2px;
+}
+
+.xb-tavern-markdown .xb-tavern-image-menu {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 3;
+}
+
+.xb-tavern-markdown .xb-tavern-image-menu-trigger {
+    width: 42px;
+    height: 32px;
+    min-height: 32px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.75);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 16px;
+    line-height: 1;
+    opacity: 0.85;
+    transition: all 0.15s;
+}
+
+.xb-tavern-markdown .xb-tavern-image-menu.is-open .xb-tavern-image-menu-trigger,
+.xb-tavern-markdown .xb-tavern-image-menu-trigger:hover {
+    background: rgba(0, 0, 0, 0.9);
+    opacity: 1;
+}
+
+.xb-tavern-markdown .xb-tavern-image-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    width: 42px;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    background: rgba(20, 20, 24, 0.98);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    padding: 4px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px) scale(0.96);
+    transform-origin: top right;
+    transition: all 0.15s ease;
+    pointer-events: none;
+}
+
+.xb-tavern-markdown .xb-tavern-image-menu.is-open .xb-tavern-image-dropdown {
+    display: flex;
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+.xb-tavern-markdown .xb-tavern-image-dropdown button {
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    padding: 0;
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 14px;
+}
+
+.xb-tavern-markdown .xb-tavern-image-dropdown button:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.xb-tavern-markdown .xb-tavern-image-dropdown button[data-action="delete-image"] {
+    color: rgba(248, 113, 113, 0.9);
+}
+
+.xb-tavern-markdown .xb-tavern-image-dropdown button[data-action="delete-image"]:hover {
+    background: rgba(248, 113, 113, 0.2);
+}
+
+.xb-tavern-markdown .xb-tavern-image-edit {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    z-index: 15;
+    display: block;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.9);
+    padding: 10px;
+    text-align: left;
+}
+
+.xb-tavern-markdown .xb-tavern-image-edit-label {
+    display: block;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 11px;
+    margin-bottom: 6px;
+}
+
+.xb-tavern-markdown .xb-tavern-image-edit-scroll {
+    display: block;
+    max-height: 250px;
+    overflow-y: auto;
+    margin-bottom: 8px;
+}
+
+.xb-tavern-markdown .xb-tavern-image-edit-scroll::-webkit-scrollbar {
+    width: 4px;
+}
+
+.xb-tavern-markdown .xb-tavern-image-edit-scroll::-webkit-scrollbar-thumb {
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.xb-tavern-markdown .xb-tavern-image-edit-group {
+    display: block;
+    margin-bottom: 8px;
+}
+
+.xb-tavern-markdown .xb-tavern-image-edit-group:last-child {
+    margin-bottom: 0;
+}
+
+.xb-tavern-markdown .xb-tavern-image-edit-group-label {
+    display: block;
+    margin-bottom: 4px;
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 10px;
+}
+
+.xb-tavern-markdown .xb-tavern-image-edit-input {
+    width: 100%;
+    min-height: 60px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-family: monospace;
+    font-size: 12px;
+    padding: 8px;
+    resize: vertical;
+}
+
+.xb-tavern-markdown .xb-tavern-image-edit-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.xb-tavern-markdown .xb-tavern-image-edit-actions button {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 6px 12px;
+}
+
+.xb-tavern-markdown .xb-tavern-image-edit-actions button[data-action="save-tags"] {
+    flex: 1;
+    border-color: rgba(212, 165, 116, 0.5);
+    background: rgba(212, 165, 116, 0.3);
 }
 
 .xb-tavern-markdown .xb-tavern-image-placeholder {
@@ -211,6 +475,257 @@
     place-items: center;
     color: var(--xb-text-muted);
     font: 13px/1.45 var(--xb-font-ui);
+    text-align: center;
+}
+
+.xb-tavern-markdown .xb-tavern-image-failed-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+}
+
+.xb-tavern-markdown .xb-tavern-image-failed-actions button {
+    min-height: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--xb-text-main);
+    padding: 0 14px;
+}
+
+.xb-tavern-markdown .xb-tavern-image-failed-actions button:hover {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.xb-tavern-markdown .xb-tavern-image-failed-actions button[data-action="refresh-image"] {
+    border-color: rgba(212, 165, 116, 0.35);
+    background: rgba(212, 165, 116, 0.18);
+}
+
+.xb-tavern-markdown .xb-tavern-inline-image {
+    display: inline-block;
+    vertical-align: top;
+    max-width: min(400px, 86%);
+    min-width: 96px;
+    min-height: 42px;
+    margin: 8px 0;
+}
+
+.xb-tavern-markdown .xb-tavern-inline-image-img {
+    display: block;
+    max-width: 100%;
+    max-height: 60vh;
+    border-radius: 6px;
+    cursor: zoom-in;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+
+.xb-tavern-markdown .xb-tavern-inline-image-placeholder,
+.xb-tavern-markdown .xb-tavern-inline-image-error {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 42px;
+    border: 1px dashed var(--xb-line);
+    border-radius: 6px;
+    background: rgba(128, 128, 128, 0.07);
+    color: var(--xb-text-muted);
+    padding: 9px 12px;
+    font: 12px/1.35 var(--xb-font-ui);
+}
+
+.xb-tavern-markdown .xb-tavern-inline-image-placeholder.is-loading {
+    border-style: solid;
+    background: rgba(76, 154, 255, 0.08);
+    color: var(--xb-cyan);
+}
+
+.xb-tavern-markdown .xb-tavern-inline-image-error {
+    border-color: rgba(216, 132, 144, 0.35);
+    background: rgba(216, 132, 144, 0.08);
+    color: var(--xb-danger);
+}
+
+.xb-tavern-markdown .xb-tavern-inline-image-error button {
+    min-height: 26px;
+    border: 1px solid rgba(216, 132, 144, 0.35);
+    border-radius: 6px;
+    background: rgba(216, 132, 144, 0.12);
+    color: var(--xb-danger);
+    padding: 4px 8px;
+    font: 600 11px/1 var(--xb-font-ui);
+}
+
+.xb-tavern-image-gallery-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+}
+
+.xb-tavern-image-gallery-overlay.visible {
+    display: flex;
+}
+
+.xb-tavern-image-gallery-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 10;
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+    padding: 0;
+}
+
+.xb-tavern-image-gallery-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.xb-tavern-image-gallery-main {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    max-width: 90vw;
+    max-height: 70vh;
+}
+
+.xb-tavern-image-gallery-nav {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    cursor: pointer;
+    font-size: 24px;
+}
+
+.xb-tavern-image-gallery-nav:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.xb-tavern-image-gallery-nav:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.xb-tavern-image-gallery-img-wrap {
+    position: relative;
+    max-width: calc(90vw - 140px);
+    max-height: 70vh;
+}
+
+.xb-tavern-image-gallery-img {
+    max-width: 100%;
+    max-height: 70vh;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.xb-tavern-image-gallery-saved-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    border-radius: 6px;
+    background: rgba(62, 207, 142, 0.9);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+}
+
+.xb-tavern-image-gallery-thumbs {
+    display: flex;
+    gap: 8px;
+    max-width: 90vw;
+    overflow-x: auto;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    margin-top: 20px;
+    padding: 12px;
+}
+
+.xb-tavern-image-gallery-thumb {
+    width: 64px;
+    height: 64px;
+    flex-shrink: 0;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    object-fit: cover;
+    opacity: 0.6;
+    transition: all 0.15s;
+}
+
+.xb-tavern-image-gallery-thumb:hover {
+    opacity: 0.9;
+}
+
+.xb-tavern-image-gallery-thumb.active {
+    border-color: #d4a574;
+    opacity: 1;
+}
+
+.xb-tavern-image-gallery-thumb.saved {
+    border-color: rgba(62, 207, 142, 0.8);
+}
+
+.xb-tavern-image-gallery-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.xb-tavern-image-gallery-btn {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 10px 20px;
+    transition: all 0.15s;
+}
+
+.xb-tavern-image-gallery-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.xb-tavern-image-gallery-btn.primary {
+    border-color: rgba(212, 165, 116, 0.5);
+    background: rgba(212, 165, 116, 0.3);
+}
+
+.xb-tavern-image-gallery-btn.danger {
+    border-color: rgba(248, 113, 113, 0.3);
+    color: #f87171;
+}
+
+.xb-tavern-image-gallery-btn.danger:hover {
+    background: rgba(248, 113, 113, 0.15);
+}
+
+.xb-tavern-image-gallery-info {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    margin-top: 12px;
+    text-align: center;
 }
 
 .xb-tavern-markdown .xb-tavern-image.is-failed {

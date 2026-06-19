@@ -110,13 +110,17 @@ import {
 } from './tool-loop-request';
 
 const TAVERN_IMAGE_MARKER_REGEX = /\[tavern-image:[a-z0-9\-_]+\]/gi;
+const TAVERN_INLINE_IMAGE_TOKEN_REGEX = /\[(?:img|图片)\s*:\s*[^\]]+\]/gi;
 const MAX_ACTION_CHECK_ROUNDS = 8;
 export const TAVERN_CONTEXT_WINDOW_MAX = 20;
 export const TAVERN_CONTEXT_WINDOW_RETAIN = 10;
 export const TAVERN_CONTEXT_WINDOW_MIN_SAFE = 5;
 
 function stripTavernImageMarkers(text = ''): string {
-    return String(text || '').replace(TAVERN_IMAGE_MARKER_REGEX, '').trim();
+    return String(text || '')
+        .replace(TAVERN_IMAGE_MARKER_REGEX, '')
+        .replace(TAVERN_INLINE_IMAGE_TOKEN_REGEX, '')
+        .trim();
 }
 
 function isUsableContextWindowMessage(message: TavernMessageRecord): boolean {
@@ -1520,12 +1524,13 @@ export async function simulateXbTavernRequest(input: XbTavernSimulateRequestInpu
     const regexApplications: TavernRegexApplicationSummary = {};
     addRegexSummary(regexApplications, inputRegex.summary);
     const substituteOptions = buildSubstituteParamsOptions(liveContext);
-    const currentUserMessage = await runTavernStage('simulate_user_input_substitute', () => applySingleTavernSubstituteParams({
+    const storedUserMessage = await runTavernStage('simulate_user_input_substitute', () => applySingleTavernSubstituteParams({
         applySubstituteParams: input.applySubstituteParams,
         id: 'userInput:simulate',
         text: inputRegex.text,
         options: substituteOptions,
     }));
+    const currentUserMessage = stripTavernImageMarkers(storedUserMessage);
     const contextWindow = session
         ? resolveTavernContextWindow({
             messages: sessionMessages,
@@ -1900,7 +1905,7 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
     const sessionContractRuntime = resolveTavernSessionContractRuntime(sessionContract);
     const actionCheckCapabilities = buildActionCheckCapabilities(sessionContractRuntime);
     const shouldReplaceSessionState = !!reusedUserMessage;
-    const rawCurrentUserMessage = stripTavernImageMarkers(reusedUserMessage?.content || input.currentUserMessage);
+    const rawCurrentUserMessage = String(reusedUserMessage?.content || input.currentUserMessage || '');
     const initialPresetId = String(chatPreset.id || baseSession.chatPresetId || baseSession.presetId || '');
     const initialPresetName = String(chatPreset.name || baseSession.chatPresetName || baseSession.presetName || '');
     let userMessage = reusedUserMessage;
@@ -1927,7 +1932,7 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
         }));
     addRegexSummary(regexApplications, inputRegex.summary);
     const substituteOptions = buildSubstituteParamsOptions(liveContext);
-    const currentUserMessage = reusedUserMessage
+    const storedUserMessage = reusedUserMessage
         ? inputRegex.text
         : await runTavernStage('turn_user_input_substitute', () => applySingleTavernSubstituteParams({
             applySubstituteParams: input.applySubstituteParams,
@@ -1935,9 +1940,10 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
             text: inputRegex.text,
             options: substituteOptions,
         }));
-    if (userMessage && !reusedUserMessage && userMessage.content !== currentUserMessage) {
+    const currentUserMessage = stripTavernImageMarkers(storedUserMessage);
+    if (userMessage && !reusedUserMessage && userMessage.content !== storedUserMessage) {
         userMessage = await updateTavernMessage(baseSession.id, userMessage.order, {
-            content: currentUserMessage,
+            content: storedUserMessage,
         }) || userMessage;
         await notifyRunCallback(() => input.onUserMessageSaved?.(baseSession.id, userMessage as TavernMessageRecord));
     }

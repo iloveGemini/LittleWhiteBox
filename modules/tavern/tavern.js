@@ -42,6 +42,8 @@ const OVERLAY_ID = "xiaobaix-tavern-overlay";
 const IFRAME_ID = "xiaobaix-tavern-iframe";
 const HTML_PATH = `${extensionFolderPath}/modules/tavern/tavern.html`;
 const BUILD_INFO_PATH = `${extensionFolderPath}/modules/tavern/dist/tavern-build.json`;
+const TAVERN_DRAW_DELETED_ERROR_TYPE = "deleted";
+const TAVERN_DRAW_DELETED_ERROR_MESSAGE = "\u56FE\u7247\u5DF2\u5220\u9664\uFF0C\u70B9\u51FB\u91CD\u8BD5\u53EF\u91CD\u65B0\u751F\u6210";
 let tavernCacheKey = "";
 let frameReady = false;
 let pendingMessages = [];
@@ -51,6 +53,12 @@ let overlayResizeHandler = null;
 const pendingDrawRequests = /* @__PURE__ */ new Map();
 async function getDrawGalleryCacheModule() {
   return await import("../draw/shared/gallery-cache.js");
+}
+async function getDrawCommonModule() {
+  return await import("../draw/shared/draw-common.js");
+}
+async function getFourthWallImageModule() {
+  return await import("../fourth-wall/fw-image.js");
 }
 function cloneFramePayload(value) {
   const seen = /* @__PURE__ */ new WeakSet();
@@ -298,6 +306,36 @@ async function handleDrawGenerate(payload = {}) {
     }
   }
 }
+async function handleInlineImageGenerate(payload = {}) {
+  const requestId = String(payload.requestId || "");
+  const source = payload.payload && typeof payload.payload === "object" ? payload.payload : payload;
+  const tags = String(source.tags || "").trim();
+  try {
+    if (!tags) {
+      throw new Error("\u65E0\u6548\u7684\u56FE\u7247\u6807\u7B7E");
+    }
+    const status = getDrawStatus();
+    if (!status.enabled || !status.ready) {
+      throw new Error("\u8BF7\u5F00\u542F\u5C0F\u767DX\u753B\u56FE\u6A21\u5757");
+    }
+    const { generateImage } = await getFourthWallImageModule();
+    const base64 = await generateImage(tags, (state, position, delay) => {
+      postToFrame("xb-tavern:inline-image-progress", {
+        requestId,
+        tags,
+        status: state,
+        position,
+        delay: delay ? Math.round(delay / 1e3) : void 0
+      });
+    });
+    replyHostResult(requestId, {
+      ok: true,
+      result: { base64 }
+    });
+  } catch (error) {
+    replyHostResult(requestId, hostErrorPayload(error, "inline_image_failed"));
+  }
+}
 function previewToTransferableUrl(preview = {}) {
   const savedUrl = String(preview.savedUrl || "").trim();
   if (savedUrl) {
@@ -312,6 +350,116 @@ function previewToTransferableUrl(preview = {}) {
   }
   return `data:image/png;base64,${base64}`;
 }
+function toSuccessDrawPreviews(previews = []) {
+  return previews.filter((preview) => preview.status !== "failed" && (preview.base64 || preview.savedUrl));
+}
+function generateDrawImageId() {
+  return `tavern-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+function getDrawPreviewCharacterPrompts(preview = {}) {
+  return Array.isArray(preview.characterPrompts) ? preview.characterPrompts.filter((item) => !!item && typeof item === "object") : [];
+}
+function getDrawPreviewMessageId(preview = {}) {
+  if (String(preview.source || "").trim() === "tavern") {
+    return -1;
+  }
+  const value = preview.messageId;
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+    return value;
+  }
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+    return Number(value.trim());
+  }
+  return -1;
+}
+function getDrawPreviewStorageMessageId(preview = {}, slotId = "") {
+  if ("messageId" in preview && preview.messageId !== void 0 && preview.messageId !== null && String(preview.messageId).trim()) {
+    return preview.messageId;
+  }
+  return `tavern:${String(slotId || "").trim() || "image"}`;
+}
+function getDrawPromptNegativeInput(facade, preview = {}) {
+  return facade.getProvider?.() === "novelai" ? String(preview.negativePrompt || "") : "";
+}
+function buildDeletedDrawPlaceholder(slotId, preview = {}, fallback = {}) {
+  const source = preview && typeof preview === "object" && Object.keys(preview).length ? preview : fallback;
+  return {
+    slotId,
+    messageId: getDrawPreviewStorageMessageId(source, slotId),
+    source: String(source.source || "tavern"),
+    chatId: String(source.chatId || ""),
+    characterName: String(source.characterName || ""),
+    bookId: String(source.bookId || ""),
+    bookTitle: String(source.bookTitle || ""),
+    chapterPath: String(source.chapterPath || ""),
+    chapterTitle: String(source.chapterTitle || ""),
+    tags: String(source.tags || ""),
+    positive: String(source.positive || ""),
+    errorType: TAVERN_DRAW_DELETED_ERROR_TYPE,
+    errorMessage: TAVERN_DRAW_DELETED_ERROR_MESSAGE,
+    characterPrompts: cloneFramePayload(getDrawPreviewCharacterPrompts(source)),
+    negativePrompt: String(source.negativePrompt || ""),
+    anchor: String(source.anchor || "")
+  };
+}
+function transferDrawPreview(preview = {}, index = 0, total = 1) {
+  return {
+    imgId: String(preview.imgId || ""),
+    url: previewToTransferableUrl(preview),
+    tags: String(preview.tags || ""),
+    positive: String(preview.positive || ""),
+    negativePrompt: String(preview.negativePrompt || ""),
+    characterPrompts: cloneFramePayload(getDrawPreviewCharacterPrompts(preview)),
+    saved: !!preview.savedUrl,
+    timestamp: Number(preview.timestamp) || 0,
+    currentIndex: index,
+    displayVersion: total - index
+  };
+}
+function extractGeneratedImageBase64(result) {
+  if (typeof result === "string") {
+    return result;
+  }
+  const source = result?.base64 || result?.image || result?.data || result?.url || "";
+  return String(source || "").trim();
+}
+async function buildDrawImageResult(slotId) {
+  const { getDisplayPreviewForSlot, getPreviewsBySlot } = await getDrawGalleryCacheModule();
+  const result = await getDisplayPreviewForSlot(slotId);
+  const preview = result.preview || {};
+  const failedInfo = result.failedInfo || {};
+  const successPreviews = toSuccessDrawPreviews(await getPreviewsBySlot(slotId));
+  const imgId = String(preview.imgId || "").trim();
+  const currentIndex = imgId ? successPreviews.findIndex((item) => String(item.imgId || "") === imgId) : -1;
+  return {
+    slotId,
+    imgId,
+    hasData: !!result.hasData,
+    isFailed: !!result.isFailed,
+    historyCount: Number(result.historyCount) || successPreviews.length || 0,
+    currentIndex: currentIndex >= 0 ? currentIndex : 0,
+    url: result.hasData ? previewToTransferableUrl(preview) : "",
+    tags: preview.tags || failedInfo.tags || "",
+    positive: preview.positive || failedInfo.positive || "",
+    negativePrompt: preview.negativePrompt || failedInfo.negativePrompt || "",
+    characterPrompts: cloneFramePayload(getDrawPreviewCharacterPrompts(preview).length ? getDrawPreviewCharacterPrompts(preview) : getDrawPreviewCharacterPrompts(failedInfo)),
+    saved: !!preview.savedUrl,
+    messageId: getDrawPreviewStorageMessageId(preview, slotId),
+    errorType: failedInfo.errorType || "",
+    errorMessage: failedInfo.errorMessage || ""
+  };
+}
+async function buildDrawImageGalleryResult(slotId) {
+  const previews = toSuccessDrawPreviews(await (await getDrawGalleryCacheModule()).getPreviewsBySlot(slotId));
+  const current = await buildDrawImageResult(slotId);
+  const currentImgId = String(current.imgId || "");
+  const currentIndex = Math.max(0, previews.findIndex((preview) => String(preview.imgId || "") === currentImgId));
+  return {
+    slotId,
+    currentIndex,
+    previews: previews.map((preview, index) => transferDrawPreview(preview, index, previews.length))
+  };
+}
 async function handleDrawImage(payload = {}) {
   const requestId = String(payload.requestId || "");
   const source = payload.payload && typeof payload.payload === "object" ? payload.payload : payload;
@@ -320,26 +468,235 @@ async function handleDrawImage(payload = {}) {
     if (!slotId) {
       throw new Error("slot_id_required");
     }
-    const { getDisplayPreviewForSlot } = await getDrawGalleryCacheModule();
-    const result = await getDisplayPreviewForSlot(slotId);
-    const preview = result.preview || {};
-    const failedInfo = result.failedInfo || {};
     replyHostResult(requestId, {
       ok: true,
-      result: {
-        slotId,
-        hasData: !!result.hasData,
-        isFailed: !!result.isFailed,
-        historyCount: Number(result.historyCount) || 0,
-        url: result.hasData ? previewToTransferableUrl(preview) : "",
-        tags: preview.tags || failedInfo.tags || "",
-        positive: preview.positive || failedInfo.positive || "",
-        errorType: failedInfo.errorType || "",
-        errorMessage: failedInfo.errorMessage || ""
-      }
+      result: await buildDrawImageResult(slotId)
     });
   } catch (error) {
     replyHostResult(requestId, hostErrorPayload(error, "image_lookup_failed"));
+  }
+}
+async function handleDrawImageSelect(payload = {}) {
+  const requestId = String(payload.requestId || "");
+  const source = payload.payload && typeof payload.payload === "object" ? payload.payload : payload;
+  const slotId = String(source.slotId || "").trim();
+  try {
+    if (!slotId) {
+      throw new Error("slot_id_required");
+    }
+    const { getPreviewsBySlot, setSlotSelection } = await getDrawGalleryCacheModule();
+    const successPreviews = toSuccessDrawPreviews(await getPreviewsBySlot(slotId));
+    if (!successPreviews.length) {
+      throw new Error("image_history_empty");
+    }
+    const nextIndex = Math.max(0, Math.min(successPreviews.length - 1, Math.floor(Number(source.index) || 0)));
+    const selected = successPreviews[nextIndex];
+    const imgId = String(selected?.imgId || "").trim();
+    if (!imgId) {
+      throw new Error("image_preview_missing");
+    }
+    await setSlotSelection(slotId, imgId);
+    replyHostResult(requestId, {
+      ok: true,
+      result: await buildDrawImageResult(slotId)
+    });
+  } catch (error) {
+    replyHostResult(requestId, hostErrorPayload(error, "image_select_failed"));
+  }
+}
+async function handleDrawImageGallery(payload = {}) {
+  const requestId = String(payload.requestId || "");
+  const source = payload.payload && typeof payload.payload === "object" ? payload.payload : payload;
+  const slotId = String(source.slotId || "").trim();
+  try {
+    if (!slotId) {
+      throw new Error("slot_id_required");
+    }
+    replyHostResult(requestId, { ok: true, result: await buildDrawImageGalleryResult(slotId) });
+  } catch (error) {
+    replyHostResult(requestId, hostErrorPayload(error, "image_gallery_failed"));
+  }
+}
+async function handleDrawImageSave(payload = {}) {
+  const requestId = String(payload.requestId || "");
+  const source = payload.payload && typeof payload.payload === "object" ? payload.payload : payload;
+  const slotId = String(source.slotId || "").trim();
+  try {
+    if (!slotId) {
+      throw new Error("slot_id_required");
+    }
+    const current = await buildDrawImageResult(slotId);
+    const imgId = String(source.imgId || current.imgId || "").trim();
+    if (!imgId) {
+      throw new Error("image_preview_missing");
+    }
+    const { getPreview, savePreviewImage } = await getDrawGalleryCacheModule();
+    const url = await savePreviewImage(imgId, "tavern");
+    const preview = await getPreview(imgId);
+    const messageId = getDrawPreviewMessageId(preview || current);
+    if (preview && messageId >= 0) {
+      const { syncDrawSavedFromPreview } = await getDrawCommonModule();
+      await syncDrawSavedFromPreview(messageId, preview, { slotId, savedUrl: url }).catch(() => false);
+    }
+    replyHostResult(requestId, { ok: true, result: await buildDrawImageResult(slotId) });
+  } catch (error) {
+    replyHostResult(requestId, hostErrorPayload(error, "image_save_failed"));
+  }
+}
+async function handleDrawImageDelete(payload = {}) {
+  const requestId = String(payload.requestId || "");
+  const source = payload.payload && typeof payload.payload === "object" ? payload.payload : payload;
+  const slotId = String(source.slotId || "").trim();
+  try {
+    if (!slotId) {
+      throw new Error("slot_id_required");
+    }
+    const current = await buildDrawImageResult(slotId);
+    const imgId = String(source.imgId || current.imgId || "").trim();
+    if (!imgId) {
+      throw new Error("image_preview_missing");
+    }
+    const {
+      clearSlotSelection,
+      deletePreview,
+      getPreview,
+      getPreviewsBySlot,
+      setSlotSelection,
+      storeFailedPlaceholder
+    } = await getDrawGalleryCacheModule();
+    const deletedPreview = await getPreview(imgId);
+    await deletePreview(imgId);
+    const remaining = toSuccessDrawPreviews(await getPreviewsBySlot(slotId));
+    const deletedCurrentImage = imgId === String(current.imgId || "").trim();
+    const nextImgId = deletedCurrentImage ? String(remaining[0]?.imgId || "").trim() : "";
+    if (deletedCurrentImage && nextImgId) {
+      await setSlotSelection(slotId, nextImgId);
+    } else if (deletedCurrentImage && !nextImgId) {
+      await clearSlotSelection(slotId);
+      await storeFailedPlaceholder(buildDeletedDrawPlaceholder(slotId, deletedPreview || {}, current));
+    }
+    const messageId = getDrawPreviewMessageId(deletedPreview || current);
+    if (messageId >= 0) {
+      const { clearDrawSavedEntry, syncDrawSavedAfterDeletion } = await getDrawCommonModule();
+      if (remaining.length > 0) {
+        await syncDrawSavedAfterDeletion(messageId, slotId, imgId, remaining).catch(() => false);
+      } else {
+        await clearDrawSavedEntry(messageId, slotId).catch(() => false);
+      }
+    }
+    replyHostResult(requestId, { ok: true, result: await buildDrawImageResult(slotId) });
+  } catch (error) {
+    replyHostResult(requestId, hostErrorPayload(error, "image_delete_failed"));
+  }
+}
+async function handleDrawImageRefresh(payload = {}) {
+  const requestId = String(payload.requestId || "");
+  const source = payload.payload && typeof payload.payload === "object" ? payload.payload : payload;
+  const slotId = String(source.slotId || "").trim();
+  try {
+    if (!slotId) {
+      throw new Error("slot_id_required");
+    }
+    const facade = window.xiaobaixDraw;
+    if (typeof facade?.generateImage !== "function") {
+      throw new Error("\u753B\u56FE\u6A21\u5757\u672A\u521D\u59CB\u5316");
+    }
+    const { getDisplayPreviewForSlot, storePreview, setSlotSelection } = await getDrawGalleryCacheModule();
+    const current = await getDisplayPreviewForSlot(slotId);
+    const preview = current.preview || {};
+    const tags = String(source.tags || preview.tags || "").trim();
+    const characterPrompts = getDrawPreviewCharacterPrompts(preview);
+    const negativePrompt = getDrawPromptNegativeInput(facade, preview);
+    if (!tags) {
+      throw new Error("image_prompt_missing");
+    }
+    const promptData = typeof facade.buildPromptData === "function" ? facade.buildPromptData({ prompt: tags, tags, negativePrompt, characterPrompts }) : { positive: tags, negativePrompt };
+    const generated = await facade.generateImage({
+      prompt: tags,
+      tags,
+      negativePrompt,
+      characterPrompts
+    });
+    const base64 = extractGeneratedImageBase64(generated);
+    if (!base64) {
+      throw new Error("image_data_missing");
+    }
+    const imgId = generateDrawImageId();
+    await storePreview({
+      imgId,
+      slotId,
+      messageId: getDrawPreviewStorageMessageId(preview, slotId),
+      base64,
+      tags,
+      positive: String(promptData.positive || tags),
+      characterPrompts,
+      negativePrompt: String(promptData.negativePrompt || negativePrompt || ""),
+      anchor: preview.anchor || "",
+      source: "tavern"
+    });
+    await setSlotSelection(slotId, imgId);
+    const messageId = getDrawPreviewMessageId(preview);
+    if (messageId >= 0) {
+      const { clearDrawSavedEntry } = await getDrawCommonModule();
+      await clearDrawSavedEntry(messageId, slotId).catch(() => false);
+    }
+    replyHostResult(requestId, { ok: true, result: await buildDrawImageResult(slotId) });
+  } catch (error) {
+    replyHostResult(requestId, hostErrorPayload(error, "image_refresh_failed"));
+  }
+}
+async function handleDrawImageEdit(payload = {}) {
+  const requestId = String(payload.requestId || "");
+  const source = payload.payload && typeof payload.payload === "object" ? payload.payload : payload;
+  const slotId = String(source.slotId || "").trim();
+  const tags = String(source.tags || "").trim();
+  try {
+    if (!slotId) {
+      throw new Error("slot_id_required");
+    }
+    if (!tags) {
+      throw new Error("image_tags_required");
+    }
+    const facade = window.xiaobaixDraw;
+    const { getPreview, storePreview } = await getDrawGalleryCacheModule();
+    const current = await buildDrawImageResult(slotId);
+    const imgId = String(current.imgId || "").trim();
+    if (!imgId) {
+      throw new Error("image_preview_missing");
+    }
+    const preview = await getPreview(imgId);
+    if (!preview) {
+      throw new Error("image_preview_missing");
+    }
+    const submittedCharacterPrompts = Array.isArray(source.characterPrompts) ? getDrawPreviewCharacterPrompts(source) : null;
+    const characterPrompts = submittedCharacterPrompts || getDrawPreviewCharacterPrompts(preview);
+    const promptData = typeof facade?.buildPromptData === "function" ? facade.buildPromptData({
+      prompt: tags,
+      tags,
+      negativePrompt: getDrawPromptNegativeInput(facade, preview),
+      characterPrompts
+    }) : { positive: tags, negativePrompt: String(preview.negativePrompt || "") };
+    await storePreview({
+      ...preview,
+      tags,
+      positive: String(promptData.positive || tags),
+      characterPrompts,
+      negativePrompt: String(promptData.negativePrompt || preview.negativePrompt || ""),
+      savedUrl: preview.savedUrl || null,
+      base64: preview.base64 || null
+    });
+    const messageId = getDrawPreviewMessageId(preview);
+    if (preview.savedUrl && messageId >= 0) {
+      const { syncDrawSavedFromPreview } = await getDrawCommonModule();
+      await syncDrawSavedFromPreview(messageId, preview, {
+        slotId: preview.slotId || slotId,
+        tags,
+        positive: String(promptData.positive || tags)
+      }).catch(() => false);
+    }
+    replyHostResult(requestId, { ok: true, result: await buildDrawImageResult(slotId) });
+  } catch (error) {
+    replyHostResult(requestId, hostErrorPayload(error, "image_edit_failed"));
   }
 }
 function handleCancelRequest(payload = {}) {
@@ -608,8 +965,29 @@ function handleFrameMessage(event) {
     case "xb-tavern:draw-generate":
       void handleDrawGenerate(data.payload || {});
       break;
+    case "xb-tavern:inline-image-generate":
+      void handleInlineImageGenerate(data.payload || {});
+      break;
     case "xb-tavern:draw-image":
       void handleDrawImage(data.payload || {});
+      break;
+    case "xb-tavern:draw-image-select":
+      void handleDrawImageSelect(data.payload || {});
+      break;
+    case "xb-tavern:draw-image-gallery":
+      void handleDrawImageGallery(data.payload || {});
+      break;
+    case "xb-tavern:draw-image-save":
+      void handleDrawImageSave(data.payload || {});
+      break;
+    case "xb-tavern:draw-image-delete":
+      void handleDrawImageDelete(data.payload || {});
+      break;
+    case "xb-tavern:draw-image-refresh":
+      void handleDrawImageRefresh(data.payload || {});
+      break;
+    case "xb-tavern:draw-image-edit":
+      void handleDrawImageEdit(data.payload || {});
       break;
     case "xb-tavern:cancel-request":
       handleCancelRequest(data.payload || {});

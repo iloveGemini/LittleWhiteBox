@@ -7,6 +7,8 @@ import {
 } from '../../../shared/runtime-events';
 
 const TAVERN_IMAGE_MARKER_REGEX = /\[tavern-image:([a-z0-9\-_]+)\]/gi;
+const TAVERN_INLINE_IMAGE_TOKEN_REGEX = /\[(?:img|图片)\s*:\s*([^\]]+)\]/gi;
+export const TAVERN_INLINE_IMAGE_PROGRESS_EVENT = 'xb-tavern:inline-image-progress';
 
 export interface TavernMarkdownToolsOptions {
     chatScrollRef: Ref<HTMLElement | null>;
@@ -42,6 +44,23 @@ export function preprocessTavernRoleplayMarkdown(text = '', options: TavernRolep
 export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
     const markdownHtmlCache = new Map<string, string>();
 
+    function isHiddenMarkdownNode(node: Element | null) {
+        return !node || !!node.closest('[hidden], [aria-hidden="true"]');
+    }
+
+    function canEnhanceMarkdownRoot(node: Element | null): node is HTMLElement {
+        return !!node && !isHiddenMarkdownNode(node);
+    }
+
+    function canAutoLoadInlineImageSlot(slot: HTMLElement | null): slot is HTMLElement {
+        return !!(
+            slot
+            && slot.isConnected !== false
+            && !isHiddenMarkdownNode(slot)
+            && !slot.closest('.streaming, .pending-user')
+        );
+    }
+
     function markdownSignature(text = '') {
         const raw = String(text || '');
         let hash = 0;
@@ -75,7 +94,10 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
     }
 
     function stripTavernImageMarkers(text = '') {
-        return String(text || '').replace(TAVERN_IMAGE_MARKER_REGEX, '').trim();
+        return String(text || '')
+            .replace(TAVERN_IMAGE_MARKER_REGEX, '')
+            .replace(TAVERN_INLINE_IMAGE_TOKEN_REGEX, '')
+            .trim();
     }
 
     function clearMarkdownCache() {
@@ -172,8 +194,536 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
         return !!(
             figure
             && figure.isConnected !== false
+            && !isHiddenMarkdownNode(figure)
             && String(figure.dataset.tavernImageSlot || '').trim() === slotId
         );
+    }
+
+    function toTavernImageResult(response: Record<string, unknown>) {
+        return (response.result || response) as Record<string, unknown>;
+    }
+
+    function getTavernImageCharacterPrompts(result: Record<string, unknown>): Array<Record<string, unknown>> {
+        return Array.isArray(result.characterPrompts)
+            ? result.characterPrompts.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+            : [];
+    }
+
+    function appendTavernImageEditGroup(
+        container: HTMLElement,
+        options: { label: string; value: string; type: string; index?: number },
+    ): HTMLTextAreaElement {
+        const group = document.createElement('span');
+        group.className = 'xb-tavern-image-edit-group';
+
+        const label = document.createElement('span');
+        label.className = 'xb-tavern-image-edit-group-label';
+        label.textContent = options.label;
+        group.append(label);
+
+        const textarea = document.createElement('textarea');
+        textarea.className = 'xb-tavern-image-edit-input';
+        textarea.dataset.type = options.type;
+        if (typeof options.index === 'number') {
+            textarea.dataset.index = String(options.index);
+        }
+        textarea.value = options.value;
+        group.append(textarea);
+
+        container.append(group);
+        return textarea;
+    }
+
+    function renderTavernImageEditFields(editScroll: HTMLElement, result: Record<string, unknown>): HTMLTextAreaElement {
+        editScroll.replaceChildren();
+        const sceneInput = appendTavernImageEditGroup(editScroll, {
+            label: '场景',
+            value: String(result.tags || ''),
+            type: 'scene',
+        });
+
+        getTavernImageCharacterPrompts(result).forEach((character, index) => {
+            appendTavernImageEditGroup(editScroll, {
+                label: String(character.name || `角色 ${index + 1}`),
+                value: String(character.prompt || ''),
+                type: 'char',
+                index,
+            });
+        });
+
+        return sceneInput;
+    }
+
+    function buildTavernImageEditPanel(
+        figure: HTMLElement,
+        slotId: string,
+        result: Record<string, unknown>,
+    ) {
+        const editPanel = document.createElement('span');
+        editPanel.className = 'xb-tavern-image-edit';
+        editPanel.style.display = 'none';
+
+        const editLabel = document.createElement('span');
+        editLabel.className = 'xb-tavern-image-edit-label';
+        editLabel.textContent = '编辑 TAG（场景描述）';
+
+        const editScroll = document.createElement('span');
+        editScroll.className = 'xb-tavern-image-edit-scroll';
+
+        const editActions = document.createElement('span');
+        editActions.className = 'xb-tavern-image-edit-actions';
+        [
+            { action: 'save-tags', label: '保存 TAG' },
+            { action: 'cancel-edit', label: '取消' },
+        ].forEach((item) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.action = item.action;
+            button.textContent = item.label;
+            editActions.append(button);
+        });
+        editPanel.append(editLabel, editScroll, editActions);
+
+        const openEditor = () => {
+            const sceneInput = renderTavernImageEditFields(editScroll, result);
+            editPanel.style.display = 'block';
+            sceneInput.focus();
+        };
+
+        editPanel.addEventListener('click', (event) => {
+            const target = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('[data-action]');
+            if (!target) {return;}
+            event.preventDefault();
+            event.stopPropagation();
+            const action = target.dataset.action || '';
+            if (action === 'cancel-edit') {
+                editPanel.style.display = 'none';
+                editScroll.replaceChildren();
+                return;
+            }
+            if (action === 'save-tags') {
+                const sceneInput = editPanel.querySelector<HTMLTextAreaElement>('textarea[data-type="scene"]');
+                const tags = String(sceneInput?.value || '').trim();
+                if (!tags) {
+                    window.alert('场景 TAG 不能为空');
+                    return;
+                }
+                const characterPrompts = collectTavernImageEditCharacterPrompts(editPanel, result);
+                setTavernImageBusy(figure, true);
+                void options.requestHost('xb-tavern:draw-image-edit', { payload: { slotId, tags, characterPrompts } })
+                    .then((response) => refreshTavernImageFigure(figure, slotId, response))
+                    .catch(() => setTavernImageBusy(figure, false));
+            }
+        });
+
+        return { editPanel, openEditor };
+    }
+
+    function collectTavernImageEditCharacterPrompts(
+        editPanel: HTMLElement,
+        result: Record<string, unknown>,
+    ): Array<Record<string, unknown>> | null {
+        const original = getTavernImageCharacterPrompts(result);
+        const charInputs = Array.from(editPanel.querySelectorAll<HTMLTextAreaElement>('textarea[data-type="char"]'));
+        if (!charInputs.length || !original.length) {return null;}
+
+        const nextPrompts: Array<Record<string, unknown>> = [];
+        charInputs.forEach((input) => {
+            const index = Math.floor(Number(input.dataset.index));
+            const source = Number.isFinite(index) ? original[index] : null;
+            if (source) {
+                nextPrompts.push({ ...source, prompt: input.value.trim() });
+            }
+        });
+        return nextPrompts;
+    }
+
+    function setTavernImageBusy(figure: HTMLElement, busy: boolean) {
+        figure.classList.toggle('is-busy', busy);
+        figure.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
+            button.disabled = busy || button.dataset.navDisabled === 'true';
+        });
+    }
+
+    function closeTavernImageMenus(root: ParentNode = document) {
+        root.querySelectorAll<HTMLElement>('.xb-tavern-image-menu.is-open').forEach((menu) => menu.classList.remove('is-open'));
+    }
+
+    function closeTavernImageGallery() {
+        document.getElementById('xb-tavern-image-gallery-overlay')?.remove();
+    }
+
+    async function refreshTavernImageFigure(figure: HTMLElement, slotId = '', response: Record<string, unknown>) {
+        if (!canHydrateTavernFigure(figure, slotId)) {return;}
+        const next = toTavernImageResult(response);
+        if (next.hasData && next.url) {
+            renderLoadedTavernImageFigure(figure, next);
+        } else {
+            renderUnavailableTavernImageFigure(figure, next);
+        }
+    }
+
+    async function selectTavernImageVersion(slotId = '', index = 0, figure?: HTMLElement | null) {
+        const response = await options.requestHost('xb-tavern:draw-image-select', {
+            payload: { slotId, index },
+        });
+        if (figure) {
+            await refreshTavernImageFigure(figure, slotId, response);
+        }
+        return toTavernImageResult(response);
+    }
+
+    async function openTavernImageGallery(slotId = '', figure?: HTMLElement | null) {
+        const response = await options.requestHost('xb-tavern:draw-image-gallery', { payload: { slotId } });
+        const data = toTavernImageResult(response);
+        const previews = Array.isArray(data.previews) ? data.previews as Array<Record<string, unknown>> : [];
+        if (!previews.length) {return;}
+        closeTavernImageGallery();
+
+        let currentIndex = Math.max(0, Math.min(previews.length - 1, Math.floor(Number(data.currentIndex) || 0)));
+        const overlay = document.createElement('div');
+        overlay.id = 'xb-tavern-image-gallery-overlay';
+        overlay.className = 'xb-tavern-image-gallery-overlay visible';
+
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'xb-tavern-image-gallery-close';
+        closeButton.textContent = '×';
+
+        const main = document.createElement('div');
+        main.className = 'xb-tavern-image-gallery-main';
+        const prevButton = document.createElement('button');
+        prevButton.type = 'button';
+        prevButton.className = 'xb-tavern-image-gallery-nav';
+        prevButton.textContent = '‹';
+        const imageWrap = document.createElement('div');
+        imageWrap.className = 'xb-tavern-image-gallery-img-wrap';
+        const image = document.createElement('img');
+        image.className = 'xb-tavern-image-gallery-img';
+        const savedBadge = document.createElement('div');
+        savedBadge.className = 'xb-tavern-image-gallery-saved-badge';
+        savedBadge.textContent = '已保存';
+        imageWrap.append(image, savedBadge);
+        const nextButton = document.createElement('button');
+        nextButton.type = 'button';
+        nextButton.className = 'xb-tavern-image-gallery-nav';
+        nextButton.textContent = '›';
+        main.append(prevButton, imageWrap, nextButton);
+
+        const thumbs = document.createElement('div');
+        thumbs.className = 'xb-tavern-image-gallery-thumbs';
+        const actions = document.createElement('div');
+        actions.className = 'xb-tavern-image-gallery-actions';
+        const useButton = document.createElement('button');
+        useButton.type = 'button';
+        useButton.className = 'xb-tavern-image-gallery-btn primary';
+        useButton.textContent = '使用此图';
+        const saveButton = document.createElement('button');
+        saveButton.type = 'button';
+        saveButton.className = 'xb-tavern-image-gallery-btn';
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'xb-tavern-image-gallery-btn danger';
+        deleteButton.textContent = '删除';
+        actions.append(useButton, saveButton, deleteButton);
+        const info = document.createElement('div');
+        info.className = 'xb-tavern-image-gallery-info';
+        overlay.append(closeButton, main, thumbs, actions, info);
+        document.body.append(overlay);
+
+        const render = () => {
+            const current = previews[currentIndex] || previews[0];
+            image.src = String(current.url || '');
+            savedBadge.style.display = current.saved ? 'block' : 'none';
+            prevButton.disabled = currentIndex >= previews.length - 1;
+            nextButton.disabled = currentIndex <= 0;
+            saveButton.textContent = current.saved ? '✓ 已保存' : '保存到服务器';
+            saveButton.disabled = !!current.saved;
+            info.textContent = `版本 ${previews.length - currentIndex} / ${previews.length}${current.timestamp ? ` · ${new Date(Number(current.timestamp)).toLocaleString()}` : ''}`;
+            thumbs.querySelectorAll<HTMLImageElement>('.xb-tavern-image-gallery-thumb').forEach((thumb) => {
+                thumb.classList.toggle('active', Number(thumb.dataset.index) === currentIndex);
+            });
+        };
+
+        previews.slice().reverse().forEach((preview, reverseIndex) => {
+            const index = previews.length - 1 - reverseIndex;
+            const thumb = document.createElement('img');
+            thumb.className = `xb-tavern-image-gallery-thumb${preview.saved ? ' saved' : ''}`;
+            thumb.src = String(preview.url || '');
+            thumb.dataset.index = String(index);
+            thumb.loading = 'lazy';
+            thumb.addEventListener('click', () => {
+                currentIndex = index;
+                render();
+            });
+            thumbs.append(thumb);
+        });
+
+        closeButton.addEventListener('click', closeTavernImageGallery);
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay) {
+                closeTavernImageGallery();
+            }
+        });
+        prevButton.addEventListener('click', () => {
+            currentIndex = Math.min(previews.length - 1, currentIndex + 1);
+            render();
+        });
+        nextButton.addEventListener('click', () => {
+            currentIndex = Math.max(0, currentIndex - 1);
+            render();
+        });
+        useButton.addEventListener('click', () => {
+            void selectTavernImageVersion(slotId, currentIndex, figure).then(closeTavernImageGallery);
+        });
+        saveButton.addEventListener('click', () => {
+            const current = previews[currentIndex] || previews[0];
+            const imgId = String(current?.imgId || '').trim();
+            if (!imgId) {return;}
+            saveButton.disabled = true;
+            void options.requestHost('xb-tavern:draw-image-save', { payload: { slotId, imgId } })
+                .then((saveResponse) => {
+                    current.saved = true;
+                    render();
+                    return refreshTavernImageFigure(figure as HTMLElement, slotId, saveResponse);
+                })
+                .catch(() => { saveButton.disabled = false; });
+        });
+        deleteButton.addEventListener('click', () => {
+            if (!window.confirm('确定删除这张图片吗？')) {return;}
+            const current = previews[currentIndex] || previews[0];
+            const imgId = String(current?.imgId || '').trim();
+            if (!imgId) {return;}
+            void options.requestHost('xb-tavern:draw-image-delete', { payload: { slotId, imgId } })
+                .then((deleteResponse) => refreshTavernImageFigure(figure as HTMLElement, slotId, deleteResponse))
+                .then(() => {
+                    previews.splice(currentIndex, 1);
+                    if (!previews.length) {
+                        closeTavernImageGallery();
+                        return;
+                    }
+                    currentIndex = Math.max(0, Math.min(previews.length - 1, currentIndex));
+                    thumbs.querySelectorAll<HTMLImageElement>('.xb-tavern-image-gallery-thumb').forEach((thumb) => {
+                        if (Number(thumb.dataset.index) === currentIndex) {
+                            thumb.remove();
+                        }
+                    });
+                    closeTavernImageGallery();
+                    void openTavernImageGallery(slotId, figure);
+                });
+        });
+        render();
+    }
+
+    function renderUnavailableTavernImageFigure(figure: HTMLElement, result: Record<string, unknown> = {}) {
+        figure.classList.add('is-failed');
+        figure.classList.remove('is-loaded', 'is-busy');
+        figure.dataset.tavernImageSlot = String(result.slotId || figure.dataset.tavernImageSlot || '').trim();
+        figure.dataset.tavernImageHydrating = 'false';
+        figure.dataset.tavernImageLoaded = 'false';
+        figure.dataset.state = 'failed';
+
+        const slotId = String(result.slotId || figure.dataset.tavernImageSlot || '').trim();
+        const wrap = document.createElement('span');
+        wrap.className = 'xb-tavern-image-wrap xb-tavern-image-failed-wrap';
+
+        const placeholder = document.createElement('span');
+        placeholder.className = 'xb-tavern-image-placeholder';
+        placeholder.textContent = result.isFailed
+            ? String(result.errorMessage || '配图生成失败')
+            : String(result.errorMessage || '配图未找到');
+        wrap.append(placeholder);
+
+        if (result.isFailed && slotId) {
+            const actions = document.createElement('span');
+            actions.className = 'xb-tavern-image-failed-actions';
+
+            const retryButton = document.createElement('button');
+            retryButton.type = 'button';
+            retryButton.dataset.action = 'refresh-image';
+            retryButton.textContent = '重试';
+
+            const editButton = document.createElement('button');
+            editButton.type = 'button';
+            editButton.dataset.action = 'edit-tags';
+            editButton.textContent = '编辑 TAG';
+            actions.append(retryButton, editButton);
+            wrap.append(actions);
+
+            const { editPanel, openEditor } = buildTavernImageEditPanel(figure, slotId, result);
+            wrap.append(editPanel);
+
+            actions.addEventListener('click', (event) => {
+                const target = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('[data-action]');
+                if (!target) {return;}
+                event.preventDefault();
+                event.stopPropagation();
+                const action = target.dataset.action || '';
+                if (action === 'refresh-image') {
+                    setTavernImageBusy(figure, true);
+                    void options.requestHost('xb-tavern:draw-image-refresh', { payload: { slotId } })
+                        .then((response) => refreshTavernImageFigure(figure, slotId, response))
+                        .catch(() => setTavernImageBusy(figure, false));
+                    return;
+                }
+                if (action === 'edit-tags') {
+                    openEditor();
+                }
+            });
+        }
+
+        figure.replaceChildren(wrap);
+    }
+
+    function renderLoadedTavernImageFigure(figure: HTMLElement, result: Record<string, unknown>) {
+        const slotId = String(result.slotId || figure.dataset.tavernImageSlot || '').trim();
+        const url = String(result.url || '').trim();
+        const historyCount = Math.max(1, Math.floor(Number(result.historyCount) || 1));
+        const currentIndex = Math.max(0, Math.min(historyCount - 1, Math.floor(Number(result.currentIndex) || 0)));
+        const displayVersion = historyCount - currentIndex;
+        figure.classList.add('is-loaded');
+        figure.classList.remove('is-failed', 'is-busy');
+        figure.dataset.tavernImageSlot = slotId;
+        figure.dataset.tavernImageLoaded = 'true';
+        figure.dataset.tavernImageIndex = String(currentIndex);
+        figure.dataset.tavernImageHistory = String(historyCount);
+        figure.dataset.tavernImageImgId = String(result.imgId || '');
+        figure.dataset.state = result.saved ? 'saved' : 'preview';
+
+        const wrap = document.createElement('span');
+        wrap.className = 'xb-tavern-image-wrap';
+
+        const image = document.createElement('img');
+        image.src = url;
+        image.alt = result.tags ? `配图：${String(result.tags)}` : '配图';
+        image.loading = 'lazy';
+        image.addEventListener('click', () => {
+            void openTavernImageGallery(slotId, figure);
+        });
+        wrap.append(image);
+
+        const nav = document.createElement('span');
+        nav.className = 'xb-tavern-image-nav';
+
+        const olderButton = document.createElement('button');
+        olderButton.type = 'button';
+        olderButton.className = 'xb-tavern-image-nav-button';
+        olderButton.dataset.action = 'older';
+        olderButton.title = '上一版本';
+        olderButton.textContent = '‹';
+        olderButton.disabled = currentIndex >= historyCount - 1;
+        olderButton.dataset.navDisabled = olderButton.disabled ? 'true' : 'false';
+
+        const version = document.createElement('span');
+        version.className = 'xb-tavern-image-nav-text';
+        version.textContent = `${displayVersion} / ${historyCount}`;
+
+        const newerButton = document.createElement('button');
+        newerButton.type = 'button';
+        newerButton.className = 'xb-tavern-image-nav-button';
+        newerButton.dataset.action = 'newer';
+        newerButton.title = '下一版本';
+        newerButton.textContent = '›';
+        newerButton.disabled = currentIndex <= 0;
+        newerButton.dataset.navDisabled = newerButton.disabled ? 'true' : 'false';
+        nav.append(olderButton, version, newerButton);
+        wrap.append(nav);
+
+        const menu = document.createElement('span');
+        menu.className = 'xb-tavern-image-menu';
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.className = 'xb-tavern-image-menu-trigger';
+        trigger.title = '操作';
+        trigger.textContent = '⋮';
+        const dropdown = document.createElement('span');
+        dropdown.className = 'xb-tavern-image-dropdown';
+        const menuItems = [
+            ...(!result.saved ? [{ action: 'save-image', title: '保存到服务器', label: '⬇' }] : []),
+            { action: 'refresh-image', title: '重新生成', label: '⟳' },
+            { action: 'edit-tags', title: '编辑TAG', label: '✐️' },
+            { action: 'delete-image', title: '删除', label: '✕' },
+        ];
+        menuItems.forEach((item) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.action = item.action;
+            button.title = item.title;
+            button.textContent = item.label;
+            dropdown.append(button);
+        });
+        menu.append(trigger, dropdown);
+        wrap.append(menu);
+
+        const { editPanel, openEditor } = buildTavernImageEditPanel(figure, slotId, result);
+        wrap.append(editPanel);
+
+        figure.replaceChildren(wrap);
+
+        const selectIndex = async (index: number) => {
+            setTavernImageBusy(figure, true);
+            try {
+                const response = await options.requestHost('xb-tavern:draw-image-select', {
+                    payload: { slotId, index },
+                });
+                if (!canHydrateTavernFigure(figure, slotId)) {return;}
+                renderLoadedTavernImageFigure(figure, toTavernImageResult(response));
+            } catch {
+                setTavernImageBusy(figure, false);
+            }
+        };
+
+        olderButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (currentIndex < historyCount - 1) {
+                void selectIndex(currentIndex + 1);
+            }
+        });
+        newerButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (currentIndex > 0) {
+                void selectIndex(currentIndex - 1);
+            }
+        });
+        trigger.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const willOpen = !menu.classList.contains('is-open');
+            closeTavernImageMenus();
+            menu.classList.toggle('is-open', willOpen);
+        });
+        dropdown.addEventListener('click', (event) => {
+            const target = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('[data-action]');
+            if (!target) {return;}
+            event.preventDefault();
+            event.stopPropagation();
+            closeTavernImageMenus();
+            const action = target.dataset.action || '';
+            if (action === 'save-image') {
+                setTavernImageBusy(figure, true);
+                void options.requestHost('xb-tavern:draw-image-save', { payload: { slotId } })
+                    .then((response) => {
+                        if (canHydrateTavernFigure(figure, slotId)) {
+                            renderLoadedTavernImageFigure(figure, toTavernImageResult(response));
+                        }
+                    })
+                    .catch(() => setTavernImageBusy(figure, false));
+            } else if (action === 'refresh-image') {
+                setTavernImageBusy(figure, true);
+                void options.requestHost('xb-tavern:draw-image-refresh', { payload: { slotId } })
+                    .then((response) => refreshTavernImageFigure(figure, slotId, response))
+                    .catch(() => setTavernImageBusy(figure, false));
+            } else if (action === 'edit-tags') {
+                openEditor();
+            } else if (action === 'delete-image' && window.confirm('确定删除这张图片吗？')) {
+                setTavernImageBusy(figure, true);
+                void options.requestHost('xb-tavern:draw-image-delete', { payload: { slotId } })
+                    .then((response) => refreshTavernImageFigure(figure, slotId, response))
+                    .catch(() => setTavernImageBusy(figure, false));
+            }
+        });
     }
 
     function hydrateTavernImageFigure(figure: HTMLElement) {
@@ -190,22 +740,10 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
                 const result = (response.result || response) as Record<string, unknown>;
                 figure.dataset.tavernImageHydrating = 'false';
                 if (!result.hasData || !result.url) {
-                    figure.classList.add('is-failed');
-                    const placeholder = document.createElement('span');
-                    placeholder.className = 'xb-tavern-image-placeholder';
-                    placeholder.textContent = result.isFailed
-                        ? String(result.errorMessage || '配图生成失败')
-                        : '配图未找到';
-                    figure.replaceChildren(placeholder);
+                    renderUnavailableTavernImageFigure(figure, result);
                     return;
                 }
-                figure.classList.add('is-loaded');
-                figure.dataset.tavernImageLoaded = 'true';
-                const image = document.createElement('img');
-                image.src = String(result.url || '');
-                image.alt = result.tags ? `配图：${String(result.tags)}` : '配图';
-                image.loading = 'lazy';
-                figure.replaceChildren(image);
+                renderLoadedTavernImageFigure(figure, result);
             })
             .catch(() => {
                 if (!canHydrateTavernFigure(figure, slotId)) {return;}
@@ -259,10 +797,14 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
             while ((match = TAVERN_IMAGE_MARKER_REGEX.exec(text)) !== null) {
                 replaced = true;
                 if (match.index > lastIndex) {
-                    fragment.append(document.createTextNode(text.slice(lastIndex, match.index)));
+                    const before = text.slice(lastIndex, match.index);
+                    fragment.append(document.createTextNode(before.endsWith('\n') ? before.slice(0, -1) : before));
                 }
                 fragment.append(createTavernImageFigure(match[1] || ''));
                 lastIndex = TAVERN_IMAGE_MARKER_REGEX.lastIndex;
+                if (text[lastIndex] === '\n') {
+                    lastIndex += 1;
+                }
             }
             if (!replaced) {return;}
             if (lastIndex < text.length) {
@@ -271,6 +813,215 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
             textNode.replaceWith(fragment);
         });
         root.querySelectorAll<HTMLElement>('[data-tavern-image-slot]').forEach((figure) => hydrateTavernImageFigure(figure));
+    }
+
+    function normalizeInlineImageTags(raw = '') {
+        let text = String(raw || '').trim();
+        text = text.replace(/^(nsfw|sketchy)\s*:\s*/i, 'nsfw, ');
+        return text.split(',').map((part) => part.trim()).filter(Boolean).join(', ');
+    }
+
+    function encodeInlineImageTags(raw = '') {
+        return encodeURIComponent(normalizeInlineImageTags(raw));
+    }
+
+    function toInlineImageDataUrl(base64 = '') {
+        const value = String(base64 || '').trim();
+        if (!value) {return '';}
+        return /^data:[^;]+;base64,/i.test(value) ? value : `data:image/png;base64,${value}`;
+    }
+
+    function setInlineImageSlotStatus(slot: HTMLElement, text: string, state = 'loading') {
+        slot.dataset.state = state;
+        const placeholder = document.createElement('span');
+        placeholder.className = `xb-tavern-inline-image-placeholder is-${state}`;
+        placeholder.textContent = text;
+        slot.replaceChildren(placeholder);
+    }
+
+    function renderInlineImageSlot(slot: HTMLElement, base64 = '') {
+        const src = toInlineImageDataUrl(base64);
+        if (!src) {
+            throw new Error('image_data_missing');
+        }
+        slot.dataset.loaded = '1';
+        slot.dataset.loading = '';
+        slot.dataset.state = 'loaded';
+        const image = document.createElement('img');
+        image.className = 'xb-tavern-inline-image-img';
+        image.src = src;
+        image.loading = 'lazy';
+        image.addEventListener('click', () => window.open(src, '_blank'));
+        slot.replaceChildren(image);
+    }
+
+    function renderInlineImageError(slot: HTMLElement, tags = '', error: unknown) {
+        slot.dataset.loaded = '1';
+        slot.dataset.loading = '';
+        slot.dataset.state = 'error';
+        const wrap = document.createElement('span');
+        wrap.className = 'xb-tavern-inline-image-error';
+        const label = document.createElement('span');
+        label.textContent = error instanceof Error ? error.message : String(error || '生成失败');
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.textContent = '重试';
+        retry.addEventListener('click', (event) => {
+            event.stopPropagation();
+            slot.dataset.loaded = '';
+            void loadInlineImageSlot(slot, tags);
+        });
+        wrap.append(label, retry);
+        slot.replaceChildren(wrap);
+    }
+
+    function formatInlineImageProgress(status = '', payload: Record<string, unknown> = {}) {
+        const queuePosition = Math.max(0, Math.floor(Number(payload.position) || 0));
+        const cooldownSeconds = Math.max(0, Math.floor(Number(payload.delay) || 0));
+        if (status === 'queued') {
+            const ahead = Math.max(0, queuePosition - 1);
+            return ahead > 0 ? `排队中，前面还有 ${ahead} 张` : '排队中';
+        }
+        if (status === 'generating') {
+            return '正在生成';
+        }
+        if (status === 'waiting') {
+            return cooldownSeconds > 0 ? `等待冷却 ${cooldownSeconds}s` : '等待冷却';
+        }
+        return '检查缓存...';
+    }
+
+    function updateInlineImageProgress(payload: Record<string, unknown> = {}) {
+        const tags = normalizeInlineImageTags(String(payload.tags || ''));
+        if (!tags) {return;}
+        const encodedTags = encodeInlineImageTags(tags);
+        const status = String(payload.status || '').trim();
+        const text = formatInlineImageProgress(status, payload);
+        document.querySelectorAll<HTMLElement>('.xb-tavern-inline-image[data-loading="1"]').forEach((slot) => {
+            if (String(slot.dataset.tags || '') !== encodedTags) {return;}
+            if (!canAutoLoadInlineImageSlot(slot)) {return;}
+            setInlineImageSlotStatus(slot, text, 'loading');
+        });
+    }
+
+    async function loadInlineImageSlot(slot: HTMLElement, tags = '') {
+        const normalizedTags = normalizeInlineImageTags(tags || decodeURIComponent(slot.dataset.tags || ''));
+        if (!normalizedTags || slot.dataset.loading === '1' || slot.dataset.loaded === '1' || !canAutoLoadInlineImageSlot(slot)) {return;}
+        slot.dataset.tags = encodeInlineImageTags(normalizedTags);
+        slot.dataset.loading = '1';
+        slot.dataset.loaded = '';
+        setInlineImageSlotStatus(slot, '检查缓存...', 'loading');
+        try {
+            const response = await options.requestHost('xb-tavern:inline-image-generate', {
+                payload: { tags: normalizedTags },
+            });
+            const result = response.result && typeof response.result === 'object'
+                ? response.result as Record<string, unknown>
+                : response;
+            renderInlineImageSlot(slot, String(result.base64 || ''));
+        } catch (error) {
+            renderInlineImageError(slot, normalizedTags, error);
+        }
+    }
+
+    let inlineImageObserver: IntersectionObserver | null = null;
+
+    function ensureInlineImageObserver() {
+        if (inlineImageObserver || typeof IntersectionObserver === 'undefined') {return inlineImageObserver;}
+        inlineImageObserver = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (!entry.isIntersecting) {return;}
+                const slot = entry.target as HTMLElement;
+                if (!canAutoLoadInlineImageSlot(slot)) {return;}
+                inlineImageObserver?.unobserve(slot);
+                void loadInlineImageSlot(slot);
+            });
+        }, { rootMargin: '200px 0px', threshold: 0.01 });
+        return inlineImageObserver;
+    }
+
+    function createInlineImageSlot(tags = '') {
+        const slot = document.createElement('span');
+        slot.className = 'xb-tavern-inline-image';
+        slot.dataset.tags = encodeInlineImageTags(tags);
+        setInlineImageSlotStatus(slot, '滚动加载', 'idle');
+        return slot;
+    }
+
+    function hydrateInlineImageSlots(root: HTMLElement) {
+        if (!canEnhanceMarkdownRoot(root)) {return;}
+        root.querySelectorAll<HTMLElement>('.xb-tavern-inline-image').forEach((slot) => {
+            if (slot.dataset.observed === '1' || slot.dataset.loaded === '1' || slot.dataset.loading === '1') {return;}
+            if (!canAutoLoadInlineImageSlot(slot)) {return;}
+            slot.dataset.observed = '1';
+            const observer = ensureInlineImageObserver();
+            if (observer) {
+                observer.observe(slot);
+                return;
+            }
+            void loadInlineImageSlot(slot);
+        });
+    }
+
+    function enhanceInlineImageTokens(root: HTMLElement) {
+        if (!canEnhanceMarkdownRoot(root) || root.closest('.streaming, .pending-user')) {return;}
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode(node) {
+                const textNode = node as Text;
+                if (!textNode.data || !TAVERN_INLINE_IMAGE_TOKEN_REGEX.test(textNode.data)) {
+                    TAVERN_INLINE_IMAGE_TOKEN_REGEX.lastIndex = 0;
+                    return NodeFilter.FILTER_SKIP;
+                }
+                TAVERN_INLINE_IMAGE_TOKEN_REGEX.lastIndex = 0;
+                const parent = textNode.parentElement;
+                if (parent?.closest?.('a, button, code, kbd, pre, script, style, textarea, .xb-tavern-image, .xb-tavern-inline-image')) {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                return NodeFilter.FILTER_ACCEPT;
+            },
+        });
+        const nodes: Text[] = [];
+        while (walker.nextNode()) {
+            nodes.push(walker.currentNode as Text);
+        }
+        nodes.forEach((textNode) => {
+            const text = textNode.data;
+            TAVERN_INLINE_IMAGE_TOKEN_REGEX.lastIndex = 0;
+            let match: RegExpExecArray | null;
+            let lastIndex = 0;
+            let replaced = false;
+            const fragment = document.createDocumentFragment();
+            while ((match = TAVERN_INLINE_IMAGE_TOKEN_REGEX.exec(text)) !== null) {
+                replaced = true;
+                if (match.index > lastIndex) {
+                    const before = text.slice(lastIndex, match.index);
+                    fragment.append(document.createTextNode(before.endsWith('\n') ? before.slice(0, -1) : before));
+                }
+                const tags = normalizeInlineImageTags(match[1] || '');
+                fragment.append(createInlineImageSlot(tags));
+                lastIndex = TAVERN_INLINE_IMAGE_TOKEN_REGEX.lastIndex;
+                if (text[lastIndex] === '\n') {
+                    lastIndex += 1;
+                }
+            }
+            if (!replaced) {return;}
+            if (lastIndex < text.length) {
+                fragment.append(document.createTextNode(text.slice(lastIndex)));
+            }
+            textNode.replaceWith(fragment);
+        });
+        hydrateInlineImageSlots(root);
+    }
+
+    function handleInlineImageProgressEvent(event: Event) {
+        const payload = event instanceof CustomEvent && event.detail && typeof event.detail === 'object'
+            ? event.detail as Record<string, unknown>
+            : {};
+        updateInlineImageProgress(payload);
+    }
+
+    if (typeof window !== 'undefined') {
+        window.addEventListener(TAVERN_INLINE_IMAGE_PROGRESS_EVENT, handleInlineImageProgressEvent as EventListener);
     }
 
     function buildActionCheckAriaLabel(event: TavernActionCheckRuntimeEvent) {
@@ -396,6 +1147,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
         const root = options.chatScrollRef.value;
         if (!root?.querySelectorAll) {return;}
         root.querySelectorAll<HTMLElement>('.xb-tavern-markdown').forEach((node) => {
+            if (!canEnhanceMarkdownRoot(node)) {return;}
             const signature = node.dataset.markdownSignature || '';
             if (node.dataset.markdownEnhanced === signature) {return;}
             enhanceMarkdownContent(node, {
@@ -405,6 +1157,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
                 htmlBlockMode: options.htmlRenderEnabled.value ? 'preview' : 'code',
             });
             enhanceTavernImageMarkers(node);
+            enhanceInlineImageTokens(node);
             enhanceRoleplayDialogue(node);
             enhanceActionCheckMarkers(node);
             node.dataset.markdownEnhanced = signature;
@@ -415,6 +1168,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
         const root = options.managerScrollRef.value;
         if (!root?.querySelectorAll) {return;}
         root.querySelectorAll<HTMLElement>('.xb-tavern-markdown').forEach((node) => {
+            if (!canEnhanceMarkdownRoot(node)) {return;}
             const signature = node.dataset.markdownSignature || '';
             if (node.dataset.markdownEnhanced === signature) {return;}
             enhanceMarkdownContent(node, {
@@ -429,6 +1183,13 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
 
     return {
         clearMarkdownCache,
+        disposeMarkdownTools() {
+            inlineImageObserver?.disconnect();
+            inlineImageObserver = null;
+            if (typeof window !== 'undefined') {
+                window.removeEventListener(TAVERN_INLINE_IMAGE_PROGRESS_EVENT, handleInlineImageProgressEvent as EventListener);
+            }
+        },
         enhanceChatMarkdown,
         enhanceManagerMarkdown,
         markdownSignature,

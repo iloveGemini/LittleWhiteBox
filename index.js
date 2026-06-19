@@ -114,11 +114,84 @@ async function initActiveDrawProvider() {
 }
 
 function installDrawFacade() {
+    function joinDrawTags(...parts) {
+        return parts
+            .filter(Boolean)
+            .map(part => String(part).trim().replace(/[，、]/g, ',').replace(/^,+|,+$/g, ''))
+            .filter(part => part.length > 0)
+            .join(', ');
+    }
+
     function getProviderGenerateImagesFromText(provider) {
         if (provider === 'novelai') return window.xiaobaixNovelDraw?.generateImagesFromText;
         if (provider === 'sdwebui') return window.xiaobaixSdDraw?.generateImagesFromText;
         if (provider === 'comfyui') return window.xiaobaixComfyDraw?.generateImagesFromText;
         return null;
+    }
+
+    function normalizeCharacterPrompts(value) {
+        return Array.isArray(value)
+            ? value.filter(item => item && typeof item === 'object')
+            : [];
+    }
+
+    function buildDrawPromptData(input = {}) {
+        const provider = normalizeDrawProvider(settings.drawProvider);
+        const payload = typeof input === 'string' ? { prompt: input } : (input || {});
+        const prompt = String(payload.prompt || payload.tags || '').trim();
+        const negativePrompt = String(payload.negativePrompt || payload.negative || '').trim();
+        const characterPrompts = normalizeCharacterPrompts(payload.characterPrompts);
+        const charPositive = characterPrompts.map(item => item.prompt).filter(Boolean).join(', ');
+        const charNegative = characterPrompts.map(item => item.uc).filter(Boolean).join(', ');
+
+        if (provider === 'novelai') {
+            const novelDraw = window.xiaobaixNovelDraw;
+            const novelSettings = novelDraw?.getSettings?.();
+            const preset = novelSettings?.paramsPresets?.find(p => p.id === novelSettings.selectedParamsPresetId)
+                || novelSettings?.paramsPresets?.[0];
+            return {
+                tags: prompt,
+                positive: joinDrawTags(preset?.positivePrefix, prompt),
+                negativePrompt: negativePrompt || preset?.negativePrefix || '',
+                characterPrompts,
+                params: preset?.params || {},
+                hasParamsPreset: !!preset,
+            };
+        }
+
+        if (provider === 'sdwebui') {
+            const sdDraw = window.xiaobaixSdDraw;
+            const sdSettings = sdDraw?.getSettings?.() || {};
+            const effective = sdDraw?.getEffectiveParams?.(sdSettings, payload.params || {}) || {};
+            return {
+                tags: prompt,
+                positive: joinDrawTags(effective.positivePrefix || '', prompt, charPositive),
+                negativePrompt: joinDrawTags(effective.negativePrefix || '', negativePrompt, charNegative),
+                characterPrompts,
+                params: effective,
+            };
+        }
+
+        if (provider === 'comfyui') {
+            const comfyDraw = window.xiaobaixComfyDraw;
+            const comfySettings = comfyDraw?.getSettings?.() || {};
+            const effective = comfyDraw?.getEffectiveParams?.(comfySettings, payload.params || {}) || {};
+            return {
+                tags: prompt,
+                positive: joinDrawTags(effective.positivePrefix || '', prompt, charPositive),
+                negativePrompt: joinDrawTags(effective.negativePrefix || '', negativePrompt, charNegative),
+                characterPrompts,
+                params: effective,
+            };
+        }
+
+        return {
+            tags: prompt,
+            positive: prompt,
+            negativePrompt,
+            characterPrompts,
+            params: payload.params || {},
+        };
     }
 
     window.xiaobaixDraw = {
@@ -138,24 +211,23 @@ function installDrawFacade() {
                 ready: enabled && typeof generateImagesFromText === 'function',
             };
         },
+        buildPromptData(input = {}) {
+            return buildDrawPromptData(input);
+        },
         async generateImage(input = {}) {
             const provider = normalizeDrawProvider(settings.drawProvider);
             const payload = typeof input === 'string' ? { prompt: input } : (input || {});
-            const prompt = payload.prompt || payload.tags || '';
-            const negativePrompt = payload.negativePrompt || payload.negative || '';
+            const promptData = buildDrawPromptData(payload);
 
             if (provider === 'novelai') {
                 const novelDraw = window.xiaobaixNovelDraw;
                 if (!novelDraw?.generateNovelImage) throw new Error('NovelAI 画图模块未初始化');
-                const novelSettings = novelDraw.getSettings?.();
-                const preset = novelSettings?.paramsPresets?.find(p => p.id === novelSettings.selectedParamsPresetId)
-                    || novelSettings?.paramsPresets?.[0];
-                if (!preset) throw new Error('无可用的 NovelAI 参数预设');
+                if (!promptData.hasParamsPreset) throw new Error('无可用的 NovelAI 参数预设');
                 return novelDraw.generateNovelImage({
-                    scene: [preset.positivePrefix, prompt].filter(Boolean).join(', '),
-                    characterPrompts: [],
-                    negativePrompt: negativePrompt || preset.negativePrefix || '',
-                    params: preset.params || {},
+                    scene: promptData.positive || promptData.tags || '',
+                    characterPrompts: promptData.characterPrompts || [],
+                    negativePrompt: promptData.negativePrompt || '',
+                    params: promptData.params || {},
                     signal: payload.signal,
                 });
             }
@@ -163,12 +235,10 @@ function installDrawFacade() {
             if (provider === 'sdwebui') {
                 const sdDraw = window.xiaobaixSdDraw;
                 if (!sdDraw?.generateSdImage) throw new Error('SD WebUI 画图模块未初始化');
-                const sdSettings = sdDraw.getSettings?.() || {};
-                const effective = sdDraw.getEffectiveParams?.(sdSettings, payload.params || {}) || {};
                 return sdDraw.generateSdImage({
-                    prompt: [effective.positivePrefix, prompt].filter(Boolean).join(', '),
-                    negativePrompt: [effective.negativePrefix, negativePrompt].filter(Boolean).join(', '),
-                    params: effective,
+                    prompt: promptData.positive || promptData.tags || '',
+                    negativePrompt: promptData.negativePrompt || '',
+                    params: promptData.params || {},
                     signal: payload.signal,
                 });
             }
@@ -176,12 +246,10 @@ function installDrawFacade() {
             if (provider === 'comfyui') {
                 const comfyDraw = window.xiaobaixComfyDraw;
                 if (!comfyDraw?.generateComfyImage) throw new Error('ComfyUI 画图模块未初始化');
-                const comfySettings = comfyDraw.getSettings?.() || {};
-                const effective = comfyDraw.getEffectiveParams?.(comfySettings, payload.params || {}) || {};
                 return comfyDraw.generateComfyImage({
-                    prompt: [effective.positivePrefix, prompt].filter(Boolean).join(', '),
-                    negativePrompt: [effective.negativePrefix, negativePrompt].filter(Boolean).join(', '),
-                    params: effective,
+                    prompt: promptData.positive || promptData.tags || '',
+                    negativePrompt: promptData.negativePrompt || '',
+                    params: promptData.params || {},
                     signal: payload.signal,
                 });
             }

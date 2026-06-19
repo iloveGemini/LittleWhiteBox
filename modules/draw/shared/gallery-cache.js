@@ -752,6 +752,17 @@ export async function updatePreviewSavedUrl(imgId, savedUrl) {
     });
 }
 
+export async function savePreviewImage(imgId, filePrefix = 'draw') {
+    const preview = await getPreview(imgId);
+    if (!preview) throw new Error('图片缓存不存在');
+    if (preview.savedUrl) return preview.savedUrl;
+    if (!preview.base64) throw new Error('图片缓存不存在');
+    const charName = preview.characterName || getChatCharacterName();
+    const url = await saveBase64AsFile(preview.base64, charName, `${filePrefix}_${imgId}`, 'png');
+    await updatePreviewSavedUrl(imgId, url);
+    return url;
+}
+
 export async function getCacheStats() {
     const database = await openDB();
     return new Promise((resolve) => {

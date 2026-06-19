@@ -6,7 +6,7 @@ import {
     normalizeMessageLoadBatchSize,
 } from './message-window';
 import { normalizeTavernDisplaySettings, type TavernDisplaySettings } from '../shared/settings';
-import { useTavernMarkdownTools } from './components/chat/useTavernMarkdownTools';
+import { TAVERN_INLINE_IMAGE_PROGRESS_EVENT, useTavernMarkdownTools } from './components/chat/useTavernMarkdownTools';
 import { useTavernScrollPane } from './components/chat/useTavernScrollPane';
 import { setHostChatCompletionsRequestHeadersProvider } from '../../../shared/host-llm/chat-completions/client.js';
 import {
@@ -215,6 +215,7 @@ const drawingMessageKey = ref('');
 const drawStatusMessageKey = ref('');
 const drawStatusKind = ref<'idle' | 'running' | 'success' | 'error'>('idle');
 const drawProgressText = ref('');
+let drawCooldownTimer: number | null = null;
 const sessions = ref<TavernSessionRecord[]>([]);
 const selectedSessionId = ref('');
 const sessionMessages = ref<TavernMessageRecord[]>([]);
@@ -317,6 +318,7 @@ interface PendingRuntimeDisplayRegexRequest {
 }
 const pendingHostRequests = new Map<string, PendingHostRequest>();
 const DRAW_COMPLETION_NOTICE_TEXT = '配图已生成';
+const DRAW_COOLDOWN_TICK_MS = 100;
 function normalizedSearchText(value = '') {
     return String(value || '').trim().toLocaleLowerCase();
 }
@@ -411,6 +413,7 @@ const rootTypographyStyle = computed<Record<string, string>>(() => ({
 }));
 const {
     clearMarkdownCache,
+    disposeMarkdownTools,
     enhanceChatMarkdown,
     enhanceManagerMarkdown,
     markdownSignature,
@@ -1240,6 +1243,38 @@ function formatDrawProgress(stateName = '', data: Record<string, unknown> = {}) 
     }
 }
 
+function clearDrawCooldownTimer() {
+    if (drawCooldownTimer) {
+        window.clearInterval(drawCooldownTimer);
+        drawCooldownTimer = null;
+    }
+}
+
+function startDrawCooldownCountdown(messageKeyValue: string, data: Record<string, unknown> = {}) {
+    clearDrawCooldownTimer();
+    const duration = Math.max(0, Number(data.duration) || 0);
+    const endsAt = Date.now() + duration;
+    const updateCountdown = () => {
+        if (drawStatusMessageKey.value !== messageKeyValue) {
+            clearDrawCooldownTimer();
+            return;
+        }
+        const remainingMs = Math.max(0, endsAt - Date.now());
+        drawStatusKind.value = 'running';
+        drawProgressText.value = formatDrawProgress('cooldown', {
+            ...data,
+            remainingMs,
+        });
+        if (remainingMs <= 0) {
+            clearDrawCooldownTimer();
+        }
+    };
+    updateCountdown();
+    if (duration > 0) {
+        drawCooldownTimer = window.setInterval(updateCountdown, DRAW_COOLDOWN_TICK_MS);
+    }
+}
+
 async function refreshTavernDrawStatus() {
     try {
         const result = await requestHost('xb-tavern:draw-status', {});
@@ -1924,8 +1959,19 @@ function onHostMessage(event: MessageEvent) {
         if (drawingMessageKey.value) {
             drawStatusMessageKey.value = drawingMessageKey.value;
             drawStatusKind.value = payload.state === 'success' ? 'success' : 'running';
-            drawProgressText.value = formatDrawProgress(String(payload.state || ''), payload.data || {});
+            if (payload.state === 'cooldown') {
+                startDrawCooldownCountdown(drawingMessageKey.value, payload.data || {});
+            } else {
+                clearDrawCooldownTimer();
+                drawProgressText.value = formatDrawProgress(String(payload.state || ''), payload.data || {});
+            }
         }
+        return;
+    }
+    if (data.type === TAVERN_INLINE_IMAGE_PROGRESS_EVENT) {
+        window.dispatchEvent(new CustomEvent(TAVERN_INLINE_IMAGE_PROGRESS_EVENT, {
+            detail: data.payload && typeof data.payload === 'object' ? data.payload : {},
+        }));
         return;
     }
     if (data.type === 'xb-tavern:config') {
@@ -2743,6 +2789,7 @@ function showDrawMessageStatus(
     kind: 'running' | 'success' | 'error' = 'running',
     durationMs = 0,
 ) {
+    clearDrawCooldownTimer();
     drawStatusMessageKey.value = messageKey(message);
     drawStatusKind.value = kind;
     drawProgressText.value = text;
@@ -4254,6 +4301,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
     window.removeEventListener('message', onHostMessage);
+    disposeMarkdownTools();
+    clearDrawCooldownTimer();
     setHostChatCompletionsRequestHeadersProvider(null);
     pendingHostRequests.forEach((request) => {
         if (request.abort && request.signal) {

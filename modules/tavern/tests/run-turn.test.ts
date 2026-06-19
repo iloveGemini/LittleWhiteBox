@@ -3750,7 +3750,7 @@ test('xb tavern context history filters saved error messages for preview and run
             sessionId: 'session',
             order: 0,
             role: 'user',
-            content: 'Hello.',
+            content: 'Hello.\n[img: 1girl, office, night]\n[图片: 1boy, street]',
             createdAt: 1,
         },
         {
@@ -3774,6 +3774,58 @@ test('xb tavern context history filters saved error messages for preview and run
         { role: 'user', content: 'Hello.' },
         { role: 'assistant', content: 'Recovered.' },
     ]);
+});
+
+test('xb tavern context cleanup ignores inline image-only messages for provider history', () => {
+    const messages = [
+        makeContextWindowMessage(0, 'assistant', '[img: 1girl, office]'),
+        makeContextWindowMessage(1, 'user', 'Actual text.'),
+    ];
+    const resolved = resolveTavernContextWindow({
+        messages,
+        currentUserMessage: '[图片: 1boy, street]',
+    });
+
+    assert.equal(resolved.usableHistoryCount, 1);
+    assert.equal(resolved.currentUserCount, 0);
+    assert.deepEqual(buildContextHistory(resolved.historyMessages), [
+        { role: 'user', content: 'Actual text.' },
+    ]);
+});
+
+test('xb tavern keeps inline image tokens in saved user messages but strips them from provider requests', async () => {
+    await resetDb();
+    const preset = createDefaultXbTavernPreset();
+    let providerMessagesJson = '';
+
+    const result = await runXbTavernTurn({
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot: {
+            character: { id: 'char-1', name: 'Aster', description: 'Pilot.' },
+            user: { name: 'Player' },
+        },
+        preset,
+        currentUserMessage: 'Look.\n[img: 1girl, office]\n[图片: 1boy, street]',
+        executeRunOnce: async (options: TavernRunOnceOptions) => {
+            providerMessagesJson = JSON.stringify(options.messages);
+            return {
+                text: 'Done.',
+                provider: 'fake-provider',
+                model: 'fake-model',
+                finishReason: 'stop',
+                requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages, {
+                    provider: 'fake-provider',
+                    model: 'fake-model',
+                }),
+            };
+        },
+    });
+
+    const messages = await listTavernMessages(result.sessionId);
+    assert.equal(messages.find((message) => message.role === 'user')?.content, 'Look.\n[img: 1girl, office]\n[图片: 1boy, street]');
+    assert.doesNotMatch(providerMessagesJson, /\[(?:img|图片)\s*:/i);
+    assert.doesNotMatch(result.requestSnapshot.rawRequestJson, /\[(?:img|图片)\s*:/i);
+    assert.match(providerMessagesJson, /Look\./);
 });
 
 test('xb tavern context window keeps a stable 20 message API window without deleting history', () => {

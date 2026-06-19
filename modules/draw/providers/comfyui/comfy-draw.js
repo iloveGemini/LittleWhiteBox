@@ -4084,21 +4084,38 @@ function buildPromptForTask(task, sharedDrawSettings, comfySettings, promptOverr
 
 function buildTextSourceGalleryMeta(options = {}) {
     const source = String(options.source || '').trim();
-    if (source !== 'ebook') return {};
-    const bookId = String(options.bookId || '').trim();
-    const bookTitle = String(options.bookTitle || options.title || '未命名书稿').trim() || '未命名书稿';
-    const chapterPath = String(options.chapterPath || '').trim();
-    const chapterTitle = String(options.chapterTitle || options.title || chapterPath || '章节').trim() || '章节';
-    return {
-        source,
-        bookId,
-        bookTitle,
-        chapterPath,
-        chapterTitle,
-        chatId: bookId ? `ebook:${bookId}` : 'ebook',
-        characterName: `电纸书 / ${bookTitle}`,
-        messageId: `ebook:${bookId || 'unknown'}:${chapterPath || chapterTitle}`,
-    };
+    if (source === 'ebook') {
+        const bookId = String(options.bookId || '').trim();
+        const bookTitle = String(options.bookTitle || options.title || '未命名书稿').trim() || '未命名书稿';
+        const chapterPath = String(options.chapterPath || '').trim();
+        const chapterTitle = String(options.chapterTitle || options.title || chapterPath || '章节').trim() || '章节';
+        return {
+            source,
+            bookId,
+            bookTitle,
+            chapterPath,
+            chapterTitle,
+            chatId: bookId ? `ebook:${bookId}` : 'ebook',
+            characterName: `电纸书 / ${bookTitle}`,
+            messageId: `ebook:${bookId || 'unknown'}:${chapterPath || chapterTitle}`,
+        };
+    }
+    if (source === 'tavern') {
+        const sessionId = String(options.sessionId || '').trim();
+        const messageOrder = Number.isFinite(Number(options.messageOrder))
+            ? Math.max(0, Math.floor(Number(options.messageOrder)))
+            : null;
+        const role = String(options.role || options.title || 'assistant').trim() || 'assistant';
+        return {
+            source,
+            chatId: sessionId || 'tavern',
+            characterName: String(options.characterName || '小白酒馆').trim() || '小白酒馆',
+            messageId: sessionId
+                ? `tavern:${sessionId}:${messageOrder ?? role}`
+                : `tavern:${messageOrder ?? role}`,
+        };
+    }
+    return {};
 }
 
 export async function generateImagesFromText(options = {}) {
