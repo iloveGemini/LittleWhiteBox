@@ -57,13 +57,13 @@ export class SillyTavernOpenAICompatibleAdapter {
         const toolMode = this.config.toolMode || 'native';
         const isTaggedMode = toolMode === 'tagged-json' && Array.isArray(task.tools) && task.tools.length > 0;
         return isTaggedMode
-            ? buildTaggedMessages(task)
+            ? buildTaggedMessages(task, this.config.model)
             : buildNativeMessages(task, this.config.model);
     }
 
     buildPayload(task, taggedMode = false) {
         const messages = taggedMode
-            ? buildTaggedMessages(task)
+            ? buildTaggedMessages(task, this.config.model)
             : buildNativeMessages(task, this.config.model);
         return buildHostOpenAICompatibleGeneratePayload(
             this.config,

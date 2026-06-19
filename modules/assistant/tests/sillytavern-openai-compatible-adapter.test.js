@@ -112,6 +112,40 @@ test('OpenAI-compatible native messages keep task system prompt in the actual re
     assert.equal(inspection.request.body.messages[0]?.content, 'You are the background manager.');
 });
 
+test('SillyTavern OpenAI-compatible Claude-like requests coerce the final system role only in the request messages', async () => {
+    const adapter = new SillyTavernOpenAICompatibleAdapter({
+        model: 'anthropic/claude-sonnet-4-6',
+        toolMode: 'native',
+    });
+    const inspection = await adapter.inspectRequest({
+        messages: [
+            { role: 'system', content: '<meta_protocol>' },
+            { role: 'assistant', content: '历史 AI' },
+            { role: 'system', content: '跑团协议' },
+            { role: 'user', content: '继续' },
+            { role: 'system', content: '</meta_protocol>' },
+        ],
+        tools: [{
+            type: 'function',
+            function: {
+                name: 'ActionCheck',
+                parameters: { type: 'object', properties: {} },
+            },
+        }],
+    });
+    const messages = inspection.request.body.messages;
+
+    assert.deepEqual(messages.map((message) => message.role), [
+        'system',
+        'assistant',
+        'system',
+        'user',
+        'user',
+    ]);
+    assert.equal(messages[4].content, '</meta_protocol>');
+    assert.equal(inspection.request.body.tools[0].function.name, 'ActionCheck');
+});
+
 test('host Claude and Google payloads select the matching SillyTavern chat-completions source', () => {
     const claudePayload = buildHostClaudeGeneratePayload(
         {

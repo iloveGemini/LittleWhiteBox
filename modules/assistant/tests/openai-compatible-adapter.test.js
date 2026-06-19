@@ -91,6 +91,60 @@ test('openai-compatible adapter sanitizes malformed replay tool calls before sen
     }]);
 });
 
+test('openai-compatible Claude-like native messages coerce only the final system or assistant role to user', () => {
+    const messages = buildNativeMessages({
+        messages: [
+            { role: 'system', content: '<meta_protocol>' },
+            { role: 'assistant', content: 'history assistant' },
+            { role: 'system', content: 'runtime system stays in place' },
+            { role: 'user', content: 'current user' },
+            { role: 'system', content: '</meta_protocol>' },
+        ],
+    }, 'anthropic/claude-sonnet-4-6');
+
+    assert.deepEqual(messages.map((message) => message.role), [
+        'system',
+        'assistant',
+        'system',
+        'user',
+        'user',
+    ]);
+    assert.equal(messages[4].content, '</meta_protocol>');
+
+    const assistantTailMessages = buildNativeMessages({
+        messages: [
+            { role: 'system', content: 'rules' },
+            { role: 'user', content: 'continue' },
+            { role: 'assistant', content: 'prefill' },
+        ],
+    }, 'claude-sonnet-4-0');
+
+    assert.deepEqual(assistantTailMessages.map((message) => message.role), [
+        'system',
+        'user',
+        'user',
+    ]);
+
+    const toolTailMessages = buildNativeMessages({
+        messages: [
+            { role: 'user', content: 'run tool' },
+            { role: 'tool', tool_call_id: 'call-1', content: '{"ok":true}' },
+        ],
+    }, 'claude-sonnet-4-0');
+
+    assert.equal(toolTailMessages[1].role, 'tool');
+    assert.equal(toolTailMessages[1].tool_call_id, 'call-1');
+
+    const nonClaudeMessages = buildNativeMessages({
+        messages: [
+            { role: 'user', content: 'hello' },
+            { role: 'system', content: 'tail marker' },
+        ],
+    }, 'gpt-4o-mini');
+
+    assert.equal(nonClaudeMessages[1].role, 'system');
+});
+
 test('openai-compatible adapter removes tagged-json tool garbage from replay payload', () => {
     const messages = buildNativeMessages({
         messages: [

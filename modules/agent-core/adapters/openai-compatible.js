@@ -320,6 +320,29 @@ function shouldForceDeepSeekReasoningContent(model = '') {
     return /deepseek/i.test(String(model || ''));
 }
 
+export function isClaudeLikeModel(model = '') {
+    return /claude/i.test(String(model || ''));
+}
+
+export function normalizeFinalClaudeLikeMessageRole(messages = [], model = '') {
+    if (!isClaudeLikeModel(model)) return messages;
+    let finalRoleIndex = -1;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (typeof messages[index]?.role === 'string') {
+            finalRoleIndex = index;
+            break;
+        }
+    }
+    const finalRole = messages[finalRoleIndex]?.role;
+    if (finalRoleIndex < 0 || finalRole === 'user') return messages;
+    if (finalRole !== 'system' && finalRole !== 'assistant') return messages;
+    return messages.map((message, index) => (
+        index === finalRoleIndex
+            ? { ...message, role: 'user' }
+            : message
+    ));
+}
+
 function ensureReasoningContentForToolCalls(message, model = '') {
     if (!isPlainObject(message)) return message;
     if (!shouldForceDeepSeekReasoningContent(model)) return message;
@@ -475,7 +498,7 @@ export function buildNativeMessages(task, model = '') {
         });
     }
 
-    return normalizedMessages;
+    return normalizeFinalClaudeLikeMessageRole(normalizedMessages, model);
 }
 
 function buildTaggedProtocolPrompt(task) {
@@ -496,7 +519,7 @@ function buildTaggedProtocolPrompt(task) {
     ].filter(Boolean).join('\n\n');
 }
 
-export function buildTaggedMessages(task) {
+export function buildTaggedMessages(task, model = '') {
     const toolNameById = new Map();
     const messages = [];
     const sourceMessages = Array.isArray(task.messages) ? task.messages : [];
@@ -571,7 +594,7 @@ export function buildTaggedMessages(task) {
         };
     }
 
-    return messages;
+    return normalizeFinalClaudeLikeMessageRole(messages, model);
 }
 
 function emitStreamProgress(task, payload) {
@@ -741,7 +764,7 @@ export class OpenAICompatibleAdapter {
             : null;
         const body = {
             model: this.config.model,
-            messages: isTaggedMode ? buildTaggedMessages(task) : buildNativeMessages(task, this.config.model),
+            messages: isTaggedMode ? buildTaggedMessages(task, this.config.model) : buildNativeMessages(task, this.config.model),
             ...(nativeTools ? { tools: nativeTools, tool_choice: task.toolChoice || 'auto' } : {}),
             ...(task.maxTokens ? { max_tokens: task.maxTokens } : {}),
         };
