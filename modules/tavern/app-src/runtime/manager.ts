@@ -1226,18 +1226,33 @@ export async function runXbTavernManagerAfterTurn(input: XbTavernManagerRunInput
             };
         }
         await assertManagerSourceMessagesCurrent(input);
+        const changedFiles = [...(result.changedFiles || [])];
+        let changedTasks = [...(result.changedTasks || [])];
+        let completedRun = result.managerRun;
         if (contractRuntime.includeQuestOrchestration) {
-            await abandonStaleTavernTasks(sessionId, input.assistantMessage.order, {
+            const abandonedTasks = await abandonStaleTavernTasks(sessionId, input.assistantMessage.order, {
                 managerRunId: managerRun.id,
                 beforeWriteGuard: async () => {
                     throwIfManagerAborted(input.signal);
                     await assertManagerSourceMessagesCurrent(input);
                 },
             });
+            if (abandonedTasks.length) {
+                changedTasks = [...new Set([
+                    ...changedTasks,
+                    ...abandonedTasks.map((task) => `task/${task.id}`),
+                ])];
+                const staleSummary = `系统已放弃 ${abandonedTasks.length} 条过期事件线索。`;
+                const outputText = String(completedRun.outputText || '').trim();
+                completedRun = await finalizeManagerRun(completedRun, {
+                    outputText: outputText && outputText !== '已检查并回复。'
+                        ? `${outputText}\n${staleSummary}`
+                        : staleSummary,
+                    parsedAction: 'manager_state_updated',
+                    changedTasks,
+                });
+            }
         }
-        const changedFiles = [...(result.changedFiles || [])];
-        const changedTasks = [...(result.changedTasks || [])];
-        const completedRun = result.managerRun;
         return {
             ok: true,
             managerRun: completedRun,

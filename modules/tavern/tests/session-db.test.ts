@@ -2374,6 +2374,55 @@ test('manager TaskPatch writes are counted in run summaries', async () => {
     assert.match(run?.outputText || '', /1 条事件线索/);
 });
 
+test('manager stale task sweep is counted in run summaries', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Manager stale summary' });
+    await executeTavernTaskTool(session.id, 'TaskPatch', {
+        op: 'upsert-task',
+        taskId: 'stale-by-manager',
+        fingerprint: 'stale-by-manager',
+        horizon: '过期远景',
+        current: '过期当前',
+        hookForUser: '过期说明。',
+        hookForModel: '过期软句。',
+    }, { sourceAssistantOrder: 5 });
+    for (let index = 0; index < 7; index += 1) {
+        await appendTavernMessage(session.id, { role: 'user', content: `铺垫 ${index}。` });
+        await appendTavernMessage(session.id, { role: 'assistant', content: `回应 ${index}。` });
+    }
+    const userMessage = await appendTavernMessage(session.id, { role: 'user', content: '继续。' });
+    const assistantMessage = await appendTavernMessage(session.id, { role: 'assistant', content: '没有推进旧线索。' });
+
+    const result = await runXbTavernManagerAfterTurn({
+        sessionId: session.id,
+        agentConfig: {},
+        userMessage,
+        assistantMessage,
+        turn: 8,
+        sessionContract: mergeTavernSessionContract(undefined, {
+            memoryArchiving: false,
+            cartographyEngine: false,
+            questOrchestration: true,
+        }),
+        executeManagerOnce: async () => ({
+            provider: 'fake-manager',
+            model: 'task-model',
+            text: '',
+        }),
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.changedTasks, ['task/stale-by-manager']);
+    const run = (await listTavernManagerRuns(session.id))[0];
+    assert.deepEqual(run?.changedTasks, ['task/stale-by-manager']);
+    assert.equal(run?.parsedAction, 'manager_state_updated');
+    assert.match(run?.outputText || '', /系统已放弃 1 条过期事件线索/);
+    const tasks = await listTavernTasks(session.id, { includeAbandoned: true });
+    assert.equal(tasks[0]?.status, 'abandoned');
+});
+
 test('stale active tasks are abandoned internally with fingerprints', async () => {
     await db.delete();
     await db.open();
