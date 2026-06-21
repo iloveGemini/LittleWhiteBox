@@ -1591,12 +1591,16 @@ test('StatePatch rejects map elements without drawable geometry', async () => {
     const valid = await executeTavernStateTool(session.id, 'StatePatch', {
         ops: [
             { op: 'add', element: { id: 'current-position', type: 'icon', cat: 'marker', pos: [60, 35], icon: 'o' } },
+            { op: 'add', element: { id: 'private-note', type: 'icon', cat: 'marker', pos: [72, 35], icon: 'heart' } },
             { op: 'add', element: { id: 'room-label', type: 'text', cat: 'label', pos: [60, 65], content: 'Forest clearing' } },
         ],
     });
 
     assert.equal(valid.ok, true);
-    assert.equal(valid.appliedCount, 2);
+    assert.equal(valid.appliedCount, 3);
+    const document = await getTavernStructuredStateDocument(session.id, 'tavern.map', 'main');
+    const elements = (document?.data as { elements?: Array<Record<string, unknown>> })?.elements || [];
+    assert.equal(elements.find((element) => element.id === 'private-note')?.icon, 'heart');
 });
 
 test('StatePatch accepts common map geometry aliases and explains failures', async () => {

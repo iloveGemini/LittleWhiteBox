@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import {
+    atlasGlyphForScale,
+    getTavernGameIconGlyph,
+    getTavernMapIconRenderSize,
+    isTavernLegacyMapIcon,
+} from '../app-src/map-glyphs';
 import { getTavernMapDisplayViewBox, getTavernMapDocumentBounds } from '../app-src/map-display';
+import { TAVERN_MAP_ICON_NAMES } from '../shared/map-icon-names';
 import type { TavernMapDocument } from '../shared/structured-state';
 
 test('map display keeps the stored viewBox as the camera frame when one is present', () => {
@@ -45,4 +52,27 @@ test('map display viewBox falls back to document viewBox when the map has no ele
     };
 
     assert.deepEqual(getTavernMapDisplayViewBox(document), [12, 24, 640, 360]);
+});
+
+test('map glyph registry upgrades semantic icons while preserving legacy markers', () => {
+    assert.equal(TAVERN_MAP_ICON_NAMES.includes('heart'), true);
+    assert.equal(TAVERN_MAP_ICON_NAMES.includes('perfume'), true);
+    assert.equal(TAVERN_MAP_ICON_NAMES.includes('skull'), true);
+    assert.equal(TAVERN_MAP_ICON_NAMES.includes('tree'), true);
+    assert.equal(TAVERN_MAP_ICON_NAMES.includes('star'), true);
+
+    assert.equal(!!getTavernGameIconGlyph('skull'), true);
+    assert.equal(!!getTavernGameIconGlyph('tree'), true);
+    assert.equal(!!getTavernGameIconGlyph('star'), true);
+    assert.equal(isTavernLegacyMapIcon('x'), true);
+    assert.equal(isTavernLegacyMapIcon('stairs-up'), true);
+    assert.equal(isTavernLegacyMapIcon('skull'), false);
+    assert.equal(getTavernMapIconRenderSize('heart') > getTavernMapIconRenderSize('x'), true);
+});
+
+test('atlas scale glyphs do not use road as a first-pass location default', () => {
+    const defaults = ['city', 'district', 'building', 'floor', 'room', 'outdoor'].map(atlasGlyphForScale);
+
+    assert.deepEqual(defaults, ['castle', 'village', 'house', 'stairs', 'door', 'forest']);
+    assert.equal(defaults.includes('road'), false);
 });

@@ -1,4 +1,5 @@
 import type { TavernMapDocument, TavernMapElement } from '../shared/structured-state';
+import { getTavernMapIconRenderSize } from './map-glyphs';
 
 export interface TavernMapBounds {
     minX: number;
@@ -84,7 +85,8 @@ function circleBounds(element: TavernMapElement): TavernMapBounds | null {
 
 function iconBounds(element: TavernMapElement): TavernMapBounds | null {
     if (!element.icon) {return null;}
-    return createBounds(element.at[0] - 10, element.at[1] - 10, element.at[0] + 10, element.at[1] + 10);
+    const half = getTavernMapIconRenderSize(element.icon) / 2;
+    return createBounds(element.at[0] - half, element.at[1] - half, element.at[0] + half, element.at[1] + half);
 }
 
 function textBounds(element: TavernMapElement): TavernMapBounds | null {

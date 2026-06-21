@@ -9,6 +9,11 @@ import { isRenderableMapDocument } from '../../shared/map-state-content';
 import { createSeedMapDocument } from '../../shared/map-state-seed';
 import { applyTrustedMapPatchOps } from '../../shared/map-state-ops';
 import { getTavernMapDisplayViewBox, getTavernMapElementBounds, type TavernMapBounds } from '../map-display';
+import {
+    gameIconTransform,
+    getTavernGameIconGlyph,
+    TAVERN_MAP_ICON_ATTRIBUTION,
+} from '../map-glyphs';
 
 type MapReplayMode = 'full' | 'patch' | 'timeline';
 type MapRenderLayer = 'fill' | 'line' | 'label';
@@ -32,6 +37,9 @@ interface MapRenderItem {
     y: number;
     fontSize: number;
     anchor: string;
+    transform: string;
+    fillRule: 'nonzero' | 'evenodd';
+    gameIcon: boolean;
 }
 
 interface MapReplayFrame {
@@ -39,6 +47,10 @@ interface MapReplayFrame {
     document: TavernMapDocument;
     patch: TavernStructuredStatePatchRecord;
     index: number;
+}
+
+function pickPenAnimationItem<T extends { gameIcon: boolean; layer: string; path: string }>(items: T[]): T | null {
+    return items.find((item) => !item.gameIcon && item.layer !== 'label' && !!item.path) || null;
 }
 
 const props = withDefaults(defineProps<{
@@ -307,14 +319,16 @@ function iconToPath(element: TavernMapElement): string {
     const s = 10;
     const h = s / 2;
     const icon = String(element.icon || '+');
+    const gameIcon = getTavernGameIconGlyph(icon);
+    if (gameIcon) {return gameIcon.path;}
     if (icon === 'x') {return `M ${x - h} ${y - h} L ${x + h} ${y + h} M ${x + h} ${y - h} L ${x - h} ${y + h}`;}
     if (icon === 'o') {return `M ${x - h} ${y} A ${h} ${h} 0 1 0 ${x + h} ${y} A ${h} ${h} 0 1 0 ${x - h} ${y}`;}
-    if (icon === 'tree') {return `M ${x} ${y - 8} L ${x - 6} ${y + 2} L ${x + 6} ${y + 2} Z M ${x} ${y + 2} L ${x} ${y + 8}`;}
-    if (icon === 'star') {return `M ${x} ${y - 7} L ${x + 2} ${y - 2} L ${x + 7} ${y - 2} L ${x + 3} ${y + 1} L ${x + 5} ${y + 7} L ${x} ${y + 3} L ${x - 5} ${y + 7} L ${x - 3} ${y + 1} L ${x - 7} ${y - 2} L ${x - 2} ${y - 2} Z`;}
     if (icon === 'arrow-n') {return `M ${x} ${y + s} L ${x} ${y - s} M ${x - h} ${y - h} L ${x} ${y - s} L ${x + h} ${y - h}`;}
     if (icon === 'arrow-s') {return `M ${x} ${y - s} L ${x} ${y + s} M ${x - h} ${y + h} L ${x} ${y + s} L ${x + h} ${y + h}`;}
     if (icon === 'arrow-e') {return `M ${x - s} ${y} L ${x + s} ${y} M ${x + h} ${y - h} L ${x + s} ${y} L ${x + h} ${y + h}`;}
     if (icon === 'arrow-w') {return `M ${x + s} ${y} L ${x - s} ${y} M ${x - h} ${y - h} L ${x - s} ${y} L ${x - h} ${y + h}`;}
+    if (icon === 'stairs-up') {return `M ${x - 9} ${y + 7} H ${x - 3} V ${y + 1} H ${x + 3} V ${y - 5} H ${x + 9} M ${x + 3} ${y - 5} L ${x + 3} ${y - 10} M ${x + 3} ${y - 10} L ${x} ${y - 7} M ${x + 3} ${y - 10} L ${x + 6} ${y - 7}`;}
+    if (icon === 'stairs-down') {return `M ${x - 9} ${y - 7} H ${x - 3} V ${y - 1} H ${x + 3} V ${y + 5} H ${x + 9} M ${x + 3} ${y + 5} L ${x + 3} ${y + 10} M ${x + 3} ${y + 10} L ${x} ${y + 7} M ${x + 3} ${y + 10} L ${x + 6} ${y + 7}`;}
     return `M ${x - h} ${y} L ${x + h} ${y} M ${x} ${y - h} L ${x} ${y + h}`;
 }
 
@@ -472,16 +486,45 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             y: labelY,
             fontSize: labelFontSize(element),
             anchor: 'middle',
+            transform: '',
+            fillRule: 'nonzero',
+            gameIcon: false,
         }];
     }
 
     const path = elementPath(element);
     if (!path) {return [];}
-    const length = estimatePathLength(element, path);
+    const gameIcon = element.icon ? getTavernGameIconGlyph(element.icon) : null;
+    const length = gameIcon ? 120 : estimatePathLength(element, path);
     const durationMs = forcedOpKind === 'remove' ? 1050 : Math.max(680, Math.min(2200, length * 4.2));
     const color = forcedOpKind === 'remove' ? '#b94035' : elementColor(element);
     const fill = forcedOpKind === 'remove' ? 'rgba(185, 64, 53, 0.16)' : elementFill(element);
     const items: MapRenderItem[] = [];
+    if (gameIcon) {
+        items.push({
+            element,
+            id: `${element.id}-glyph`,
+            layer: 'line',
+            path,
+            color,
+            fill: color,
+            strokeWidth: 0,
+            dash: '',
+            delayMs: baseDelay,
+            durationMs,
+            length,
+            opKind,
+            text: '',
+            x: 0,
+            y: 0,
+            fontSize: 0,
+            anchor: 'middle',
+            transform: gameIconTransform(element.at[0], element.at[1]),
+            fillRule: gameIcon.fillRule,
+            gameIcon: true,
+        });
+        return items;
+    }
     if (fill !== 'none') {
         items.push({
             element,
@@ -501,6 +544,9 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             y: 0,
             fontSize: 0,
             anchor: 'middle',
+            transform: '',
+            fillRule: 'nonzero',
+            gameIcon: false,
         });
     }
     items.push({
@@ -521,6 +567,9 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
         y: 0,
         fontSize: 0,
         anchor: 'middle',
+        transform: '',
+        fillRule: 'nonzero',
+        gameIcon: false,
     });
     return items;
 }
@@ -545,8 +594,8 @@ const progressStyle = computed(() => ({
     '--map-progress-duration': `${totalAnimationMs.value}ms`,
 }));
 const penStyle = computed(() => {
-    const animated = animatedItems.value.find((item) => item.layer !== 'label' && item.path) || animatedItems.value[0];
-    if (!animated || !animated.path) {return { display: 'none' };}
+    const animated = pickPenAnimationItem(animatedItems.value);
+    if (!animated) {return { display: 'none' };}
     return {
         offsetPath: `path("${animated.path}")`,
         animationDelay: `${animated.delayMs}ms`,
@@ -584,6 +633,7 @@ function itemClass(item: MapRenderItem) {
         {
             'is-animated': replayMode.value === 'full' || item.opKind !== 'stable',
             'is-latest': latestChangedIds.value.has(item.element.id),
+            'is-game-icon': item.gameIcon,
         },
     ];
 }
@@ -824,6 +874,8 @@ function handleMapPointerEnd(event: PointerEvent) {
             :key="item.id"
             :d="item.path"
             :fill="item.fill"
+            :transform="item.transform"
+            :fill-rule="item.fillRule"
             :class="itemClass(item)"
             :style="itemStyle(item)"
           />
@@ -840,6 +892,8 @@ function handleMapPointerEnd(event: PointerEvent) {
             :stroke="item.color"
             :stroke-width="item.strokeWidth"
             :stroke-dasharray="item.dash"
+            :transform="item.transform"
+            :fill-rule="item.fillRule"
             stroke-linecap="round"
             stroke-linejoin="round"
             :class="itemClass(item)"
@@ -867,6 +921,8 @@ function handleMapPointerEnd(event: PointerEvent) {
             :key="`removed-fill-${item.id}`"
             :d="item.path"
             :fill="item.fill"
+            :transform="item.transform"
+            :fill-rule="item.fillRule"
             :class="itemClass(item)"
             :style="itemStyle(item)"
           />
@@ -878,6 +934,8 @@ function handleMapPointerEnd(event: PointerEvent) {
             :stroke="item.color"
             :stroke-width="item.strokeWidth"
             :stroke-dasharray="item.dash"
+            :transform="item.transform"
+            :fill-rule="item.fillRule"
             stroke-linecap="round"
             stroke-linejoin="round"
             :class="itemClass(item)"
@@ -1001,6 +1059,7 @@ function handleMapPointerEnd(event: PointerEvent) {
       <span>{{ totalPatchCount }} patches</span>
       <span v-if="digestLines.length">{{ digestLines[0] }}</span>
       <span v-if="digestLines[1]">{{ digestLines[1] }}</span>
+      <span class="tavern-map-icon-credit">{{ TAVERN_MAP_ICON_ATTRIBUTION }}</span>
     </footer>
   </aside>
 </template>

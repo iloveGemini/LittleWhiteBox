@@ -216,6 +216,15 @@
         tavern-map-op-glow 1.4s ease-out calc(var(--map-delay) + 160ms) both;
 }
 
+.tavern-chat.xb-page .map-line.is-game-icon.is-animated {
+    opacity: 0;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+    animation:
+        tavern-map-fill-in 1s ease-out calc(var(--map-delay) + 120ms) forwards,
+        tavern-map-op-glow 1.4s ease-out calc(var(--map-delay) + 160ms) both;
+}
+
 .tavern-chat.xb-page .map-fill.is-animated {
     opacity: 0;
     animation:
@@ -250,6 +259,15 @@
 .tavern-chat.xb-page .map-removed-layer .map-element {
     --map-accent: rgba(190, 62, 54, 0.86);
     filter: drop-shadow(0 0 8px rgba(190, 62, 54, 0.42));
+}
+
+.tavern-chat.xb-page .tavern-map-icon-credit {
+    margin-left: auto;
+    max-width: 260px;
+    overflow: hidden;
+    color: var(--xb-ink-faint);
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .tavern-chat.xb-page .is-latest {

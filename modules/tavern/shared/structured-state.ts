@@ -30,6 +30,10 @@ import {
 } from './atlas-state-seed';
 import { hasSpatialMapContent } from './map-state-content';
 import { mergeMapElementPatch } from './map-state-ops';
+import {
+    TAVERN_MAP_ICON_NAMES,
+    type TavernMapIconName,
+} from './map-icon-names';
 
 export const TAVERN_STATE_TOOL_NAMES = {
     LIST: 'StateList',
@@ -51,20 +55,6 @@ export type TavernMapElementCategory =
     | 'grid'
     | 'magic'
     | 'secret';
-
-export type TavernMapIconName =
-    | 'x'
-    | 'o'
-    | '+'
-    | 'star'
-    | 'tree'
-    | 'skull'
-    | 'arrow-n'
-    | 'arrow-s'
-    | 'arrow-e'
-    | 'arrow-w'
-    | 'stairs-up'
-    | 'stairs-down';
 
 export interface TavernMapStyle {
     color?: string;
@@ -215,20 +205,7 @@ const MAP_ELEMENT_CATEGORIES = new Set<TavernMapElementCategory>([
     'magic',
     'secret',
 ]);
-const MAP_ICON_NAMES = new Set<TavernMapIconName>([
-    'x',
-    'o',
-    '+',
-    'star',
-    'tree',
-    'skull',
-    'arrow-n',
-    'arrow-s',
-    'arrow-e',
-    'arrow-w',
-    'stairs-up',
-    'stairs-down',
-]);
+const MAP_ICON_NAMES = new Set<TavernMapIconName>(TAVERN_MAP_ICON_NAMES);
 const MAP_THEMES = new Set<TavernMapTheme>(['parchment', 'paper', 'dark', 'blueprint', 'grid']);
 const MAP_STATUSES = new Set<TavernMapStatus>(['uninitialized', 'active']);
 const ATLAS_LOCATION_SCALES = new Set<TavernAtlasLocationScale>(['city', 'district', 'building', 'floor', 'room', 'outdoor']);
@@ -1099,7 +1076,7 @@ function describeMapPatchError(error = ''): string {
     case 'map_element_text_required':
         return `${id} is missing text content. \`text\` must be a short non-empty label.`;
     case 'map_element_icon_invalid':
-        return `${id} has an invalid icon. Use one of x/o/+/star/tree/skull/arrow-n/arrow-s/arrow-e/arrow-w/stairs-up/stairs-down.`;
+        return `${id} has an invalid icon. Use one of ${TAVERN_MAP_ICON_NAMES.join('/')}.`;
     case 'map_element_shape_required':
         return `${id} is missing a shape field. Every element must provide exactly one of rect/circle/path/curve/icon/text.`;
     case 'map_element_shape_conflict':

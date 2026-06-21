@@ -2,7 +2,13 @@
 import { computed, ref, watch } from 'vue';
 import type { TavernStructuredStateDocumentRecord, TavernStructuredStatePatchRecord } from '../../shared/session-db';
 import type { TavernAtlasActorPosition, TavernAtlasDocument, TavernAtlasLink, TavernAtlasLocation, TavernMapStateDocumentItem } from '../../shared/structured-state';
-import { layoutTavernAtlasDocument } from '../atlas-display';
+import { layoutTavernAtlasDocument, type AtlasLayoutNode } from '../atlas-display';
+import {
+    atlasGlyphForScale,
+    gameIconTransform,
+    getTavernGameIconGlyph,
+    TAVERN_MAP_ICON_ATTRIBUTION,
+} from '../map-glyphs';
 
 const props = withDefaults(defineProps<{
     document: TavernStructuredStateDocumentRecord | null;
@@ -114,6 +120,14 @@ function mapDocumentLabel(location: TavernAtlasLocation | null | undefined): str
     return mapTitleById.value.get(docId) || `已关联 ${docId}，地图未创建`;
 }
 
+function atlasNodeGlyph(location: TavernAtlasLocation | null | undefined) {
+    return getTavernGameIconGlyph(atlasGlyphForScale(location?.scale));
+}
+
+function atlasNodeGlyphTransform(node: AtlasLayoutNode): string {
+    return gameIconTransform(node.x + 18, node.y + 23, 18);
+}
+
 </script>
 
 <template>
@@ -146,12 +160,35 @@ function mapDocumentLabel(location: TavernAtlasLocation | null | undefined): str
           role="img"
           aria-label="世界图"
         >
+          <defs>
+            <filter
+              id="tavern-atlas-sketch"
+              x="-5%"
+              y="-5%"
+              width="110%"
+              height="110%"
+            >
+              <feTurbulence
+                type="fractalNoise"
+                baseFrequency="0.022"
+                numOctaves="3"
+                seed="11"
+                result="noise"
+              />
+              <feDisplacementMap
+                in="SourceGraphic"
+                in2="noise"
+                scale="0.55"
+              />
+            </filter>
+          </defs>
           <path
             v-for="link in layout.links"
             :key="link.id"
             class="tavern-atlas-link"
             :class="`kind-${atlas.links.find((item) => item.id === link.id)?.kind || 'path'}`"
             :d="link.path"
+            filter="url(#tavern-atlas-sketch)"
           />
           <g
             v-for="node in layout.nodes"
@@ -169,24 +206,33 @@ function mapDocumentLabel(location: TavernAtlasLocation | null | undefined): str
               :width="node.width"
               :height="node.height"
               rx="8"
+              filter="url(#tavern-atlas-sketch)"
+            />
+            <path
+              v-if="atlasNodeGlyph(locationMap.get(node.key))"
+              class="tavern-atlas-node-glyph"
+              :d="atlasNodeGlyph(locationMap.get(node.key))?.path"
+              :transform="atlasNodeGlyphTransform(node)"
+              :fill-rule="atlasNodeGlyph(locationMap.get(node.key))?.fillRule"
             />
             <text
-              :x="node.x + node.width / 2"
+              :x="node.x + 36"
               :y="node.y + 22"
-              text-anchor="middle"
+              text-anchor="start"
             >
               {{ locationMap.get(node.key)?.name || node.key }}
             </text>
             <text
-              :x="node.x + node.width / 2"
+              :x="node.x + 36"
               :y="node.y + 40"
-              text-anchor="middle"
+              text-anchor="start"
               class="tavern-atlas-node-meta"
             >
               {{ nodeActors(node.key) || locationMap.get(node.key)?.scale }}
             </text>
           </g>
         </svg>
+        <span class="tavern-atlas-icon-credit">{{ TAVERN_MAP_ICON_ATTRIBUTION }}</span>
       </div>
       <aside
         v-if="showDetail"
@@ -302,11 +348,44 @@ function mapDocumentLabel(location: TavernAtlasLocation | null | undefined): str
 }
 
 .tavern-atlas-graph {
+    position: relative;
     min-height: 0;
     overflow: hidden;
+    isolation: isolate;
+    background:
+        radial-gradient(circle at 20% 12%, rgba(255, 251, 220, 0.58), transparent 28%),
+        radial-gradient(circle at 86% 78%, rgba(102, 63, 23, 0.16), transparent 32%),
+        linear-gradient(135deg, rgba(67, 43, 18, 0.08), transparent 38%, rgba(255, 255, 255, 0.18)),
+        #e6d8ae;
+}
+
+.tavern-atlas-graph::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, rgba(45, 35, 22, 0.035) 1px, transparent 1px),
+        linear-gradient(rgba(45, 35, 22, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    mask-image: radial-gradient(circle at center, #000 0, #000 68%, transparent 100%);
+}
+
+.tavern-atlas-graph::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    box-shadow:
+        inset 0 0 0 1px rgba(45, 34, 22, 0.08),
+        inset 0 0 80px rgba(45, 34, 22, 0.16);
 }
 
 .tavern-atlas-graph svg {
+    position: relative;
+    z-index: 2;
     width: 100%;
     height: 100%;
     min-height: 280px;
@@ -314,18 +393,26 @@ function mapDocumentLabel(location: TavernAtlasLocation | null | undefined): str
 
 .tavern-atlas-link {
     fill: none;
-    stroke: color-mix(in srgb, var(--xb-ink-faint) 55%, transparent);
+    stroke: #7e6746;
     stroke-width: 2;
+    stroke-dasharray: 7 5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.74;
 }
 
 .tavern-atlas-link.kind-portal {
-    stroke: var(--xb-stamp);
-    stroke-dasharray: 5 5;
+    stroke: #8052a1;
+    stroke-width: 1.45;
+    stroke-dasharray: 3 5;
+    opacity: 0.78;
 }
 
 .tavern-atlas-link.kind-stairs,
 .tavern-atlas-link.kind-elevator {
-    stroke-dasharray: 3 4;
+    stroke: #6f604a;
+    stroke-width: 1.8;
+    stroke-dasharray: 2 4;
 }
 
 .tavern-atlas-node {
@@ -333,39 +420,70 @@ function mapDocumentLabel(location: TavernAtlasLocation | null | undefined): str
 }
 
 .tavern-atlas-node rect {
-    fill: var(--xb-chat-panel-bg);
-    stroke: var(--xb-rule);
+    fill: #ead9b1;
+    stroke: #665033;
     stroke-width: 1.4;
 }
 
+.tavern-atlas-node-glyph {
+    fill: #6f4b31;
+    opacity: 0.86;
+    pointer-events: none;
+}
+
 .tavern-atlas-node text {
-    fill: var(--xb-ink);
+    fill: #2d2118;
     font: 13px/1 var(--xb-font-ui);
     pointer-events: none;
 }
 
 .tavern-atlas-node .tavern-atlas-node-meta {
-    fill: var(--xb-ink-soft);
+    fill: #6d5a3f;
     font: 11px/1 var(--xb-font-mono);
 }
 
 .tavern-atlas-node.is-mentioned rect {
-    fill: color-mix(in srgb, var(--xb-chat-panel-bg) 70%, transparent);
+    fill: rgba(237, 220, 181, 0.58);
+    stroke: #8a7655;
     stroke-dasharray: 4 4;
 }
 
+.tavern-atlas-node.is-mentioned .tavern-atlas-node-glyph {
+    opacity: 0.46;
+}
+
 .tavern-atlas-node.has-map rect {
-    stroke: color-mix(in srgb, var(--xb-stamp) 45%, var(--xb-rule));
+    stroke: #9a5d30;
 }
 
 .tavern-atlas-node.is-current rect {
-    stroke: var(--xb-stamp);
+    fill: #f1dfb4;
+    stroke: #a0462c;
     stroke-width: 2.2;
+}
+
+.tavern-atlas-node.is-current .tavern-atlas-node-glyph {
+    fill: #9c3d29;
+    opacity: 0.94;
 }
 
 .tavern-atlas-node.is-preview rect,
 .tavern-atlas-node.is-selected rect {
-    filter: drop-shadow(0 5px 14px rgba(var(--xb-accent-rgb), 0.16));
+    filter: url(#tavern-atlas-sketch) drop-shadow(0 5px 14px rgba(95, 54, 24, 0.18));
+}
+
+.tavern-atlas-icon-credit {
+    position: absolute;
+    right: 12px;
+    bottom: 9px;
+    z-index: 5;
+    max-width: min(360px, calc(100% - 24px));
+    overflow: hidden;
+    color: rgba(58, 45, 30, 0.46);
+    font: 10px/1.25 var(--xb-font-ui);
+    pointer-events: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .tavern-atlas-detail {

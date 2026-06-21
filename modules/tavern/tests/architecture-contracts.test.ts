@@ -453,12 +453,24 @@ test('tavern map update badge stays collapsed until requested', () => {
     assert.match(mapPanelSource, /const mapPanOffset = ref<\[number, number\]>\(\[0, 0\]\)/);
     assert.match(mapPanelSource, /function handleMapPointerDown\(event: PointerEvent\)/);
     assert.match(mapPanelSource, /@pointerdown="handleMapPointerDown"[\s\S]*@pointermove="handleMapPointerMove"[\s\S]*@pointerup="handleMapPointerEnd"[\s\S]*@pointercancel="handleMapPointerEnd"/);
+    assert.match(mapPanelSource, /function pickPenAnimationItem[\s\S]*!item\.gameIcon[\s\S]*item\.layer !== 'label'[\s\S]*!!item\.path/);
+    assert.match(mapPanelSource, /const animated = pickPenAnimationItem\(animatedItems\.value\)/);
     assert.doesNotMatch(mapPanelSource, /tavern-map-active-button|设为当前|activate-document/);
     assert.doesNotMatch(appSource, /activateMapDocument/);
     assert.doesNotMatch(contextSource, /activateMapDocument/);
     assert.match(mapCss, /\.tavern-chat\.xb-page \.tavern-map-canvas svg \{[\s\S]*cursor: grab;[\s\S]*touch-action: none;[\s\S]*user-select: none;/);
     assert.match(mapCss, /\.tavern-chat\.xb-page \.tavern-map-canvas\.is-panning svg \{[\s\S]*cursor: grabbing;/);
     assert.doesNotMatch(mapCss, /tavern-map-active-button/);
+});
+
+test('tavern map glyph attribution keeps runtime license metadata', () => {
+    const glyphSource = readRepoFile('modules/tavern/app-src/map-glyphs.ts');
+
+    assert.match(glyphSource, /export const TAVERN_MAP_ICON_LICENSE = \{/);
+    assert.match(glyphSource, /name: 'CC BY 3\.0'/);
+    assert.match(glyphSource, /url: 'https:\/\/creativecommons\.org\/licenses\/by\/3\.0\/'/);
+    assert.match(glyphSource, /source: 'https:\/\/game-icons\.net'/);
+    assert.match(glyphSource, /TAVERN_MAP_ICON_ATTRIBUTION = TAVERN_MAP_ICON_LICENSE\.attribution/);
 });
 
 test('tavern atlas only opens scene maps that actually exist', () => {
