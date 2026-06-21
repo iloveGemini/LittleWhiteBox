@@ -354,6 +354,7 @@ export async function rollbackManagerRunTaskWrites(managerRunId = ''): Promise<{
             updatedAt: now(),
         });
         await tavernManagerRunsTable.update(runId, {
+            status: 'rolled_back',
             error: mergeTaskRollbackError(run.error, ['tasks']),
             updatedAt: now(),
         });

@@ -17519,6 +17519,7 @@ async function Px(e = "") {
     error: "rollback_conflict_current_tasks_changed",
     updatedAt: sr()
   }), await jn.update(t, {
+    status: "rolled_back",
     error: IF(r.error, ["tasks"]),
     updatedAt: sr()
   }), {

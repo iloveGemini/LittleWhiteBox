@@ -2513,6 +2513,54 @@ test('manager rollback keeps memory conflict audit when task rollback also succe
     assert.equal(updatedRun?.error, 'rollback_conflict:memory/state.md');
 });
 
+test('manager rollback marks task-only conflicts as rolled back with audit error', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Manager task conflict audit' });
+    const userMessage = await appendTavernMessage(session.id, { role: 'user', content: '继续。' });
+    const assistantMessage = await appendTavernMessage(session.id, { role: 'assistant', content: '码头有新线索。' });
+    const run = await createTavernManagerRun({
+        sessionId: session.id,
+        trigger: 'after_turn',
+        turn: 1,
+        userOrder: userMessage.order,
+        assistantOrder: assistantMessage.order,
+        status: 'running',
+    });
+
+    const taskWrite = await executeTavernTaskTool(session.id, 'TaskPatch', {
+        op: 'upsert-task',
+        taskId: 'task-conflict',
+        fingerprint: 'task-conflict',
+        horizon: '冲突远景',
+        current: '冲突当前',
+        doneWhen: '角色当场说出答案。',
+        hookForUser: '冲突说明。',
+        hookForModel: '冲突软句。',
+    }, { caller: 'auto', managerRunId: run.id, sourceAssistantOrder: 5 });
+    assert.equal(taskWrite.ok, true);
+
+    const userEdit = await executeTavernTaskTool(session.id, 'TaskPatch', {
+        op: 'advance-task',
+        taskId: 'task-conflict',
+        current: '用户后续手动改过的当前',
+        horizon: '冲突远景',
+        doneWhen: '角色当场说出答案。',
+        hookForUser: '冲突说明。',
+        hookForModel: '冲突软句后来变了。',
+    }, { caller: 'chat', sourceAssistantOrder: 6 });
+    assert.equal(userEdit.ok, true);
+
+    const rolledBack = await cancelAndRollbackXbTavernManagersForMessageRange(session.id, userMessage.order);
+
+    assert.deepEqual(rolledBack.conflicts, ['tasks']);
+    const updatedRun = (await listTavernManagerRuns(session.id))[0];
+    assert.equal(updatedRun?.status, 'rolled_back');
+    assert.equal(updatedRun?.error, 'rollback_conflict:tasks');
+    assert.equal((await listTavernTasks(session.id, { includeCompleted: true }))[0]?.current, '用户后续手动改过的当前');
+});
+
 test('manager TaskPatch writes are counted in run summaries', async () => {
     await db.delete();
     await db.open();
