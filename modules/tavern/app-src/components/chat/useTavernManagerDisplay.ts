@@ -137,6 +137,7 @@ export function useTavernManagerDisplay(options: TavernManagerDisplayOptions) {
             manager_memory_tool_required: '本轮没有完成必要的记忆维护，系统没有采用这次结果。',
             manager_aborted: '本次后台工作已停止，系统没有采用这次结果。',
             manager_source_messages_changed: '原文消息已经变化，系统没有采用这次结果。',
+            manager_epoch_expired: '后台工作已过期，系统没有采用这次结果。',
         };
         if (/工具轮次达到上限/.test(error)) {return `原因：${error} 系统没有采用这次结果。`;}
         if (error && labels[error]) {return `原因：${labels[error]}`;}

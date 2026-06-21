@@ -17,8 +17,10 @@ import {
     type TavernMemoryToolResult,
 } from '../../shared/memory-files';
 import {
+    advanceTavernAutoManagerEpoch,
     createTavernManagerRun,
     deleteTavernManagerMessages,
+    getTavernAutoManagerEpoch,
     getTavernMessage,
     listTavernManagerMemorySnapshots,
     listTavernManagerMessages,
@@ -103,6 +105,7 @@ export interface XbTavernManagerRunInput {
     turn: number;
     trigger?: string;
     managerRunId?: string;
+    autoManagerEpoch?: number;
     sessionContract?: TavernSessionContract;
     assistantPreset?: TavernAssistantPreset;
     signal?: AbortSignal;
@@ -425,7 +428,7 @@ function isManagerAbortLike(error: unknown, signal?: AbortSignal): boolean {
 function managerFailureStatus(error: unknown, signal?: AbortSignal): TavernManagerRunRecord['status'] {
     const message = error instanceof Error ? error.message : String(error || '');
     if (isManagerAbortLike(error, signal)) {return 'cancelled';}
-    if (message === 'manager_source_messages_changed') {return 'superseded';}
+    if (message === 'manager_source_messages_changed' || message === 'manager_epoch_expired') {return 'superseded';}
     return 'failed';
 }
 
@@ -728,6 +731,12 @@ async function runManagerAgentWithTools(input: {
 }
 
 async function assertManagerSourceMessagesCurrent(input: XbTavernManagerRunInput): Promise<void> {
+    if (Number.isFinite(Number(input.autoManagerEpoch))) {
+        const currentEpoch = await getTavernAutoManagerEpoch(input.sessionId);
+        if (currentEpoch !== Math.max(0, Math.floor(Number(input.autoManagerEpoch) || 0))) {
+            throw new Error('manager_epoch_expired');
+        }
+    }
     const [userMessage, assistantMessage] = await Promise.all([
         getTavernMessage(input.sessionId, input.userMessage.order),
         getTavernMessage(input.sessionId, input.assistantMessage.order),
@@ -1350,6 +1359,9 @@ export async function scheduleXbTavernManagerAfterTurn(input: XbTavernManagerRun
     awaitCompletion?: boolean;
     onManagerRunSaved?: (run: TavernManagerRunRecord) => void | Promise<void>;
 }): Promise<XbTavernManagerScheduleResult> {
+    const autoManagerEpoch = Number.isFinite(Number(input.autoManagerEpoch))
+        ? Math.max(0, Math.floor(Number(input.autoManagerEpoch) || 0))
+        : await getTavernAutoManagerEpoch(input.sessionId);
     const queued = await createTavernManagerRun({
         sessionId: input.sessionId,
         turn: input.turn,
@@ -1387,6 +1399,7 @@ export async function scheduleXbTavernManagerAfterTurn(input: XbTavernManagerRun
             const result = await runXbTavernManagerAfterTurn({
                 ...input,
                 managerRunId: queued.id,
+                autoManagerEpoch,
                 signal: controller.signal,
             });
             await input.onManagerRunSaved?.(result.managerRun);
@@ -1439,6 +1452,9 @@ export async function settleTavernManagersForSession(sessionId = '', timeoutMs =
         timeoutPromise,
     ]);
     if (timer) {clearTimeout(timer);}
+    if (result === 'timeout') {
+        await advanceTavernAutoManagerEpoch(id);
+    }
     return {
         settled: result === 'settled',
         timedOut: result === 'timeout',

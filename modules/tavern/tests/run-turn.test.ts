@@ -431,7 +431,19 @@ test('xb tavern run turn continues and records diagnostics when manager settle t
         contextSnapshot: {
             character: { id: 'char-timeout', name: 'Aster', description: 'Pilot.' },
         },
+        state: {
+            contract: mergeTavernSessionContract(undefined, {
+                memoryArchiving: true,
+                questOrchestration: true,
+            }),
+        },
     });
+    for (let index = 0; index < 5; index += 1) {
+        await appendTavernMessage(session.id, {
+            role: index % 2 ? 'assistant' : 'user',
+            content: `铺垫 ${index}`,
+        });
+    }
     const userMessage = await appendTavernMessage(session.id, {
         role: 'user',
         content: '上一轮。',
@@ -459,9 +471,44 @@ test('xb tavern run turn continues and records diagnostics when manager settle t
             markManagerStarted();
             await managerGate;
             return {
-                text: 'Manager eventually settled.',
+                text: '',
                 provider: 'fake-provider',
                 model: 'fake-model',
+                toolCalls: [{
+                    id: 'late-memory',
+                    name: 'MemoryWrite',
+                    arguments: {
+                        filePath: 'memory/state.md',
+                        content: '# 会话记忆\n\n这条超时后台写入不能落库。',
+                    },
+                }, {
+                    id: 'late-task',
+                    name: 'TaskPatch',
+                    arguments: {
+                        op: 'upsert-task',
+                        taskId: 'late-task',
+                        fingerprint: 'late-task',
+                        horizon: '超时后台远景',
+                        current: '超时后台入口',
+                        doneWhen: '角色在故事中明确说出超时后台结果。',
+                        hookForUser: '超时后台线索。',
+                        hookForModel: '超时后台线索浮现。',
+                    },
+                }, {
+                    id: 'late-state',
+                    name: 'StatePatch',
+                    arguments: {
+                        docType: 'tavern.map',
+                        docId: 'late-map',
+                        ops: [{
+                            op: 'meta',
+                            set: { name: '超时后台地图', viewBox: [0, 0, 500, 400], status: 'active' },
+                        }, {
+                            op: 'add',
+                            element: { id: 'late-marker', at: [50, 50], shape: 'label', text: '不能落库' },
+                        }],
+                    },
+                }],
             };
         },
     });
@@ -489,6 +536,22 @@ test('xb tavern run turn continues and records diagnostics when manager settle t
     const diagnostics = result.buildSnapshot.diagnostics as { managerSettleTimedOut?: boolean; managerSettleTimeoutMs?: number } | undefined;
     assert.equal(diagnostics?.managerSettleTimedOut, true);
     assert.equal(diagnostics?.managerSettleTimeoutMs, 5);
+    assert.doesNotMatch((await getTavernMemoryFile(session.id, 'memory/state.md'))?.content || '', /超时后台写入不能落库/);
+    const taskResult = await executeTavernTaskTool(session.id, 'TaskPatch', {
+        op: 'complete-task',
+        taskId: 'late-task',
+    });
+    assert.equal(taskResult.error, 'task_not_found');
+    const stateResult = await executeTavernStateTool(session.id, 'StateRead', {
+        docType: 'tavern.map',
+        docId: 'late-map',
+        mode: 'document',
+    });
+    assert.equal(stateResult.error, 'state_document_not_found');
+    const runs = await listTavernManagerRuns(session.id);
+    const staleRun = runs.find((run) => run.id === scheduled.managerRunId);
+    assert.equal(staleRun?.status, 'superseded');
+    assert.equal(staleRun?.error, 'manager_epoch_expired');
 });
 
 test('xb tavern session author note reaches native prompt for real and simulated requests', async () => {

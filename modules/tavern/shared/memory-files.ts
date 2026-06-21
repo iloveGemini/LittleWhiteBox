@@ -865,6 +865,7 @@ function isManagerControlError(error: unknown): boolean {
     const name = error instanceof Error ? error.name : '';
     return name === 'AbortError'
         || message === 'manager_source_messages_changed'
+        || message === 'manager_epoch_expired'
         || message === 'manager_aborted';
 }
 
@@ -945,14 +946,15 @@ export async function executeTavernMemoryTool(
         if (toolName === TAVERN_MEMORY_TOOL_NAMES.WRITE) {
             const pathInput = String(args.filePath || args.path || '');
             const path = validateWritableMemoryPath(pathInput);
-            await options.beforeWriteGuard?.();
             const file = await db.transaction(
                 'rw',
                 tavernMemoryFilesTable,
                 tavernMemoryIndexesTable,
                 tavernManagerMemorySnapshotsTable,
+                tavernMessagesTable,
                 tavernSessionsTable,
                 async () => {
+                    await options.beforeWriteGuard?.();
                     if (options.managerRunId) {
                         await ensureTavernManagerMemorySnapshot({ managerRunId: options.managerRunId, sessionId: id, path });
                     }
@@ -996,14 +998,15 @@ export async function executeTavernMemoryTool(
             const failedCount = Math.max(0, editResults.length - successCount);
             const changed = result.content !== file.content;
             if (changed) {
-                await options.beforeWriteGuard?.();
                 await db.transaction(
                     'rw',
                     tavernMemoryFilesTable,
                     tavernMemoryIndexesTable,
                     tavernManagerMemorySnapshotsTable,
+                    tavernMessagesTable,
                     tavernSessionsTable,
                     async () => {
+                        await options.beforeWriteGuard?.();
                         if (options.managerRunId) {
                             await ensureTavernManagerMemorySnapshot({ managerRunId: options.managerRunId, sessionId: id, path });
                         }

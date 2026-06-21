@@ -5,6 +5,7 @@ import db, {
     listTavernStructuredStateDocuments,
     listTavernStructuredStatePatches,
     putTavernStructuredStateDocument,
+    tavernMessagesTable,
     tavernSessionsTable,
     tavernStateDocumentsTable,
     tavernStatePatchesTable,
@@ -2296,14 +2297,15 @@ export async function executeTavernStateTool(
             if (docType === ATLAS_DOC_TYPE && activate) {
                 return { ok: false, summary: 'Atlas has no activate:true operation. Move the player with move-actor(actorKey:"player").', docType, docId, error: 'atlas_activate_not_supported' };
             }
-            await options.beforeWriteGuard?.();
             if (docType === ATLAS_DOC_TYPE) {
                 return await db.transaction(
                     'rw',
                     tavernStateDocumentsTable,
                     tavernStatePatchesTable,
+                    tavernMessagesTable,
                     tavernSessionsTable,
                     async () => {
+                        await options.beforeWriteGuard?.();
                         const existing = await getSeededAtlasDocumentRecord(id);
                         const currentRevision = Number(existing?.revision) || 0;
                         if (Number.isFinite(Number(args.baseRevision)) && Number(args.baseRevision) !== currentRevision) {
@@ -2426,8 +2428,10 @@ export async function executeTavernStateTool(
                 'rw',
                 tavernStateDocumentsTable,
                 tavernStatePatchesTable,
+                tavernMessagesTable,
                 tavernSessionsTable,
                 async () => {
+                    await options.beforeWriteGuard?.();
                     const existing = await getTavernStructuredStateDocument(id, docType, docId);
                     const currentRevision = Number(existing?.revision) || 0;
                     if (Number.isFinite(Number(args.baseRevision)) && Number(args.baseRevision) !== currentRevision) {
@@ -2615,7 +2619,7 @@ export async function executeTavernStateTool(
     } catch (error) {
         const name = error instanceof Error ? error.name : '';
         const message = error instanceof Error ? error.message : String(error || 'state_tool_failed');
-        if (name === 'AbortError' || message === 'manager_source_messages_changed' || message === 'manager_aborted') {
+        if (name === 'AbortError' || message === 'manager_source_messages_changed' || message === 'manager_epoch_expired' || message === 'manager_aborted') {
             throw error;
         }
         return {

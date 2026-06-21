@@ -61,6 +61,7 @@ export interface TavernSessionRecord {
 export interface TavernSessionState {
     turn?: number;
     contextWindowStartOrder?: number;
+    autoManagerEpoch?: number;
     activeMapDocId?: string;
     contract?: TavernSessionContract;
     worldEntryStates?: Record<string, XbTavernWorldEntryState>;
@@ -728,7 +729,7 @@ function normalizeNativeWorldInfoTimedState(value: unknown): XbTavernNativeWorld
 export function normalizeTavernSessionState(value: unknown): TavernSessionState {
     const source = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
     const activeMapDocId = normalizeStructuredStateDocId(source.activeMapDocId || TAVERN_MAP_DOC_ID);
-    return {
+    const state: TavernSessionState = {
         ...source,
         turn: Math.max(0, Number(source.turn) || 0),
         contextWindowStartOrder: Math.max(0, Math.floor(Number(source.contextWindowStartOrder) || 0)),
@@ -737,6 +738,12 @@ export function normalizeTavernSessionState(value: unknown): TavernSessionState 
         worldEntryStates: normalizeWorldEntryStates(source.worldEntryStates),
         nativeWorldInfoTimedState: normalizeNativeWorldInfoTimedState(source.nativeWorldInfoTimedState),
     };
+    if (hasOwnStateField(source, 'autoManagerEpoch')) {
+        state.autoManagerEpoch = Math.max(0, Math.floor(Number(source.autoManagerEpoch) || 0));
+    } else {
+        delete state.autoManagerEpoch;
+    }
+    return state;
 }
 
 function hasOwnStateField(value: unknown, key: keyof TavernSessionState): boolean {
@@ -890,6 +897,9 @@ export async function updateTavernSessionState(sessionId = '', patch: Partial<Ta
         ...currentState,
         ...patch,
         turn: Math.max(0, Number(patch.turn ?? currentState.turn) || 0),
+        autoManagerEpoch: hasOwnStateField(patch, 'autoManagerEpoch')
+            ? Math.max(0, Math.floor(Number(patchState.autoManagerEpoch) || 0))
+            : currentState.autoManagerEpoch,
         contract: hasOwnStateField(patch, 'contract')
             ? mergeTavernSessionContract(currentState.contract, hasTavernSessionContractOverride(patch.contract) ? patch.contract : undefined)
             : currentState.contract,
@@ -920,6 +930,9 @@ export async function replaceTavernSessionState(sessionId = '', stateInput: Part
     const state: TavernSessionState = {
         ...stateInput,
         turn: Math.max(0, Number(normalized.turn) || 0),
+        autoManagerEpoch: hasOwnStateField(stateInput, 'autoManagerEpoch')
+            ? Math.max(0, Math.floor(Number(normalized.autoManagerEpoch) || 0))
+            : currentState.autoManagerEpoch,
         activeMapDocId: hasOwnStateField(stateInput, 'activeMapDocId')
             ? normalized.activeMapDocId
             : currentState.activeMapDocId || TAVERN_MAP_DOC_ID,
@@ -935,6 +948,30 @@ export async function replaceTavernSessionState(sessionId = '', stateInput: Part
         buildSnapshot: cloneSerializable(state.lastBuildSnapshot || existing.buildSnapshot, undefined),
     });
     return await getTavernSession(id);
+}
+
+export async function getTavernAutoManagerEpoch(sessionId = ''): Promise<number> {
+    const session = await getTavernSession(sessionId);
+    return Math.max(0, Math.floor(Number(normalizeTavernSessionState(session?.state || {}).autoManagerEpoch) || 0));
+}
+
+export async function advanceTavernAutoManagerEpoch(sessionId = ''): Promise<number> {
+    const id = String(sessionId || '').trim();
+    if (!id) {return 0;}
+    return await db.transaction('rw', tavernSessionsTable, async () => {
+        const existing = await tavernSessionsTable.get(id);
+        if (!existing) {return 0;}
+        const state = normalizeTavernSessionState(existing.state || {});
+        const nextEpoch = Math.max(0, Math.floor(Number(state.autoManagerEpoch) || 0)) + 1;
+        await tavernSessionsTable.update(id, {
+            state: cloneSerializable({
+                ...state,
+                autoManagerEpoch: nextEpoch,
+            }, {}),
+            updatedAt: now(),
+        });
+        return nextEpoch;
+    });
 }
 
 export async function updateTavernSessionSnapshot(sessionId = '', patch: {

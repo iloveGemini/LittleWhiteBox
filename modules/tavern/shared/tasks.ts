@@ -2,6 +2,8 @@ import db, {
     getLatestTavernAssistantOrder,
     tavernManagerRunsTable,
     tavernManagerTaskSnapshotsTable,
+    tavernMessagesTable,
+    tavernSessionsTable,
     tavernTaskFingerprintStatesTable,
     tavernTaskSnapshotsTable,
     tavernTasksTable,
@@ -404,8 +406,8 @@ function summarizeTask(task: TavernTaskRecord): Pick<TavernTaskRecord, 'id' | 's
 }
 
 async function runTaskMutation<T>(sessionId: string, options: TavernTaskPatchOptions, mutate: () => Promise<T>): Promise<T> {
-    await options.beforeWriteGuard?.();
-    return await db.transaction('rw', tavernTasksTable, tavernTaskFingerprintStatesTable, tavernManagerTaskSnapshotsTable, async () => {
+    return await db.transaction('rw', tavernTasksTable, tavernTaskFingerprintStatesTable, tavernManagerTaskSnapshotsTable, tavernMessagesTable, tavernSessionsTable, async () => {
+        await options.beforeWriteGuard?.();
         if (options.managerRunId) {
             await ensureTavernManagerTaskSnapshot(options.managerRunId, sessionId);
         }
