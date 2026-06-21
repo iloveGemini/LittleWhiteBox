@@ -42,17 +42,29 @@ const {
     />
 
     <section class="xb-main">
-      <TavernApiSettingsPanel />
+      <TavernApiSettingsPanel
+        v-if="activeSettingsWorkspace === 'api'"
+      />
 
-      <TavernChatPresetSettingsPanel />
+      <TavernChatPresetSettingsPanel
+        v-if="activeSettingsWorkspace === 'chatPreset'"
+      />
 
-      <TavernWorldbooksSettingsPanel />
+      <TavernWorldbooksSettingsPanel
+        v-if="activeSettingsWorkspace === 'worldbooks'"
+      />
 
-      <TavernRegexSettingsPanel />
+      <TavernRegexSettingsPanel
+        v-if="activeSettingsWorkspace === 'regex'"
+      />
 
-      <TavernAssistantPresetSettingsPanel />
+      <TavernAssistantPresetSettingsPanel
+        v-if="activeSettingsWorkspace === 'assistantPreset'"
+      />
 
-      <TavernBaseSettingsPanel />
+      <TavernBaseSettingsPanel
+        v-if="activeSettingsWorkspace === 'base'"
+      />
     </section>
   </section>
 </template>

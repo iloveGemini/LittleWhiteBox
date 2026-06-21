@@ -1107,6 +1107,16 @@ function renderSectionFiles(section = {}, files = [], state = {}) {
     return `<div class="xb-file-tree" data-file-tree-signature="${escapeHtml(treeSignature)}">${rows.join('')}</div>`;
 }
 
+function renderFileGroupBadge(group = {}, state = {}) {
+    if (group.key === 'chapters') {
+        const descending = !!state.chapterSortDescending;
+        const label = descending ? '正序' : '倒序';
+        const title = descending ? '按章节正序显示' : '按章节倒序显示';
+        return `<button class="xb-file-sort-toggle${descending ? ' is-descending' : ''}" type="button" data-chapter-sort-toggle title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">${escapeHtml(label)}</button>`;
+    }
+    return `<em>${escapeHtml(group.badge)}</em>`;
+}
+
 function renderImportActions(disabledAttr = '') {
     return `
         <div class="xb-section-subtitle">可导入</div>
@@ -1154,15 +1164,20 @@ export function collectStudioFileSectionModels(state = {}, options = {}) {
     return {
         emptyHtml: '',
         groups: [...primarySections, ...otherSections].map((group) => {
-            const filesHtml = renderSectionFiles(group, group.files, state);
+            const displayFiles = group.key === 'chapters' && state.chapterSortDescending
+                ? [...group.files].reverse()
+                : group.files;
             const staticSignature = [
                 group.key,
                 group.title,
                 group.description,
                 group.badge,
+                group.key === 'chapters' && state.chapterSortDescending ? 'desc' : 'asc',
                 group.key === 'sources' ? writeActionAttr : '',
             ].join(':');
-            const fileModels = group.files.map((file) => {
+            const badgeHtml = renderFileGroupBadge(group, state);
+            const filesHtml = renderSectionFiles(group, displayFiles, state);
+            const fileModels = displayFiles.map((file) => {
                 const active = file.path === state.selectedPath;
                 const title = formatFileTitle(file.path);
                 const signature = getStudioFileSignature(file, state);
@@ -1188,7 +1203,7 @@ export function collectStudioFileSectionModels(state = {}, options = {}) {
                     <div class="xb-file-group" data-file-group-key="${escapeHtml(group.key)}" data-file-static-signature="${escapeHtml(staticSignature)}">
                         <div class="xb-file-group-title">
                             <span>${escapeHtml(group.title)}</span>
-                            <em>${escapeHtml(group.badge)}</em>
+                            ${badgeHtml}
                         </div>
                         <div class="xb-file-group-desc">${escapeHtml(group.description)}</div>
                         ${group.key === 'sources' ? renderImportActions(writeActionAttr) : ''}
@@ -1202,7 +1217,7 @@ export function collectStudioFileSectionModels(state = {}, options = {}) {
                     <div class="xb-file-group" data-file-group-key="${escapeHtml(group.key)}" data-file-static-signature="${escapeHtml(staticSignature)}">
                         <div class="xb-file-group-title">
                             <span>${escapeHtml(group.title)}</span>
-                            <em>${escapeHtml(group.badge)}</em>
+                            ${badgeHtml}
                         </div>
                         <div class="xb-file-group-desc">${escapeHtml(group.description)}</div>
                         ${group.key === 'sources' ? renderImportActions(writeActionAttr) : ''}

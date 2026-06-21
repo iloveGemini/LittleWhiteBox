@@ -76,7 +76,7 @@ function handleInput(event: Event) {
 
       <div class="prompt-inspector-body">
         <section
-          v-show="tab === 'history'"
+          v-if="tab === 'history'"
           class="prompt-inspector-view"
         >
           <div class="prompt-inspector-summary">
@@ -98,7 +98,7 @@ function handleInput(event: Event) {
         </section>
 
         <section
-          v-show="tab === 'simulate'"
+          v-else-if="tab === 'simulate'"
           class="prompt-inspector-view"
         >
           <div class="prompt-simulate-panel">

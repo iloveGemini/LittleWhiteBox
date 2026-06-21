@@ -693,8 +693,10 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
             font-size: inherit;
             font-weight: inherit;
         }
-        .xb-file-group-title em {
+        .xb-file-group-title em,
+        .xb-file-sort-toggle {
             padding: 3px 8px;
+            border: 0;
             border-radius: 999px;
             background: rgba(143, 183, 202, 0.12);
             color: var(--xb-cyan);
@@ -703,6 +705,14 @@ export function injectEbookStyles(rootId = 'xb-ebook-root') {
             font-weight: 700;
             font-style: normal;
             letter-spacing: 0.02em;
+        }
+        .xb-file-sort-toggle {
+            min-height: 24px;
+            cursor: pointer;
+        }
+        .xb-file-sort-toggle:hover {
+            background: rgba(143, 183, 202, 0.2);
+            color: #d8f6ff;
         }
         .xb-file-group-desc {
             color: var(--xb-text-muted);

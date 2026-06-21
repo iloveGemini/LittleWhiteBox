@@ -2661,18 +2661,28 @@ test('Studio file section models keep unchanged file signatures reusable', () =>
         files,
         selectedPath: 'book/chapters/002.md',
     });
+    const descendingModel = collectStudioFileSectionModels({
+        files,
+        selectedPath: 'book/chapters/001.md',
+        chapterSortDescending: true,
+    });
     const firstChapters = firstModel.groups.find((group) => group.key === 'chapters');
     const nextChapters = nextModel.groups.find((group) => group.key === 'chapters');
+    const descendingChapters = descendingModel.groups.find((group) => group.key === 'chapters');
     const settingsGroup = firstModel.groups.find((group) => group.key === 'settings');
     const firstOutline = settingsGroup.files[0];
     const nextOutline = nextModel.groups.find((group) => group.key === 'settings').files[0];
 
+    assert.deepEqual(firstChapters.files.map((file) => file.path), ['book/chapters/001.md', 'book/chapters/002.md']);
+    assert.deepEqual(descendingChapters.files.map((file) => file.path), ['book/chapters/002.md', 'book/chapters/001.md']);
     assert.notEqual(firstChapters.files[0].signature, nextChapters.files[0].signature);
     assert.notEqual(firstChapters.files[1].signature, nextChapters.files[1].signature);
     assert.equal(firstOutline.signature, nextOutline.signature);
     assert.equal(firstModel.groups.some((group) => group.key === 'volumes'), false);
     assert.match(firstChapters.scaffoldHtml, /data-file-group-key="chapters"/);
     assert.match(firstChapters.html, /data-file-group-key="chapters"/);
+    assert.match(firstChapters.html, /data-chapter-sort-toggle[^>]*>倒序<\/button>/);
+    assert.match(descendingChapters.html, /data-chapter-sort-toggle[^>]*>正序<\/button>/);
     assert.match(firstChapters.html, /data-file-static-signature="chapters:/);
     assert.match(firstChapters.html, /data-file-signature="book\/chapters\/001\.md:第 1 章:active"/);
     assert.match(firstChapters.html, /data-file-signature="book\/chapters\/002\.md:第 2 章:"/);

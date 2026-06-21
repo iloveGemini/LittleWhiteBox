@@ -371,6 +371,11 @@ export function createBookController(deps = {}) {
         return ['loading', 'playing'].includes(String(state.readerTtsPlayback?.status || ''));
     }
 
+    function toggleChapterSortOrder() {
+        state.chapterSortDescending = !state.chapterSortDescending;
+        render();
+    }
+
     function resetReaderTtsPlayback(status = 'idle') {
         state.readerTtsPlayback = {
             status,
@@ -985,6 +990,7 @@ export function createBookController(deps = {}) {
         showReader,
         showStudio,
         stopReaderTts,
+        toggleChapterSortOrder,
         toggleReaderTts,
     };
 }

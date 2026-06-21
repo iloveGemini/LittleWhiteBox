@@ -379,6 +379,7 @@ export function bindEbookEvents(options = {}) {
     root.querySelector('#xb-studio-link')?.addEventListener('click', () => void bookController.showStudio());
     root.querySelector('#xb-studio-empty-link')?.addEventListener('click', () => void bookController.showStudio());
     root.querySelector('#xb-reader-link')?.addEventListener('click', () => void bookController.showReader());
+    root.querySelector('[data-chapter-sort-toggle]')?.addEventListener('click', () => void bookController.toggleChapterSortOrder());
     root.querySelector('#xb-reader-tts-toggle')?.addEventListener('click', () => void bookController.toggleReaderTts());
     root.querySelector('#xb-draw-chapter')?.addEventListener('click', () => void bookController.drawCurrentChapter());
     root.querySelector('#xb-new-book')?.addEventListener('click', () => void bookController.createNewBook());

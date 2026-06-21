@@ -20,6 +20,7 @@ export function createEbookState() {
         files: [],
         selectedPath: '',
         readerPath: '',
+        chapterSortDescending: false,
         viewMode: 'library',
         editorContent: '',
         savedContent: '',

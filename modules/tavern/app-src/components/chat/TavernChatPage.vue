@@ -28,6 +28,7 @@ import {
     normalizeXbTavernAuthorNote,
     type XbTavernAuthorNote,
 } from '../../../shared/message-assembler';
+import { useTavernMediaQuery } from '../useTavernMediaQuery';
 
 const shell = useTavernShellContext();
 const chat = useTavernChatContext();
@@ -80,8 +81,11 @@ const authorNoteSaving = ref(false);
 const authorNoteStatus = ref('');
 const mobileChatPanel = ref<'none' | 'directory' | 'workspace'>('none');
 const mobileMemoryDirectoryOpen = ref(false);
+const isMobileChatViewport = useTavernMediaQuery('(max-width: 760px)');
 
 const contractDraftDirty = computed(() => JSON.stringify(contractDraft.value) !== JSON.stringify(sessionContract.value));
+const shouldMountChatDirectory = computed(() => !isMobileChatViewport.value || mobileChatPanel.value === 'directory');
+const shouldMountChatWorkspace = computed(() => !isMobileChatViewport.value || mobileChatPanel.value === 'workspace');
 
 const authorNotePositionOptions = [
     { value: XBTavernAuthorNotePosition.AFTER_MAIN, label: '主提示词后' },
@@ -323,7 +327,10 @@ onUpdated(() => {
       @toggle-theme="homeThemeDark = !homeThemeDark"
       @worldbooks="openQuickSettingsModal('worldbooks')"
     />
-    <header class="chat-mobile-topbar">
+    <header
+      v-if="isMobileChatViewport"
+      class="chat-mobile-topbar"
+    >
       <div class="chat-mobile-primary-row">
         <div
           class="chat-mobile-segment"
@@ -530,6 +537,7 @@ onUpdated(() => {
       </div>
     </header>
     <button
+      v-if="isMobileChatViewport && mobileChatPanel !== 'none'"
       type="button"
       class="chat-mobile-sheet-scrim"
       title="收起面板"
@@ -537,6 +545,7 @@ onUpdated(() => {
       @click="closeMobileChatPanel"
     />
     <TavernChatSidebar
+      v-if="shouldMountChatDirectory"
       @click="handleMobileDirectoryClick"
       @close="closeMobileChatPanel"
     />
@@ -556,6 +565,7 @@ onUpdated(() => {
     </section>
 
     <TavernWorkspacePanel
+      v-if="shouldMountChatWorkspace"
       :mobile-memory-directory-open="mobileMemoryDirectoryOpen"
       @close="closeMobileChatPanel"
       @close-memory-directory="mobileMemoryDirectoryOpen = false"
@@ -711,8 +721,12 @@ onUpdated(() => {
             :class="quickSettingsLayoutClass"
           >
             <section class="xb-main">
-              <TavernChatPresetSettingsPanel />
-              <TavernWorldbooksSettingsPanel />
+              <TavernChatPresetSettingsPanel
+                v-if="quickSettingsOpen === 'chatPreset'"
+              />
+              <TavernWorldbooksSettingsPanel
+                v-else-if="quickSettingsOpen === 'worldbooks'"
+              />
             </section>
           </div>
         </div>
