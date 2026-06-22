@@ -9,7 +9,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (event: 'cancel'): void;
-    (event: 'save', options: { content: string; rerun?: boolean }): void;
+    (event: 'save', options: { content: string; rerun?: boolean; rollbackState?: boolean }): void;
 }>();
 
 const draft = ref(String(props.message.content || ''));
@@ -71,9 +71,9 @@ function focusEditor() {
     });
 }
 
-function save(rerun = false) {
+function save(options: { rerun?: boolean; rollbackState?: boolean } = {}) {
     if (!dirty.value) {return;}
-    emit('save', { content: draft.value, rerun });
+    emit('save', { content: draft.value, ...options });
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -84,7 +84,7 @@ function handleKeydown(event: KeyboardEvent) {
     }
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
-        save(false);
+        save();
     }
 }
 
@@ -121,17 +121,24 @@ onBeforeUnmount(() => {
       <button
         type="button"
         :disabled="!dirty"
-        @click="save(false)"
+        @click="save()"
       >
-        {{ message.role === 'user' ? '保存' : '保存修改' }}
+        仅保存
+      </button>
+      <button
+        type="button"
+        :disabled="!dirty"
+        @click="save({ rollbackState: true })"
+      >
+        回滚保存
       </button>
       <button
         v-if="message.role === 'user'"
         type="button"
         :disabled="!dirty"
-        @click="save(true)"
+        @click="save({ rerun: true })"
       >
-        保存并从这里重来
+        重来
       </button>
       <button
         type="button"
