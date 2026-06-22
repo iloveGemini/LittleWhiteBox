@@ -60,6 +60,8 @@ test('tavern scroll handlers collapse expanded message windows when returning to
     assert.match(scrollPaneSource, /const previousScrollTop = lastScrollTop;[\s\S]*const scrollingTowardBottom = currentScrollTop > previousScrollTop;[\s\S]*lastScrollTop = currentScrollTop;/);
     assert.match(scrollPaneSource, /else if \(currentScrollTop < previousScrollTop\) \{[\s\S]*autoScroll\.value = false;/);
     assert.doesNotMatch(scrollPaneSource, /else \{\s*autoScroll\.value = false;\s*\}/);
+    assert.match(scrollPaneSource, /function findWheelScrollTarget\(event: WheelEvent, root: HTMLElement, deltaY: number\)/);
+    assert.match(scrollPaneSource, /requestAnimationFrame\(\(\) => \{[\s\S]*applyWheelFallback\(target, deltaY\);[\s\S]*if \(target === root\) \{[\s\S]*handleScroll\(\);/);
     assert.match(scrollPaneSource, /function scrollToBottom\([\s\S]*scrollOptions\.collapseWindow \|\| autoScroll\.value[\s\S]*collapseMessageWindowIfBottom\(true\);/);
     assert.match(scrollPaneSource, /watch\(\(\) => normalizeHiddenOutsideCount/);
 });

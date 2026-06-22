@@ -157,10 +157,73 @@ export function useTavernScrollPane(options: TavernScrollPaneOptions) {
         });
     }
 
+    function getWheelTarget(event: WheelEvent) {
+        const target = event.target;
+        if (target instanceof HTMLElement) {return target;}
+        if (target instanceof Node && target.parentElement instanceof HTMLElement) {
+            return target.parentElement;
+        }
+        return null;
+    }
+
+    function hasWheelScrollableOverflow(element: HTMLElement) {
+        if (element instanceof HTMLTextAreaElement) {return true;}
+        const view = element.ownerDocument?.defaultView || window;
+        const style = view.getComputedStyle?.(element);
+        return /^(auto|scroll|overlay)$/i.test(String(style?.overflowY || ''));
+    }
+
+    function normalizeWheelDeltaY(event: WheelEvent, target: HTMLElement) {
+        const raw = Number(event.deltaY || 0);
+        if (!Number.isFinite(raw) || raw === 0) {return 0;}
+        if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {return raw * 16;}
+        if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {return raw * Math.max(1, target.clientHeight || 1);}
+        return raw;
+    }
+
+    function canWheelScroll(element: HTMLElement, deltaY: number) {
+        if (!hasWheelScrollableOverflow(element)) {return false;}
+        const maxScrollTop = Math.max(0, Number(element.scrollHeight || 0) - Number(element.clientHeight || 0));
+        if (maxScrollTop <= 1) {return false;}
+        const current = Number(element.scrollTop || 0);
+        return deltaY < 0
+            ? current > 0
+            : current < maxScrollTop - 1;
+    }
+
+    function findWheelScrollTarget(event: WheelEvent, root: HTMLElement, deltaY: number) {
+        let current: HTMLElement | null = getWheelTarget(event);
+        while (current && current !== root) {
+            if (canWheelScroll(current, deltaY)) {return current;}
+            current = current.parentElement;
+        }
+        return canWheelScroll(root, deltaY) ? root : null;
+    }
+
+    function applyWheelFallback(target: HTMLElement, deltaY: number) {
+        const maxScrollTop = Math.max(0, Number(target.scrollHeight || 0) - Number(target.clientHeight || 0));
+        target.scrollTop = Math.min(Math.max(0, Number(target.scrollTop || 0) + deltaY), maxScrollTop);
+    }
+
     function handleWheel(event: WheelEvent) {
-        if (Number(event.deltaY || 0) < 0) {
+        const root = scrollRef.value;
+        if (!root) {return;}
+        const deltaY = normalizeWheelDeltaY(event, root);
+        if (deltaY < 0) {
             autoScroll.value = false;
         }
+        if (!deltaY) {return;}
+        const target = findWheelScrollTarget(event, root, deltaY);
+        if (!target) {return;}
+        const previousScrollTop = Number(target.scrollTop || 0);
+        requestAnimationFrame(() => {
+            if (!target.isConnected) {return;}
+            if (Math.abs(Number(target.scrollTop || 0) - previousScrollTop) > 0.5) {return;}
+            applyWheelFallback(target, deltaY);
+            if (target === root) {
+                handleScroll();
+            }
+        });
     }
 
     function handleTouchStart(event: TouchEvent) {
