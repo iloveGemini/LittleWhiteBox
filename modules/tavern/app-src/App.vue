@@ -202,6 +202,7 @@ const characterWorldbookSelectionOpen = ref(false);
 const characterWorldbookSelectionOptions = ref<string[]>([]);
 const pendingCharacterGreetingIndex = ref(0);
 const pendingCharacterError = ref('');
+const selectedSessionCharacterError = ref('');
 const statusText = ref('等待读取角色与会话');
 const currentUserMessage = ref('');
 const historyMode = ref<'raw' | 'squash'>('raw');
@@ -722,7 +723,7 @@ const chatMessageWindow = computed(() => {
     };
 });
 const visibleChatMessages = computed(() => loadedSessionMessages.value);
-const latestErrorMessage = computed(() => composeErrorMessage.value);
+const latestErrorMessage = computed(() => selectedSessionCharacterError.value || composeErrorMessage.value);
 const latestSavedChatError = computed(() => {
     const lastMessage = latestSessionMessage.value;
     return lastMessage?.error ? `${lastMessage.sessionId}:${lastMessage.order}:${lastMessage.content || ''}` : '';
@@ -1013,7 +1014,7 @@ const chatSubtitle = computed(() => {
     if (!selectedSessionId.value) {return '写一句话后会自动创建独立会话。';}
     return sessionFloorLabel(selectedSession.value);
 });
-const canSendMessage = computed(() => !isCancellingRun.value && (isRunning.value || !!currentUserMessage.value.trim()));
+const canSendMessage = computed(() => !isCancellingRun.value && (isRunning.value || (!selectedSessionCharacterError.value && !!currentUserMessage.value.trim())));
 const canSendManagerMessage = computed(() => !isManagerAssistantCancelling.value && (isManagerAssistantRunning.value || (!!selectedSessionId.value && !!managerInputDraft.value.trim())));
 function clonePostMessagePayload<T>(value: T): T {
     const seen = new WeakSet<object>();
@@ -1827,6 +1828,23 @@ function preserveSessionAuthorNote(nextContext: XbTavernContext = {}, session?: 
     };
 }
 
+function applySessionSnapshotContext(session?: TavernSessionRecord | null): void {
+    if (!session) {return;}
+    context.value = preserveSessionAuthorNote(session.contextSnapshot || {}, session);
+}
+
+function clearSelectedSessionCharacterError(sessionId = selectedSessionId.value): void {
+    if (String(sessionId || '').trim() !== String(selectedSessionId.value || '').trim()) {return;}
+    selectedSessionCharacterError.value = '';
+}
+
+function setSelectedSessionCharacterError(error: unknown, sessionId = selectedSessionId.value): void {
+    if (String(sessionId || '').trim() !== String(selectedSessionId.value || '').trim()) {return;}
+    const errorText = describeError(error);
+    selectedSessionCharacterError.value = errorText;
+    showComposeError(errorText, 8000);
+}
+
 async function saveCurrentAuthorNote(note: XbTavernAuthorNote): Promise<void> {
     const sessionId = String(selectedSessionId.value || '').trim();
     const session = selectedSession.value;
@@ -1859,10 +1877,15 @@ async function syncSessionCharacterContext(options: { sessionId?: string; force?
     if (!session) {return context.value;}
     const targetCharacterKey = String(session.characterKey || '').trim();
     if (!targetCharacterKey) {return context.value;}
-    if (!options.force && currentContextCharacterReady() && currentContextCharacterKey() === targetCharacterKey) {
-        return context.value;
+    const alreadyHasTargetContext = currentContextCharacterReady() && currentContextCharacterKey() === targetCharacterKey;
+    if (targetSessionId === String(selectedSessionId.value || '').trim()) {
+        applySessionSnapshotContext(session);
     }
     const nativeCharacterId = resolveCurrentNativeCharacterId(targetCharacterKey);
+    clearSelectedSessionCharacterError(targetSessionId);
+    if (!options.force && alreadyHasTargetContext) {
+        return context.value;
+    }
     const syncSequence = ++sessionContextSyncSequence;
     const payload = await getHostContext({
         nativeCharacterId,
@@ -1890,10 +1913,24 @@ async function syncSessionCharacterContext(options: { sessionId?: string; force?
     return nextContext;
 }
 
+async function syncSessionCharacterContextSafely(options: { sessionId?: string; force?: boolean } = {}): Promise<void> {
+    const targetSessionId = String(options.sessionId || selectedSessionId.value || '').trim();
+    try {
+        await syncSessionCharacterContext(options);
+    } catch (error) {
+        setSelectedSessionCharacterError(error, targetSessionId);
+    }
+}
+
 async function resolveRuntimeContextForSession(sessionId = selectedSessionId.value): Promise<XbTavernContext> {
     const targetSessionId = String(sessionId || '').trim();
     if (!targetSessionId) {return context.value;}
-    return await syncSessionCharacterContext({ sessionId: targetSessionId, force: true });
+    try {
+        return await syncSessionCharacterContext({ sessionId: targetSessionId, force: true });
+    } catch (error) {
+        setSelectedSessionCharacterError(error, targetSessionId);
+        throw error;
+    }
 }
 
 function resolveHostRequest(payload: Record<string, unknown> = {}) {
@@ -2289,7 +2326,7 @@ async function refreshSessions() {
     await loadSelectedSessionMessageWindow();
     await refreshManagerRecords(selectedSessionId.value);
     if (selectedSessionId.value) {
-        void syncSessionCharacterContext({ sessionId: selectedSessionId.value });
+        void syncSessionCharacterContextSafely({ sessionId: selectedSessionId.value });
     }
 }
 
@@ -2548,6 +2585,7 @@ async function selectCharacterAndCreateSession(characterKey: string) {
     selectedCharacterPreviewKey.value = targetKey;
     selectedCharacterGreetingIndex.value = greetingIndex;
     selectedSessionId.value = '';
+    selectedSessionCharacterError.value = '';
     clearLoadedSessionMessageWindow();
     await setSelectedTavernSessionId('');
     await refreshManagerRecords('');
@@ -2569,10 +2607,13 @@ async function selectSession(sessionId: string) {
     resetSessionPreviewState();
     invalidateMemoryFileRecordLoad();
     selectedSessionId.value = sessionId;
+    selectedSessionCharacterError.value = '';
+    const session = sessions.value.find((item) => item.id === sessionId) || null;
+    applySessionSnapshotContext(session);
     await setSelectedTavernSessionId(sessionId);
     await loadSelectedSessionMessageWindow({ reset: true, sessionId });
     await refreshManagerRecords(sessionId);
-    void syncSessionCharacterContext({ sessionId, force: true });
+    void syncSessionCharacterContextSafely({ sessionId, force: true });
     activeView.value = 'chat';
     chatFocus.value = 'chat';
     scrollChatToBottom(true);
@@ -2622,6 +2663,7 @@ async function removeSession(sessionId: string, event?: Event) {
         return;
     }
     selectedSessionId.value = '';
+    selectedSessionCharacterError.value = '';
     clearLoadedSessionMessageWindow();
     await setSelectedTavernSessionId('');
     await refreshSessions();
@@ -3905,6 +3947,11 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
         showComposeError('先写一句话。');
         return;
     }
+    if (selectedSessionCharacterError.value) {
+        runtimeError.value = selectedSessionCharacterError.value;
+        showComposeError(selectedSessionCharacterError.value, 8000);
+        return;
+    }
     try {
         messageText = await resolveSlashCommandMessageText(messageText, options);
     } catch (error) {
@@ -4395,7 +4442,7 @@ async function runPostReadyStartupTasks() {
         void loadTavernUsers();
     }
     if (selectedSessionId.value) {
-        void syncSessionCharacterContext({ sessionId: selectedSessionId.value, force: true });
+        void syncSessionCharacterContextSafely({ sessionId: selectedSessionId.value, force: true });
     }
     if (activeView.value === 'chat' && chatFocus.value === 'chat') {
         scrollChatToBottom(true);

@@ -71,7 +71,7 @@ function hashString(value = ''): string {
     return (hash >>> 0).toString(36);
 }
 
-function buildCharacterKey(character: Record<string, unknown>, nativeCharacterId: unknown): string {
+function buildCharacterKey(character: Record<string, unknown>, _nativeCharacterId: unknown): string {
     const data = pickData(character);
     const name = normalizeText(character.name || data.name);
     const avatar = normalizeText(character.avatar || data.avatar);
@@ -79,7 +79,7 @@ function buildCharacterKey(character: Record<string, unknown>, nativeCharacterId
     const payload = normalizeText(character.json_data) || JSON.stringify(data || character || {});
     const hash = hashString(payload || name);
     if (payload) {return `card:${hash}`;}
-    return `name:${name || normalizeText(nativeCharacterId) || 'unknown'}`;
+    return `name:${name || 'unknown'}`;
 }
 
 function readEntryList(value: unknown): unknown[] {

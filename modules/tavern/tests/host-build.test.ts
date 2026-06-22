@@ -295,7 +295,7 @@ test('tavern worldbook sync uses native source overview with current context', (
     assert.doesNotMatch(worldbookSource, /extension_prompts\[key\] = cloneJson\(value\)/);
     assert.match(contextSource, /worldbookSources,/);
     assert.match(contextSource, /worldbookSourcesSynced: true/);
-    assert.match(appSource, /syncSessionCharacterContext\(\{ sessionId: targetSessionId, force: true \}\)/);
+    assert.match(appSource, /syncSessionCharacterContextSafely\(\{ sessionId: selectedSessionId\.value, force: true \}\)/);
 });
 
 test('tavern worldbook host bridge exposes named entry edit endpoints and native runtime result', () => {
