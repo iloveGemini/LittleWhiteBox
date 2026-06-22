@@ -47,7 +47,8 @@ declare module '*.js' {
     export function parseExampleIntoIndividual(messageExampleString: string, appendNamesForGroup?: boolean): unknown[];
     export function parseMesExamples(examplesStr: string, isInstruct?: boolean): string[];
     export function baseChatReplace(value: unknown, name1Override?: string | null, name2Override?: string | null): string;
-    export function getMaxPromptTokens(overrideResponseLength?: number | null): number;
+    export const getMaxPromptTokens: ((overrideResponseLength?: number | null) => number) | undefined;
+    export const getMaxContextSize: (() => number) | undefined;
     export const depth_prompt_depth_default: number;
     export const depth_prompt_role_default: string;
     export const extension_settings: Record<string, Record<string, unknown>>;
@@ -106,7 +107,7 @@ declare module '*.js' {
     export const selected_world_info: string[];
     export const METADATA_KEY: string;
     export function getWorldInfoSettings(): Record<string, unknown>;
-    export function updateWorldInfoSettings(settings: Record<string, unknown>, activeWorldInfo?: string[]): void;
+    export const updateWorldInfoSettings: ((settings: Record<string, unknown>, activeWorldInfo?: string[]) => void) | undefined;
     export function updateWorldInfoList(): Promise<void>;
     export function checkWorldInfo(
         chat: string[],
@@ -125,7 +126,7 @@ declare module '*.js' {
     export const SCRIPT_TYPES: { GLOBAL: number; SCOPED: number; PRESET: number };
     export const regex_placement: Record<string, number>;
     export const substitute_find_regex: { NONE: number; RAW: number; ESCAPED: number };
-    export const RegexProvider: { instance: { clear(): void } };
+    export const RegexProvider: { instance?: { clear?: () => void } } | undefined;
     export function getRegexedString(rawString: string, placement: number, options?: Record<string, unknown>): string;
     export function getScriptsByType(scriptType: number, options?: { allowedOnly?: boolean }): Array<Record<string, unknown>>;
     export function saveScriptsByType(scripts: Array<Record<string, unknown>>, scriptType: number): Promise<void>;

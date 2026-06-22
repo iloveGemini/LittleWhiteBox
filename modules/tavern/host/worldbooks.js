@@ -8,16 +8,17 @@ import {
   select_selected_character,
   setCharacterId,
   setCharacterName,
-  getMaxPromptTokens,
   extension_prompts,
   setExtensionPrompt,
   extension_prompt_types,
   this_chid,
   unshallowCharacter
 } from "../../../../../../../script.js";
+import * as stScript from "../../../../../../../script.js";
 import { NOTE_MODULE_NAME } from "../../../../../../authors-note.js";
 import { getContext } from "../../../../../../extensions.js";
 import { power_user } from "../../../../../../power-user.js";
+import * as nativeWorldInfo from "../../../../../../world-info.js";
 import {
   charUpdatePrimaryWorld,
   checkWorldInfo,
@@ -27,7 +28,6 @@ import {
   METADATA_KEY,
   saveWorldInfo,
   selected_world_info,
-  updateWorldInfoSettings,
   updateWorldInfoList,
   world_names
 } from "../../../../../../world-info.js";
@@ -36,6 +36,20 @@ import {
 } from "../shared/message-assembler.js";
 function asRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function getNativeMaxPromptTokens() {
+  return Number(stScript.getMaxPromptTokens?.()) || Number(stScript.getMaxContextSize?.()) || Number(asRecord(getContext?.() || {}).maxContext) || 4096;
+}
+function applyGlobalWorldbookSelection(selected) {
+  const settings = nativeWorldInfo.getWorldInfoSettings();
+  if (typeof nativeWorldInfo.updateWorldInfoSettings === "function") {
+    nativeWorldInfo.updateWorldInfoSettings(settings, selected);
+    return;
+  }
+  replaceSelectedWorldInfo(selected);
+  const worldInfo = asRecord(nativeWorldInfo.world_info);
+  worldInfo.globalSelect = [...selected];
+  stScript.saveSettingsDebounced?.();
 }
 function normalizeText(value = "") {
   return String(value || "").trim();
@@ -1134,8 +1148,7 @@ async function setTavernGlobalWorldbooks(input = {}) {
     const payload = asRecord(input);
     const options = await ensureWorldbookNames();
     const selected = normalizeStringList(payload.selected).filter((name) => options.includes(name));
-    const settings = getWorldInfoSettings();
-    updateWorldInfoSettings(settings, selected);
+    applyGlobalWorldbookSelection(selected);
     await updateWorldInfoList();
     return readGlobalWorldbooksState();
   });
@@ -1148,7 +1161,7 @@ async function getTavernWorldbookRuntime(input = {}) {
   const globalScanData = buildGlobalScanData(payload);
   const maxContext = Math.max(
     1,
-    Number(payload.maxContext) || Number(getMaxPromptTokens?.()) || Number(asRecord(getContext?.() || {}).maxContext) || 4096
+    Number(payload.maxContext) || getNativeMaxPromptTokens()
   );
   const sources = collectRuntimeSources(context);
   return runTavernWorldbookStateExclusive(async () => {

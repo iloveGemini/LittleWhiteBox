@@ -117,7 +117,10 @@ test('tavern worldbook bridge edits named entries through native save boundary',
     assert.doesNotMatch(hostSource, /openWorldInfoEditor/);
     assert.doesNotMatch(hostSource, /createWorldInfoEntry/);
     assert.match(hostSource, /export async function setTavernGlobalWorldbooks/);
-    assert.match(hostSource, /updateWorldInfoSettings\(settings, selected\)/);
+    assert.match(hostSource, /function applyGlobalWorldbookSelection\(selected: string\[\]\): void/);
+    assert.match(hostSource, /nativeWorldInfo\.updateWorldInfoSettings\(settings, selected\)/);
+    assert.match(hostSource, /replaceSelectedWorldInfo\(selected\);[\s\S]*worldInfo\.globalSelect = \[\.\.\.selected\];[\s\S]*stScript\.saveSettingsDebounced\?\.\(\)/);
+    assert.doesNotMatch(hostSource, /setWorldInfoSettings\(settings,/);
 });
 
 test('tavern mobile worldbook entry rows stay compact', () => {
@@ -219,7 +222,7 @@ test('tavern character and global worldbook actions stay on native ST boundaries
     assert.match(hostSource, /await prepareCharacterEditorForWorldbookBinding\(characterId\);[\s\S]*await charUpdatePrimaryWorld\(name\);/);
     assert.match(hostSource, /export async function bindTavernCharacterWorldbook[\s\S]*return runTavernWorldbookStateExclusive\(async \(\) => \{[\s\S]*return bindCharacterWorldbookThroughEditor\(characterId, name\);/);
     assert.match(hostSource, /export async function activateTavernCharacterWorldbook[\s\S]*return runTavernWorldbookStateExclusive\(async \(\) => \{[\s\S]*const boundState = await bindCharacterWorldbookThroughEditor/);
-    assert.match(hostSource, /updateWorldInfoSettings\(settings, selected\);[\s\S]*await updateWorldInfoList\(\);/);
+    assert.match(hostSource, /export async function setTavernGlobalWorldbooks[\s\S]*applyGlobalWorldbookSelection\(selected\);[\s\S]*await updateWorldInfoList\(\);/);
     assert.match(tavernSource, /case 'xb-tavern:get-character-worldbook-state':/);
     assert.match(tavernSource, /case 'xb-tavern:activate-character-worldbook':/);
     assert.match(tavernSource, /case 'xb-tavern:bind-character-worldbook':/);
@@ -1213,15 +1216,42 @@ test('tavern RP display and edit save use native regex phases without slash comm
 
 test('tavern native regex writes refresh SillyTavern regex UI and cache', () => {
     const hostSource = readRepoFile('modules/tavern/host/regex.ts');
+    const envSource = readRepoFile('modules/tavern/env.d.ts');
     assert.doesNotMatch(hostSource, /RegexProvider,\s*[\r\n]/);
     assert.doesNotMatch(hostSource, /import\s*\{[\s\S]*RegexProvider[\s\S]*\}\s*from/);
     assert.match(hostSource, /import\s+\*\s+as\s+nativeRegexEngine/);
     assert.match(hostSource, /function syncNativeRegexUiAfterWrite/);
     assert.match(hostSource, /nativeRegexEngine\.RegexProvider\?\./);
+    assert.match(envSource, /export const RegexProvider: \{ instance\?: \{ clear\?: \(\) => void \} \} \| undefined;/);
     assert.match(hostSource, /saveSettingsDebounced\?\.\(\)/);
     assert.match(hostSource, /event_types\?\.CHAT_CHANGED/);
     assert.match(hostSource, /await eventSource\.emit\(chatChangedEvent, chatId\)/);
     assert.doesNotMatch(hostSource, /reloadCurrentChat/);
     assert.match(hostSource, /export async function saveTavernRegexScript[\s\S]*await syncNativeRegexUiAfterWrite\(\)/);
     assert.match(hostSource, /export async function deleteTavernRegexScript[\s\S]*await syncNativeRegexUiAfterWrite\(\)/);
+});
+
+test('tavern host imports preserve SillyTavern 1.14 and 1.18 API parity', () => {
+    const envSource = readRepoFile('modules/tavern/env.d.ts');
+    const promptSource = readRepoFile('modules/tavern/host/native-prompt.ts');
+    const worldbookSource = readRepoFile('modules/tavern/host/worldbooks.ts');
+
+    assert.doesNotMatch(promptSource, /import\s*\{[^}]*persona_description_positions[^}]*\}\s*from\s*['"][^'"]*personas\.js['"]/);
+    assert.match(promptSource, /import\s*\{[^}]*persona_description_positions[^}]*power_user[^}]*\}\s*from\s*['"][^'"]*power-user\.js['"]/);
+
+    assert.doesNotMatch(worldbookSource, /import\s*\{[^}]*getMaxPromptTokens[^}]*\}\s*from\s*['"][^'"]*script\.js['"]/);
+    assert.match(worldbookSource, /import\s+\*\s+as\s+stScript\s+from\s*['"][^'"]*script\.js['"]/);
+    assert.match(worldbookSource, /function getNativeMaxPromptTokens\(\): number/);
+    assert.match(envSource, /export const getMaxPromptTokens: \(\(overrideResponseLength\?: number \| null\) => number\) \| undefined;/);
+    assert.match(envSource, /export const getMaxContextSize: \(\(\) => number\) \| undefined;/);
+    assert.match(worldbookSource, /stScript\.getMaxPromptTokens\?\.\(\)/);
+    assert.match(worldbookSource, /stScript\.getMaxContextSize\?\.\(\)/);
+
+    assert.doesNotMatch(worldbookSource, /import\s*\{[^}]*updateWorldInfoSettings[^}]*\}\s*from\s*['"][^'"]*world-info\.js['"]/);
+    assert.match(worldbookSource, /import\s+\*\s+as\s+nativeWorldInfo\s+from\s*['"][^'"]*world-info\.js['"]/);
+    assert.match(worldbookSource, /function applyGlobalWorldbookSelection\(selected: string\[\]\): void/);
+    assert.match(envSource, /export const updateWorldInfoSettings: \(\(settings: Record<string, unknown>, activeWorldInfo\?: string\[\]\) => void\) \| undefined;/);
+    assert.match(worldbookSource, /typeof nativeWorldInfo\.updateWorldInfoSettings === 'function'/);
+    assert.match(worldbookSource, /replaceSelectedWorldInfo\(selected\);[\s\S]*worldInfo\.globalSelect = \[\.\.\.selected\];[\s\S]*stScript\.saveSettingsDebounced\?\.\(\)/);
+    assert.doesNotMatch(worldbookSource, /setWorldInfoSettings\(settings,/);
 });

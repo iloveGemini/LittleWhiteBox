@@ -340,7 +340,7 @@ test('tavern worldbook host bridge exposes named entry edit endpoints and native
     assert.match(hostSource, /if \(!name\) \{[\s\S]*throw new Error\('缺少要绑定的世界书名称。'\);[\s\S]*if \(!state\.worldbookOptions\.includes\(name\)\)/);
     assert.match(hostSource, /await prepareCharacterEditorForWorldbookBinding\(characterId\);[\s\S]*await charUpdatePrimaryWorld\(name\);/);
     assert.match(hostSource, /return bindCharacterWorldbookThroughEditor\(characterId, name\);/);
-    assert.match(hostSource, /updateWorldInfoSettings\(settings, selected\);[\s\S]*await updateWorldInfoList\(\);/);
+    assert.match(hostSource, /applyGlobalWorldbookSelection\(selected\);[\s\S]*await updateWorldInfoList\(\);/);
     assert.doesNotMatch(hostSource, /importEmbeddedWorldInfo/);
     assert.doesNotMatch(hostSource, /createWorldInfoEntry/);
     assert.match(hostSource, /export async function getTavernWorldbookRuntime/);
@@ -384,6 +384,8 @@ test('tavern native prompt builder injects LittleWhiteBox state without host cha
     const nativeSource = readRepoFile('modules/tavern/host/native-prompt.ts');
     assert.match(nativeSource, /function getUserPersonaPrompt[\s\S]*normalizeText\(context\.user\?\.persona \|\| context\.user\?\.description\)/);
     assert.doesNotMatch(nativeSource, /substituteParams\('\{\{persona\}\}'\)/);
+    assert.match(nativeSource, /import\s*\{[^}]*persona_description_positions[^}]*power_user[^}]*\}\s*from\s*['"][^'"]*power-user\.js['"]/);
+    assert.doesNotMatch(nativeSource, /import\s*\{[^}]*persona_description_positions[^}]*\}\s*from\s*['"][^'"]*personas\.js['"]/);
     assert.match(nativeSource, /power_user\.persona_description = persona;/);
     assert.match(nativeSource, /power_user\.persona_description_position = persona_description_positions\.IN_PROMPT;/);
     assert.match(nativeSource, /function capturePromptManager/);

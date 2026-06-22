@@ -11,8 +11,7 @@ import {
 } from '../../../../../../../script.js';
 import { NOTE_MODULE_NAME } from '../../../../../../authors-note.js';
 import { parseExampleIntoIndividual, prepareOpenAIMessages, promptManager } from '../../../../../../openai.js';
-import { power_user } from '../../../../../../power-user.js';
-import { persona_description_positions } from '../../../../../../personas.js';
+import { persona_description_positions, power_user } from '../../../../../../power-user.js';
 import {
     resolveXbTavernAuthorNoteState,
     type TavernChatPromptPresetBundle,
