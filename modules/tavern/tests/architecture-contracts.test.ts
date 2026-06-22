@@ -86,6 +86,19 @@ test('tavern startup posts frame-ready before heavy app tasks and prewarms host 
     assert.match(hostSource, /case 'xb-tavern:frame-ready':[\s\S]*void sendInitialConfigToFrame\(\)\.catch\(\(error\) => \{[\s\S]*failed to send initial config[\s\S]*\}\)\.finally\(flushPendingMessages\);/);
 });
 
+test('tavern mobile overlay viewport updates are frame-throttled', () => {
+    const hostSource = readRepoFile('modules/tavern/tavern.ts');
+
+    assert.match(hostSource, /let overlayResizeFrame = 0;/);
+    assert.match(hostSource, /let cachedTavernMobileTopOffset: number \| null = null;/);
+    assert.match(hostSource, /function getTavernMobileTopOffset\(forceRefresh = false\): number \{[\s\S]*cachedTavernMobileTopOffset !== null[\s\S]*getComputedStyle\(document\.documentElement\)/);
+    assert.match(hostSource, /const viewportHeight = getTavernMobileViewportHeight\(topOffset\);/);
+    assert.match(hostSource, /function scheduleTavernOverlayViewport\(overlay: HTMLElement, forceTopOffsetRefresh = false\): void \{[\s\S]*window\.requestAnimationFrame\(\(\) => \{[\s\S]*applyTavernOverlayViewport\(overlay\);/);
+    assert.match(hostSource, /overlayResizeHandler = \(\) => scheduleTavernOverlayViewport\(overlay, true\);/);
+    assert.match(hostSource, /window\.cancelAnimationFrame\(overlayResizeFrame\);/);
+    assert.doesNotMatch(hostSource, /overlayResizeHandler = \(\) => applyTavernOverlayViewport\(overlay\);/);
+});
+
 test('tavern assistant preset settings expose state and character memory rules', () => {
     const controllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
     const sectionMatch = controllerSource.match(/const assistantPresetSections:[\s\S]*?];/);
@@ -803,7 +816,7 @@ test('tavern markdown enhancement lives outside the app controller', () => {
     assert.match(contextSource, /htmlRenderEnabled: Ref<boolean>;/);
     assert.match(conversationSource, /htmlRenderEnabled\.value \? 'html-render:on' : 'html-render:off'/);
     assert.match(conversationSource, /pending-user:\$\{pendingUserRenderState\.signature\}/);
-    assert.match(conversationSource, /live-assistant:\$\{liveAssistantRenderState\.signature\}/);
+    assert.doesNotMatch(conversationSource, /live-assistant:\$\{liveAssistantRenderState\.signature\}/);
     assert.match(managerSource, /function managerMarkdownSignature/);
     assert.match(managerSource, /htmlRenderEnabled\.value \? 'html-render:on' : 'html-render:off'/);
     assert.match(managerSource, /history-message:\$\{item\.key\}:\$\{managerMarkdownSignature\(item\.message\.content\)\}/);
@@ -819,6 +832,28 @@ test('tavern markdown enhancement lives outside the app controller', () => {
     assert.match(tavernHostSource, /function refreshRenderSettings\(\): void \{[\s\S]*htmlRenderEnabled: isHtmlRenderEnabled\(\),[\s\S]*\}/);
     assert.match(indexSource, /window\.xiaobaixTavern\?\.refreshRenderSettings\?\.\(\);/);
     assert.doesNotMatch(indexSource, /refreshContext\?\.\(\{ includeWorldbooks: false \}\)/);
+});
+
+test('tavern live stream rendering is frame-batched without bypassing display regex', () => {
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const conversationSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
+
+    assert.match(appSource, /let runtimeStreamFrame = 0;/);
+    assert.match(appSource, /let pendingRuntimeStreamSnapshot: TavernRunStreamSnapshot \| null = null;/);
+    assert.match(appSource, /function scheduleRuntimeStreamSnapshot\(snapshot: TavernRunStreamSnapshot\)[\s\S]*window\.requestAnimationFrame\(\(\) => \{[\s\S]*flushRuntimeStreamSnapshotNow\(\);/);
+    assert.match(appSource, /onStreamProgress: \(snapshot\) => \{[\s\S]*scheduleRuntimeStreamSnapshot\(snapshot\);[\s\S]*\},/);
+    assert.doesNotMatch(appSource, /onStreamProgress: \(snapshot\) => \{[\s\S]{0,240}runtimeText\.value = snapshot\.text;/);
+    assert.match(appSource, /function displayRuntimeRenderProjection/);
+    assert.match(appSource, /scheduleRuntimeDisplayRegexText\('runtime:message', request\);/);
+    assert.match(appSource, /scheduleRuntimeDisplayRegexText\('runtime:message', request\);[\s\S]*return runtimeDisplayRegexStableProjection\.get\('runtime:message'\) \?\? \{ text: '', actionCheckEvents: \[\] \};/);
+    assert.doesNotMatch(appSource, /runtimeDisplayRegexStableProjection\.set\('runtime:message', rawProjection\)/);
+    assert.match(appSource, /function runRuntimeDisplayRegexRequest\(slot: string\) \{[\s\S]*current\.latest\.key !== input\.key[\s\S]*runRuntimeDisplayRegexRequest\(slot\);/);
+    assert.match(appSource, /function rememberDisplayRegexText\(key: string, text: string\)[\s\S]*if \(isRunning\.value\) \{[\s\S]*enhanceLiveChatMarkdown\(\);[\s\S]*\} else \{[\s\S]*enhanceChatMarkdown\(\);/);
+    assert.match(appSource, /if \(isRunning\.value\) \{[\s\S]*enhanceLiveChatMarkdown\(\);[\s\S]*\} else \{[\s\S]*enhanceChatMarkdown\(\);[\s\S]*\}/);
+    assert.match(appSource, /isRunning\.value = false;[\s\S]*void nextTick\(\(\) => \{[\s\S]*enhanceChatMarkdown\(\);/);
+    assert.match(appSource, /enhanceLiveChatMarkdown,/);
+    assert.doesNotMatch(conversationSource, /:key="`live-assistant:\$\{liveAssistantRenderState\.signature\}`"/);
+    assert.match(conversationSource, /:data-markdown-signature="liveAssistantRenderState\.signature"/);
 });
 
 test('tavern draw progress keeps a local cooldown ticker instead of freezing the first frame', () => {
@@ -868,9 +903,18 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.match(markdownToolsSource, /if \(event\.stakes\) \{[\s\S]*className = 'action-check-card-stakes'[\s\S]*textContent = event\.stakes/);
     assert.match(appSource, /function clearRuntimeAssistantLiveState\(\) \{[\s\S]*runtimeText\.value = '';[\s\S]*runtimeThoughts\.value = \[\];[\s\S]*runtimeActionCheckEvents\.value = \[\];[\s\S]*runtimeUserMessageVisible\.value = false;/);
     assert.match(appSource, /runtimeUserMessageVisible\.value = false;[\s\S]*runtimeProvider\.value = ''/);
-    assert.match(appSource, /loadedSessionMessages\.value = existingIndex >= 0[\s\S]*runtimeUserMessageVisible\.value = true;/);
-    assert.match(appSource, /onUserMessageSaved: async \(sessionId, message\) => \{[\s\S]*loadedSessionMessages\.value = existingIndex >= 0[\s\S]*runtimePendingUserMessage\.value = '';[\s\S]*await setSelectedTavernSessionId\(sessionId\)/);
-    assert.match(appSource, /onAssistantMessageSaved: async \(sessionId, message\) => \{[\s\S]*loadedSessionMessages\.value = existingIndex >= 0[\s\S]*clearRuntimeAssistantLiveState\(\);/);
+    assert.match(appSource, /function upsertLoadedSessionMessage\(message: TavernMessageRecord\) \{[\s\S]*messageOrder >= tailOrder[\s\S]*loadedSessionMessages\.value = \[\.\.\.currentMessages, message\];/);
+    assert.doesNotMatch(appSource, /\[\.\.\.loadedSessionMessages\.value, message\]\.sort\(\(left, right\) => left\.order - right\.order\)/);
+    const userSavedCallback = appSource.match(/onUserMessageSaved: async \(sessionId, message\) => \{[\s\S]*?\n[ ]{12}\},\n[ ]{12}onAssistantMessageSaved/);
+    assert.ok(userSavedCallback);
+    assert.match(userSavedCallback[0], /upsertLoadedSessionMessage\(message\);[\s\S]*touchSessionLocally\(sessionId, message\.createdAt\);[\s\S]*runtimePendingUserMessage\.value = '';[\s\S]*await setSelectedTavernSessionId\(sessionId\)/);
+    assert.doesNotMatch(userSavedCallback[0], /refreshSessions\(\)/);
+    const assistantSavedCallback = appSource.match(/onAssistantMessageSaved: async \(sessionId, message\) => \{[\s\S]*?\n[ ]{12}\},\n[ ]{12}onManagerRunSaved/);
+    assert.ok(assistantSavedCallback);
+    assert.match(assistantSavedCallback[0], /flushRuntimeStreamSnapshotNow\(\);[\s\S]*upsertLoadedSessionMessage\(message\);[\s\S]*touchSessionLocally\(sessionId, message\.createdAt\);[\s\S]*clearRuntimeAssistantLiveState\(\);/);
+    assert.doesNotMatch(assistantSavedCallback[0], /refreshSessions\(\)/);
+    assert.match(appSource, /selectedSessionId\.value = result\.sessionId;[\s\S]*flushRuntimeStreamSnapshotNow\(\);[\s\S]*clearRuntimeAssistantLiveState\(\);[\s\S]*await refreshSessions\(\);[\s\S]*scrollChatToBottom\(\);/);
+    assert.doesNotMatch(appSource, /await refreshSessions\(\);\s*await refreshManagerRecords\(result\.sessionId\);/);
     assert.match(conversationPanelSource, /const liveAssistantCanRender = computed\(\(\) => isRunning\.value && runtimeUserMessageVisible\.value\)/);
     assert.match(conversationPanelSource, /v-if="liveAssistantCanRender && liveAssistantVisible"[\s\S]*data-chat-anchor-key="streaming:content"/);
     assert.match(conversationPanelSource, /v-if="liveAssistantCanRender && !liveAssistantVisible"[\s\S]*data-chat-anchor-key="streaming:empty"/);
@@ -1201,13 +1245,15 @@ test('tavern RP display and edit save use native regex phases without slash comm
     assert.match(appSource, /const actionCheckEvents = getActionCheckEvents\(events\);[\s\S]*if \(!text && !actionCheckEvents\.length\) \{return \{ text: '', actionCheckEvents: \[\] \};\}[\s\S]*if \(!text\) \{return \{ text: '', actionCheckEvents \};\}/);
     assert.match(appSource, /injectActionCheckRegexMarkers\(text, actionCheckEvents\)/);
     assert.match(appSource, /toDisplayRegexProjection\(cached, request\)/);
-    assert.match(appSource, /runtimeDisplayRegexStableProjection\.get\('runtime:message'\) \?\? \{ text: '', actionCheckEvents: \[\] \}/);
+    assert.match(appSource, /scheduleRuntimeDisplayRegexText\('runtime:message', request\);[\s\S]*return runtimeDisplayRegexStableProjection\.get\('runtime:message'\) \?\? \{ text: '', actionCheckEvents: \[\] \};/);
+    assert.doesNotMatch(appSource, /const rawProjection = toDisplayRegexProjection\(markerPayload\.text, request\)/);
     assert.match(appSource, /const RUNTIME_DISPLAY_REGEX_THROTTLE_MS = 200/);
     assert.match(appSource, /function clearRuntimeDisplayRegexRequests\(\)[\s\S]*pendingRuntimeDisplayRegexRequests\.forEach\(\(request\) => window\.clearTimeout\(request\.timer\)\)/);
     assert.match(appSource, /function clearDisplayRegexCache\(\)[\s\S]*clearRuntimeDisplayRegexRequests\(\)/);
     assert.match(appSource, /function clearRuntimeAssistantLiveState\(\) \{[\s\S]*clearRuntimeDisplayRegexRequests\(\)/);
     assert.match(appSource, /function scheduleRuntimeDisplayRegexText\(slot: string, input: DisplayRegexTextRequest\)/);
-    assert.match(appSource, /current\.key = input\.key;[\s\S]*current\.input = input;[\s\S]*return;/);
+    assert.match(appSource, /const current = pendingRuntimeDisplayRegexRequests\.get\(slot\);[\s\S]*current\.latest = input;[\s\S]*return;/);
+    assert.match(appSource, /pending\.timer = 0;[\s\S]*runRuntimeDisplayRegexRequest\(slot\);/);
     assert.doesNotMatch(appSource, /function scheduleRuntimeDisplayRegexText[\s\S]{0,260}window\.clearTimeout\(current\.timer\)/);
     assert.match(appSource, /latestRuntimeDisplayRegexKeys\.get\(slot\) !== input\.key/);
     assert.match(appSource, /const runtimeDisplayRegexStableProjection = new Map<string, DisplayRegexProjection>\(\)/);

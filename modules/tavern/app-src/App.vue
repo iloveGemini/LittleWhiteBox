@@ -84,6 +84,7 @@ import {
     runXbTavernTurn,
     simulateXbTavernRequest,
     type TavernBuildNativeChatPromptRuntime,
+    type TavernRunStreamSnapshot,
 } from './runtime/run-once';
 import {
     buildManagerChatDisplayItems,
@@ -222,6 +223,8 @@ const drawStatusMessageKey = ref('');
 const drawStatusKind = ref<'idle' | 'running' | 'success' | 'error'>('idle');
 const drawProgressText = ref('');
 let drawCooldownTimer: number | null = null;
+let runtimeStreamFrame = 0;
+let pendingRuntimeStreamSnapshot: TavernRunStreamSnapshot | null = null;
 const sessions = ref<TavernSessionRecord[]>([]);
 const selectedSessionId = ref('');
 const loadedSessionMessages = ref<TavernMessageRecord[]>([]);
@@ -327,8 +330,8 @@ interface DisplayRegexProjection {
 }
 interface PendingRuntimeDisplayRegexRequest {
     timer: number;
-    key: string;
-    input: DisplayRegexTextRequest;
+    latest: DisplayRegexTextRequest;
+    inFlight: boolean;
 }
 const pendingHostRequests = new Map<string, PendingHostRequest>();
 const DRAW_COMPLETION_NOTICE_TEXT = '配图已生成';
@@ -429,6 +432,7 @@ const {
     clearMarkdownCache,
     disposeMarkdownTools,
     enhanceChatMarkdown,
+    enhanceLiveChatMarkdown,
     enhanceManagerMarkdown,
     markdownSignature,
     renderChatMarkdown,
@@ -1387,7 +1391,11 @@ function rememberDisplayRegexText(key: string, text: string) {
     displayRegexCache.value = next;
     if (activeView.value === 'chat' && chatFocus.value === 'chat') {
         void nextTick(() => {
-            enhanceChatMarkdown();
+            if (isRunning.value) {
+                enhanceLiveChatMarkdown();
+            } else {
+                enhanceChatMarkdown();
+            }
             updateChatScrollButtons();
         });
     }
@@ -1552,24 +1560,40 @@ async function resolveRuntimeDisplayRegexText(slot: string, input: DisplayRegexT
     }
 }
 
+function runRuntimeDisplayRegexRequest(slot: string) {
+    const pending = pendingRuntimeDisplayRegexRequests.get(slot);
+    if (!pending || pending.inFlight) {return;}
+    const input = pending.latest;
+    pending.inFlight = true;
+    void resolveRuntimeDisplayRegexText(slot, input).finally(() => {
+        const current = pendingRuntimeDisplayRegexRequests.get(slot);
+        if (!current) {return;}
+        current.inFlight = false;
+        if (current.latest.key !== input.key) {
+            runRuntimeDisplayRegexRequest(slot);
+            return;
+        }
+        pendingRuntimeDisplayRegexRequests.delete(slot);
+    });
+}
+
 function scheduleRuntimeDisplayRegexText(slot: string, input: DisplayRegexTextRequest) {
     latestRuntimeDisplayRegexKeys.set(slot, input.key);
     const current = pendingRuntimeDisplayRegexRequests.get(slot);
     if (current) {
-        current.key = input.key;
-        current.input = input;
+        current.latest = input;
         return;
     }
     const timer = window.setTimeout(() => {
         const pending = pendingRuntimeDisplayRegexRequests.get(slot);
         if (!pending) {return;}
-        pendingRuntimeDisplayRegexRequests.delete(slot);
-        void resolveRuntimeDisplayRegexText(slot, pending.input);
+        pending.timer = 0;
+        runRuntimeDisplayRegexRequest(slot);
     }, RUNTIME_DISPLAY_REGEX_THROTTLE_MS);
     pendingRuntimeDisplayRegexRequests.set(slot, {
         timer,
-        key: input.key,
-        input,
+        latest: input,
+        inFlight: false,
     });
 }
 
@@ -2311,6 +2335,65 @@ async function loadSelectedSessionMessageWindow(options: { reset?: boolean; sess
     loadedSessionMessageEndOrder.value = windowResult.loadedEndOrder;
     selectedSessionLatestAssistantOrder.value = latestAssistantOrder ?? -1;
     rememberSessionMessageCount(sessionId, windowResult.total);
+}
+
+function upsertLoadedSessionMessage(message: TavernMessageRecord) {
+    const messageSessionId = String(message.sessionId || '').trim();
+    if (!messageSessionId || messageSessionId !== selectedSessionId.value) {return;}
+    const currentMessages = loadedSessionMessages.value;
+    const existingIndex = currentMessages.findIndex((item) => item.sessionId === message.sessionId && item.order === message.order);
+    if (existingIndex >= 0) {
+        loadedSessionMessages.value = currentMessages.map((item, index) => index === existingIndex ? message : item);
+    } else {
+        const messageOrder = Number(message.order);
+        const tailOrder = Number(currentMessages.at(-1)?.order);
+        if (!currentMessages.length || !Number.isFinite(messageOrder) || !Number.isFinite(tailOrder) || messageOrder >= tailOrder) {
+            loadedSessionMessages.value = [...currentMessages, message];
+        } else {
+            const insertIndex = currentMessages.findIndex((item) => Number(item.order) > messageOrder);
+            loadedSessionMessages.value = insertIndex >= 0
+                ? [...currentMessages.slice(0, insertIndex), message, ...currentMessages.slice(insertIndex)]
+                : [...currentMessages, message];
+        }
+        selectedSessionMessageTotal.value = Math.max(
+            Math.max(0, Math.floor(Number(selectedSessionMessageTotal.value) || 0)) + 1,
+            loadedSessionMessages.value.length,
+        );
+    }
+    const messageOrder = Number(message.order);
+    if (Number.isFinite(messageOrder)) {
+        loadedSessionMessageStartOrder.value = loadedSessionMessageStartOrder.value === null
+            ? messageOrder
+            : Math.min(loadedSessionMessageStartOrder.value, messageOrder);
+        loadedSessionMessageEndOrder.value = loadedSessionMessageEndOrder.value === null
+            ? messageOrder
+            : Math.max(loadedSessionMessageEndOrder.value, messageOrder);
+        if (message.role === 'assistant') {
+            selectedSessionLatestAssistantOrder.value = Math.max(selectedSessionLatestAssistantOrder.value, messageOrder);
+        }
+    }
+    rememberSessionMessageCount(messageSessionId, selectedSessionMessageTotal.value);
+}
+
+function sessionUpdatedSortValue(session: TavernSessionRecord): number {
+    return Number(session.updatedAt) || Number(session.createdAt) || 0;
+}
+
+function touchSessionLocally(sessionId: string, updatedAt = Date.now()) {
+    const id = String(sessionId || '').trim();
+    if (!id) {return;}
+    const timestamp = Number(updatedAt) || Date.now();
+    let touched = false;
+    const nextSessions = sessions.value.map((session) => {
+        if (session.id !== id) {return session;}
+        touched = true;
+        return {
+            ...session,
+            updatedAt: Math.max(sessionUpdatedSortValue(session), timestamp),
+        };
+    });
+    if (!touched) {return;}
+    sessions.value = nextSessions.sort((left, right) => sessionUpdatedSortValue(right) - sessionUpdatedSortValue(left));
 }
 
 async function refreshSessions() {
@@ -3670,7 +3753,48 @@ function applyManagerProtocolEvent(sessionId: string, event: TavernManagerProtoc
     appendManagerLiveProtocolMessage(id, event.message);
 }
 
+function applyRuntimeStreamSnapshot(snapshot: TavernRunStreamSnapshot) {
+    if (typeof snapshot.text === 'string') {runtimeText.value = snapshot.text;}
+    if (Array.isArray(snapshot.thoughts)) {runtimeThoughts.value = thoughtBlocks(snapshot.thoughts);}
+    if (Array.isArray(snapshot.liveActionCheckEvents)) {
+        runtimeActionCheckEvents.value = snapshot.liveActionCheckEvents.map((event) => ({ ...event }));
+    }
+}
+
+function cancelPendingRuntimeStreamFrame() {
+    if (runtimeStreamFrame) {
+        window.cancelAnimationFrame(runtimeStreamFrame);
+        runtimeStreamFrame = 0;
+    }
+}
+
+function flushRuntimeStreamSnapshotNow() {
+    cancelPendingRuntimeStreamFrame();
+    const snapshot = pendingRuntimeStreamSnapshot;
+    pendingRuntimeStreamSnapshot = null;
+    if (snapshot) {
+        applyRuntimeStreamSnapshot(snapshot);
+    }
+}
+
+function scheduleRuntimeStreamSnapshot(snapshot: TavernRunStreamSnapshot) {
+    const next = pendingRuntimeStreamSnapshot ? { ...pendingRuntimeStreamSnapshot } : {};
+    if (typeof snapshot.text === 'string') {next.text = snapshot.text;}
+    if (Array.isArray(snapshot.thoughts)) {next.thoughts = snapshot.thoughts;}
+    if (Array.isArray(snapshot.liveActionCheckEvents)) {
+        next.liveActionCheckEvents = snapshot.liveActionCheckEvents;
+    }
+    pendingRuntimeStreamSnapshot = next;
+    if (runtimeStreamFrame) {return;}
+    runtimeStreamFrame = window.requestAnimationFrame(() => {
+        runtimeStreamFrame = 0;
+        flushRuntimeStreamSnapshotNow();
+    });
+}
+
 function clearRuntimeAssistantLiveState() {
+    cancelPendingRuntimeStreamFrame();
+    pendingRuntimeStreamSnapshot = null;
     clearRuntimeDisplayRegexRequests();
     runtimeText.value = '';
     runtimeThoughts.value = [];
@@ -3925,6 +4049,7 @@ async function handleManagerSubmit() {
 function cancelActiveRun() {
     if (!isRunning.value || !activeRunController.value) {return;}
     if (!isCancellingRun.value) {
+        flushRuntimeStreamSnapshotNow();
         isCancellingRun.value = true;
         runtimeText.value = runtimeText.value || '正在停止...';
     }
@@ -3969,6 +4094,8 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
     isCancellingRun.value = false;
     runtimeError.value = '';
     clearComposeError();
+    cancelPendingRuntimeStreamFrame();
+    pendingRuntimeStreamSnapshot = null;
     runtimeText.value = '';
     runtimeThoughts.value = [];
     runtimeActionCheckEvents.value = [];
@@ -4022,35 +4149,26 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
             getNativeWorldInfoRuntime: getNativeWorldbookRuntime,
             buildNativeChatPrompt,
             onStreamProgress: (snapshot) => {
-                if (typeof snapshot.text === 'string') {runtimeText.value = snapshot.text;}
-                if (Array.isArray(snapshot.thoughts)) {runtimeThoughts.value = thoughtBlocks(snapshot.thoughts);}
-                if (Array.isArray(snapshot.liveActionCheckEvents)) {
-                    runtimeActionCheckEvents.value = snapshot.liveActionCheckEvents.map((event) => ({ ...event }));
-                }
+                scheduleRuntimeStreamSnapshot(snapshot);
             },
             onUserMessageSaved: async (sessionId, message) => {
                 selectedSessionId.value = sessionId;
-                const existingIndex = loadedSessionMessages.value.findIndex((item) => item.sessionId === message.sessionId && item.order === message.order);
-                loadedSessionMessages.value = existingIndex >= 0
-                    ? loadedSessionMessages.value.map((item, index) => index === existingIndex ? message : item)
-                    : [...loadedSessionMessages.value, message].sort((left, right) => left.order - right.order);
+                upsertLoadedSessionMessage(message);
+                touchSessionLocally(sessionId, message.createdAt);
                 runtimeUserMessageVisible.value = true;
                 runtimePendingUserMessage.value = '';
                 currentUserMessage.value = '';
                 void nextTick(() => resetTextareaHeight(chatComposeTextareaRef.value));
                 scrollChatToBottom(true);
                 await setSelectedTavernSessionId(sessionId);
-                await refreshSessions();
                 scrollChatToBottom(true);
             },
             onAssistantMessageSaved: async (sessionId, message) => {
                 selectedSessionId.value = sessionId;
-                const existingIndex = loadedSessionMessages.value.findIndex((item) => item.sessionId === message.sessionId && item.order === message.order);
-                loadedSessionMessages.value = existingIndex >= 0
-                    ? loadedSessionMessages.value.map((item, index) => index === existingIndex ? message : item)
-                    : [...loadedSessionMessages.value, message].sort((left, right) => left.order - right.order);
+                flushRuntimeStreamSnapshotNow();
+                upsertLoadedSessionMessage(message);
+                touchSessionLocally(sessionId, message.createdAt);
                 clearRuntimeAssistantLiveState();
-                await refreshSessions();
                 scrollChatToBottom();
             },
             onManagerRunSaved: async (sessionId) => {
@@ -4058,12 +4176,12 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
             },
         });
         selectedSessionId.value = result.sessionId;
+        flushRuntimeStreamSnapshotNow();
         clearRuntimeAssistantLiveState();
         runtimeError.value = result.error || '';
         runtimeProvider.value = result.provider || '';
         runtimeModel.value = result.model || '';
         await refreshSessions();
-        await refreshManagerRecords(result.sessionId);
         scrollChatToBottom();
     } catch (error) {
         console.error('[小白酒馆] turn failed', error);
@@ -4081,6 +4199,10 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
         isCancellingRun.value = false;
         isRunning.value = false;
         scrollChatToBottom();
+        void nextTick(() => {
+            enhanceChatMarkdown();
+            updateChatScrollButtons();
+        });
     }
 }
 
@@ -4099,7 +4221,11 @@ watch([
     if (activeView.value === 'chat' && chatFocus.value === 'chat') {
         scrollChatToBottom();
         void nextTick(() => {
-            enhanceChatMarkdown();
+            if (isRunning.value) {
+                enhanceLiveChatMarkdown();
+            } else {
+                enhanceChatMarkdown();
+            }
             updateChatScrollButtons();
         });
     }
@@ -4468,6 +4594,7 @@ onMounted(async () => {
 onUnmounted(() => {
     window.removeEventListener('message', onHostMessage);
     disposeMarkdownTools();
+    clearRuntimeAssistantLiveState();
     clearDrawCooldownTimer();
     setHostChatCompletionsRequestHeadersProvider(null);
     pendingHostRequests.forEach((request) => {

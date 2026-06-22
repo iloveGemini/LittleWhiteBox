@@ -82,7 +82,9 @@ let frameBootReady = false;
 let pendingMessages: PendingFrameMessage[] = [];
 let initialConfigPromise: Promise<Record<string, unknown>> | null = null;
 let messageHandlerInstalled = false;
-let overlayResizeHandler: (() => void) | null = null;
+let overlayResizeHandler: EventListener | null = null;
+let overlayResizeFrame = 0;
+let cachedTavernMobileTopOffset: number | null = null;
 const pendingDrawRequests = new Map<string, AbortController>();
 let latestStartupProgress: TavernStartupProgressPayload = { percent: 5, action: 'createOverlay' };
 
@@ -191,14 +193,18 @@ function isTavernMobileDevice(): boolean {
     return window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(max-width: 900px)').matches;
 }
 
-function getTavernMobileTopOffset(): number {
+function getTavernMobileTopOffset(forceRefresh = false): number {
+    if (!forceRefresh && cachedTavernMobileTopOffset !== null) {
+        return cachedTavernMobileTopOffset;
+    }
     const rawValue = getComputedStyle(document.documentElement).getPropertyValue('--topBarBlockSize').trim();
     const parsedValue = Number.parseFloat(rawValue);
-    return Number.isFinite(parsedValue) ? Math.max(0, parsedValue) : 0;
+    cachedTavernMobileTopOffset = Number.isFinite(parsedValue) ? Math.max(0, parsedValue) : 0;
+    return cachedTavernMobileTopOffset;
 }
 
-function getTavernMobileViewportHeight(): number {
-    return Math.max(240, window.innerHeight - getTavernMobileTopOffset());
+function getTavernMobileViewportHeight(topOffset = getTavernMobileTopOffset()): number {
+    return Math.max(240, window.innerHeight - topOffset);
 }
 
 function applyTavernOverlayViewport(overlay = document.getElementById(OVERLAY_ID)): void {
@@ -214,16 +220,27 @@ function applyTavernOverlayViewport(overlay = document.getElementById(OVERLAY_ID
         return;
     }
     const topOffset = getTavernMobileTopOffset();
-    const viewportHeight = getTavernMobileViewportHeight();
+    const viewportHeight = getTavernMobileViewportHeight(topOffset);
     overlay.style.top = `${topOffset}px`;
     overlay.style.height = `${viewportHeight}px`;
     overlay.style.padding = 'env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)';
     overlay.classList.add('is-mobile');
 }
 
+function scheduleTavernOverlayViewport(overlay: HTMLElement, forceTopOffsetRefresh = false): void {
+    if (forceTopOffsetRefresh) {
+        cachedTavernMobileTopOffset = null;
+    }
+    if (overlayResizeFrame) {return;}
+    overlayResizeFrame = window.requestAnimationFrame(() => {
+        overlayResizeFrame = 0;
+        applyTavernOverlayViewport(overlay);
+    });
+}
+
 function installOverlayResizeHandler(overlay: HTMLElement): void {
     if (overlayResizeHandler) {return;}
-    overlayResizeHandler = () => applyTavernOverlayViewport(overlay);
+    overlayResizeHandler = () => scheduleTavernOverlayViewport(overlay, true);
     window.addEventListener('resize', overlayResizeHandler);
     window.addEventListener('orientationchange', overlayResizeHandler);
     window.visualViewport?.addEventListener('resize', overlayResizeHandler);
@@ -237,6 +254,10 @@ function removeOverlayResizeHandler(): void {
     window.visualViewport?.removeEventListener('resize', overlayResizeHandler);
     window.visualViewport?.removeEventListener('scroll', overlayResizeHandler);
     overlayResizeHandler = null;
+    if (overlayResizeFrame) {
+        window.cancelAnimationFrame(overlayResizeFrame);
+        overlayResizeFrame = 0;
+    }
 }
 
 function postToFrame(type: string, payload: Record<string, unknown> = {}): boolean {

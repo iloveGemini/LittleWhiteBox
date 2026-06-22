@@ -595,7 +595,6 @@ watch(isMobileActionTrayViewport, (isMobile) => {
           </template>
           <div
             v-if="liveAssistantMarkdownVisible"
-            :key="`live-assistant:${liveAssistantRenderState.signature}`"
             class="xb-tavern-markdown"
             :data-action-check-groups="liveAssistantRenderState.actionCheckGroups || undefined"
             :data-markdown-signature="liveAssistantRenderState.signature"

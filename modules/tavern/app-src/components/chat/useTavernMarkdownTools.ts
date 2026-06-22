@@ -1217,6 +1217,15 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
         });
     }
 
+    function enhanceLiveChatMarkdown() {
+        const root = options.chatScrollRef.value;
+        if (!root?.querySelectorAll) {return;}
+        root.querySelectorAll<HTMLElement>('.chat-bubble.streaming .xb-tavern-markdown').forEach((node) => {
+            if (!canEnhanceMarkdownRoot(node)) {return;}
+            enhanceActionCheckMarkers(node);
+        });
+    }
+
     function enhanceManagerMarkdown() {
         const root = options.managerScrollRef.value;
         if (!root?.querySelectorAll) {return;}
@@ -1244,6 +1253,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
             }
         },
         enhanceChatMarkdown,
+        enhanceLiveChatMarkdown,
         enhanceManagerMarkdown,
         markdownSignature,
         renderChatMarkdown,
