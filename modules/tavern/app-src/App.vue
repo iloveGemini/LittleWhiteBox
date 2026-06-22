@@ -3554,12 +3554,14 @@ function acceptedStateRollbackNoticeForFloor(floor: number): string {
     return `会话记忆、人物记忆和事件线索会回滚到${target}。`;
 }
 
-async function saveEditMessage(message: TavernMessageRecord, options: { rerun?: boolean; content?: string } = {}) {
+async function saveEditMessage(message: TavernMessageRecord, options: { rerun?: boolean; rollbackState?: boolean; content?: string } = {}) {
     if (!canEditMessage(message)) {return;}
     const draft = 'content' in options
         ? String(options.content || '')
         : String(message.content || '');
     const content = draft.trim();
+    const shouldRollbackState = options.rerun === true || options.rollbackState === true;
+    const shouldClearRuntimeEvents = options.rerun === true && message.role === 'user';
     if (!content) {
         flashMessageAction(message, 'edit', false);
         return;
@@ -3574,25 +3576,27 @@ async function saveEditMessage(message: TavernMessageRecord, options: { rerun?: 
         return;
     }
     const floor = Math.max(1, Number(message.order) + 1);
-    if (!await confirmTavernDialog({
+    if (options.rollbackState === true && !options.rerun && !await confirmTavernDialog({
         title: '保存楼层编辑',
-        message: `保存第 ${floor} 楼的编辑？\n\n${acceptedStateRollbackNoticeForFloor(floor)}`,
-        confirmText: '保存',
+        message: `回滚这一楼之后的记忆和事件状态？\n\n${acceptedStateRollbackNoticeForFloor(floor)}`,
+        confirmText: '回滚保存',
         tone: 'warning',
     })) {return;}
     const substitutedContent = await substituteEditedMessageContent(message, content);
     const regexedContent = await applyEditRegexToMessageContent(message, substitutedContent);
     const updated = await updateTavernMessage(message.sessionId, message.order, {
         content: regexedContent,
-        ...(message.role === 'user' ? { runtimeEvents: [] } : {}),
+        ...(shouldClearRuntimeEvents ? { runtimeEvents: [] } : {}),
     });
-    if (updated) {
+    if (updated && shouldRollbackState) {
         await cancelAndRollbackXbTavernManagersForMessageRange(message.sessionId, message.order);
         await restoreAcceptedStateBeforeMessage(message.sessionId, message.order);
     }
     if (updated && selectedSessionId.value) {
         await loadSelectedSessionMessageWindow({ sessionId: selectedSessionId.value });
-        await refreshManagerRecords(selectedSessionId.value);
+        if (shouldRollbackState) {
+            await refreshManagerRecords(selectedSessionId.value);
+        }
     }
     cancelEditMessage();
     flashMessageAction(updated || message, 'edit', !!updated);
@@ -3606,7 +3610,7 @@ async function saveEditMessage(message: TavernMessageRecord, options: { rerun?: 
         } else {
             await rerunFromMessage(updated);
         }
-    } else if (updated) {
+    } else if (updated && shouldRollbackState) {
         await rebuildSelectedSessionRuntimeState();
     }
 }
