@@ -411,6 +411,7 @@ const showManagerScrollBottom = managerScrollPane.showScrollBottom;
 const managerScrollControlsActive = managerScrollPane.scrollControlsActive;
 const chatMessageWindowLimit = chatScrollPane.messageWindowLimit;
 const managerMessageWindowLimit = managerScrollPane.messageWindowLimit;
+let suppressNextChatWindowLimitReload = false;
 const editingMessageKey = ref('');
 const editingMessageDraft = ref('');
 const showPromptInspector = ref(false);
@@ -2420,6 +2421,33 @@ function upsertLoadedSessionMessage(message: TavernMessageRecord) {
     rememberSessionMessageCount(messageSessionId, selectedSessionMessageTotal.value);
 }
 
+function pruneLoadedSessionMessagesFromOrder(sessionId = '', fromOrder = Number.POSITIVE_INFINITY): number {
+    const targetSessionId = String(sessionId || '').trim();
+    const firstRemovedOrder = Number(fromOrder);
+    if (!targetSessionId || targetSessionId !== selectedSessionId.value || !Number.isFinite(firstRemovedOrder)) {return 0;}
+    const currentMessages = loadedSessionMessages.value;
+    const remainingMessages = currentMessages.filter((message) => (
+        message.sessionId !== targetSessionId || Number(message.order) < firstRemovedOrder
+    ));
+    const removedCount = currentMessages.length - remainingMessages.length;
+    if (removedCount <= 0) {return 0;}
+    loadedSessionMessages.value = remainingMessages;
+    selectedSessionMessageTotal.value = Math.max(
+        remainingMessages.length,
+        Math.max(0, Math.floor(Number(selectedSessionMessageTotal.value) || 0) - removedCount),
+    );
+    const remainingOrders = remainingMessages
+        .map((message) => Number(message.order))
+        .filter((order) => Number.isFinite(order));
+    loadedSessionMessageStartOrder.value = remainingOrders.length ? Math.min(...remainingOrders) : null;
+    loadedSessionMessageEndOrder.value = remainingOrders.length ? Math.max(...remainingOrders) : null;
+    selectedSessionLatestAssistantOrder.value = remainingMessages
+        .filter((message) => message.role === 'assistant' && Number.isFinite(Number(message.order)))
+        .reduce((latest, message) => Math.max(latest, Number(message.order)), -1);
+    rememberSessionMessageCount(targetSessionId, selectedSessionMessageTotal.value);
+    return removedCount;
+}
+
 function sessionUpdatedSortValue(session: TavernSessionRecord): number {
     return Number(session.updatedAt) || Number(session.createdAt) || 0;
 }
@@ -4149,18 +4177,33 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
     runtimeProvider.value = '';
     runtimeModel.value = '';
     chatAutoScroll.value = true;
+    const reusedUserMessageOrder = Number(options.reuseUserMessageOrder);
+    const isReusedUserMessageRun = Number.isFinite(reusedUserMessageOrder);
+    const defaultChatMessageWindowLimit = normalizeHiddenOutsideCount(hiddenOutsideCount.value);
+    if (isReusedUserMessageRun && Number(chatMessageWindowLimit.value) !== defaultChatMessageWindowLimit) {
+        suppressNextChatWindowLimitReload = true;
+    }
     resetChatMessageWindowState();
-    const shouldShowPendingUserMessage = !Number.isFinite(Number(options.reuseUserMessageOrder));
+    if (isReusedUserMessageRun && selectedSessionId.value) {
+        pruneLoadedSessionMessagesFromOrder(selectedSessionId.value, reusedUserMessageOrder + 1);
+    }
+    const shouldShowPendingUserMessage = !isReusedUserMessageRun;
     if (shouldShowPendingUserMessage) {
         runtimePendingUserMessage.value = messageText;
         currentUserMessage.value = '';
         void nextTick(() => resetTextareaHeight(chatComposeTextareaRef.value));
+        scrollChatToBottom(true);
+    } else {
+        runtimeUserMessageVisible.value = true;
         scrollChatToBottom(true);
     }
     try {
         if (controller.signal.aborted) {
             const pendingUserMessage = runtimePendingUserMessage.value;
             clearRuntimeAssistantLiveState();
+            if (isReusedUserMessageRun && selectedSessionId.value) {
+                await loadSelectedSessionMessageWindow({ sessionId: selectedSessionId.value });
+            }
             if (pendingUserMessage && !currentUserMessage.value.trim()) {
                 currentUserMessage.value = pendingUserMessage;
                 void nextTick(() => resetTextareaHeight(chatComposeTextareaRef.value));
@@ -4173,6 +4216,9 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
         const runtimeContext = await resolveRuntimeContextForSession(selectedSessionId.value);
         if (controller.signal.aborted) {
             clearRuntimeAssistantLiveState();
+            if (isReusedUserMessageRun && selectedSessionId.value) {
+                await loadSelectedSessionMessageWindow({ sessionId: selectedSessionId.value });
+            }
             return;
         }
         const result = await runXbTavernTurn({
@@ -4232,6 +4278,9 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
         console.error('[小白酒馆] turn failed', error);
         const pendingUserMessage = runtimePendingUserMessage.value;
         clearRuntimeAssistantLiveState();
+        if (isReusedUserMessageRun && selectedSessionId.value) {
+            await loadSelectedSessionMessageWindow({ sessionId: selectedSessionId.value });
+        }
         if (pendingUserMessage && !currentUserMessage.value.trim()) {
             currentUserMessage.value = pendingUserMessage;
             void nextTick(() => resetTextareaHeight(chatComposeTextareaRef.value));
@@ -4301,6 +4350,10 @@ watch([() => activeView.value, () => chatFocus.value], () => {
 });
 
 watch(() => chatMessageWindowLimit.value, () => {
+    if (suppressNextChatWindowLimitReload) {
+        suppressNextChatWindowLimitReload = false;
+        return;
+    }
     if (selectedSessionId.value) {
         void loadSelectedSessionMessageWindow();
     }

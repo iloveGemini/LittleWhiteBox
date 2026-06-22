@@ -905,7 +905,12 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.match(appSource, /function clearRuntimeAssistantLiveState\(\) \{[\s\S]*runtimeText\.value = '';[\s\S]*runtimeThoughts\.value = \[\];[\s\S]*runtimeActionCheckEvents\.value = \[\];[\s\S]*runtimeUserMessageVisible\.value = false;/);
     assert.match(appSource, /runtimeUserMessageVisible\.value = false;[\s\S]*runtimeProvider\.value = ''/);
     assert.match(appSource, /function upsertLoadedSessionMessage\(message: TavernMessageRecord\) \{[\s\S]*messageOrder >= tailOrder[\s\S]*loadedSessionMessages\.value = \[\.\.\.currentMessages, message\];/);
+    assert.match(appSource, /function pruneLoadedSessionMessagesFromOrder\(sessionId = '', fromOrder = Number\.POSITIVE_INFINITY\): number \{[\s\S]*Number\(message\.order\) < firstRemovedOrder[\s\S]*loadedSessionMessages\.value = remainingMessages;[\s\S]*selectedSessionLatestAssistantOrder\.value = remainingMessages/);
     assert.doesNotMatch(appSource, /\[\.\.\.loadedSessionMessages\.value, message\]\.sort\(\(left, right\) => left\.order - right\.order\)/);
+    assert.match(appSource, /let suppressNextChatWindowLimitReload = false;/);
+    assert.match(appSource, /const reusedUserMessageOrder = Number\(options\.reuseUserMessageOrder\);[\s\S]*const isReusedUserMessageRun = Number\.isFinite\(reusedUserMessageOrder\);[\s\S]*suppressNextChatWindowLimitReload = true;[\s\S]*resetChatMessageWindowState\(\);[\s\S]*pruneLoadedSessionMessagesFromOrder\(selectedSessionId\.value, reusedUserMessageOrder \+ 1\);[\s\S]*runtimeUserMessageVisible\.value = true;/);
+    assert.match(appSource, /watch\(\(\) => chatMessageWindowLimit\.value, \(\) => \{[\s\S]*if \(suppressNextChatWindowLimitReload\) \{[\s\S]*suppressNextChatWindowLimitReload = false;[\s\S]*return;[\s\S]*void loadSelectedSessionMessageWindow\(\);/);
+    assert.match(appSource, /catch \(error\) \{[\s\S]*clearRuntimeAssistantLiveState\(\);[\s\S]*if \(isReusedUserMessageRun && selectedSessionId\.value\) \{[\s\S]*await loadSelectedSessionMessageWindow\(\{ sessionId: selectedSessionId\.value \}\);/);
     const userSavedCallback = appSource.match(/onUserMessageSaved: async \(sessionId, message\) => \{[\s\S]*?\n[ ]{12}\},\n[ ]{12}onAssistantMessageSaved/);
     assert.ok(userSavedCallback);
     assert.match(userSavedCallback[0], /upsertLoadedSessionMessage\(message\);[\s\S]*touchSessionLocally\(sessionId, message\.createdAt\);[\s\S]*runtimePendingUserMessage\.value = '';[\s\S]*await setSelectedTavernSessionId\(sessionId\)/);
