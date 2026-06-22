@@ -44,7 +44,7 @@ import {
 export interface TavernSessionRecord {
     id: string;
     title: string;
-    characterId?: string;
+    characterKey?: string;
     characterName?: string;
     createdAt: number;
     updatedAt: number;
@@ -502,13 +502,34 @@ class TavernDatabase extends Dexie {
             stateDocuments: '[sessionId+docType+docId], sessionId, docType, docId, status, updatedAt',
             statePatches: 'id, sessionId, docType, docId, managerRunId, revision, status, updatedAt',
             managerStateSnapshots: '[managerRunId+docType+docId], managerRunId, sessionId, docType, docId, updatedAt',
-            tasks: 'id, sessionId, status, fingerprint, updatedOrder, updatedAt',
+            tasks: '[sessionId+id], sessionId, status, fingerprint, updatedOrder, updatedAt',
             taskSnapshots: '[sessionId+floor], sessionId, floor, createdAt',
             managerTaskSnapshots: 'managerRunId, sessionId, updatedAt',
             taskFingerprintStates: 'sessionId, updatedAt',
         });
         this.version(7).stores({
             sessions: 'id, updatedAt, characterId, characterName',
+            messages: '[sessionId+order], sessionId, order',
+            managerMessages: '[sessionId+order], sessionId, order',
+            meta: 'key',
+            presets: 'id, updatedAt, sourcePresetId',
+            managerRuns: 'id, sessionId, status, turn, updatedAt',
+            memoryFiles: '[sessionId+path], sessionId, path, status, updatedAt',
+            memoryStateSnapshots: null,
+            memorySnapshots: '[sessionId+floor], sessionId, floor, createdAt',
+            memoryIndexes: '[sessionId+kind], sessionId, kind, status, updatedAt',
+            assistantPresets: 'id, updatedAt',
+            managerMemorySnapshots: '[managerRunId+path], managerRunId, sessionId, path, updatedAt',
+            stateDocuments: '[sessionId+docType+docId], sessionId, docType, docId, status, updatedAt',
+            statePatches: 'id, sessionId, docType, docId, managerRunId, revision, status, updatedAt',
+            managerStateSnapshots: '[managerRunId+docType+docId], managerRunId, sessionId, docType, docId, updatedAt',
+            tasks: '[sessionId+id], sessionId, status, fingerprint, updatedOrder, updatedAt',
+            taskSnapshots: '[sessionId+floor], sessionId, floor, createdAt',
+            managerTaskSnapshots: 'managerRunId, sessionId, updatedAt',
+            taskFingerprintStates: 'sessionId, updatedAt',
+        });
+        this.version(8).stores({
+            sessions: 'id, updatedAt, characterKey, characterName',
             messages: '[sessionId+order], sessionId, order',
             managerMessages: '[sessionId+order], sessionId, order',
             meta: 'key',
@@ -773,7 +794,7 @@ export async function createTavernSession(input: Partial<TavernSessionRecord> = 
     const session: TavernSessionRecord = {
         id: String(input.id || createId()),
         title: normalizeTitle(title, characterName || '未选择角色'),
-        characterId: String(input.characterId || ''),
+        characterKey: String(input.characterKey || ''),
         characterName,
         createdAt: Number(input.createdAt) || timestamp,
         updatedAt: timestamp,
@@ -982,7 +1003,7 @@ export async function updateTavernSessionSnapshot(sessionId = '', patch: {
     chatPresetName?: string;
     presetId?: string;
     presetName?: string;
-    characterId?: string;
+    characterKey?: string;
     characterName?: string;
 } = {}): Promise<TavernSessionRecord | null> {
     const id = String(sessionId || '').trim();
@@ -999,7 +1020,7 @@ export async function updateTavernSessionSnapshot(sessionId = '', patch: {
         chatPresetName: 'chatPresetName' in patch ? String(patch.chatPresetName || '') : existing.chatPresetName,
         presetId: 'presetId' in patch ? String(patch.presetId || '') : existing.presetId,
         presetName: 'presetName' in patch ? String(patch.presetName || '') : existing.presetName,
-        characterId: 'characterId' in patch ? String(patch.characterId || '') : String(character.id || existing.characterId || ''),
+        characterKey: 'characterKey' in patch ? String(patch.characterKey || '') : String(character.characterKey || existing.characterKey || ''),
         characterName: 'characterName' in patch ? String(patch.characterName || '') : String(character.name || existing.characterName || ''),
     };
     await tavernSessionsTable.update(id, update);

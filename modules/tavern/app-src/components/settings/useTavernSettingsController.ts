@@ -57,7 +57,7 @@ interface TavernSettingsControllerOptions {
     agentConfig: Ref<Record<string, unknown>>;
     tavernDisplaySettings: Ref<TavernDisplaySettings>;
     effectiveContext: ComputedRef<XbTavernContext>;
-    currentWorldbookCharacterId: ComputedRef<string>;
+    currentWorldbookNativeCharacterId: ComputedRef<string>;
     homeThemeDark: Ref<boolean>;
     isRunning: Ref<boolean>;
     describeError: (error: unknown) => string;
@@ -1143,7 +1143,9 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         }
         regexStatus.value = '正在读取';
         try {
-            const result = await options.requestHost('xb-tavern:list-regex-scripts');
+            const result = await options.requestHost('xb-tavern:list-regex-scripts', {
+                payload: { nativeCharacterId: String(options.currentWorldbookNativeCharacterId.value || '').trim() },
+            });
             regexList.value = (result.result || result) as Record<string, unknown>;
             const current = regexScriptRows.value.find((row) => row.key === selectedRegexKey.value);
             applyActiveRegexScript(current || regexScriptRows.value[0] || null);
@@ -1205,6 +1207,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         try {
             const result = await options.requestHost('xb-tavern:save-regex-script', {
                 payload: {
+                    nativeCharacterId: String(options.currentWorldbookNativeCharacterId.value || '').trim(),
                     scriptType,
                     script: regexDraft.value,
                 },
@@ -1251,7 +1254,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         regexStatus.value = '正在删除';
         try {
             const result = await options.requestHost('xb-tavern:delete-regex-script', {
-                payload: { scriptType, id },
+                payload: { nativeCharacterId: String(options.currentWorldbookNativeCharacterId.value || '').trim(), scriptType, id },
             });
             regexList.value = (result.result || result) as Record<string, unknown>;
             applyActiveRegexScript(regexScriptRows.value[0] || null);
@@ -1765,16 +1768,16 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
     }
     async function syncWorldbooksForCurrentCharacter() {
         const requestSerial = ++worldbookSyncRequestSerial;
-        const characterId = String(options.currentWorldbookCharacterId.value || '').trim();
+        const nativeCharacterId = String(options.currentWorldbookNativeCharacterId.value || '').trim();
         let bindingStatus = '';
         selectedWorldbookName.value = '';
-        if (!characterId) {
+        if (!nativeCharacterId) {
             await syncWorldbooksFromHost({ requestSerial });
             return;
         }
         try {
             const result = await options.requestHost('xb-tavern:get-character-worldbook-state', {
-                payload: { characterId },
+                payload: { nativeCharacterId },
             });
             if (requestSerial !== worldbookSyncRequestSerial) {return;}
             const payload = (result.result || result) as Record<string, unknown>;

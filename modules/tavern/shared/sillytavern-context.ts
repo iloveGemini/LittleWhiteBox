@@ -8,8 +8,7 @@ import {
 } from './message-assembler';
 
 export interface SillyTavernContextSource {
-    characterId?: number | string;
-    this_chid?: number | string;
+    nativeCharacterId?: number | string;
     characters?: unknown[];
     character?: unknown;
     chat?: unknown[];
@@ -63,6 +62,26 @@ function asArray(value: unknown): unknown[] {
     return Array.isArray(value) ? value : [];
 }
 
+function hashString(value = ''): string {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+        hash ^= value.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+}
+
+function buildCharacterKey(character: Record<string, unknown>, nativeCharacterId: unknown): string {
+    const data = pickData(character);
+    const name = normalizeText(character.name || data.name);
+    const avatar = normalizeText(character.avatar || data.avatar);
+    const payload = normalizeText(character.json_data) || JSON.stringify(data || character || {});
+    const hash = hashString(payload || [avatar, name].join('\u0000'));
+    if (avatar) {return `avatar:${avatar}:${name || 'unnamed'}:${hash.slice(0, 8)}`;}
+    if (payload) {return `card:${hash}:${name || 'unnamed'}`;}
+    return `name:${name || 'unknown'}:${hash.slice(0, 8) || normalizeText(nativeCharacterId)}`;
+}
+
 function readEntryList(value: unknown): unknown[] {
     if (Array.isArray(value)) {return value;}
     const record = asRecord(value);
@@ -71,7 +90,7 @@ function readEntryList(value: unknown): unknown[] {
 
 function pickCharacter(source: SillyTavernContextSource = {}): Record<string, unknown> {
     if (source.character && typeof source.character === 'object') {return asRecord(source.character);}
-    const id = source.characterId ?? source.this_chid;
+    const id = source.nativeCharacterId;
     if (id === undefined || id === null) {return {};}
     const index = Number(id);
     if (!Number.isInteger(index)) {return {};}
@@ -85,13 +104,15 @@ function pickData(character: Record<string, unknown>): Record<string, unknown> {
 export function normalizeSillyTavernCharacter(source: SillyTavernContextSource = {}): XbTavernCharacter {
     const character = pickCharacter(source);
     const data = pickData(character);
+    const nativeCharacterId = source.nativeCharacterId;
     const name = [
         character.name,
         data.name,
         source.name2,
     ].map((value) => normalizeText(value)).find((value) => value && !isSystemCharacterName(value)) || '';
     return {
-        id: normalizeText(source.characterId ?? source.this_chid),
+        characterKey: Object.keys(character).length ? buildCharacterKey(character, nativeCharacterId) : '',
+        nativeCharacterId: normalizeText(nativeCharacterId),
         name,
         avatar: normalizeText(character.avatar || data.avatar),
         description: normalizeText(data.description || character.description),

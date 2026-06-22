@@ -13,7 +13,7 @@ import {
 
 test('sillytavern context adapter extracts the active LittleWhiteBox character and supported worldbooks', () => {
     const source = {
-        characterId: 0,
+        nativeCharacterId: 0,
         name1: 'Mira',
         characters: [{
             name: 'Aster',
@@ -76,7 +76,7 @@ test('sillytavern context adapter does not treat system name as a character card
 
 test('sillytavern context adapter switches character snapshots by id', () => {
     const source = {
-        characterId: 1,
+        nativeCharacterId: 1,
         name1: 'Mira',
         characters: [
             { name: 'Aster', data: { description: 'Pilot.' } },
@@ -98,7 +98,7 @@ test('sillytavern context adapter switches character snapshots by id', () => {
 
 test('sillytavern context adapter only uses character-bound and global worldbooks', () => {
     const source = {
-        characterId: 0,
+        nativeCharacterId: 0,
         characters: [{
             name: 'Aster',
             avatar: 'aster.png',
@@ -123,7 +123,7 @@ test('sillytavern context adapter only uses character-bound and global worldbook
 
 test('sillytavern context adapter ignores character-card lore until it is imported', () => {
     const source = {
-        characterId: 0,
+        nativeCharacterId: 0,
         characters: [{
             name: 'Aster',
             avatar: 'aster.png',

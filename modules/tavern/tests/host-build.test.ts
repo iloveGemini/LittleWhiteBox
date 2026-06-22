@@ -202,12 +202,12 @@ test('tavern character select page keeps a dense index and selected-card preview
     assert.match(layoutCss, /width: 360px/);
     assert.match(previewCss, /\.dossier-header/);
     assert.match(appSource, /activeView === 'home' \|\| activeView === 'about'/);
-    assert.match(appSource, /const previewId = String\(selectedCharacterPreviewId\.value \|\| ''\)\.trim\(\);/);
+    assert.match(appSource, /const previewKey = String\(selectedCharacterPreviewKey\.value \|\| ''\)\.trim\(\);/);
     assert.match(appSource, /async function selectCharacterForPreview/);
-    assert.match(appSource, /getHostContext\(\s*\{\s*characterId: targetId,\s*includeHistory: false,\s*includeWorldbooks: false\s*\}/);
+    assert.match(appSource, /getHostContext\(\s*\{\s*nativeCharacterId,\s*includeHistory: false,\s*includeWorldbooks: false\s*\}/);
     assert.doesNotMatch(appSource, /CHARACTER_CONTEXT_TIMEOUT_MS|host_request_timeout/);
     assert.match(appSource, /function hasCharacterPreviewDetails/);
-    assert.match(appSource, /pendingCharacterPreviewId/);
+    assert.match(appSource, /pendingCharacterPreviewKey/);
     assert.doesNotMatch(panelSource, /刷新列表/);
     assert.doesNotMatch(panelSource, /这里不重写角色卡/);
     assert.doesNotMatch(panelSource, /archive-toolbar/);
@@ -237,9 +237,9 @@ test('tavern character list merges native character records when extension conte
 test('tavern chat creation waits for hydrated character context before adding greetings', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const assemblerSource = readRepoFile('modules/tavern/shared/message-assembler.ts');
-    assert.match(appSource, /async function selectCharacterAndCreateSession\(characterId: string\)/);
-    assert.match(appSource, /pendingCharacterSessionId\.value = targetId/);
-    assert.match(appSource, /postToHost\('xb-tavern:refresh-context', \{ characterId: targetId, includeHistory: false \}\)/);
+    assert.match(appSource, /async function selectCharacterAndCreateSession\(characterKey: string\)/);
+    assert.match(appSource, /pendingCharacterSessionKey\.value = targetKey/);
+    assert.match(appSource, /postToHost\('xb-tavern:refresh-context', \{ nativeCharacterId, includeHistory: false \}\)/);
     assert.match(appSource, /function applyHostPayload/);
     assert.match(appSource, /finishPendingCharacterSession\(\)/);
     assert.match(appSource, /await createSessionAndOpenChat\(\{ greetingIndex \}\)/);
@@ -324,7 +324,7 @@ test('tavern worldbook host bridge exposes named entry edit endpoints and native
     assert.match(hostSource, /unshallowCharacter/);
     assert.match(hostSource, /await hydrateCharacterRecordById\(requestedId\)/);
     assert.match(hostSource, /select_selected_character\(numericId, \{ switchMenu: false \}\);/);
-    assert.match(hostSource, /const character = await hydrateCharacterRecordById\(state\.characterId\);[\s\S]*const book = readCharacterBook\(character\);/);
+    assert.match(hostSource, /const character = await hydrateCharacterRecordById\(state\.nativeCharacterId\);[\s\S]*const book = readCharacterBook\(character\);/);
     assert.match(hostSource, /state\.worldbookOptions\.includes\(name\) && payload\.confirmed !== true[\s\S]*action: 'needs_import_confirmation'/);
     assert.match(hostSource, /function captureCharacterEditorSnapshot/);
     assert.match(hostSource, /function captureCharacterEditorJQueryData/);
@@ -334,12 +334,12 @@ test('tavern worldbook host bridge exposes named entry edit endpoints and native
     assert.match(hostSource, /function isCharacterEditorFocusedOn/);
     assert.match(hostSource, /return worldEditorId === targetId && greetingsEditorId === targetId;/);
     assert.match(hostSource, /async function bindCharacterWorldbookThroughEditor/);
-    assert.match(hostSource, /const shouldPrepareEditor = !isCharacterEditorFocusedOn\(characterId\);[\s\S]*if \(shouldPrepareEditor\) \{[\s\S]*await prepareCharacterEditorForWorldbookBinding\(characterId\);[\s\S]*finally \{[\s\S]*restoreCharacterEditorSnapshot\(snapshot\);/);
-    assert.match(hostSource, /const state = await readCharacterWorldbookState\(characterId\);[\s\S]*state\.boundWorldbookName !== name \|\| state\.boundExists !== true[\s\S]*throw new Error\(`角色世界书绑定未保存成功：\$\{name\}`\);/);
-    assert.match(hostSource, /const convertedBook = convertCharacterBook\(book\);[\s\S]*await saveWorldInfo\(name, convertedBook, true\);[\s\S]*await updateWorldInfoList\(\);[\s\S]*const boundState = await bindCharacterWorldbookThroughEditor\(state\.characterId, name\);/);
+    assert.match(hostSource, /const shouldPrepareEditor = !isCharacterEditorFocusedOn\(nativeCharacterId\);[\s\S]*if \(shouldPrepareEditor\) \{[\s\S]*await prepareCharacterEditorForWorldbookBinding\(nativeCharacterId\);[\s\S]*finally \{[\s\S]*restoreCharacterEditorSnapshot\(snapshot\);/);
+    assert.match(hostSource, /const state = await readCharacterWorldbookState\(nativeCharacterId\);[\s\S]*state\.boundWorldbookName !== name \|\| state\.boundExists !== true[\s\S]*throw new Error\(`角色世界书绑定未保存成功：\$\{name\}`\);/);
+    assert.match(hostSource, /const convertedBook = convertCharacterBook\(book\);[\s\S]*await saveWorldInfo\(name, convertedBook, true\);[\s\S]*await updateWorldInfoList\(\);[\s\S]*const boundState = await bindCharacterWorldbookThroughEditor\(state\.nativeCharacterId, name\);/);
     assert.match(hostSource, /if \(!name\) \{[\s\S]*throw new Error\('缺少要绑定的世界书名称。'\);[\s\S]*if \(!state\.worldbookOptions\.includes\(name\)\)/);
-    assert.match(hostSource, /await prepareCharacterEditorForWorldbookBinding\(characterId\);[\s\S]*await charUpdatePrimaryWorld\(name\);/);
-    assert.match(hostSource, /return bindCharacterWorldbookThroughEditor\(characterId, name\);/);
+    assert.match(hostSource, /await prepareCharacterEditorForWorldbookBinding\(nativeCharacterId\);[\s\S]*await charUpdatePrimaryWorld\(name\);/);
+    assert.match(hostSource, /return bindCharacterWorldbookThroughEditor\(nativeCharacterId, name\);/);
     assert.match(hostSource, /applyGlobalWorldbookSelection\(selected\);[\s\S]*await updateWorldInfoList\(\);/);
     assert.doesNotMatch(hostSource, /importEmbeddedWorldInfo/);
     assert.doesNotMatch(hostSource, /createWorldInfoEntry/);
@@ -372,7 +372,7 @@ test('tavern worldbook host bridge exposes named entry edit endpoints and native
     assert.match(tavernSource, /case 'xb-tavern:get-worldbook-runtime':/);
     assert.match(appSource, /action === 'needs_import_confirmation'/);
     assert.match(appSource, /window\.confirm\(`世界书「\$\{name\}」已存在，导入角色内嵌世界书会覆盖它。继续？`\)/);
-    assert.match(appSource, /payload: \{ characterId: targetId, confirmed: true \}/);
+    assert.match(appSource, /payload: \{ nativeCharacterId, confirmed: true \}/);
     assert.doesNotMatch(tavernSource, /case 'xb-tavern:open-worldbook-editor':/);
     assert.doesNotMatch(tavernSource, /case 'xb-tavern:list-worldbooks':/);
     assert.doesNotMatch(tavernSource, /case 'xb-tavern:get-worldbook':/);
@@ -393,7 +393,7 @@ test('tavern native prompt builder injects LittleWhiteBox state without host cha
     assert.match(nativeSource, /function applyPromptManagerActiveCharacter/);
     assert.match(nativeSource, /function applyChatPresetPromptManager/);
     assert.match(nativeSource, /serviceSettings\.prompts = cloneJson\(prompts\);/);
-    assert.match(nativeSource, /replacePromptOrderForCharacter\(promptOrder, characterId, activeOrder\)/);
+    assert.match(nativeSource, /replacePromptOrderForCharacter\(promptOrder, nativeCharacterId, activeOrder\)/);
     assert.match(nativeSource, /applyChatPresetPromptManager\(input\.chatPreset, context\);[\s\S]*applyPromptManagerActiveCharacter\(context\);/);
     assert.match(nativeSource, /activeCharacter = character;/);
     assert.doesNotMatch(nativeSource, /promptOrder\.push\(\{[\s\S]*character_id: character\.id/);

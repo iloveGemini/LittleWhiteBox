@@ -369,20 +369,21 @@ function addNativeWorldInfoDepth(runtime: XbTavernNativeWorldInfoRuntime = {}): 
 
 function characterPromptManagerIdentity(context: XbTavernContext = {}): Record<string, unknown> | null {
     const character = context.character || {};
-    const id = normalizeText(character.id);
-    if (!id) {return null;}
+    const nativeCharacterId = normalizeText(character.nativeCharacterId);
+    if (!nativeCharacterId) {return null;}
     return {
         ...asRecord(character.data),
         ...character,
-        id,
+        id: nativeCharacterId,
+        nativeCharacterId,
         name: normalizeText(character.name),
     };
 }
 
-function replacePromptOrderForCharacter(existingPromptOrder: unknown, characterId = '', nextOrder: unknown[] = []): unknown[] {
+function replacePromptOrderForCharacter(existingPromptOrder: unknown, nativeCharacterId = '', nextOrder: unknown[] = []): unknown[] {
     const containers = (Array.isArray(existingPromptOrder) ? existingPromptOrder : [])
         .map((container) => ({ ...asRecord(container) }));
-    const targetId = normalizeText(characterId);
+    const targetId = normalizeText(nativeCharacterId);
     const targetIndex = containers.findIndex((container) => normalizeText(container.character_id) === targetId);
     const target = targetIndex >= 0 ? containers[targetIndex] : { character_id: targetId };
     const replacement = {
@@ -416,9 +417,9 @@ function applyChatPresetPromptManager(chatPreset: TavernChatPromptPresetBundle =
             ? cloneJson(rawPreset.prompt_order)
             : undefined;
     const activeOrder = Array.isArray(preset.activeOrder) ? preset.activeOrder : [];
-    const characterId = normalizeText(context.character?.id);
-    if (characterId && activeOrder.length) {
-        promptOrder = replacePromptOrderForCharacter(promptOrder, characterId, activeOrder);
+    const nativeCharacterId = normalizeText(context.character?.nativeCharacterId);
+    if (nativeCharacterId && activeOrder.length) {
+        promptOrder = replacePromptOrderForCharacter(promptOrder, nativeCharacterId, activeOrder);
     }
     if (Array.isArray(promptOrder)) {
         serviceSettings.prompt_order = promptOrder;

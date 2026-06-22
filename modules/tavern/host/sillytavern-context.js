@@ -215,6 +215,52 @@ function getWindowRecord() {
 function readGlobalString(name = "") {
   return normalizeText(getWindowRecord()[name]);
 }
+function hashString(value = "") {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+function stableJson(value) {
+  if (value === null || value === void 0) {
+    return "";
+  }
+  if (typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJson(item)).join(",")}]`;
+  }
+  const record = asRecord(value);
+  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(",")}}`;
+}
+function rawCharacterAvatarName(character, data, nativeCharacterId) {
+  const raw = normalizeText(character.avatar || data.avatar);
+  if (raw && raw !== "none" && !/^(data:|blob:|https?:)/i.test(raw)) {
+    return raw.replace(/\\/g, "/").split("/").filter(Boolean).pop() || raw;
+  }
+  try {
+    return normalizeText(getCharaFilename(nativeCharacterId));
+  } catch {
+    return "";
+  }
+}
+function buildCharacterKey(character, nativeCharacterId) {
+  const data = asRecord(character.data) || character;
+  const name = normalizeText(character.name || data.name);
+  const avatar = rawCharacterAvatarName(character, data, nativeCharacterId);
+  const cardPayload = normalizeText(character.json_data) || stableJson(data) || stableJson(character);
+  const hash = hashString(cardPayload || [avatar, name].join("\0"));
+  if (avatar) {
+    return `avatar:${avatar}:${name || "unnamed"}:${hash.slice(0, 8)}`;
+  }
+  if (cardPayload) {
+    return `card:${hash}:${name || "unnamed"}`;
+  }
+  return `name:${name || "unknown"}:${hash.slice(0, 8)}`;
+}
 async function hydrateCharacterAt(index) {
   if (!Number.isInteger(index) || index < 0) {
     return;
@@ -238,16 +284,16 @@ async function hydrateCharacterAt(index) {
   }
 }
 async function hydrateSelectedCharacter(ctx, options) {
-  const index = Number(resolveCharacterId(ctx, options));
+  const index = Number(resolveNativeCharacterId(ctx, options));
   if (Number.isInteger(index)) {
     await hydrateCharacterAt(index);
   }
 }
-function resolveCharacterId(ctx = getContext?.() || {}, options = {}) {
-  return options.characterId ?? ctx.characterId ?? ctx.this_chid;
+function resolveNativeCharacterId(_ctx = getContext?.() || {}, options = {}) {
+  return options.nativeCharacterId;
 }
 function getCurrentCharacter(ctx = getContext?.() || {}, options = {}) {
-  const id = resolveCharacterId(ctx, options);
+  const id = resolveNativeCharacterId(ctx, options);
   const index = Number(id);
   const runtime = Number.isInteger(index) ? asRecord(sillyTavernCharacters?.[index]) : {};
   const getCharacter = typeof ctx.getCharacter === "function" ? ctx.getCharacter : null;
@@ -273,17 +319,35 @@ function getCurrentCharacter(ctx = getContext?.() || {}, options = {}) {
 }
 function normalizeCharacter(ctx = getContext?.() || {}, options = {}) {
   const character = getCurrentCharacter(ctx, options) || {};
+  const nativeCharacterId = resolveNativeCharacterId(ctx, options);
+  if (nativeCharacterId === void 0 || nativeCharacterId === null || !Object.keys(character).length) {
+    return {
+      characterKey: "",
+      nativeCharacterId: "",
+      name: "",
+      avatar: "",
+      tags: [],
+      description: "",
+      personality: "",
+      scenario: "",
+      firstMessage: "",
+      alternateGreetings: [],
+      mesExample: "",
+      creatorNotes: "",
+      data: {}
+    };
+  }
   const data = asRecord(character.data) || character;
   const name = [
     character.name,
     data.name,
     ctx.name2
   ].map((value) => normalizeText(value)).find((value) => value && !isSystemCharacterName(value)) || "";
-  const characterId = resolveCharacterId(ctx, options);
-  const tagKey = getTagKeyForEntity?.(characterId);
+  const tagKey = getTagKeyForEntity?.(nativeCharacterId);
   const tags = tagKey && Array.isArray(tag_map?.[tagKey]) ? tag_map[tagKey].map((item) => normalizeText(item)).filter(Boolean) : [];
   return {
-    id: normalizeText(characterId),
+    characterKey: buildCharacterKey(character, nativeCharacterId),
+    nativeCharacterId: normalizeText(nativeCharacterId),
     name,
     avatar: normalizeCharacterAvatar(character.avatar || data.avatar || readGlobalString("default_avatar")),
     tags,
@@ -314,7 +378,7 @@ function readCharacterAvatarName(ctx = getContext?.() || {}, options = {}) {
     return raw.replace(/\\/g, "/").split("/").filter(Boolean).pop() || raw;
   }
   try {
-    return normalizeText(getCharaFilename(resolveCharacterId(ctx, options)));
+    return normalizeText(getCharaFilename(resolveNativeCharacterId(ctx, options)));
   } catch {
     return "";
   }
@@ -358,7 +422,7 @@ function collectWorldbookSources(ctx = getContext?.() || {}, options = {}) {
   addUnique(characterLoreIds, character.avatar);
   addUnique(characterLoreIds, data.avatar);
   try {
-    addUnique(characterLoreIds, getCharaFilename(resolveCharacterId(ctx, options)));
+    addUnique(characterLoreIds, getCharaFilename(resolveNativeCharacterId(ctx, options)));
   } catch {
   }
   const characterLoreIdSet = new Set(characterLoreIds);
@@ -405,7 +469,8 @@ function listCharacters(ctx = getContext?.() || {}) {
     const depthPrompt = asRecord(extensions.depth_prompt);
     const legacyDepthPrompt = asRecord(data.depth_prompt);
     return {
-      id: String(index),
+      characterKey: buildCharacterKey(character, index),
+      nativeCharacterId: String(index),
       name: normalizeText(character?.name || data.name || `Character ${index + 1}`),
       avatar: normalizeCharacterAvatar(character?.avatar || data.avatar || readGlobalString("default_avatar")),
       shallow: character.shallow === true,
@@ -508,7 +573,7 @@ async function buildTavernContext(options = {}) {
       }))
     },
     availableCharacters: listCharacters(ctx),
-    selectedCharacterId: normalizeText(resolveCharacterId(ctx, options)),
+    selectedCharacterKey: normalizeText(asRecord(context.character).characterKey),
     htmlRenderEnabled: isHtmlRenderEnabled(),
     ...getHostTypographyMetrics()
   };

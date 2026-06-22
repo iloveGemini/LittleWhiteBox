@@ -133,9 +133,7 @@ interface TavernWorldbookEntryDraft {
 }
 
 interface TavernCharacterWorldbookState {
-    characterId: string;
-    currentCharacterId: string;
-    isCurrentCharacter: boolean;
+    nativeCharacterId: string;
     characterName: string;
     boundWorldbookName: string;
     boundExists: boolean;
@@ -808,7 +806,7 @@ function captureRuntimeState(): {
     selectedWorldInfo: string[];
     chatLore: string;
     personaLore: string;
-    characterId: string;
+    nativeCharacterId: string;
     characterName: string;
     timedState: XbTavernNativeWorldInfoTimedState;
     extensionPrompts: ExtensionPromptSnapshot;
@@ -818,7 +816,8 @@ function captureRuntimeState(): {
         selectedWorldInfo: Array.isArray(selected_world_info) ? [...selected_world_info] : [],
         chatLore: normalizeText(chat_metadata?.[METADATA_KEY]),
         personaLore: normalizeText(power_user?.persona_description_lorebook),
-        characterId: normalizeText(this_chid),
+        // Only capture ST's current native character pointer so temporary native switches can be restored.
+        nativeCharacterId: normalizeText(this_chid),
         characterName: normalizeText(name2),
         timedState: normalizeTimedState(chat_metadata?.timedWorldInfo),
         extensionPrompts: captureExtensionPrompts(),
@@ -844,7 +843,7 @@ function applyRuntimeState(input: {
         delete chat_metadata[METADATA_KEY];
     }
     power_user.persona_description_lorebook = personaLore || '';
-    setCharacterId(normalizeText(input.context.character?.id) || undefined);
+    setCharacterId(normalizeText(input.context.character?.nativeCharacterId) || undefined);
     if (normalizeText(input.context.character?.name)) {
         setCharacterName(normalizeText(input.context.character?.name));
     }
@@ -874,7 +873,7 @@ function restoreRuntimeState(snapshot: ReturnType<typeof captureRuntimeState>): 
         delete chat_metadata[METADATA_KEY];
     }
     power_user.persona_description_lorebook = snapshot.personaLore || '';
-    setCharacterId(snapshot.characterId || undefined);
+    setCharacterId(snapshot.nativeCharacterId || undefined);
     setCharacterName(snapshot.characterName || '');
     chat_metadata.timedWorldInfo = cloneJson(snapshot.timedState);
     restoreExtensionPrompts(snapshot.extensionPrompts);
@@ -899,16 +898,16 @@ async function runTavernWorldbookStateExclusive<T>(task: () => Promise<T>): Prom
     }
 }
 
-function getCharacterRecordById(characterId: string): Record<string, unknown> {
-    const normalizedId = normalizeIdText(characterId);
+function getCharacterRecordById(nativeCharacterId: string): Record<string, unknown> {
+    const normalizedId = normalizeIdText(nativeCharacterId);
     const numericId = Number(normalizedId);
     if (!normalizedId || !Number.isInteger(numericId) || numericId < 0) {return {};}
     const list = Array.isArray(characters) ? characters : [];
     return asRecord(list[numericId]);
 }
 
-async function hydrateCharacterRecordById(characterId: string): Promise<Record<string, unknown>> {
-    const normalizedId = normalizeIdText(characterId);
+async function hydrateCharacterRecordById(nativeCharacterId: string): Promise<Record<string, unknown>> {
+    const normalizedId = normalizeIdText(nativeCharacterId);
     const numericId = Number(normalizedId);
     if (!Number.isInteger(numericId) || numericId < 0) {return {};}
     const character = getCharacterRecordById(normalizedId);
@@ -923,8 +922,8 @@ async function hydrateCharacterRecordById(characterId: string): Promise<Record<s
     return getCharacterRecordById(normalizedId);
 }
 
-async function prepareCharacterEditorForWorldbookBinding(characterId: string): Promise<void> {
-    const normalizedId = normalizeIdText(characterId);
+async function prepareCharacterEditorForWorldbookBinding(nativeCharacterId: string): Promise<void> {
+    const normalizedId = normalizeIdText(nativeCharacterId);
     const numericId = Number(normalizedId);
     if (!Number.isInteger(numericId) || numericId < 0 || !Object.keys(getCharacterRecordById(normalizedId)).length) {
         throw new Error('当前角色未找到，无法绑定世界书。');
@@ -1023,8 +1022,8 @@ function restoreCharacterEditorSnapshot(snapshot: TavernCharacterEditorSnapshot 
     });
 }
 
-function isCharacterEditorFocusedOn(characterId: string): boolean {
-    const targetId = normalizeIdText(characterId);
+function isCharacterEditorFocusedOn(nativeCharacterId: string): boolean {
+    const targetId = normalizeIdText(nativeCharacterId);
     if (!targetId) {return false;}
     const form = document.querySelector('#form_create');
     if (form instanceof HTMLFormElement && form.getAttribute('actiontype') === 'createcharacter') {return false;}
@@ -1033,18 +1032,18 @@ function isCharacterEditorFocusedOn(characterId: string): boolean {
     return worldEditorId === targetId && greetingsEditorId === targetId;
 }
 
-async function bindCharacterWorldbookThroughEditor(characterId: string, name: string): Promise<TavernCharacterWorldbookState> {
-    const shouldPrepareEditor = !isCharacterEditorFocusedOn(characterId);
+async function bindCharacterWorldbookThroughEditor(nativeCharacterId: string, name: string): Promise<TavernCharacterWorldbookState> {
+    const shouldPrepareEditor = !isCharacterEditorFocusedOn(nativeCharacterId);
     const snapshot = shouldPrepareEditor ? captureCharacterEditorSnapshot() : null;
     try {
         if (shouldPrepareEditor) {
-            await prepareCharacterEditorForWorldbookBinding(characterId);
+            await prepareCharacterEditorForWorldbookBinding(nativeCharacterId);
         }
         await charUpdatePrimaryWorld(name);
     } finally {
         restoreCharacterEditorSnapshot(snapshot);
     }
-    const state = await readCharacterWorldbookState(characterId);
+    const state = await readCharacterWorldbookState(nativeCharacterId);
     if (state.boundWorldbookName !== name || state.boundExists !== true) {
         throw new Error(`角色世界书绑定未保存成功：${name}`);
     }
@@ -1076,7 +1075,6 @@ function readEmbeddedWorldbookState(
 
 function buildCharacterWorldbookState(
     requestedId: string,
-    currentCharacterId: string,
     character: Record<string, unknown>,
     names: string[],
     options?: {
@@ -1094,9 +1092,7 @@ function buildCharacterWorldbookState(
         : { hasEmbeddedBook: false, embeddedBookName: '' };
     const characterData = readCharacterData(character);
     return {
-        characterId: requestedId,
-        currentCharacterId,
-        isCurrentCharacter: !!requestedId && requestedId === currentCharacterId,
+        nativeCharacterId: requestedId,
         characterName: normalizeText(character.name) || normalizeText(characterData.name),
         ...bindingState,
         ...embeddedState,
@@ -1121,12 +1117,11 @@ function characterBookName(character: Record<string, unknown>, book: Record<stri
     return normalizeText(book.name) || `${characterName}'s Lorebook`;
 }
 
-async function readCharacterWorldbookState(characterId: string): Promise<TavernCharacterWorldbookState> {
-    const requestedId = normalizeIdText(characterId);
-    const currentCharacterId = normalizeIdText(this_chid);
+async function readCharacterWorldbookState(nativeCharacterId: string): Promise<TavernCharacterWorldbookState> {
+    const requestedId = normalizeIdText(nativeCharacterId);
     const names = await ensureWorldbookNames();
     const character = await hydrateCharacterRecordById(requestedId);
-    return buildCharacterWorldbookState(requestedId, currentCharacterId, character, names, {
+    return buildCharacterWorldbookState(requestedId, character, names, {
         includeBinding: true,
         includeEmbedded: true,
     });
@@ -1282,18 +1277,18 @@ export async function saveTavernWorldbookEntry(input: unknown = {}): Promise<Tav
 export async function getTavernCharacterWorldbookState(input: unknown = {}): Promise<TavernCharacterWorldbookState> {
     return runTavernWorldbookStateExclusive(async () => {
         const payload = asRecord(input);
-        return readCharacterWorldbookState(normalizeIdText(payload.characterId));
+        return readCharacterWorldbookState(normalizeIdText(payload.nativeCharacterId));
     });
 }
 
 export async function activateTavernCharacterWorldbook(input: unknown = {}): Promise<TavernCharacterWorldbookActionResult> {
     return runTavernWorldbookStateExclusive(async () => {
         const payload = asRecord(input);
-        const state = await readCharacterWorldbookState(normalizeIdText(payload.characterId));
+        const state = await readCharacterWorldbookState(normalizeIdText(payload.nativeCharacterId));
         if (state.boundWorldbookName && state.boundExists) {
             return { action: 'selected', name: state.boundWorldbookName, state };
         }
-        const character = await hydrateCharacterRecordById(state.characterId);
+        const character = await hydrateCharacterRecordById(state.nativeCharacterId);
         const book = readCharacterBook(character);
         if (hasCharacterBookEntries(book)) {
             const name = characterBookName(character, book);
@@ -1303,7 +1298,7 @@ export async function activateTavernCharacterWorldbook(input: unknown = {}): Pro
             const convertedBook = convertCharacterBook(book);
             await saveWorldInfo(name, convertedBook, true);
             await updateWorldInfoList();
-            const boundState = await bindCharacterWorldbookThroughEditor(state.characterId, name);
+            const boundState = await bindCharacterWorldbookThroughEditor(state.nativeCharacterId, name);
             return {
                 action: 'imported',
                 name,
@@ -1321,8 +1316,8 @@ export async function activateTavernCharacterWorldbook(input: unknown = {}): Pro
 export async function bindTavernCharacterWorldbook(input: unknown = {}): Promise<TavernCharacterWorldbookState> {
     return runTavernWorldbookStateExclusive(async () => {
         const payload = asRecord(input);
-        const characterId = normalizeIdText(payload.characterId);
-        const state = await readCharacterWorldbookState(characterId);
+        const nativeCharacterId = normalizeIdText(payload.nativeCharacterId);
+        const state = await readCharacterWorldbookState(nativeCharacterId);
         const name = normalizeText(payload.name);
         if (!name) {
             throw new Error('缺少要绑定的世界书名称。');
@@ -1330,7 +1325,7 @@ export async function bindTavernCharacterWorldbook(input: unknown = {}): Promise
         if (!state.worldbookOptions.includes(name)) {
             throw new Error(`找不到世界书：${name}`);
         }
-        return bindCharacterWorldbookThroughEditor(characterId, name);
+        return bindCharacterWorldbookThroughEditor(nativeCharacterId, name);
     });
 }
 

@@ -1461,7 +1461,7 @@ function buildCharacterFilterData(context = {}) {
   return {
     names: [
       character.name,
-      character.id,
+      character.characterKey,
       avatar,
       avatarFile
     ].map((item) => normalizeText(item)).filter(Boolean),
@@ -1808,7 +1808,7 @@ function createXbTavernBuildSnapshot(context = {}, chatPreset = {}, result, diag
     chatPresetName: normalizeText(chatPreset.name),
     presetId: normalizeText(chatPreset.id),
     presetName: normalizeText(chatPreset.name),
-    characterId: normalizeText(character.id),
+    characterKey: normalizeText(character.characterKey),
     characterName: normalizeText(character.name),
     userName: normalizeText(user.name),
     historyCount: Array.isArray(context.history) ? context.history.length : 0,

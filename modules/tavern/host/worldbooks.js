@@ -678,7 +678,8 @@ function captureRuntimeState() {
     selectedWorldInfo: Array.isArray(selected_world_info) ? [...selected_world_info] : [],
     chatLore: normalizeText(chat_metadata?.[METADATA_KEY]),
     personaLore: normalizeText(power_user?.persona_description_lorebook),
-    characterId: normalizeText(this_chid),
+    // Only capture ST's current native character pointer so temporary native switches can be restored.
+    nativeCharacterId: normalizeText(this_chid),
     characterName: normalizeText(name2),
     timedState: normalizeTimedState(chat_metadata?.timedWorldInfo),
     extensionPrompts: captureExtensionPrompts(),
@@ -696,7 +697,7 @@ function applyRuntimeState(input) {
     delete chat_metadata[METADATA_KEY];
   }
   power_user.persona_description_lorebook = personaLore || "";
-  setCharacterId(normalizeText(input.context.character?.id) || void 0);
+  setCharacterId(normalizeText(input.context.character?.nativeCharacterId) || void 0);
   if (normalizeText(input.context.character?.name)) {
     setCharacterName(normalizeText(input.context.character?.name));
   }
@@ -724,7 +725,7 @@ function restoreRuntimeState(snapshot) {
     delete chat_metadata[METADATA_KEY];
   }
   power_user.persona_description_lorebook = snapshot.personaLore || "";
-  setCharacterId(snapshot.characterId || void 0);
+  setCharacterId(snapshot.nativeCharacterId || void 0);
   setCharacterName(snapshot.characterName || "");
   chat_metadata.timedWorldInfo = cloneJson(snapshot.timedState);
   restoreExtensionPrompts(snapshot.extensionPrompts);
@@ -747,8 +748,8 @@ async function runTavernWorldbookStateExclusive(task) {
     release();
   }
 }
-function getCharacterRecordById(characterId) {
-  const normalizedId = normalizeIdText(characterId);
+function getCharacterRecordById(nativeCharacterId) {
+  const normalizedId = normalizeIdText(nativeCharacterId);
   const numericId = Number(normalizedId);
   if (!normalizedId || !Number.isInteger(numericId) || numericId < 0) {
     return {};
@@ -756,8 +757,8 @@ function getCharacterRecordById(characterId) {
   const list = Array.isArray(characters) ? characters : [];
   return asRecord(list[numericId]);
 }
-async function hydrateCharacterRecordById(characterId) {
-  const normalizedId = normalizeIdText(characterId);
+async function hydrateCharacterRecordById(nativeCharacterId) {
+  const normalizedId = normalizeIdText(nativeCharacterId);
   const numericId = Number(normalizedId);
   if (!Number.isInteger(numericId) || numericId < 0) {
     return {};
@@ -773,8 +774,8 @@ async function hydrateCharacterRecordById(characterId) {
   }
   return getCharacterRecordById(normalizedId);
 }
-async function prepareCharacterEditorForWorldbookBinding(characterId) {
-  const normalizedId = normalizeIdText(characterId);
+async function prepareCharacterEditorForWorldbookBinding(nativeCharacterId) {
+  const normalizedId = normalizeIdText(nativeCharacterId);
   const numericId = Number(normalizedId);
   if (!Number.isInteger(numericId) || numericId < 0 || !Object.keys(getCharacterRecordById(normalizedId)).length) {
     throw new Error("\u5F53\u524D\u89D2\u8272\u672A\u627E\u5230\uFF0C\u65E0\u6CD5\u7ED1\u5B9A\u4E16\u754C\u4E66\u3002");
@@ -871,8 +872,8 @@ function restoreCharacterEditorSnapshot(snapshot) {
     }
   });
 }
-function isCharacterEditorFocusedOn(characterId) {
-  const targetId = normalizeIdText(characterId);
+function isCharacterEditorFocusedOn(nativeCharacterId) {
+  const targetId = normalizeIdText(nativeCharacterId);
   if (!targetId) {
     return false;
   }
@@ -884,18 +885,18 @@ function isCharacterEditorFocusedOn(characterId) {
   const greetingsEditorId = normalizeIdText(readJQueryData(".open_alternate_greetings", "chid"));
   return worldEditorId === targetId && greetingsEditorId === targetId;
 }
-async function bindCharacterWorldbookThroughEditor(characterId, name) {
-  const shouldPrepareEditor = !isCharacterEditorFocusedOn(characterId);
+async function bindCharacterWorldbookThroughEditor(nativeCharacterId, name) {
+  const shouldPrepareEditor = !isCharacterEditorFocusedOn(nativeCharacterId);
   const snapshot = shouldPrepareEditor ? captureCharacterEditorSnapshot() : null;
   try {
     if (shouldPrepareEditor) {
-      await prepareCharacterEditorForWorldbookBinding(characterId);
+      await prepareCharacterEditorForWorldbookBinding(nativeCharacterId);
     }
     await charUpdatePrimaryWorld(name);
   } finally {
     restoreCharacterEditorSnapshot(snapshot);
   }
-  const state = await readCharacterWorldbookState(characterId);
+  const state = await readCharacterWorldbookState(nativeCharacterId);
   if (state.boundWorldbookName !== name || state.boundExists !== true) {
     throw new Error(`\u89D2\u8272\u4E16\u754C\u4E66\u7ED1\u5B9A\u672A\u4FDD\u5B58\u6210\u529F\uFF1A${name}`);
   }
@@ -917,16 +918,14 @@ function readEmbeddedWorldbookState(character) {
     embeddedBookName: characterBookName(character, book)
   };
 }
-function buildCharacterWorldbookState(requestedId, currentCharacterId, character, names, options) {
+function buildCharacterWorldbookState(requestedId, character, names, options) {
   const includeBinding = options?.includeBinding !== false;
   const includeEmbedded = options?.includeEmbedded !== false;
   const bindingState = includeBinding ? readWorldbookBindingState(character, names) : { boundWorldbookName: "", boundExists: false };
   const embeddedState = includeEmbedded ? readEmbeddedWorldbookState(character) : { hasEmbeddedBook: false, embeddedBookName: "" };
   const characterData = readCharacterData(character);
   return {
-    characterId: requestedId,
-    currentCharacterId,
-    isCurrentCharacter: !!requestedId && requestedId === currentCharacterId,
+    nativeCharacterId: requestedId,
     characterName: normalizeText(character.name) || normalizeText(characterData.name),
     ...bindingState,
     ...embeddedState,
@@ -946,12 +945,11 @@ function characterBookName(character, book) {
   const characterName = normalizeText(character.name) || normalizeText(readCharacterData(character).name) || "Character";
   return normalizeText(book.name) || `${characterName}'s Lorebook`;
 }
-async function readCharacterWorldbookState(characterId) {
-  const requestedId = normalizeIdText(characterId);
-  const currentCharacterId = normalizeIdText(this_chid);
+async function readCharacterWorldbookState(nativeCharacterId) {
+  const requestedId = normalizeIdText(nativeCharacterId);
   const names = await ensureWorldbookNames();
   const character = await hydrateCharacterRecordById(requestedId);
-  return buildCharacterWorldbookState(requestedId, currentCharacterId, character, names, {
+  return buildCharacterWorldbookState(requestedId, character, names, {
     includeBinding: true,
     includeEmbedded: true
   });
@@ -1091,17 +1089,17 @@ async function saveTavernWorldbookEntry(input = {}) {
 async function getTavernCharacterWorldbookState(input = {}) {
   return runTavernWorldbookStateExclusive(async () => {
     const payload = asRecord(input);
-    return readCharacterWorldbookState(normalizeIdText(payload.characterId));
+    return readCharacterWorldbookState(normalizeIdText(payload.nativeCharacterId));
   });
 }
 async function activateTavernCharacterWorldbook(input = {}) {
   return runTavernWorldbookStateExclusive(async () => {
     const payload = asRecord(input);
-    const state = await readCharacterWorldbookState(normalizeIdText(payload.characterId));
+    const state = await readCharacterWorldbookState(normalizeIdText(payload.nativeCharacterId));
     if (state.boundWorldbookName && state.boundExists) {
       return { action: "selected", name: state.boundWorldbookName, state };
     }
-    const character = await hydrateCharacterRecordById(state.characterId);
+    const character = await hydrateCharacterRecordById(state.nativeCharacterId);
     const book = readCharacterBook(character);
     if (hasCharacterBookEntries(book)) {
       const name = characterBookName(character, book);
@@ -1111,7 +1109,7 @@ async function activateTavernCharacterWorldbook(input = {}) {
       const convertedBook = convertCharacterBook(book);
       await saveWorldInfo(name, convertedBook, true);
       await updateWorldInfoList();
-      const boundState = await bindCharacterWorldbookThroughEditor(state.characterId, name);
+      const boundState = await bindCharacterWorldbookThroughEditor(state.nativeCharacterId, name);
       return {
         action: "imported",
         name,
@@ -1128,8 +1126,8 @@ async function activateTavernCharacterWorldbook(input = {}) {
 async function bindTavernCharacterWorldbook(input = {}) {
   return runTavernWorldbookStateExclusive(async () => {
     const payload = asRecord(input);
-    const characterId = normalizeIdText(payload.characterId);
-    const state = await readCharacterWorldbookState(characterId);
+    const nativeCharacterId = normalizeIdText(payload.nativeCharacterId);
+    const state = await readCharacterWorldbookState(nativeCharacterId);
     const name = normalizeText(payload.name);
     if (!name) {
       throw new Error("\u7F3A\u5C11\u8981\u7ED1\u5B9A\u7684\u4E16\u754C\u4E66\u540D\u79F0\u3002");
@@ -1137,7 +1135,7 @@ async function bindTavernCharacterWorldbook(input = {}) {
     if (!state.worldbookOptions.includes(name)) {
       throw new Error(`\u627E\u4E0D\u5230\u4E16\u754C\u4E66\uFF1A${name}`);
     }
-    return bindCharacterWorldbookThroughEditor(characterId, name);
+    return bindCharacterWorldbookThroughEditor(nativeCharacterId, name);
   });
 }
 async function getTavernGlobalWorldbooks() {

@@ -4,7 +4,8 @@ import TavernCornerActions from './TavernCornerActions.vue';
 import { useTavernEphemeralDisclosureScope } from './useTavernEphemeralDisclosureScope';
 
 interface TavernCharacterOption {
-    id: string;
+    characterKey: string;
+    nativeCharacterId?: string;
     name: string;
     avatar?: string;
     shallow?: boolean;
@@ -19,9 +20,7 @@ interface TavernCharacterOption {
 }
 
 interface TavernCharacterWorldbookState {
-    characterId: string;
-    currentCharacterId: string;
-    isCurrentCharacter: boolean;
+    nativeCharacterId: string;
     characterName: string;
     boundWorldbookName: string;
     boundExists: boolean;
@@ -33,7 +32,7 @@ interface TavernCharacterWorldbookState {
 interface TavernCharacterSessionOption {
     id: string;
     title: string;
-    characterId?: string;
+    characterKey?: string;
     characterName?: string;
     createdAt: number;
     updatedAt: number;
@@ -46,11 +45,11 @@ const props = defineProps<{
     characters: TavernCharacterOption[];
     visibleCharacters: TavernCharacterOption[];
     filteredCount: number;
-    liveCharacterId: string;
+    liveCharacterKey: string;
     selectedCharacter: TavernCharacterOption | null | undefined;
     selectedGreetingIndex: number;
-    pendingPreviewCharacterId: string;
-    pendingCharacterSessionId: string;
+    pendingPreviewCharacterKey: string;
+    pendingCharacterSessionKey: string;
     selectedCharacterSessions: TavernCharacterSessionOption[];
     characterWorldbookState: TavernCharacterWorldbookState | null;
     characterWorldbookBusy: boolean;
@@ -110,7 +109,7 @@ const characterDefinitionFields = computed(() => {
 
 const selectedCharacterPreviewLoading = computed(() => (
     !!props.selectedCharacter
-    && String(props.pendingPreviewCharacterId || '') === String(props.selectedCharacter.id || '')
+    && String(props.pendingPreviewCharacterKey || '') === String(props.selectedCharacter.characterKey || '')
 ));
 
 const characterWorldbookButtonTitle = computed(() => {
@@ -127,10 +126,10 @@ const characterWorldbookBound = computed(() => (
 function scrollSelectedIntoView() {
     void nextTick(() => {
         const root = listRef.value;
-        const selectedId = String(props.selectedCharacter?.id || '').trim();
-        if (!root || !selectedId) {return;}
+        const selectedKey = String(props.selectedCharacter?.characterKey || '').trim();
+        if (!root || !selectedKey) {return;}
         const target = Array.from(root.querySelectorAll<HTMLElement>('[data-character-card-id]'))
-            .find((node) => node.dataset.characterCardId === selectedId);
+            .find((node) => node.dataset.characterCardId === selectedKey);
         target?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
     });
 }
@@ -140,7 +139,7 @@ function handleSearchInput(event: Event) {
 }
 
 function characterDataDisclosureId(key: string) {
-    return `character-data:${props.selectedCharacter?.id || 'none'}:${key}`;
+    return `character-data:${props.selectedCharacter?.characterKey || 'none'}:${key}`;
 }
 
 function greetingLabel(index: number) {
@@ -167,7 +166,7 @@ function sessionArchiveMeta(session: TavernCharacterSessionOption) {
 }
 
 function openSessionArchive() {
-    if (!props.selectedCharacter || props.pendingCharacterSessionId) {return;}
+    if (!props.selectedCharacter || props.pendingCharacterSessionKey) {return;}
     sessionArchiveOpen.value = true;
 }
 
@@ -192,7 +191,7 @@ function openSession(sessionId: string) {
 }
 
 watch(
-    () => props.selectedCharacter?.id,
+    () => props.selectedCharacter?.characterKey,
     () => {
         advancedDefinitionDisclosure.reset();
         closeCharacterDefinition();
@@ -272,17 +271,17 @@ defineExpose({ scrollSelectedIntoView, openSessionArchive });
           >
             <button
               v-for="character in visibleCharacters"
-              :key="character.id"
+              :key="character.characterKey"
               type="button"
               class="character-card-option"
-              :data-character-card-id="character.id"
+              :data-character-card-id="character.characterKey"
               :class="{
-                current: character.id === liveCharacterId,
-                selected: character.id === selectedCharacter?.id,
-                pending: character.id === pendingCharacterSessionId,
+                current: character.characterKey === liveCharacterKey,
+                selected: character.characterKey === selectedCharacter?.characterKey,
+                pending: character.characterKey === pendingCharacterSessionKey,
               }"
-              :disabled="!!pendingCharacterSessionId"
-              @click="$emit('select', character.id)"
+              :disabled="!!pendingCharacterSessionKey"
+              @click="$emit('select', character.characterKey)"
             >
               <div class="card-focus-indicator" />
               <span class="character-card-avatar">
@@ -305,15 +304,15 @@ defineExpose({ scrollSelectedIntoView, openSessionArchive });
                 </span>
                 <span class="card-status-tags">
                   <small
-                    v-if="character.id === liveCharacterId"
+                    v-if="character.characterKey === liveCharacterKey"
                     class="tag active"
                   >ACTIVE</small>
                   <small
-                    v-if="character.id === pendingCharacterSessionId"
+                    v-if="character.characterKey === pendingCharacterSessionKey"
                     class="tag loading"
                   >LOADING...</small>
                   <small
-                    v-else-if="character.id === pendingPreviewCharacterId"
+                    v-else-if="character.characterKey === pendingPreviewCharacterKey"
                     class="tag loading"
                   >READING...</small>
                 </span>
@@ -344,7 +343,7 @@ defineExpose({ scrollSelectedIntoView, openSessionArchive });
           <div class="dossier-header">
             <div class="dossier-identity">
               <p class="sys-mono">
-                ID: {{ selectedCharacter.id.substring(0, 8) || 'UNKNOWN' }}
+                ID: {{ selectedCharacter.characterKey.substring(0, 24) || 'UNKNOWN' }}
               </p>
               <div class="dossier-title-row">
                 <h3>{{ selectedCharacter.name }}</h3>
@@ -380,7 +379,7 @@ defineExpose({ scrollSelectedIntoView, openSessionArchive });
                     type="button"
                     class="os-system-act-btn character-worldbook-button"
                     :class="{ 'is-loading': characterWorldbookBusy, 'is-bound': characterWorldbookBound }"
-                    :disabled="!!pendingCharacterSessionId || characterWorldbookBusy"
+                    :disabled="!!pendingCharacterSessionKey || characterWorldbookBusy"
                     :title="characterWorldbookButtonTitle"
                     aria-label="角色世界书"
                     @click="$emit('open-character-worldbook')"
@@ -401,7 +400,7 @@ defineExpose({ scrollSelectedIntoView, openSessionArchive });
                   <button
                     type="button"
                     class="os-system-act-btn session-archive-button"
-                    :disabled="!!pendingCharacterSessionId"
+                    :disabled="!!pendingCharacterSessionKey"
                     @click="openSessionArchive"
                   >
                     会话档案
@@ -410,11 +409,11 @@ defineExpose({ scrollSelectedIntoView, openSessionArchive });
                   <button
                     type="button"
                     class="os-system-act-btn enter-chat-button"
-                    :class="{ 'is-loading': selectedCharacter.id === pendingCharacterSessionId }"
-                    :disabled="!!pendingCharacterSessionId"
+                    :class="{ 'is-loading': selectedCharacter.characterKey === pendingCharacterSessionKey }"
+                    :disabled="!!pendingCharacterSessionKey"
                     @click="$emit('enter-selected')"
                   >
-                    {{ selectedCharacter.id === pendingCharacterSessionId ? '新建中...' : '新建聊天' }}
+                    {{ selectedCharacter.characterKey === pendingCharacterSessionKey ? '新建中...' : '新建聊天' }}
                   </button>
                 </div>
               </div>
@@ -455,11 +454,11 @@ defineExpose({ scrollSelectedIntoView, openSessionArchive });
                       >
                         <button
                           v-for="(greeting, index) in greetingOptions"
-                          :key="`${selectedCharacter.id}-greeting-${index}`"
+                          :key="`${selectedCharacter.characterKey}-greeting-${index}`"
                           type="button"
                           class="greeting-choice"
                           :class="{ selected: index === selectedGreetingIndex }"
-                          :disabled="!!pendingCharacterSessionId"
+                          :disabled="!!pendingCharacterSessionKey"
                           @click="$emit('select-greeting', index)"
                         >
                           <span class="greeting-choice-name">{{ greetingLabel(index) }}</span>

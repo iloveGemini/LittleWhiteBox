@@ -4,8 +4,7 @@ import {
   eventSource,
   event_types,
   getCurrentChatId,
-  saveSettingsDebounced,
-  this_chid
+  saveSettingsDebounced
 } from "../../../../../../../script.js";
 import * as nativeRegexEngine from "../../../../../../extensions/regex/engine.js";
 const {
@@ -145,11 +144,11 @@ function normalizeRegexScript(input, scriptType, index) {
     maxDepth: nullableNumber(source.maxDepth)
   };
 }
-function currentCharacter() {
-  const index = Number(this_chid);
+function currentCharacter(nativeCharacterId) {
+  const index = Number(nativeCharacterId);
   return Number.isFinite(index) ? characters?.[index] : void 0;
 }
-function buildGroup(scriptType, key, label) {
+function buildGroup(scriptType, key, label, nativeCharacterId) {
   const scripts = getScriptsByType(scriptType).map((script, index) => normalizeRegexScript(script, scriptType, index));
   const presetApi = getCurrentPresetAPI();
   const presetName = getCurrentPresetName();
@@ -158,7 +157,7 @@ function buildGroup(scriptType, key, label) {
     label,
     scriptType,
     scripts,
-    allowed: scriptType === SCRIPT_TYPES.SCOPED ? isScopedScriptsAllowed(currentCharacter()) : scriptType === SCRIPT_TYPES.PRESET ? isPresetScriptsAllowed(presetApi, presetName) : true
+    allowed: scriptType === SCRIPT_TYPES.SCOPED ? isScopedScriptsAllowed(currentCharacter(nativeCharacterId)) : scriptType === SCRIPT_TYPES.PRESET ? isPresetScriptsAllowed(presetApi, presetName) : true
   };
 }
 async function syncNativeRegexUiAfterWrite() {
@@ -174,12 +173,14 @@ async function syncNativeRegexUiAfterWrite() {
     console.warn("[LittleWhiteBox] Failed to refresh native regex UI after write.", error);
   }
 }
-function listTavernRegexScripts() {
+function listTavernRegexScripts(input = {}) {
+  const source = asRecord(input);
+  const nativeCharacterId = text(source.nativeCharacterId);
   return {
     groups: [
-      buildGroup(SCRIPT_TYPES.GLOBAL, "global", "\u5168\u5C40"),
-      buildGroup(SCRIPT_TYPES.SCOPED, "scoped", "\u5F53\u524D\u89D2\u8272"),
-      buildGroup(SCRIPT_TYPES.PRESET, "preset", "\u9884\u8BBE\u6B63\u5219")
+      buildGroup(SCRIPT_TYPES.GLOBAL, "global", "\u5168\u5C40", nativeCharacterId),
+      buildGroup(SCRIPT_TYPES.SCOPED, "scoped", "\u5F53\u524D\u89D2\u8272", nativeCharacterId),
+      buildGroup(SCRIPT_TYPES.PRESET, "preset", "\u9884\u8BBE\u6B63\u5219", nativeCharacterId)
     ],
     placements: {
       userInput: regex_placement.USER_INPUT,
@@ -192,6 +193,7 @@ function listTavernRegexScripts() {
 }
 async function saveTavernRegexScript(input) {
   const source = asRecord(input);
+  const nativeCharacterId = text(source.nativeCharacterId);
   const scriptType = normalizeScriptType(source.scriptType);
   const script = normalizeRegexScript(source.script);
   if (!script.scriptName) {
@@ -206,19 +208,20 @@ async function saveTavernRegexScript(input) {
   }
   await saveScriptsByType(scripts, scriptType);
   if (scriptType === SCRIPT_TYPES.SCOPED) {
-    allowScopedScripts(currentCharacter());
+    allowScopedScripts(currentCharacter(nativeCharacterId));
   } else if (scriptType === SCRIPT_TYPES.PRESET) {
     allowPresetScripts(getCurrentPresetAPI(), getCurrentPresetName());
   }
   await syncNativeRegexUiAfterWrite();
   return {
-    ...listTavernRegexScripts(),
+    ...listTavernRegexScripts({ nativeCharacterId }),
     savedScriptId: script.id,
     savedScriptType: scriptType
   };
 }
 async function deleteTavernRegexScript(input) {
   const source = asRecord(input);
+  const nativeCharacterId = text(source.nativeCharacterId);
   const scriptType = normalizeScriptType(source.scriptType);
   const id = text(source.id);
   if (!id) {
@@ -227,7 +230,7 @@ async function deleteTavernRegexScript(input) {
   const scripts = getScriptsByType(scriptType).map((item, index) => normalizeRegexScript(item, scriptType, index)).filter((item) => item.id !== id);
   await saveScriptsByType(scripts, scriptType);
   await syncNativeRegexUiAfterWrite();
-  return listTavernRegexScripts();
+  return listTavernRegexScripts({ nativeCharacterId });
 }
 function applyTavernRegex(input) {
   const source = asRecord(input);

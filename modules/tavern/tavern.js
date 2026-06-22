@@ -827,7 +827,7 @@ async function handleRegexRequest(type, payload = {}) {
   try {
     let result;
     if (type === "xb-tavern:list-regex-scripts") {
-      result = listTavernRegexScripts();
+      result = listTavernRegexScripts(payload.payload);
     } else if (type === "xb-tavern:save-regex-script") {
       result = await saveTavernRegexScript(payload.payload);
     } else if (type === "xb-tavern:delete-regex-script") {

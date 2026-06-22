@@ -215,7 +215,7 @@ test('tavern character and global worldbook actions stay on native ST boundaries
     assert.match(hostSource, /unshallowCharacter/);
     assert.match(hostSource, /await hydrateCharacterRecordById\(requestedId\)/);
     assert.match(hostSource, /select_selected_character\(numericId, \{ switchMenu: false \}\);/);
-    assert.match(hostSource, /const character = await hydrateCharacterRecordById\(state\.characterId\);[\s\S]*const book = readCharacterBook\(character\);/);
+    assert.match(hostSource, /const character = await hydrateCharacterRecordById\(state\.nativeCharacterId\);[\s\S]*const book = readCharacterBook\(character\);/);
     assert.match(hostSource, /state\.worldbookOptions\.includes\(name\) && payload\.confirmed !== true[\s\S]*action: 'needs_import_confirmation'/);
     assert.match(hostSource, /function captureCharacterEditorSnapshot/);
     assert.match(hostSource, /function captureCharacterEditorJQueryData/);
@@ -225,12 +225,12 @@ test('tavern character and global worldbook actions stay on native ST boundaries
     assert.match(hostSource, /function isCharacterEditorFocusedOn/);
     assert.match(hostSource, /return worldEditorId === targetId && greetingsEditorId === targetId;/);
     assert.match(hostSource, /async function bindCharacterWorldbookThroughEditor/);
-    assert.match(hostSource, /const shouldPrepareEditor = !isCharacterEditorFocusedOn\(characterId\);[\s\S]*if \(shouldPrepareEditor\) \{[\s\S]*await prepareCharacterEditorForWorldbookBinding\(characterId\);[\s\S]*finally \{[\s\S]*restoreCharacterEditorSnapshot\(snapshot\);/);
-    assert.match(hostSource, /const state = await readCharacterWorldbookState\(characterId\);[\s\S]*state\.boundWorldbookName !== name \|\| state\.boundExists !== true[\s\S]*throw new Error\(`角色世界书绑定未保存成功：\$\{name\}`\);/);
-    assert.match(hostSource, /const convertedBook = convertCharacterBook\(book\);[\s\S]*await saveWorldInfo\(name, convertedBook, true\);[\s\S]*await updateWorldInfoList\(\);[\s\S]*const boundState = await bindCharacterWorldbookThroughEditor\(state\.characterId, name\);/);
+    assert.match(hostSource, /const shouldPrepareEditor = !isCharacterEditorFocusedOn\(nativeCharacterId\);[\s\S]*if \(shouldPrepareEditor\) \{[\s\S]*await prepareCharacterEditorForWorldbookBinding\(nativeCharacterId\);[\s\S]*finally \{[\s\S]*restoreCharacterEditorSnapshot\(snapshot\);/);
+    assert.match(hostSource, /const state = await readCharacterWorldbookState\(nativeCharacterId\);[\s\S]*state\.boundWorldbookName !== name \|\| state\.boundExists !== true[\s\S]*throw new Error\(`角色世界书绑定未保存成功：\$\{name\}`\);/);
+    assert.match(hostSource, /const convertedBook = convertCharacterBook\(book\);[\s\S]*await saveWorldInfo\(name, convertedBook, true\);[\s\S]*await updateWorldInfoList\(\);[\s\S]*const boundState = await bindCharacterWorldbookThroughEditor\(state\.nativeCharacterId, name\);/);
     assert.match(hostSource, /if \(!name\) \{[\s\S]*throw new Error\('缺少要绑定的世界书名称。'\);[\s\S]*if \(!state\.worldbookOptions\.includes\(name\)\)/);
-    assert.match(hostSource, /await prepareCharacterEditorForWorldbookBinding\(characterId\);[\s\S]*await charUpdatePrimaryWorld\(name\);/);
-    assert.match(hostSource, /export async function bindTavernCharacterWorldbook[\s\S]*return runTavernWorldbookStateExclusive\(async \(\) => \{[\s\S]*return bindCharacterWorldbookThroughEditor\(characterId, name\);/);
+    assert.match(hostSource, /await prepareCharacterEditorForWorldbookBinding\(nativeCharacterId\);[\s\S]*await charUpdatePrimaryWorld\(name\);/);
+    assert.match(hostSource, /export async function bindTavernCharacterWorldbook[\s\S]*return runTavernWorldbookStateExclusive\(async \(\) => \{[\s\S]*return bindCharacterWorldbookThroughEditor\(nativeCharacterId, name\);/);
     assert.match(hostSource, /export async function activateTavernCharacterWorldbook[\s\S]*return runTavernWorldbookStateExclusive\(async \(\) => \{[\s\S]*const boundState = await bindCharacterWorldbookThroughEditor/);
     assert.match(hostSource, /export async function setTavernGlobalWorldbooks[\s\S]*applyGlobalWorldbookSelection\(selected\);[\s\S]*await updateWorldInfoList\(\);/);
     assert.match(tavernSource, /case 'xb-tavern:get-character-worldbook-state':/);
@@ -245,15 +245,15 @@ test('tavern character and global worldbook actions stay on native ST boundaries
     assert.match(appSource, /requestHost\('xb-tavern:activate-character-worldbook'/);
     assert.match(appSource, /requestHost\('xb-tavern:bind-character-worldbook'/);
     assert.match(appSource, /action === 'needs_import_confirmation'/);
-    assert.match(appSource, /payload: \{ characterId: targetId, confirmed: true \}/);
+    assert.match(appSource, /payload: \{ nativeCharacterId, confirmed: true \}/);
     assert.match(settingsControllerSource, /function openWorldbookWorkspace\(name = ''\)/);
     assert.match(settingsControllerSource, /selectedWorldbookName\.value = targetName/);
     assert.match(settingsControllerSource, /openSettingsWorkspace\('worldbooks'\)/);
     assert.match(appSource, /openWorldbookWorkspace\(String\(payload\.name \|\| ''\)\)/);
     assert.match(appSource, /openWorldbookWorkspace\(targetName\)/);
-    assert.match(appSource, /const currentWorldbookCharacterId = computed\(\(\) => \([\s\S]*selectedSession\.value\?\.characterId[\s\S]*effectiveContext\.value\.character\?\.id/);
-    assert.match(appSource, /useTavernSettingsController\(\{[\s\S]*effectiveContext,[\s\S]*currentWorldbookCharacterId,/);
-    assert.match(settingsControllerSource, /async function syncWorldbooksForCurrentCharacter\(\)[\s\S]*const requestSerial = \+\+worldbookSyncRequestSerial;[\s\S]*options\.currentWorldbookCharacterId\.value[\s\S]*requestHost\('xb-tavern:get-character-worldbook-state'[\s\S]*requestSerial !== worldbookSyncRequestSerial[\s\S]*boundName && payload\.boundExists === true[\s\S]*syncWorldbooksFromHost\(\{ preferredName: boundName, requestSerial \}\)/);
+    assert.match(appSource, /const currentWorldbookNativeCharacterId = computed\(\(\) => \([\s\S]*resolveCurrentNativeCharacterId\(String\(selectedSession\.value\?\.characterKey/);
+    assert.match(appSource, /useTavernSettingsController\(\{[\s\S]*effectiveContext,[\s\S]*currentWorldbookNativeCharacterId,/);
+    assert.match(settingsControllerSource, /async function syncWorldbooksForCurrentCharacter\(\)[\s\S]*const requestSerial = \+\+worldbookSyncRequestSerial;[\s\S]*options\.currentWorldbookNativeCharacterId\.value[\s\S]*requestHost\('xb-tavern:get-character-worldbook-state'[\s\S]*requestSerial !== worldbookSyncRequestSerial[\s\S]*boundName && payload\.boundExists === true[\s\S]*syncWorldbooksFromHost\(\{ preferredName: boundName, requestSerial \}\)/);
     assert.match(settingsControllerSource, /async function syncWorldbooksFromHost\(syncOptions: TavernWorldbookSyncOptions = \{\}\)[\s\S]*const requestSerial = syncOptions\.requestSerial \|\| \+\+worldbookSyncRequestSerial;[\s\S]*if \(requestSerial !== worldbookSyncRequestSerial\) \{return;\}/);
     assert.match(settingsControllerSource, /const fallbackName = syncOptions\.selectFirst[\s\S]*: '';/);
     assert.doesNotMatch(settingsControllerSource, /worldbookOptions\.value\[0\]\?\.name[\s\S]*selectedWorldbookName\.value = syncOptions\.keepSelection/);
@@ -354,7 +354,7 @@ test('tavern chat hot paths use message windows instead of full session scans', 
 test('tavern home only resumes an explicitly selected character session', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     assert.match(appSource, /const canResumeSelectedSession = computed/);
-    assert.match(appSource, /String\(selectedSession\.value\.characterId \|\| ''\)\.trim\(\)/);
+    assert.match(appSource, /String\(selectedSession\.value\.characterKey \|\| ''\)\.trim\(\)/);
     assert.match(appSource, /:has-session="canResumeSelectedSession"/);
     assert.match(appSource, /if \(canResumeSelectedSession\.value\) \{\s*openChatView\(\);/);
     assert.doesNotMatch(appSource, /selectedSessionId\.value = sessions\.value\[0\]\.id/);
@@ -1110,10 +1110,10 @@ test('tavern character archive separates new chat from existing session selectio
 test('tavern deleting a selected chat never falls through to another character session', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
 
-    assert.match(appSource, /const deletedCharacterId = String\(session\?\.characterId \|\| ''\)\.trim\(\);/);
-    assert.match(appSource, /const nextSameCharacterSession = deletedCharacterId[\s\S]*\.filter\(\(item\) => item\.id !== id && String\(item\.characterId \|\| ''\)\.trim\(\) === deletedCharacterId\)/);
+    assert.match(appSource, /const deletedCharacterKey = String\(session\?\.characterKey \|\| ''\)\.trim\(\);/);
+    assert.match(appSource, /const nextSameCharacterSession = deletedCharacterKey[\s\S]*\.filter\(\(item\) => item\.id !== id && String\(item\.characterKey \|\| ''\)\.trim\(\) === deletedCharacterKey\)/);
     assert.match(appSource, /if \(nextSameCharacterSession\?\.id\) \{[\s\S]*await setSelectedTavernSessionId\(nextSameCharacterSession\.id\);[\s\S]*activeView\.value = 'chat';/);
-    assert.match(appSource, /selectedSessionId\.value = '';[\s\S]*await setSelectedTavernSessionId\(''\);[\s\S]*selectedCharacterPreviewId\.value = deletedCharacterId;[\s\S]*activeView\.value = deletedCharacterId \? 'characters' : 'home';/);
+    assert.match(appSource, /selectedSessionId\.value = '';[\s\S]*await setSelectedTavernSessionId\(''\);[\s\S]*selectedCharacterPreviewKey\.value = deletedCharacterKey;[\s\S]*activeView\.value = deletedCharacterKey \? 'characters' : 'home';/);
 });
 
 test('tavern heavy disclosure details bind to ephemeral state instead of keeping bodies mounted', () => {
@@ -1264,4 +1264,39 @@ test('tavern host imports preserve SillyTavern 1.14 and 1.18 API parity', () => 
     assert.match(worldbookSource, /typeof nativeWorldInfo\.updateWorldInfoSettings === 'function'/);
     assert.match(worldbookSource, /replaceSelectedWorldInfo\(selected\);[\s\S]*worldInfo\.globalSelect = \[\.\.\.selected\];[\s\S]*stScript\.saveSettingsDebounced\?\.\(\)/);
     assert.doesNotMatch(worldbookSource, /setWorldInfoSettings\(settings,/);
+});
+
+test('tavern character identity uses stable keys and explicit native ids', () => {
+    const hostSource = readRepoFile('modules/tavern/host/sillytavern-context.ts');
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const sessionSource = readRepoFile('modules/tavern/shared/session-db.ts');
+    const worldbookSource = readRepoFile('modules/tavern/host/worldbooks.ts');
+    const nativePromptSource = readRepoFile('modules/tavern/host/native-prompt.ts');
+    const regexSource = readRepoFile('modules/tavern/host/regex.ts');
+
+    assert.match(hostSource, /nativeCharacterId\?: string \| number/);
+    assert.match(hostSource, /function buildCharacterKey/);
+    assert.match(hostSource, /characterKey: buildCharacterKey\(character, nativeCharacterId\)/);
+    assert.match(hostSource, /nativeCharacterId: String\(index\)/);
+    assert.match(hostSource, /function resolveNativeCharacterId[\s\S]*return options\.nativeCharacterId;/);
+    assert.doesNotMatch(hostSource, /options\.characterId|ctx\.characterId|ctx\.this_chid/);
+
+    assert.match(sessionSource, /characterKey\?: string;/);
+    assert.match(sessionSource, /this\.version\(8\)\.stores\(\{[\s\S]*sessions: 'id, updatedAt, characterKey, characterName'/);
+    assert.match(sessionSource, /characterKey: String\(input\.characterKey \|\| ''\)/);
+    assert.match(sessionSource, /characterKey: 'characterKey' in patch/);
+
+    assert.match(appSource, /const selectedCharacterPreviewKey = ref\(''\);/);
+    assert.match(appSource, /const pendingCharacterSessionKey = ref\(''\);/);
+    assert.match(appSource, /function resolveCurrentNativeCharacterId\(characterKey = ''/);
+    assert.match(appSource, /throw new Error\('角色卡已不存在或文件名变化，请重新选择角色。'\);/);
+    assert.match(appSource, /\.filter\(\(session\) => String\(session\.characterKey \|\| ''\)\.trim\(\) === characterKey\)/);
+    assert.match(appSource, /postToHost\('xb-tavern:refresh-context', \{ nativeCharacterId, includeHistory: false \}\)/);
+    assert.doesNotMatch(appSource, /selectedCharacterId|selectedCharacterPreviewId|pendingCharacterPreviewId|pendingCharacterSessionId|session\.characterId|payload: \{ characterId/);
+
+    assert.match(worldbookSource, /payload\.nativeCharacterId/);
+    assert.doesNotMatch(worldbookSource, /payload\.characterId|isCurrentCharacter|currentCharacterId/);
+    assert.match(nativePromptSource, /context\.character\?\.nativeCharacterId/);
+    assert.match(regexSource, /function currentCharacter\(nativeCharacterId: unknown\)/);
+    assert.doesNotMatch(regexSource, /this_chid/);
 });

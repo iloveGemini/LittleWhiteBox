@@ -120,7 +120,7 @@ test('tavern session db stores independent sessions and messages', async () => {
 
     const session = await createTavernSession({
         title: 'Aster test',
-        characterId: '0',
+        characterKey: '0',
         characterName: 'Aster',
         contextSnapshot: { character: { id: '0', name: 'Aster' } },
         presetId: 'preset-1',

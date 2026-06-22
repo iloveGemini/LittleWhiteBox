@@ -1591,7 +1591,7 @@ async function ensureRunSession(input: XbTavernRunTurnInput, buildSnapshot?: XbT
     const initialRuntimeState = normalizeTavernSessionState(input.runtimeState || {});
     return await createTavernSession({
         title: String(character.name || '未选择角色'),
-        characterId: String(character.id || ''),
+        characterKey: String(character.characterKey || ''),
         characterName: String(character.name || '未选择角色'),
         contextSnapshot,
         buildSnapshot,

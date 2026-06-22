@@ -299,7 +299,7 @@ test('xb tavern run turn sends the same ST-native prompt shape used by simulatio
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Native prompt real send',
-        characterId: 'char-native',
+        characterKey: 'char-native',
         characterName: 'Aster',
         contextSnapshot: {
             character: { id: 'char-native', name: 'Aster', description: 'Pilot.' },
@@ -361,7 +361,7 @@ test('xb tavern run turn sends only the latest quest hook first to ST-native mem
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Native quest hook',
-        characterId: 'char-quest-native',
+        characterKey: 'char-quest-native',
         characterName: 'Aster',
         contextSnapshot: {
             character: { id: 'char-quest-native', name: 'Aster', description: 'Pilot.' },
@@ -430,7 +430,7 @@ test('xb tavern run turn continues and records diagnostics when manager settle t
     });
     const session = await createTavernSession({
         title: 'Manager settle timeout',
-        characterId: 'char-timeout',
+        characterKey: 'char-timeout',
         characterName: 'Aster',
         contextSnapshot: {
             character: { id: 'char-timeout', name: 'Aster', description: 'Pilot.' },
@@ -591,7 +591,7 @@ test('xb tavern session author note reaches native prompt for real and simulated
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Author note session',
-        characterId: 'char-note',
+        characterKey: 'char-note',
         characterName: 'Aster',
         contextSnapshot: {
             character: { id: 'char-note', name: 'Aster', description: 'Pilot.' },
@@ -667,7 +667,7 @@ test('xb tavern author note world scan can activate local worldbook without cons
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Author note scan session',
-        characterId: 'char-note-scan',
+        characterKey: 'char-note-scan',
         characterName: 'Aster',
         contextSnapshot: {
             character: { id: 'char-note-scan', name: 'Aster', description: 'Pilot.' },
@@ -1959,7 +1959,7 @@ test('xb tavern regex transforms user input, world info, and AI output in the re
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Regex turn',
-        characterId: 'char-1',
+        characterKey: 'char-1',
         characterName: 'Aster',
         contextSnapshot: {
             character: { id: 'char-1', name: 'Aster' },
@@ -2080,7 +2080,7 @@ test('xb tavern simulated request applies regex without saving messages', async 
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Regex simulation',
-        characterId: 'char-1',
+        characterKey: 'char-1',
         characterName: 'Aster',
         contextSnapshot: {
             character: { id: 'char-1', name: 'Aster' },
@@ -2212,7 +2212,7 @@ test('xb tavern simulated request applies prompt-stage regex to history without 
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Regex prompt simulation',
-        characterId: 'char-1',
+        characterKey: 'char-1',
         characterName: 'Aster',
         contextSnapshot: {
             character: { id: 'char-1', name: 'Aster' },
@@ -2355,7 +2355,7 @@ test('xb tavern applies native macro substitution to user input, world keys, wor
     await resetDb();
     const session = await createTavernSession({
         title: 'Macro substitution',
-        characterId: 'char-1',
+        characterKey: 'char-1',
         characterName: 'Aster',
         contextSnapshot: {
             character: { id: 'char-1', name: 'Aster', description: 'Pilot for {{user}}.' },
@@ -3029,7 +3029,7 @@ test('xb tavern simulated request builds raw API JSON without saving chat messag
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Aster',
-        characterId: 'char-1',
+        characterKey: 'char-1',
         characterName: 'Aster',
         contextSnapshot: {
             character: { id: 'char-1', name: 'Aster', description: 'A careful scout.' },
@@ -3085,7 +3085,7 @@ test('xb tavern world entry substitution skips null worldbook records', async ()
     } as unknown as Parameters<typeof simulateXbTavernRequest>[0]['contextSnapshot'];
     const session = await createTavernSession({
         title: 'Aster',
-        characterId: 'char-1',
+        characterKey: 'char-1',
         characterName: 'Aster',
         contextSnapshot,
         presetId: preset.id,
@@ -3127,7 +3127,7 @@ test('xb tavern simulated request injects only the active map digest without ful
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Map digest',
-        characterId: 'char-map',
+        characterKey: 'char-map',
         characterName: 'Mapper',
         contextSnapshot: {
             character: { id: 'char-map', name: 'Mapper', description: 'A cartographer.' },
@@ -3196,7 +3196,7 @@ test('xb tavern simulated request falls back to main map digest when active map 
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Map digest fallback',
-        characterId: 'char-map-fallback',
+        characterKey: 'char-map-fallback',
         characterName: 'Mapper',
         contextSnapshot: {
             character: { id: 'char-map-fallback', name: 'Mapper', description: 'A cartographer.' },
@@ -3258,7 +3258,7 @@ test('xb tavern simulated request injects only memory files when cartography is 
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Memory only contract',
-        characterId: 'char-memory',
+        characterKey: 'char-memory',
         characterName: 'Archivist',
         contextSnapshot: {
             character: { id: 'char-memory', name: 'Archivist', description: 'Keeps notes.' },
@@ -3317,7 +3317,7 @@ test('xb tavern simulated request injects only structured state when memory arch
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Map only contract',
-        characterId: 'char-map-only',
+        characterKey: 'char-map-only',
         characterName: 'Scout',
         contextSnapshot: {
             character: { id: 'char-map-only', name: 'Scout', description: 'Checks routes.' },
@@ -3378,7 +3378,7 @@ test('xb tavern simulated request ignores unusable empty session snapshots', asy
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: '旧空会话',
-        characterId: '',
+        characterKey: '',
         characterName: '',
         contextSnapshot: {},
         presetId: preset.id,
@@ -3428,7 +3428,7 @@ test('xb tavern simulated request ignores system-name session snapshots', async 
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: '坏快照',
-        characterId: 'system',
+        characterKey: 'system',
         characterName: 'SillyTavern System',
         contextSnapshot: {
             character: {
@@ -4398,7 +4398,7 @@ test('xb tavern run turn trims only API history and keeps stored messages intact
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Windowed',
-        characterId: 'char-1',
+        characterKey: 'char-1',
         characterName: 'Aster',
         contextSnapshot: {
             character: { id: 'char-1', name: 'Aster', description: 'Pilot.' },
@@ -4452,7 +4452,7 @@ test('xb tavern simulated request uses the same trimmed API history without savi
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Windowed simulate',
-        characterId: 'char-1',
+        characterKey: 'char-1',
         characterName: 'Aster',
         contextSnapshot: {
             character: { id: 'char-1', name: 'Aster', description: 'Pilot.' },
@@ -4501,7 +4501,7 @@ test('xb tavern run turn prefers the latest live context for an existing session
     const preset = createDefaultXbTavernPreset();
     const session = await createTavernSession({
         title: 'Locked',
-        characterId: 'old',
+        characterKey: 'old',
         characterName: 'Old Character',
         contextSnapshot: {
             character: { id: 'old', name: 'Old Character', description: 'Old card.' },

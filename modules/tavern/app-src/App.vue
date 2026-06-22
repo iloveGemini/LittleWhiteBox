@@ -135,7 +135,8 @@ interface RequestAuditSnapshot {
 }
 
 interface TavernCharacterOption {
-    id: string;
+    characterKey: string;
+    nativeCharacterId?: string;
     name: string;
     avatar?: string;
     shallow?: boolean;
@@ -151,9 +152,7 @@ interface TavernCharacterOption {
 }
 
 interface TavernCharacterWorldbookState {
-    characterId: string;
-    currentCharacterId: string;
-    isCurrentCharacter: boolean;
+    nativeCharacterId: string;
     characterName: string;
     boundWorldbookName: string;
     boundExists: boolean;
@@ -192,11 +191,10 @@ const hostRequestHeaders = ref<Record<string, unknown>>({});
 const hostMainFontSizePx = ref('15px');
 const hostProseLineHeightPx = ref('23px');
 const availableCharacters = ref<TavernCharacterOption[]>([]);
-const selectedCharacterId = ref('');
-const selectedCharacterPreviewId = ref('');
+const selectedCharacterPreviewKey = ref('');
 const selectedCharacterGreetingIndex = ref(0);
-const pendingCharacterPreviewId = ref('');
-const pendingCharacterSessionId = ref('');
+const pendingCharacterPreviewKey = ref('');
+const pendingCharacterSessionKey = ref('');
 const characterWorldbookState = ref<TavernCharacterWorldbookState | null>(null);
 const characterWorldbookBusy = ref(false);
 const characterWorldbookStatus = ref('');
@@ -376,7 +374,7 @@ const sessionRuntimeState = computed(() => normalizeTavernSessionState(selectedS
 const sessionContract = computed<TavernSessionContract>(() => normalizeTavernSessionContract(sessionRuntimeState.value.contract));
 const canResumeSelectedSession = computed(() => !!(
     selectedSession.value
-    && String(selectedSession.value.characterId || '').trim()
+    && String(selectedSession.value.characterKey || '').trim()
 ));
 const activeView = ref<AppView>(readInitialView());
 const activeSettingsWorkspace = ref<TavernSettingsWorkspaceKey>(readInitialSettingsWorkspace());
@@ -463,8 +461,8 @@ const effectiveContext = computed<XbTavernContext>(() => ({
         ? buildContextHistory(loadedSessionMessages.value)
         : context.value.history,
 }));
-const currentWorldbookCharacterId = computed(() => (
-    String(selectedSession.value?.characterId || effectiveContext.value.character?.id || selectedCharacterId.value || '').trim()
+const currentWorldbookNativeCharacterId = computed(() => (
+    resolveCurrentNativeCharacterId(String(selectedSession.value?.characterKey || effectiveContext.value.character?.characterKey || '').trim(), { optional: true })
 ));
 const {
     activeAssistantPreset,
@@ -488,7 +486,7 @@ const {
     agentConfig,
     tavernDisplaySettings,
     effectiveContext,
-    currentWorldbookCharacterId,
+    currentWorldbookNativeCharacterId,
     homeThemeDark,
     isRunning,
     describeError,
@@ -500,9 +498,9 @@ const effectiveCharacter = computed(() => effectiveContext.value.character || {}
 const characterName = computed(() => displayableTavernName(effectiveCharacter.value.name || '', '未选择角色'));
 const characterAvatar = computed(() => {
     const primaryAvatar = String(effectiveCharacter.value.avatar || '').trim();
-    const characterId = String(effectiveCharacter.value.id || selectedCharacterId.value || '').trim();
+    const characterKey = String(effectiveCharacter.value.characterKey || '').trim();
     const characterNameValue = String(effectiveCharacter.value.name || '').trim();
-    const matchedCharacter = availableCharacters.value.find((character) => String(character.id || '').trim() === characterId)
+    const matchedCharacter = availableCharacters.value.find((character) => String(character.characterKey || '').trim() === characterKey)
         || availableCharacters.value.find((character) => String(character.name || '').trim() === characterNameValue);
     const fallbackAvatar = String(matchedCharacter?.avatar || '').trim();
     const candidates = [primaryAvatar, fallbackAvatar].filter((avatar, index, list) => avatar && list.indexOf(avatar) === index);
@@ -520,7 +518,25 @@ const visibleUserAvatar = computed(() => {
     return url && !brokenAvatarUrls.value[url] ? url : '';
 });
 const liveCharacter = computed(() => context.value.character || {});
-const liveCharacterId = computed(() => String(liveCharacter.value.id || selectedCharacterId.value || '').trim());
+const liveCharacterKey = computed(() => String(liveCharacter.value.characterKey || '').trim());
+function findCharacterByKey(characterKey = ''): TavernCharacterOption | null {
+    const key = String(characterKey || '').trim();
+    if (!key) {return null;}
+    return characterCards.value.find((character) => character.characterKey === key) || null;
+}
+
+function resolveCurrentNativeCharacterId(characterKey = '', options: { optional?: boolean } = {}): string {
+    const key = String(characterKey || '').trim();
+    if (!key) {
+        if (options.optional) {return '';}
+        throw new Error('缺少角色身份。');
+    }
+    const nativeCharacterId = String(findCharacterByKey(key)?.nativeCharacterId || '').trim();
+    if (nativeCharacterId) {return nativeCharacterId;}
+    if (options.optional) {return '';}
+    throw new Error('角色卡已不存在或文件名变化，请重新选择角色。');
+}
+
 function avatarAvailable(url = '') {
     const key = String(url || '').trim();
     return !!key && !brokenAvatarUrls.value[key];
@@ -536,9 +552,10 @@ function rememberBrokenAvatar(url = '') {
 }
 
 function normalizeCharacterOption(character: Record<string, unknown>, idFallback = ''): TavernCharacterOption | null {
-    const id = String(character.id || idFallback || '').trim();
-    if (!id) {return null;}
-    const name = String(character.name || '').trim() || `角色 ${id}`;
+    const characterKey = String(character.characterKey || idFallback || '').trim();
+    if (!characterKey) {return null;}
+    const nativeCharacterId = String(character.nativeCharacterId || '').trim();
+    const name = String(character.name || '').trim() || `角色 ${characterKey}`;
     const avatar = String(character.avatar || '').trim();
     const shallow = character.shallow === true;
     const description = String(character.description || '').trim();
@@ -549,11 +566,12 @@ function normalizeCharacterOption(character: Record<string, unknown>, idFallback
     const mesExample = String(character.mesExample || character.mes_example || '').trim();
     const creatorNotes = String(character.creatorNotes || character.creator_notes || '').trim();
     const characterDepthPrompt = String(character.characterDepthPrompt || character.character_depth_prompt || '').trim();
-    const signature = JSON.stringify([id, name, avatar, shallow, description, personality, scenario, firstMessage, alternateGreetings, mesExample, creatorNotes, characterDepthPrompt]);
-    const cached = characterOptionCache.get(id);
+    const signature = JSON.stringify([characterKey, nativeCharacterId, name, avatar, shallow, description, personality, scenario, firstMessage, alternateGreetings, mesExample, creatorNotes, characterDepthPrompt]);
+    const cached = characterOptionCache.get(characterKey);
     if (cached?.signature === signature) {return cached.option;}
     const option: TavernCharacterOption = {
-        id,
+        characterKey,
+        nativeCharacterId,
         name,
         avatar,
         shallow,
@@ -567,7 +585,7 @@ function normalizeCharacterOption(character: Record<string, unknown>, idFallback
         characterDepthPrompt,
     };
     option.searchCorpus = normalizedSearchText(buildSearchCorpus([
-        option.id,
+        option.characterKey,
         option.name,
         option.description,
         option.personality,
@@ -578,19 +596,19 @@ function normalizeCharacterOption(character: Record<string, unknown>, idFallback
         option.creatorNotes,
         option.characterDepthPrompt,
     ], 900));
-    characterOptionCache.set(id, { signature, option });
+    characterOptionCache.set(characterKey, { signature, option });
     return option;
 }
 const characterCards = computed<TavernCharacterOption[]>(() => {
     const byId = new Map<string, TavernCharacterOption>();
     availableCharacters.value.forEach((character) => {
         const option = normalizeCharacterOption(character as unknown as Record<string, unknown>);
-        if (option) {byId.set(option.id, option);}
+        if (option) {byId.set(option.characterKey, option);}
     });
-    const currentId = String(liveCharacter.value.id || '').trim();
-    if (currentId && liveCharacter.value.name && !byId.has(currentId)) {
-        const option = normalizeCharacterOption(liveCharacter.value as Record<string, unknown>, currentId);
-        if (option) {byId.set(currentId, option);}
+    const currentKey = String(liveCharacter.value.characterKey || '').trim();
+    if (currentKey && liveCharacter.value.name && !byId.has(currentKey)) {
+        const option = normalizeCharacterOption(liveCharacter.value as Record<string, unknown>, currentKey);
+        if (option) {byId.set(currentKey, option);}
     }
     return [...byId.values()].sort((left, right) => {
         return left.name.localeCompare(right.name, 'zh-Hans-CN');
@@ -603,24 +621,24 @@ const filteredCharacterCards = computed<TavernCharacterOption[]>(() => {
 });
 const visibleCharacterCards = computed(() => {
     const visible = filteredCharacterCards.value.slice(0, characterVisibleLimit.value);
-    const selectedId = String(selectedCharacterPreviewId.value || '').trim();
-    if (!selectedId || visible.some((character) => character.id === selectedId)) {return visible;}
-    const selected = characterCards.value.find((character) => character.id === selectedId);
+    const selectedKey = String(selectedCharacterPreviewKey.value || '').trim();
+    if (!selectedKey || visible.some((character) => character.characterKey === selectedKey)) {return visible;}
+    const selected = characterCards.value.find((character) => character.characterKey === selectedKey);
     return selected ? [selected, ...visible] : visible;
 });
 const selectedCharacterPreview = computed(() => {
-    const previewId = String(selectedCharacterPreviewId.value || '').trim();
-    if (previewId) {
-        const selected = characterCards.value.find((character) => character.id === previewId);
+    const previewKey = String(selectedCharacterPreviewKey.value || '').trim();
+    if (previewKey) {
+        const selected = characterCards.value.find((character) => character.characterKey === previewKey);
         if (selected) {return selected;}
     }
     return null;
 });
 const selectedCharacterSessions = computed<TavernSessionRecord[]>(() => {
-    const characterId = String(selectedCharacterPreview.value?.id || '').trim();
-    if (!characterId) {return [];}
+    const characterKey = String(selectedCharacterPreview.value?.characterKey || '').trim();
+    if (!characterKey) {return [];}
     return sessions.value
-        .filter((session) => String(session.characterId || '').trim() === characterId)
+        .filter((session) => String(session.characterKey || '').trim() === characterKey)
         .slice()
         .sort((left, right) => (
             (Number(right.updatedAt) || Number(right.createdAt) || 0)
@@ -734,9 +752,9 @@ const {
     visibleRunLimit: MANAGER_RUN_VISIBLE_LIMIT,
 });
 const filteredChatSidebarSessions = computed(() => {
-    const currentCharacterId = String(selectedSession.value?.characterId || effectiveContext.value.character?.id || '').trim();
-    return currentCharacterId
-        ? sessions.value.filter((session) => String(session.characterId || '').trim() === currentCharacterId)
+    const currentCharacterKey = String(selectedSession.value?.characterKey || effectiveContext.value.character?.characterKey || '').trim();
+    return currentCharacterKey
+        ? sessions.value.filter((session) => String(session.characterKey || '').trim() === currentCharacterKey)
         : sessions.value;
 });
 const chatSidebarSessions = computed(() => {
@@ -1019,15 +1037,15 @@ watch(characterSearchText, () => {
 
 watch(filteredCharacterCards, (cards) => {
     if (!cards.length) {
-        selectedCharacterPreviewId.value = '';
+        selectedCharacterPreviewKey.value = '';
         return;
     }
-    const current = String(selectedCharacterPreviewId.value || '').trim();
-    if (current && cards.some((character) => character.id === current)) {return;}
-    selectedCharacterPreviewId.value = '';
+    const current = String(selectedCharacterPreviewKey.value || '').trim();
+    if (current && cards.some((character) => character.characterKey === current)) {return;}
+    selectedCharacterPreviewKey.value = '';
 }, { immediate: true });
 
-watch(selectedCharacterPreviewId, () => {
+watch(selectedCharacterPreviewKey, () => {
     selectedCharacterGreetingIndex.value = 0;
     characterWorldbookState.value = null;
     characterWorldbookStatus.value = '';
@@ -1038,11 +1056,11 @@ watch(selectedCharacterPreviewId, () => {
     }
 });
 
-watch([activeView, selectedCharacterPreviewId, liveCharacterId], ([view, previewId]) => {
+watch([activeView, selectedCharacterPreviewKey, liveCharacterKey], ([view, previewKey]) => {
     if (view !== 'characters') {return;}
-    const targetId = String(previewId || '').trim();
-    if (!targetId) {return;}
-    void syncCharacterWorldbookState(targetId);
+    const targetKey = String(previewKey || '').trim();
+    if (!targetKey) {return;}
+    void syncCharacterWorldbookState(targetKey);
 });
 
 watch(selectedCharacterGreetingOptions, (options) => {
@@ -1774,13 +1792,13 @@ const buildNativeChatPrompt: TavernBuildNativeChatPromptRuntime = async (input) 
 };
 
 async function getHostContext(input: {
-    characterId?: string;
+    nativeCharacterId?: string;
     includeHistory?: boolean;
     includeWorldbooks?: boolean;
 } = {}, options: { signal?: AbortSignal } = {}): Promise<Record<string, unknown>> {
     const response = await requestHost('xb-tavern:get-context', {
         payload: {
-            characterId: input.characterId,
+            nativeCharacterId: input.nativeCharacterId,
             includeHistory: input.includeHistory,
             includeWorldbooks: input.includeWorldbooks,
         },
@@ -1788,12 +1806,12 @@ async function getHostContext(input: {
     return (response.result || response) as Record<string, unknown>;
 }
 
-function currentContextCharacterId() {
-    return String(context.value.character?.id || selectedCharacterId.value || '').trim();
+function currentContextCharacterKey() {
+    return String(context.value.character?.characterKey || '').trim();
 }
 
 function currentContextCharacterReady() {
-    return !!displayableTavernName(context.value.character?.name || '') && !!currentContextCharacterId();
+    return !!displayableTavernName(context.value.character?.name || '') && !!currentContextCharacterKey();
 }
 
 function hasAuthorNoteSnapshot(value: unknown): boolean {
@@ -1825,7 +1843,7 @@ async function saveCurrentAuthorNote(note: XbTavernAuthorNote): Promise<void> {
     };
     const updatedSession = await updateTavernSessionSnapshot(sessionId, {
         contextSnapshot: nextContext,
-        characterId: String(nextContext.character?.id || session.characterId || ''),
+        characterKey: String(nextContext.character?.characterKey || session.characterKey || ''),
         characterName: String(nextContext.character?.name || session.characterName || ''),
     });
     if (updatedSession) {
@@ -1839,14 +1857,15 @@ async function syncSessionCharacterContext(options: { sessionId?: string; force?
     const targetSessionId = String(options.sessionId || selectedSessionId.value || '').trim();
     const session = sessions.value.find((item) => item.id === targetSessionId) || (targetSessionId === selectedSessionId.value ? selectedSession.value : null);
     if (!session) {return context.value;}
-    const targetCharacterId = String(session.characterId || '').trim();
-    if (!targetCharacterId) {return context.value;}
-    if (!options.force && currentContextCharacterReady() && currentContextCharacterId() === targetCharacterId) {
+    const targetCharacterKey = String(session.characterKey || '').trim();
+    if (!targetCharacterKey) {return context.value;}
+    if (!options.force && currentContextCharacterReady() && currentContextCharacterKey() === targetCharacterKey) {
         return context.value;
     }
+    const nativeCharacterId = resolveCurrentNativeCharacterId(targetCharacterKey);
     const syncSequence = ++sessionContextSyncSequence;
     const payload = await getHostContext({
-        characterId: targetCharacterId,
+        nativeCharacterId,
         includeHistory: false,
     });
     if (syncSequence !== sessionContextSyncSequence) {
@@ -1862,7 +1881,7 @@ async function syncSessionCharacterContext(options: { sessionId?: string; force?
     });
     const updatedSession = await updateTavernSessionSnapshot(targetSessionId, {
         contextSnapshot: nextContext,
-        characterId: String(nextContext.character?.id || session.characterId || ''),
+        characterKey: String(nextContext.character?.characterKey || session.characterKey || ''),
         characterName: String(nextContext.character?.name || session.characterName || ''),
     });
     if (updatedSession) {
@@ -1951,7 +1970,6 @@ function applyHostPayload(payload: Record<string, unknown>) {
     }
     applyHostChatPreset(payload);
     availableCharacters.value = payload.availableCharacters as TavernCharacterOption[] || availableCharacters.value;
-    selectedCharacterId.value = String(payload.selectedCharacterId || context.value.character?.id || selectedCharacterId.value || '');
     statusText.value = diagnostics.value.message || '';
     void finishPendingCharacterSession().catch((error) => {
         pendingCharacterError.value = error instanceof Error ? error.message : String(error || 'create_session_failed');
@@ -2033,7 +2051,7 @@ function onHostMessage(event: MessageEvent) {
 function openCharacterSelect() {
     activeView.value = 'characters';
     pendingCharacterError.value = '';
-    selectedCharacterPreviewId.value = '';
+    selectedCharacterPreviewKey.value = '';
     refreshCharacterList();
 }
 
@@ -2043,33 +2061,34 @@ function refreshCharacterList() {
     postToHost('xb-tavern:refresh-context', {});
 }
 
-async function selectCharacterForPreview(characterId: string) {
-    const targetId = String(characterId || '').trim();
-    if (!targetId || pendingCharacterSessionId.value) {return;}
-    selectedCharacterPreviewId.value = targetId;
-    void syncCharacterWorldbookState(targetId);
-    const current = characterCards.value.find((character) => character.id === targetId);
+async function selectCharacterForPreview(characterKey: string) {
+    const targetKey = String(characterKey || '').trim();
+    if (!targetKey || pendingCharacterSessionKey.value) {return;}
+    selectedCharacterPreviewKey.value = targetKey;
+    void syncCharacterWorldbookState(targetKey);
+    const current = findCharacterByKey(targetKey);
     if (current && current.shallow !== true && hasCharacterPreviewDetails(current)) {return;}
     const sequence = ++characterPreviewRequestSequence;
-    pendingCharacterPreviewId.value = targetId;
+    pendingCharacterPreviewKey.value = targetKey;
     pendingCharacterError.value = '';
     try {
-        const payload = await getHostContext({ characterId: targetId, includeHistory: false, includeWorldbooks: false });
-        if (sequence !== characterPreviewRequestSequence || selectedCharacterPreviewId.value !== targetId) {return;}
+        const nativeCharacterId = resolveCurrentNativeCharacterId(targetKey);
+        const payload = await getHostContext({ nativeCharacterId, includeHistory: false, includeWorldbooks: false });
+        if (sequence !== characterPreviewRequestSequence || selectedCharacterPreviewKey.value !== targetKey) {return;}
         applyCharacterListPayload(payload);
     } catch (error) {
-        if (sequence !== characterPreviewRequestSequence || selectedCharacterPreviewId.value !== targetId) {return;}
+        if (sequence !== characterPreviewRequestSequence || selectedCharacterPreviewKey.value !== targetKey) {return;}
         pendingCharacterError.value = error instanceof Error ? error.message : String(error || 'character_preview_failed');
     } finally {
-        if (sequence === characterPreviewRequestSequence && pendingCharacterPreviewId.value === targetId) {
-            pendingCharacterPreviewId.value = '';
+        if (sequence === characterPreviewRequestSequence && pendingCharacterPreviewKey.value === targetKey) {
+            pendingCharacterPreviewKey.value = '';
         }
     }
 }
 
-async function syncCharacterWorldbookState(characterId = selectedCharacterPreviewId.value) {
-    const targetId = String(characterId || '').trim();
-    if (!targetId) {
+async function syncCharacterWorldbookState(characterKey = selectedCharacterPreviewKey.value) {
+    const targetKey = String(characterKey || '').trim();
+    if (!targetKey) {
         characterWorldbookState.value = null;
         characterWorldbookSelectionOpen.value = false;
         characterWorldbookSelectionOptions.value = [];
@@ -2077,26 +2096,28 @@ async function syncCharacterWorldbookState(characterId = selectedCharacterPrevie
     }
     const sequence = ++characterWorldbookRequestSequence;
     try {
+        const nativeCharacterId = resolveCurrentNativeCharacterId(targetKey);
         const result = await requestHost('xb-tavern:get-character-worldbook-state', {
-            payload: { characterId: targetId },
+            payload: { nativeCharacterId },
         });
-        if (sequence !== characterWorldbookRequestSequence || String(selectedCharacterPreviewId.value || '').trim() !== targetId) {return;}
+        if (sequence !== characterWorldbookRequestSequence || String(selectedCharacterPreviewKey.value || '').trim() !== targetKey) {return;}
         characterWorldbookState.value = (result.result || result) as unknown as TavernCharacterWorldbookState;
         characterWorldbookStatus.value = '';
     } catch (error) {
-        if (sequence !== characterWorldbookRequestSequence || String(selectedCharacterPreviewId.value || '').trim() !== targetId) {return;}
+        if (sequence !== characterWorldbookRequestSequence || String(selectedCharacterPreviewKey.value || '').trim() !== targetKey) {return;}
         characterWorldbookStatus.value = describeError(error);
     }
 }
 
 async function openSelectedCharacterWorldbook() {
-    const targetId = String(selectedCharacterPreviewId.value || '').trim();
-    if (!targetId || characterWorldbookBusy.value) {return;}
+    const targetKey = String(selectedCharacterPreviewKey.value || '').trim();
+    if (!targetKey || characterWorldbookBusy.value) {return;}
     characterWorldbookBusy.value = true;
     characterWorldbookStatus.value = '';
     try {
+        const nativeCharacterId = resolveCurrentNativeCharacterId(targetKey);
         let result = await requestHost('xb-tavern:activate-character-worldbook', {
-            payload: { characterId: targetId },
+            payload: { nativeCharacterId },
         });
         let payload = (result.result || result) as TavernCharacterWorldbookActionResult;
         if (payload.action === 'needs_import_confirmation') {
@@ -2107,7 +2128,7 @@ async function openSelectedCharacterWorldbook() {
                 return;
             }
             result = await requestHost('xb-tavern:activate-character-worldbook', {
-                payload: { characterId: targetId, confirmed: true },
+                payload: { nativeCharacterId, confirmed: true },
             });
             payload = (result.result || result) as TavernCharacterWorldbookActionResult;
         }
@@ -2128,7 +2149,7 @@ async function openSelectedCharacterWorldbook() {
             if (state) {characterWorldbookState.value = state;}
             return;
         }
-        await syncCharacterWorldbookState(targetId);
+        await syncCharacterWorldbookState(targetKey);
     } catch (error) {
         characterWorldbookStatus.value = describeError(error);
     } finally {
@@ -2141,14 +2162,15 @@ function closeCharacterWorldbookSelection() {
 }
 
 async function bindSelectedCharacterWorldbook(name: string) {
-    const targetId = String(selectedCharacterPreviewId.value || '').trim();
+    const targetKey = String(selectedCharacterPreviewKey.value || '').trim();
     const targetName = String(name || '').trim();
-    if (!targetId || !targetName || characterWorldbookBusy.value) {return;}
+    if (!targetKey || !targetName || characterWorldbookBusy.value) {return;}
     characterWorldbookBusy.value = true;
     characterWorldbookStatus.value = '';
     try {
+        const nativeCharacterId = resolveCurrentNativeCharacterId(targetKey);
         const result = await requestHost('xb-tavern:bind-character-worldbook', {
-            payload: { characterId: targetId, name: targetName },
+            payload: { nativeCharacterId, name: targetName },
         });
         characterWorldbookState.value = (result.result || result) as unknown as TavernCharacterWorldbookState;
         characterWorldbookSelectionOpen.value = false;
@@ -2178,16 +2200,16 @@ function scrollSelectedCharacterPreviewIntoView() {
 
 function moveCharacterPreview(delta: number) {
     const cards = visibleCharacterCards.value;
-    if (!cards.length || pendingCharacterSessionId.value) {return;}
-    const currentId = String(selectedCharacterPreview.value?.id || selectedCharacterPreviewId.value || '').trim();
-    if (!currentId) {
-        selectedCharacterPreviewId.value = cards[delta < 0 ? cards.length - 1 : 0]?.id || '';
+    if (!cards.length || pendingCharacterSessionKey.value) {return;}
+    const currentKey = String(selectedCharacterPreview.value?.characterKey || selectedCharacterPreviewKey.value || '').trim();
+    if (!currentKey) {
+        selectedCharacterPreviewKey.value = cards[delta < 0 ? cards.length - 1 : 0]?.characterKey || '';
         scrollSelectedCharacterPreviewIntoView();
         return;
     }
-    const currentIndex = Math.max(0, cards.findIndex((character) => character.id === currentId));
+    const currentIndex = Math.max(0, cards.findIndex((character) => character.characterKey === currentKey));
     const nextIndex = Math.min(cards.length - 1, Math.max(0, currentIndex + delta));
-    selectedCharacterPreviewId.value = cards[nextIndex]?.id || '';
+    selectedCharacterPreviewKey.value = cards[nextIndex]?.characterKey || '';
     scrollSelectedCharacterPreviewIntoView();
 }
 
@@ -2200,11 +2222,11 @@ function handleCharacterArchiveKeydown(event: KeyboardEvent) {
         moveCharacterPreview(-1);
     } else if (event.key === 'Home') {
         event.preventDefault();
-        selectedCharacterPreviewId.value = visibleCharacterCards.value[0]?.id || '';
+        selectedCharacterPreviewKey.value = visibleCharacterCards.value[0]?.characterKey || '';
         scrollSelectedCharacterPreviewIntoView();
     } else if (event.key === 'End') {
         event.preventDefault();
-        selectedCharacterPreviewId.value = visibleCharacterCards.value.at(-1)?.id || '';
+        selectedCharacterPreviewKey.value = visibleCharacterCards.value.at(-1)?.characterKey || '';
         scrollSelectedCharacterPreviewIntoView();
     } else if (event.key === 'Enter') {
         event.preventDefault();
@@ -2213,9 +2235,9 @@ function handleCharacterArchiveKeydown(event: KeyboardEvent) {
 }
 
 async function enterSelectedCharacter() {
-    const targetId = String(selectedCharacterPreview.value?.id || selectedCharacterPreviewId.value || '').trim();
-    if (!targetId || pendingCharacterSessionId.value) {return;}
-    await selectCharacterAndCreateSession(targetId);
+    const targetKey = String(selectedCharacterPreview.value?.characterKey || selectedCharacterPreviewKey.value || '').trim();
+    if (!targetKey || pendingCharacterSessionKey.value) {return;}
+    await selectCharacterAndCreateSession(targetKey);
 }
 
 let selectedMessageWindowLoadSequence = 0;
@@ -2450,7 +2472,7 @@ async function createSessionFromContext(options: { includeFirstMessage?: boolean
     });
     const session = await createTavernSession({
         title: String(snapshotContext.character?.name || '未选择角色'),
-        characterId: String(snapshotContext.character?.id || ''),
+        characterKey: String(snapshotContext.character?.characterKey || ''),
         characterName: String(snapshotContext.character?.name || '未选择角色'),
         contextSnapshot: snapshotContext,
         buildSnapshot: snapshotBrain.buildSnapshot,
@@ -2497,15 +2519,15 @@ async function handleHomePrimaryAction() {
 }
 
 function clearPendingCharacterSession() {
-    pendingCharacterSessionId.value = '';
+    pendingCharacterSessionKey.value = '';
     pendingCharacterGreetingIndex.value = 0;
 }
 
 async function finishPendingCharacterSession() {
-    const targetId = pendingCharacterSessionId.value;
-    if (!targetId) {return;}
-    const currentId = String(context.value.character?.id || selectedCharacterId.value || '').trim();
-    if (currentId !== targetId) {return;}
+    const targetKey = pendingCharacterSessionKey.value;
+    if (!targetKey) {return;}
+    const currentKey = String(context.value.character?.characterKey || '').trim();
+    if (currentKey !== targetKey) {return;}
     if (!displayableTavernName(context.value.character?.name || '')) {
         clearPendingCharacterSession();
         pendingCharacterError.value = '没有读到这张角色卡。';
@@ -2518,24 +2540,29 @@ async function finishPendingCharacterSession() {
     await createSessionAndOpenChat({ greetingIndex });
 }
 
-async function selectCharacterAndCreateSession(characterId: string) {
-    const targetId = String(characterId || '').trim();
-    if (!targetId || pendingCharacterSessionId.value) {return;}
-    const wasPreviewed = targetId === String(selectedCharacterPreviewId.value || '').trim();
+async function selectCharacterAndCreateSession(characterKey: string) {
+    const targetKey = String(characterKey || '').trim();
+    if (!targetKey || pendingCharacterSessionKey.value) {return;}
+    const wasPreviewed = targetKey === String(selectedCharacterPreviewKey.value || '').trim();
     const greetingIndex = wasPreviewed ? selectedCharacterGreetingIndex.value : 0;
-    selectedCharacterPreviewId.value = targetId;
+    selectedCharacterPreviewKey.value = targetKey;
     selectedCharacterGreetingIndex.value = greetingIndex;
     selectedSessionId.value = '';
     clearLoadedSessionMessageWindow();
     await setSelectedTavernSessionId('');
     await refreshManagerRecords('');
     resetSessionPreviewState();
-    selectedCharacterId.value = targetId;
     pendingCharacterError.value = '';
     statusText.value = '正在读取角色卡';
-    pendingCharacterSessionId.value = targetId;
+    pendingCharacterSessionKey.value = targetKey;
     pendingCharacterGreetingIndex.value = greetingIndex;
-    postToHost('xb-tavern:refresh-context', { characterId: targetId, includeHistory: false });
+    try {
+        const nativeCharacterId = resolveCurrentNativeCharacterId(targetKey);
+        postToHost('xb-tavern:refresh-context', { nativeCharacterId, includeHistory: false });
+    } catch (error) {
+        pendingCharacterError.value = describeError(error);
+        clearPendingCharacterSession();
+    }
 }
 
 async function selectSession(sessionId: string) {
@@ -2556,11 +2583,11 @@ async function removeSession(sessionId: string, event?: Event) {
     const id = String(sessionId || '').trim();
     if (!id) {return;}
     const session = sessions.value.find((item) => item.id === id);
-    const deletedCharacterId = String(session?.characterId || '').trim();
+    const deletedCharacterKey = String(session?.characterKey || '').trim();
     const isDeletingSelectedSession = id === selectedSessionId.value;
-    const nextSameCharacterSession = deletedCharacterId
+    const nextSameCharacterSession = deletedCharacterKey
         ? sessions.value
-            .filter((item) => item.id !== id && String(item.characterId || '').trim() === deletedCharacterId)
+            .filter((item) => item.id !== id && String(item.characterKey || '').trim() === deletedCharacterKey)
             .slice()
             .sort((left, right) => (
                 (Number(right.updatedAt) || Number(right.createdAt) || 0)
@@ -2598,11 +2625,11 @@ async function removeSession(sessionId: string, event?: Event) {
     clearLoadedSessionMessageWindow();
     await setSelectedTavernSessionId('');
     await refreshSessions();
-    if (deletedCharacterId) {
-        selectedCharacterPreviewId.value = deletedCharacterId;
-        void syncCharacterWorldbookState(deletedCharacterId);
+    if (deletedCharacterKey) {
+        selectedCharacterPreviewKey.value = deletedCharacterKey;
+        void syncCharacterWorldbookState(deletedCharacterKey);
     }
-    activeView.value = deletedCharacterId ? 'characters' : 'home';
+    activeView.value = deletedCharacterKey ? 'characters' : 'home';
 }
 
 function openChatView() {
@@ -4460,12 +4487,12 @@ onUnmounted(() => {
         :characters="characterCards"
         :visible-characters="visibleCharacterCards"
         :filtered-count="filteredCharacterCards.length"
-        :live-character-id="liveCharacterId"
+        :live-character-key="liveCharacterKey"
         :selected-character="selectedCharacterPreview"
         :selected-character-sessions="selectedCharacterSessions"
         :selected-greeting-index="selectedCharacterGreetingIndex"
-        :pending-preview-character-id="pendingCharacterPreviewId"
-        :pending-character-session-id="pendingCharacterSessionId"
+        :pending-preview-character-key="pendingCharacterPreviewKey"
+        :pending-character-session-key="pendingCharacterSessionKey"
         :character-worldbook-state="characterWorldbookState"
         :character-worldbook-busy="characterWorldbookBusy"
         :hidden-count="hiddenCharacterCount"

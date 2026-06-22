@@ -10,7 +10,7 @@ import { characters as sillyTavernCharacters, chat_metadata, getOneCharacter, ge
 const LITTLE_WHITE_BOX_EXT_ID = 'LittleWhiteBox';
 
 interface TavernHostOptions {
-    characterId?: string | number;
+    nativeCharacterId?: string | number;
     includeHistory?: boolean;
     includeWorldbooks?: boolean;
     onStartupProgress?: (payload: { percent: number; action: string }) => void;
@@ -23,7 +23,8 @@ interface TavernHostDiagnostics {
 }
 
 interface TavernHostCharacterOption {
-    id: string;
+    characterKey: string;
+    nativeCharacterId: string;
     name: string;
     avatar: string;
     shallow: boolean;
@@ -41,7 +42,7 @@ interface TavernHostContextPayload {
     context: Record<string, unknown>;
     diagnostics: TavernHostDiagnostics;
     availableCharacters: TavernHostCharacterOption[];
-    selectedCharacterId: string;
+    selectedCharacterKey: string;
     htmlRenderEnabled: boolean;
     hostMainFontSizePx: string;
     hostProseLineHeightPx: string;
@@ -255,6 +256,52 @@ function readGlobalString(name = ''): string {
     return normalizeText(getWindowRecord()[name]);
 }
 
+function hashString(value = ''): string {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+        hash ^= value.charCodeAt(index);
+        hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+}
+
+function stableJson(value: unknown): string {
+    if (value === null || value === undefined) {return '';}
+    if (typeof value !== 'object') {return JSON.stringify(value);}
+    if (Array.isArray(value)) {
+        return `[${value.map((item) => stableJson(item)).join(',')}]`;
+    }
+    const record = asRecord(value);
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(',')}}`;
+}
+
+function rawCharacterAvatarName(character: Record<string, unknown>, data: Record<string, unknown>, nativeCharacterId: unknown): string {
+    const raw = normalizeText(character.avatar || data.avatar);
+    if (raw && raw !== 'none' && !/^(data:|blob:|https?:)/i.test(raw)) {
+        return raw.replace(/\\/g, '/').split('/').filter(Boolean).pop() || raw;
+    }
+    try {
+        return normalizeText(getCharaFilename(nativeCharacterId as string | number | null));
+    } catch {
+        return '';
+    }
+}
+
+function buildCharacterKey(character: Record<string, unknown>, nativeCharacterId: unknown): string {
+    const data = asRecord(character.data) || character;
+    const name = normalizeText(character.name || data.name);
+    const avatar = rawCharacterAvatarName(character, data, nativeCharacterId);
+    const cardPayload = normalizeText(character.json_data) || stableJson(data) || stableJson(character);
+    const hash = hashString(cardPayload || [avatar, name].join('\u0000'));
+    if (avatar) {
+        return `avatar:${avatar}:${name || 'unnamed'}:${hash.slice(0, 8)}`;
+    }
+    if (cardPayload) {
+        return `card:${hash}:${name || 'unnamed'}`;
+    }
+    return `name:${name || 'unknown'}:${hash.slice(0, 8)}`;
+}
+
 async function hydrateCharacterAt(index: number): Promise<void> {
     if (!Number.isInteger(index) || index < 0) {return;}
     const character = asRecord(sillyTavernCharacters?.[index]);
@@ -273,18 +320,18 @@ async function hydrateCharacterAt(index: number): Promise<void> {
 }
 
 async function hydrateSelectedCharacter(ctx: Record<string, unknown>, options: TavernHostOptions): Promise<void> {
-    const index = Number(resolveCharacterId(ctx, options));
+    const index = Number(resolveNativeCharacterId(ctx, options));
     if (Number.isInteger(index)) {
         await hydrateCharacterAt(index);
     }
 }
 
-function resolveCharacterId(ctx: Record<string, unknown> = getContext?.() || {}, options: TavernHostOptions = {}): unknown {
-    return options.characterId ?? ctx.characterId ?? ctx.this_chid;
+function resolveNativeCharacterId(_ctx: Record<string, unknown> = getContext?.() || {}, options: TavernHostOptions = {}): unknown {
+    return options.nativeCharacterId;
 }
 
 function getCurrentCharacter(ctx: Record<string, unknown> = getContext?.() || {}, options: TavernHostOptions = {}): Record<string, unknown> | null {
-    const id = resolveCharacterId(ctx, options);
+    const id = resolveNativeCharacterId(ctx, options);
     const index = Number(id);
     const runtime = Number.isInteger(index) ? asRecord(sillyTavernCharacters?.[index]) : {};
     const getCharacter = typeof ctx.getCharacter === 'function' ? ctx.getCharacter as (id: unknown) => unknown : null;
@@ -308,19 +355,37 @@ function getCurrentCharacter(ctx: Record<string, unknown> = getContext?.() || {}
 
 function normalizeCharacter(ctx: Record<string, unknown> = getContext?.() || {}, options: TavernHostOptions = {}): Record<string, unknown> {
     const character = getCurrentCharacter(ctx, options) || {};
+    const nativeCharacterId = resolveNativeCharacterId(ctx, options);
+    if (nativeCharacterId === undefined || nativeCharacterId === null || !Object.keys(character).length) {
+        return {
+            characterKey: '',
+            nativeCharacterId: '',
+            name: '',
+            avatar: '',
+            tags: [],
+            description: '',
+            personality: '',
+            scenario: '',
+            firstMessage: '',
+            alternateGreetings: [],
+            mesExample: '',
+            creatorNotes: '',
+            data: {},
+        };
+    }
     const data = asRecord(character.data) || character;
     const name = [
         character.name,
         data.name,
         ctx.name2,
     ].map((value) => normalizeText(value)).find((value) => value && !isSystemCharacterName(value)) || '';
-    const characterId = resolveCharacterId(ctx, options);
-    const tagKey = getTagKeyForEntity?.(characterId as string | number | null);
+    const tagKey = getTagKeyForEntity?.(nativeCharacterId as string | number | null);
     const tags = tagKey && Array.isArray(tag_map?.[tagKey])
         ? tag_map[tagKey].map((item) => normalizeText(item)).filter(Boolean)
         : [];
     return {
-        id: normalizeText(characterId),
+        characterKey: buildCharacterKey(character, nativeCharacterId),
+        nativeCharacterId: normalizeText(nativeCharacterId),
         name,
         avatar: normalizeCharacterAvatar(character.avatar || data.avatar || readGlobalString('default_avatar')),
         tags,
@@ -353,7 +418,7 @@ function readCharacterAvatarName(ctx: Record<string, unknown> = getContext?.() |
         return raw.replace(/\\/g, '/').split('/').filter(Boolean).pop() || raw;
     }
     try {
-        return normalizeText(getCharaFilename(resolveCharacterId(ctx, options) as string | number | null));
+        return normalizeText(getCharaFilename(resolveNativeCharacterId(ctx, options) as string | number | null));
     } catch {
         return '';
     }
@@ -402,7 +467,7 @@ function collectWorldbookSources(ctx: Record<string, unknown> = getContext?.() |
     addUnique(characterLoreIds, character.avatar);
     addUnique(characterLoreIds, data.avatar);
     try {
-        addUnique(characterLoreIds, getCharaFilename(resolveCharacterId(ctx, options) as string | number | null));
+        addUnique(characterLoreIds, getCharaFilename(resolveNativeCharacterId(ctx, options) as string | number | null));
     } catch {}
     const characterLoreIdSet = new Set(characterLoreIds);
     asArray<Record<string, unknown>>(worldInfo.charLore).forEach((entry) => {
@@ -456,7 +521,8 @@ function listCharacters(ctx: Record<string, unknown> = getContext?.() || {}): Ta
         const depthPrompt = asRecord(extensions.depth_prompt);
         const legacyDepthPrompt = asRecord(data.depth_prompt);
         return {
-            id: String(index),
+            characterKey: buildCharacterKey(character, index),
+            nativeCharacterId: String(index),
             name: normalizeText(character?.name || data.name || `Character ${index + 1}`),
             avatar: normalizeCharacterAvatar(character?.avatar || data.avatar || readGlobalString('default_avatar')),
             shallow: character.shallow === true,
@@ -566,7 +632,7 @@ export async function buildTavernContext(options: TavernHostOptions = {}): Promi
             })),
         },
         availableCharacters: listCharacters(ctx),
-        selectedCharacterId: normalizeText(resolveCharacterId(ctx, options)),
+        selectedCharacterKey: normalizeText(asRecord(context.character).characterKey),
         htmlRenderEnabled: isHtmlRenderEnabled(),
         ...getHostTypographyMetrics(),
     };

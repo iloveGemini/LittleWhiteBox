@@ -4,7 +4,6 @@ import {
     event_types,
     getCurrentChatId,
     saveSettingsDebounced,
-    this_chid,
 } from '../../../../../../../script.js';
 import * as nativeRegexEngine from '../../../../../../extensions/regex/engine.js';
 import type { TavernApplyRegexItem, TavernApplyRegexResult, TavernRegexPlacementKey } from '../shared/regex';
@@ -162,12 +161,12 @@ function normalizeRegexScript(input: unknown, scriptType?: number, index?: numbe
     };
 }
 
-function currentCharacter(): unknown {
-    const index = Number(this_chid);
+function currentCharacter(nativeCharacterId: unknown): unknown {
+    const index = Number(nativeCharacterId);
     return Number.isFinite(index) ? characters?.[index] : undefined;
 }
 
-function buildGroup(scriptType: number, key: string, label: string): Record<string, unknown> {
+function buildGroup(scriptType: number, key: string, label: string, nativeCharacterId: unknown): Record<string, unknown> {
     const scripts = getScriptsByType(scriptType).map((script, index) => normalizeRegexScript(script, scriptType, index));
     const presetApi = getCurrentPresetAPI();
     const presetName = getCurrentPresetName();
@@ -177,7 +176,7 @@ function buildGroup(scriptType: number, key: string, label: string): Record<stri
         scriptType,
         scripts,
         allowed: scriptType === SCRIPT_TYPES.SCOPED
-            ? isScopedScriptsAllowed(currentCharacter())
+            ? isScopedScriptsAllowed(currentCharacter(nativeCharacterId))
             : scriptType === SCRIPT_TYPES.PRESET
                 ? isPresetScriptsAllowed(presetApi, presetName)
                 : true,
@@ -198,12 +197,14 @@ async function syncNativeRegexUiAfterWrite(): Promise<void> {
     }
 }
 
-export function listTavernRegexScripts(): Record<string, unknown> {
+export function listTavernRegexScripts(input: unknown = {}): Record<string, unknown> {
+    const source = asRecord(input);
+    const nativeCharacterId = text(source.nativeCharacterId);
     return {
         groups: [
-            buildGroup(SCRIPT_TYPES.GLOBAL, 'global', '全局'),
-            buildGroup(SCRIPT_TYPES.SCOPED, 'scoped', '当前角色'),
-            buildGroup(SCRIPT_TYPES.PRESET, 'preset', '预设正则'),
+            buildGroup(SCRIPT_TYPES.GLOBAL, 'global', '全局', nativeCharacterId),
+            buildGroup(SCRIPT_TYPES.SCOPED, 'scoped', '当前角色', nativeCharacterId),
+            buildGroup(SCRIPT_TYPES.PRESET, 'preset', '预设正则', nativeCharacterId),
         ],
         placements: {
             userInput: regex_placement.USER_INPUT,
@@ -217,6 +218,7 @@ export function listTavernRegexScripts(): Record<string, unknown> {
 
 export async function saveTavernRegexScript(input: unknown): Promise<Record<string, unknown>> {
     const source = asRecord(input);
+    const nativeCharacterId = text(source.nativeCharacterId);
     const scriptType = normalizeScriptType(source.scriptType);
     const script = normalizeRegexScript(source.script);
     if (!script.scriptName) {
@@ -231,13 +233,13 @@ export async function saveTavernRegexScript(input: unknown): Promise<Record<stri
     }
     await saveScriptsByType(scripts, scriptType);
     if (scriptType === SCRIPT_TYPES.SCOPED) {
-        allowScopedScripts(currentCharacter());
+        allowScopedScripts(currentCharacter(nativeCharacterId));
     } else if (scriptType === SCRIPT_TYPES.PRESET) {
         allowPresetScripts(getCurrentPresetAPI(), getCurrentPresetName());
     }
     await syncNativeRegexUiAfterWrite();
     return {
-        ...listTavernRegexScripts(),
+        ...listTavernRegexScripts({ nativeCharacterId }),
         savedScriptId: script.id,
         savedScriptType: scriptType,
     };
@@ -245,6 +247,7 @@ export async function saveTavernRegexScript(input: unknown): Promise<Record<stri
 
 export async function deleteTavernRegexScript(input: unknown): Promise<Record<string, unknown>> {
     const source = asRecord(input);
+    const nativeCharacterId = text(source.nativeCharacterId);
     const scriptType = normalizeScriptType(source.scriptType);
     const id = text(source.id);
     if (!id) {
@@ -255,7 +258,7 @@ export async function deleteTavernRegexScript(input: unknown): Promise<Record<st
         .filter((item) => item.id !== id);
     await saveScriptsByType(scripts, scriptType);
     await syncNativeRegexUiAfterWrite();
-    return listTavernRegexScripts();
+    return listTavernRegexScripts({ nativeCharacterId });
 }
 
 export function applyTavernRegex(input: unknown): TavernApplyRegexResult {

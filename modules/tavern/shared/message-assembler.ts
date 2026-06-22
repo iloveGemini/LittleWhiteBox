@@ -59,6 +59,8 @@ export interface XbTavernMessage {
 
 export interface XbTavernCharacter {
     id?: string;
+    characterKey?: string;
+    nativeCharacterId?: string;
     name?: string;
     avatar?: string;
     tags?: string[];
@@ -583,7 +585,7 @@ export interface XbTavernBuildSnapshot {
     chatPresetName: string;
     presetId: string;
     presetName: string;
-    characterId: string;
+    characterKey: string;
     characterName: string;
     userName: string;
     historyCount: number;
@@ -2049,7 +2051,7 @@ function buildCharacterFilterData(context: XbTavernContext = {}): XbTavernWorldS
     return {
         names: [
             character.name,
-            character.id,
+            character.characterKey,
             avatar,
             avatarFile,
         ].map((item) => normalizeText(item)).filter(Boolean),
@@ -2476,7 +2478,7 @@ export function createXbTavernBuildSnapshot(
         chatPresetName: normalizeText(chatPreset.name),
         presetId: normalizeText(chatPreset.id),
         presetName: normalizeText(chatPreset.name),
-        characterId: normalizeText(character.id),
+        characterKey: normalizeText(character.characterKey),
         characterName: normalizeText(character.name),
         userName: normalizeText(user.name),
         historyCount: Array.isArray(context.history) ? context.history.length : 0,

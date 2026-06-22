@@ -300,20 +300,21 @@ function addNativeWorldInfoDepth(runtime = {}) {
 }
 function characterPromptManagerIdentity(context = {}) {
   const character = context.character || {};
-  const id = normalizeText(character.id);
-  if (!id) {
+  const nativeCharacterId = normalizeText(character.nativeCharacterId);
+  if (!nativeCharacterId) {
     return null;
   }
   return {
     ...asRecord(character.data),
     ...character,
-    id,
+    id: nativeCharacterId,
+    nativeCharacterId,
     name: normalizeText(character.name)
   };
 }
-function replacePromptOrderForCharacter(existingPromptOrder, characterId = "", nextOrder = []) {
+function replacePromptOrderForCharacter(existingPromptOrder, nativeCharacterId = "", nextOrder = []) {
   const containers = (Array.isArray(existingPromptOrder) ? existingPromptOrder : []).map((container) => ({ ...asRecord(container) }));
-  const targetId = normalizeText(characterId);
+  const targetId = normalizeText(nativeCharacterId);
   const targetIndex = containers.findIndex((container) => normalizeText(container.character_id) === targetId);
   const target = targetIndex >= 0 ? containers[targetIndex] : { character_id: targetId };
   const replacement = {
@@ -338,9 +339,9 @@ function applyChatPresetPromptManager(chatPreset = {}, context = {}) {
   }
   let promptOrder = Array.isArray(preset.promptOrder) ? cloneJson(preset.promptOrder) : Array.isArray(rawPreset.prompt_order) ? cloneJson(rawPreset.prompt_order) : void 0;
   const activeOrder = Array.isArray(preset.activeOrder) ? preset.activeOrder : [];
-  const characterId = normalizeText(context.character?.id);
-  if (characterId && activeOrder.length) {
-    promptOrder = replacePromptOrderForCharacter(promptOrder, characterId, activeOrder);
+  const nativeCharacterId = normalizeText(context.character?.nativeCharacterId);
+  if (nativeCharacterId && activeOrder.length) {
+    promptOrder = replacePromptOrderForCharacter(promptOrder, nativeCharacterId, activeOrder);
   }
   if (Array.isArray(promptOrder)) {
     serviceSettings.prompt_order = promptOrder;
