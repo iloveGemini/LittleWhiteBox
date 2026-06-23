@@ -633,6 +633,7 @@ const {
     chatScrollRef,
     managerScrollRef,
     htmlRenderEnabled,
+    htmlThemeDark: homeThemeDark,
     alertDialog: alertTavernDialog,
     confirmDialog: confirmTavernDialog,
     requestHost,
@@ -1206,12 +1207,14 @@ const visibleManagerMarkdownSignature = computed(() => visibleManagerChatItems.v
         ? `${item.message.sessionId}:${item.message.order}:${markdownSignature(item.message.content)}`
         : `${item.key}:${markdownSignature(item.assistantMessage.content)}:${item.calls.map((call) => `${call.id}:${markdownSignature(call.resultText)}`).join(',')}`)
     .concat(htmlRenderEnabled.value ? 'html-render:on' : 'html-render:off')
+    .concat(homeThemeDark.value ? 'theme:dark' : 'theme:light')
     .join('|'));
 const liveManagerMarkdownSignature = computed(() => liveManagerChatDisplayItems.value
     .map((item) => item.kind === 'message'
         ? `${item.message.sessionId}:${item.message.order}:${markdownSignature(item.message.content)}`
         : `${item.key}:${markdownSignature(item.assistantMessage.content)}:${item.calls.map((call) => `${call.id}:${markdownSignature(call.resultText)}`).join(',')}`)
     .concat(htmlRenderEnabled.value ? 'html-render:on' : 'html-render:off')
+    .concat(homeThemeDark.value ? 'theme:dark' : 'theme:light')
     .join('|'));
 const chatSubtitle = computed(() => {
     if (!selectedSessionId.value) {return '写一句话后会自动创建独立会话。';}
@@ -4543,6 +4546,7 @@ watch([
     () => runtimeThoughtsSignature.value,
     () => runtimeActionCheckSignature.value,
     () => htmlRenderEnabled.value,
+    () => homeThemeDark.value,
     () => activeView.value,
     () => chatFocus.value,
 ], () => {
@@ -4565,6 +4569,7 @@ watch([
     () => visibleManagerMarkdownSignature.value,
     () => liveManagerMarkdownSignature.value,
     () => isManagerAssistantRunning.value,
+    () => homeThemeDark.value,
     () => activeView.value,
     () => chatFocus.value,
 ], () => {

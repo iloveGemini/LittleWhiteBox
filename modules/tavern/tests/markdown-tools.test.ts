@@ -106,6 +106,7 @@ test('tavern html generate relay returns parent responses to the requesting ifra
             chatScrollRef: makeRef(root as unknown as HTMLElement | null),
             managerScrollRef: makeRef<HTMLElement | null>(null),
             htmlRenderEnabled: makeRef(true),
+            htmlThemeDark: makeRef(true),
             alertDialog: async () => {},
             confirmDialog: async () => true,
             requestHost: async () => ({}),
@@ -242,5 +243,94 @@ test('tavern html generate relay returns parent responses to the requesting ifra
         } else {
             host.window = previousWindow;
         }
+    }
+});
+
+test('tavern html iframe height updates ignore zero probes and apply measured heights on a frame', () => {
+    const host = globalThis as Record<string, unknown>;
+    const previousWindow = host.window;
+    const listeners = new Map<string, Array<(event: Record<string, unknown>) => void>>();
+    const frames = new Map<number, () => void>();
+    let nextFrameId = 1;
+
+    const fakeWindow = {
+        location: { origin: 'https://tavern.local' },
+        parent: {},
+        addEventListener(type: string, listener: (event: Record<string, unknown>) => void) {
+            const bucket = listeners.get(type) || [];
+            bucket.push(listener);
+            listeners.set(type, bucket);
+        },
+        removeEventListener(type: string, listener: (event: Record<string, unknown>) => void) {
+            const bucket = listeners.get(type) || [];
+            listeners.set(type, bucket.filter((item) => item !== listener));
+        },
+        setTimeout(callback: () => void) {
+            callback();
+            return 1;
+        },
+        clearTimeout() {},
+        requestAnimationFrame(callback: () => void) {
+            const id = nextFrameId;
+            nextFrameId += 1;
+            frames.set(id, callback);
+            return id;
+        },
+        cancelAnimationFrame(id: number) {
+            frames.delete(id);
+        },
+    };
+    const innerWindow = {};
+    const iframe = {
+        contentWindow: innerWindow,
+        isConnected: true,
+        style: { height: '' },
+    };
+    const root = {
+        querySelectorAll(selector: string) {
+            assert.equal(selector, 'iframe.xb-tavern-html-iframe');
+            return [iframe];
+        },
+    };
+
+    host.window = fakeWindow;
+    try {
+        useTavernMarkdownTools({
+            chatScrollRef: makeRef(root as unknown as HTMLElement | null),
+            managerScrollRef: makeRef<HTMLElement | null>(null),
+            htmlRenderEnabled: makeRef(true),
+            htmlThemeDark: makeRef(true),
+            alertDialog: async () => {},
+            confirmDialog: async () => true,
+            requestHost: async () => ({}),
+        });
+        const dispatchMessage = (event: Record<string, unknown>) => {
+            for (const listener of listeners.get('message') || []) {
+                listener(event);
+            }
+        };
+
+        dispatchMessage({
+            source: innerWindow,
+            origin: 'https://preview.example',
+            data: { height: 0, force: true },
+        });
+
+        assert.equal(frames.size, 0);
+        assert.equal(iframe.style.height, '');
+
+        dispatchMessage({
+            source: innerWindow,
+            origin: 'https://preview.example',
+            data: { height: 42.2, force: true },
+        });
+
+        assert.equal(frames.size, 1);
+        for (const callback of frames.values()) {
+            callback();
+        }
+        assert.equal(iframe.style.height, '43px');
+    } finally {
+        host.window = previousWindow;
     }
 });

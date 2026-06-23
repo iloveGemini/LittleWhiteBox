@@ -16,6 +16,7 @@ export interface TavernMarkdownToolsOptions {
     chatScrollRef: Ref<HTMLElement | null>;
     managerScrollRef: Ref<HTMLElement | null>;
     htmlRenderEnabled: Ref<boolean>;
+    htmlThemeDark: Ref<boolean>;
     alertDialog: (options: { title?: string; message?: string; confirmText?: string; tone?: 'default' | 'danger' | 'warning' } | string) => Promise<void>;
     confirmDialog: (options: { title?: string; message?: string; confirmText?: string; cancelText?: string; tone?: 'default' | 'danger' | 'warning' } | string) => Promise<boolean>;
     requestHost: (type: string, payload?: { payload?: object }) => Promise<{ result?: unknown } & Record<string, unknown>>;
@@ -119,23 +120,57 @@ function buildTavernHtmlResourceHints(html = '') {
     return hints;
 }
 
-function buildTavernWrappedHtml(html = '') {
+function getTavernHtmlTheme(themeDark = false) {
+    return themeDark ? 'dark' : 'light';
+}
+
+function buildTavernHtmlThemeBootstrap(theme: 'dark' | 'light') {
+    return `<meta name="color-scheme" content="${theme}"><style id="xb-tavern-html-theme">:root{color-scheme:${theme}}</style><script>(function(){try{var r=document.documentElement;r.dataset.xbTavernTheme='${theme}';r.classList.add('xb-tavern-theme-${theme}');r.style.colorScheme='${theme}';}catch(_){}})();</script>`;
+}
+
+function buildTavernHtmlOpeningTag(theme: 'dark' | 'light') {
+    return `<html data-xb-tavern-theme="${theme}" class="xb-tavern-theme-${theme}" style="color-scheme:${theme}">`;
+}
+
+function applyTavernHtmlThemeAttributes(documentHtml = '', theme: 'dark' | 'light') {
+    const themedClass = `xb-tavern-theme-${theme}`;
+    return String(documentHtml || '').replace(/<html\b([^>]*)>/i, (_match, rawAttributes = '') => {
+        let attributes = String(rawAttributes || '').replace(/\sdata-xb-tavern-theme=(?:"[^"]*"|'[^']*'|[^\s>]*)/i, '');
+        if (/\sclass\s*=/.test(attributes)) {
+            attributes = attributes.replace(/(\sclass\s*=\s*)(["'])(.*?)\2/i, (_classMatch, prefix, quote, value) => `${prefix}${quote}${String(value || '').trim()} ${themedClass}${quote}`);
+        } else {
+            attributes += ` class="${themedClass}"`;
+        }
+        if (/\sstyle\s*=/.test(attributes)) {
+            attributes = attributes.replace(/(\sstyle\s*=\s*)(["'])(.*?)\2/i, (_styleMatch, prefix, quote, value) => `${prefix}${quote}${String(value || '').replace(/;\s*$/, '')};color-scheme:${theme}${quote}`);
+        } else {
+            attributes += ` style="color-scheme:${theme}"`;
+        }
+        attributes += ` data-xb-tavern-theme="${theme}"`;
+        return `<html${attributes}>`;
+    });
+}
+
+function buildTavernWrappedHtml(html = '', themeDark = false) {
     const source = String(html || '');
     const scripts = `<script>${getWrapperScript()}${getIframeBaseScript()}</script>`;
     const headHints = buildTavernHtmlResourceHints(source);
+    const theme = getTavernHtmlTheme(themeDark);
+    const themeBootstrap = buildTavernHtmlThemeBootstrap(theme);
     const vhFix = '<style>html,body{height:auto!important;min-height:0!important;max-height:none!important}.profile-container,[style*="100vh"]{height:auto!important;min-height:600px!important}[style*="height:100%"]{height:auto!important;min-height:100%!important}</style>';
-    const injection = `${scripts}${headHints}${vhFix}`;
+    const injection = `${themeBootstrap}${scripts}${headHints}${vhFix}`;
     if (source.includes('<html') && source.includes('</html')) {
-        if (source.includes('<head>')) {
-            return source.replace('<head>', `<head>${injection}`);
+        const themedSource = applyTavernHtmlThemeAttributes(source, theme);
+        if (themedSource.includes('<head>')) {
+            return themedSource.replace('<head>', `<head>${injection}`);
         }
-        if (source.includes('</head>')) {
-            return source.replace('</head>', `${injection}</head>`);
+        if (themedSource.includes('</head>')) {
+            return themedSource.replace('</head>', `${injection}</head>`);
         }
-        return source.replace('<body', `<head>${injection}</head><body`);
+        return themedSource.replace('<body', `<head>${injection}</head><body`);
     }
     return `<!DOCTYPE html>
-<html>
+${buildTavernHtmlOpeningTag(theme)}
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -148,6 +183,8 @@ ${injection}
 export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
     const markdownHtmlCache = new Map<string, string>();
     const htmlGenerateRelays = new Map<string, { iframe: HTMLIFrameElement; targetOrigin: string; timeoutId: number }>();
+    const htmlIframeHeights = new WeakMap<HTMLIFrameElement, number>();
+    const htmlIframeHeightFrames = new WeakMap<HTMLIFrameElement, number>();
 
     function isHiddenMarkdownNode(node: Element | null) {
         return !node || !!node.closest('[hidden], [aria-hidden="true"]');
@@ -301,8 +338,33 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
         const iframe = wrapper.querySelector<HTMLIFrameElement>(TAVERN_HTML_IFRAME_SELECTOR);
         if (iframe) {
             clearTavernHtmlGenerateRelaysForIframe(iframe);
+            const frameId = htmlIframeHeightFrames.get(iframe);
+            if (frameId) {
+                window.cancelAnimationFrame(frameId);
+                htmlIframeHeightFrames.delete(iframe);
+            }
+            htmlIframeHeights.delete(iframe);
         }
         wrapper.remove();
+    }
+
+    function applyTavernHtmlIframeHeight(iframe: HTMLIFrameElement, height: unknown, force = false) {
+        const next = Math.max(0, Number(height) || 0);
+        if (next < 1) {return;}
+        const rounded = Math.ceil(next);
+        const previous = htmlIframeHeights.get(iframe) || 0;
+        if (!force && Math.abs(rounded - previous) < 1) {return;}
+        htmlIframeHeights.set(iframe, rounded);
+        const previousFrame = htmlIframeHeightFrames.get(iframe);
+        if (previousFrame) {
+            window.cancelAnimationFrame(previousFrame);
+        }
+        const frameId = window.requestAnimationFrame(() => {
+            htmlIframeHeightFrames.delete(iframe);
+            if (!iframe.isConnected) {return;}
+            iframe.style.height = `${rounded}px`;
+        });
+        htmlIframeHeightFrames.set(iframe, frameId);
     }
 
     function probeTavernHtmlIframe(iframe: HTMLIFrameElement, delay = 0) {
@@ -335,8 +397,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
             ? event.data as Record<string, unknown>
             : {};
         if (typeof data.height === 'number') {
-            const next = Math.max(1, Math.ceil(Number(data.height) || 0));
-            iframe.style.height = `${next}px`;
+            applyTavernHtmlIframeHeight(iframe, data.height, !!data.force);
             return;
         }
         if (data.type === 'getAvatars') {
@@ -392,6 +453,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
         pre.style.display = '';
         delete pre.dataset.xbTavernHtmlFinal;
         delete pre.dataset.xbTavernHtmlHash;
+        delete pre.dataset.xbTavernHtmlPending;
     }
 
     async function fetchTavernExternalHtml(url: string) {
@@ -426,7 +488,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
             let html = await fetchTavernExternalHtml(url);
             if (html) {
                 html = await replaceTavernHtmlRenderVariables(html);
-                iframe.srcdoc = buildTavernWrappedHtml(html);
+                iframe.srcdoc = buildTavernWrappedHtml(html, options.htmlThemeDark.value);
                 probeTavernHtmlIframe(iframe, 100);
                 return;
             }
@@ -452,7 +514,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
             return;
         }
         const replaced = await replaceTavernHtmlRenderVariables(source);
-        iframe.srcdoc = buildTavernWrappedHtml(replaced);
+        iframe.srcdoc = buildTavernWrappedHtml(replaced, options.htmlThemeDark.value);
         probeTavernHtmlIframe(iframe);
     }
 
@@ -472,7 +534,19 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
         pre.style.display = 'none';
         pre.dataset.xbTavernHtmlFinal = 'true';
         pre.dataset.xbTavernHtmlHash = hash;
+        delete pre.dataset.xbTavernHtmlPending;
         void loadTavernHtmlIframeContent(iframe, html);
+    }
+
+    function hidePendingTavernHtmlPreviews(root: HTMLElement) {
+        if (!options.htmlRenderEnabled.value) {return;}
+        root.querySelectorAll<HTMLElement>('pre > code').forEach((codeBlock) => {
+            const pre = codeBlock.parentElement as HTMLPreElement | null;
+            if (!pre || pre.dataset.xbTavernHtmlFinal === 'true') {return;}
+            if (!isExplicitTavernHtmlCodeBlock(codeBlock)) {return;}
+            pre.style.display = 'none';
+            pre.dataset.xbTavernHtmlPending = 'true';
+        });
     }
 
     function enhanceTavernHtmlCodeBlocks(root: HTMLElement) {
@@ -1660,6 +1734,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
         root.querySelectorAll<HTMLElement>('.chat-bubble.streaming .xb-tavern-markdown').forEach((node) => {
             if (!canEnhanceMarkdownRoot(node)) {return;}
             // Match the native renderer: streamed DOM is unstable, so HTML iframes wait for the final message.
+            hidePendingTavernHtmlPreviews(node);
             enhanceActionCheckMarkers(node);
         });
     }

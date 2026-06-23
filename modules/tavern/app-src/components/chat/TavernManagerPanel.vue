@@ -13,6 +13,7 @@ const chat = useTavernChatContext();
 const manager = useTavernManagerContext();
 const {
     activeView,
+    homeThemeDark,
     shortText,
 } = shell;
 const {
@@ -111,6 +112,7 @@ function managerMarkdownSignature(text = '') {
     return markdownSignature([
         text,
         htmlRenderEnabled.value ? 'html-render:on' : 'html-render:off',
+        homeThemeDark.value ? 'theme:dark' : 'theme:light',
     ].join('\u0000'));
 }
 

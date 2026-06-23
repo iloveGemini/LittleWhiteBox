@@ -847,16 +847,22 @@ test('tavern markdown enhancement lives outside the app controller', () => {
     assert.match(appSource, /const htmlRenderEnabled = ref\(true\);/);
     assert.match(appSource, /if \('context' in payload\) \{[\s\S]*const nextContext = payload\.context as XbTavernContext \|\| \{\};[\s\S]*if \(canApplyHostContext\(nextContext\)\) \{[\s\S]*context\.value = nextContext;/);
     assert.match(appSource, /htmlRenderEnabled\.value = payload\.htmlRenderEnabled !== false;/);
-    assert.match(appSource, /htmlRenderEnabled,\s*alertDialog: alertTavernDialog,\s*confirmDialog: confirmTavernDialog,\s*requestHost,/);
+    assert.match(appSource, /htmlRenderEnabled,\s*htmlThemeDark: homeThemeDark,\s*alertDialog: alertTavernDialog,\s*confirmDialog: confirmTavernDialog,\s*requestHost,/);
     assert.match(contextSource, /htmlRenderEnabled: Ref<boolean>;/);
     assert.match(conversationSource, /htmlRenderEnabled\.value \? 'html-render:on' : 'html-render:off'/);
+    assert.match(conversationSource, /homeThemeDark\.value \? 'theme:dark' : 'theme:light'/);
     assert.match(conversationSource, /pending-user:\$\{pendingUserRenderState\.signature\}/);
     assert.doesNotMatch(conversationSource, /live-assistant:\$\{liveAssistantRenderState\.signature\}/);
     assert.match(managerSource, /function managerMarkdownSignature/);
     assert.match(managerSource, /htmlRenderEnabled\.value \? 'html-render:on' : 'html-render:off'/);
+    assert.match(managerSource, /homeThemeDark\.value \? 'theme:dark' : 'theme:light'/);
     assert.match(managerSource, /history-message:\$\{item\.key\}:\$\{managerMarkdownSignature\(item\.message\.content\)\}/);
     assert.match(managerSource, /live-message:\$\{item\.key\}:\$\{managerMarkdownSignature\(item\.message\.content\)\}/);
     assert.match(appSource, /visibleManagerMarkdownSignature[\s\S]*htmlRenderEnabled\.value \? 'html-render:on' : 'html-render:off'/);
+    assert.match(appSource, /visibleManagerMarkdownSignature[\s\S]*homeThemeDark\.value \? 'theme:dark' : 'theme:light'/);
+    assert.match(appSource, /liveManagerMarkdownSignature[\s\S]*homeThemeDark\.value \? 'theme:dark' : 'theme:light'/);
+    assert.match(appSource, /watch\(\[[\s\S]*\(\) => htmlRenderEnabled\.value,[\s\S]*\(\) => homeThemeDark\.value,[\s\S]*enhanceChatMarkdown\(\);/);
+    assert.match(appSource, /watch\(\[[\s\S]*\(\) => liveManagerMarkdownSignature\.value,[\s\S]*\(\) => homeThemeDark\.value,[\s\S]*enhanceManagerMarkdown\(\);/);
     assert.match(markdownToolsSource, /htmlBlockMode: options\.htmlRenderEnabled\.value \? 'preview' : 'code'/);
     assert.match(markdownToolsSource, /htmlBlockMode: options\.htmlRenderEnabled\.value \? undefined : 'code'/);
     assert.match(markdownToolsSource, /window\.addEventListener\(TAVERN_INLINE_IMAGE_PROGRESS_EVENT/);
@@ -871,6 +877,7 @@ test('tavern markdown enhancement lives outside the app controller', () => {
 
 test('tavern roleplay html previews use stable code anchors and a local iframe bridge', () => {
     const markdownToolsSource = readRepoFile('modules/tavern/app-src/components/chat/useTavernMarkdownTools.ts');
+    const markdownCss = readRepoFile('modules/tavern/app-src/styles/chat/markdown.css');
     const conversationSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const markdownSource = readRepoFile('modules/agent-core/ui/message-markdown.js');
@@ -887,14 +894,21 @@ test('tavern roleplay html previews use stable code anchors and a local iframe b
     assert.match(markdownToolsSource, /function isExplicitTavernHtmlCodeBlock\(codeBlock: HTMLElement\)[\s\S]*TAVERN_HTML_CODE_LANGUAGES\.has\(normalized\);/);
     assert.match(markdownToolsSource, /if \(!isExplicitTavernHtmlCodeBlock\(codeBlock\)\) \{[\s\S]*cleanupTavernHtmlPre\(pre\);[\s\S]*return;[\s\S]*\}/);
     assert.match(markdownToolsSource, /function extractTavernExternalHtmlUrl\(content = ''\)[\s\S]*\/\^https\?:\\\/\\\/\[\^\\s\]\+\$\/i[\s\S]*xb-src:/);
+    assert.match(markdownToolsSource, /htmlThemeDark: Ref<boolean>;/);
+    assert.match(markdownToolsSource, /function buildTavernHtmlThemeBootstrap\(theme: 'dark' \| 'light'\)[\s\S]*<meta name="color-scheme" content="\$\{theme\}">[\s\S]*r\.dataset\.xbTavernTheme='\$\{theme\}'[\s\S]*r\.style\.colorScheme='\$\{theme\}'/);
+    assert.match(markdownToolsSource, /const injection = `\$\{themeBootstrap\}\$\{scripts\}\$\{headHints\}\$\{vhFix\}`;/);
+    assert.match(markdownToolsSource, /<style>html,body\{margin:0;padding:0;background:transparent\}<\/style>/);
     assert.match(markdownToolsSource, /async function loadTavernExternalHtmlUrl\(iframe: HTMLIFrameElement, url: string\)[\s\S]*iframe\.srcdoc = '<!DOCTYPE html><html><body style="display:flex;justify-content:center;align-items:center;height:100px;color:#888;font-family:sans-serif;background:transparent">加载中\.\.\.<\/body><\/html>';[\s\S]*iframe\.src = url;[\s\S]*iframe\.style\.minHeight = '800px';[\s\S]*iframe\.setAttribute\('scrolling', 'auto'\);/);
     assert.match(markdownToolsSource, /async function replaceTavernHtmlRenderVariables\(html = ''\)[\s\S]*requestHost\('xb-tavern:replace-html-render-vars', \{ payload: \{ html: source \} \}\)/);
     assert.match(markdownToolsSource, /async function loadTavernHtmlIframeContent\(iframe: HTMLIFrameElement, html = ''\)[\s\S]*extractTavernExternalHtmlUrl\(source\)[\s\S]*await loadTavernExternalHtmlUrl\(iframe, externalUrl\);[\s\S]*await replaceTavernHtmlRenderVariables\(source\);/);
     assert.match(markdownToolsSource, /enhanceTavernHtmlCodeBlocks\(node\);[\s\S]*enhanceMarkdownContent\(node, \{[\s\S]*skipPreSelector: TAVERN_HTML_PRE_SELECTOR/);
     assert.match(markdownToolsSource, /className = 'xb-tavern-html-wrapper'/);
+    assert.match(markdownCss, /\.xb-tavern-markdown \.xb-tavern-html-wrapper \{[\s\S]*margin: 0;/);
     assert.match(markdownToolsSource, /className = 'xb-tavern-html-iframe'/);
     assert.match(markdownToolsSource, /iframe\.style\.cssText = 'width:100%;border:none;background:transparent;overflow:hidden;height:0;margin:0;padding:0;display:block;contain:layout paint style;will-change:height;min-height:50px';/);
-    assert.match(markdownToolsSource, /iframe\.srcdoc = buildTavernWrappedHtml\(replaced\);/);
+    assert.match(markdownToolsSource, /function applyTavernHtmlIframeHeight\(iframe: HTMLIFrameElement, height: unknown, force = false\)[\s\S]*if \(next < 1\) \{return;\}[\s\S]*window\.requestAnimationFrame/);
+    assert.match(markdownToolsSource, /if \(typeof data\.height === 'number'\) \{[\s\S]*applyTavernHtmlIframeHeight\(iframe, data\.height, !!data\.force\);/);
+    assert.match(markdownToolsSource, /iframe\.srcdoc = buildTavernWrappedHtml\(replaced, options\.htmlThemeDark\.value\);/);
     assert.match(markdownToolsSource, /if \(!externalUrl && same\) \{return;\}/);
     assert.match(markdownToolsSource, /window\.addEventListener\('message', handleTavernHtmlIframeMessage as EventListener\);/);
     assert.match(markdownToolsSource, /window\.removeEventListener\('message', handleTavernHtmlIframeMessage as EventListener\);/);
@@ -928,6 +942,10 @@ test('tavern live stream rendering is frame-batched without bypassing display re
     const liveEnhanceMatch = markdownToolsSource.match(/function enhanceLiveChatMarkdown\(\) \{[\s\S]*?\n {4}\}/);
 
     assert.ok(liveEnhanceMatch);
+    assert.match(markdownToolsSource, /function hidePendingTavernHtmlPreviews\(root: HTMLElement\)[\s\S]*pre\.dataset\.xbTavernHtmlPending = 'true';/);
+    assert.match(markdownToolsSource, /function cleanupTavernHtmlPre\(pre: HTMLPreElement\)[\s\S]*delete pre\.dataset\.xbTavernHtmlPending;/);
+    assert.match(markdownToolsSource, /function renderTavernHtmlPre\(pre: HTMLPreElement, html = '', hash = ''\)[\s\S]*delete pre\.dataset\.xbTavernHtmlPending;/);
+    assert.match(liveEnhanceMatch[0], /hidePendingTavernHtmlPreviews\(node\);/);
     assert.match(liveEnhanceMatch[0], /enhanceActionCheckMarkers\(node\);/);
     assert.doesNotMatch(liveEnhanceMatch[0], /enhanceTavernHtmlCodeBlocks/);
 

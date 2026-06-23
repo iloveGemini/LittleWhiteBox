@@ -120,6 +120,7 @@ function roleplayMarkdownSignature(text = '', extra = '') {
         options.userName,
         options.characterName,
         htmlRenderEnabled.value ? 'html-render:on' : 'html-render:off',
+        homeThemeDark.value ? 'theme:dark' : 'theme:light',
     ].join('\u0000'));
 }
 
