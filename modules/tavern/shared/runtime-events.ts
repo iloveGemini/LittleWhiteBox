@@ -16,6 +16,7 @@ export interface TavernActionCheckRuntimeEvent {
     difficulty: number;
     roll: number;
     success: boolean;
+    outcome: 'criticalSuccess' | 'success' | 'failure' | 'criticalFailure';
     insertAfterChars: number;
     toolCallId?: string;
     summary?: string;
@@ -66,18 +67,29 @@ function normalizeChanceEncounterEvent(source: Record<string, unknown>): TavernC
     };
 }
 
+function normalizeActionCheckOutcome(roll: number, difficulty: number): TavernActionCheckRuntimeEvent['outcome'] {
+    if (roll <= 1) {return 'criticalFailure';}
+    if (roll >= 20) {return 'criticalSuccess';}
+    return roll >= difficulty ? 'success' : 'failure';
+}
+
 function normalizeActionCheckEvent(source: Record<string, unknown>): TavernActionCheckRuntimeEvent | null {
     const action = normalizeInlineText(source.action, 240);
     const stat = normalizeInlineText(source.stat, 120);
     if (!action || !stat) {return null;}
+    const roll = clampInteger(source.roll, 1, 20, 1);
+    const difficulty = clampInteger(source.difficulty, 1, 21, 10);
+    const outcome = normalizeActionCheckOutcome(roll, difficulty);
+    const success = outcome === 'success' || outcome === 'criticalSuccess';
     return {
         type: 'actionCheck',
         createdAt: normalizeIsoTimestamp(source.createdAt),
         action,
         stat,
-        difficulty: clampInteger(source.difficulty, 2, 20, 12),
-        roll: clampInteger(source.roll, 1, 20, 1),
-        success: source.success === true,
+        difficulty,
+        roll,
+        success,
+        outcome,
         insertAfterChars: Math.max(0, clampInteger(source.insertAfterChars, 0, Number.MAX_SAFE_INTEGER, 0)),
         ...(normalizeInlineText(source.toolCallId, 120) ? { toolCallId: normalizeInlineText(source.toolCallId, 120) } : {}),
         ...(normalizeInlineText(source.summary, 320) ? { summary: normalizeInlineText(source.summary, 320) } : {}),
@@ -105,6 +117,7 @@ function runtimeEventKey(event: TavernRuntimeEvent): string {
         event.action,
         String(event.roll),
         String(event.difficulty),
+        event.outcome,
     ].join('\u0000');
 }
 
@@ -137,6 +150,7 @@ export function createActionCheckEvent(input: {
     difficulty: number;
     roll: number;
     success: boolean;
+    outcome?: TavernActionCheckRuntimeEvent['outcome'];
     insertAfterChars: number;
     createdAt?: string;
     toolCallId?: string;
@@ -151,6 +165,7 @@ export function createActionCheckEvent(input: {
         difficulty: input.difficulty,
         roll: input.roll,
         success: input.success,
+        outcome: input.outcome,
         insertAfterChars: input.insertAfterChars,
         toolCallId: input.toolCallId,
         summary: input.summary,

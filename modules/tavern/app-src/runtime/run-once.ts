@@ -483,6 +483,17 @@ function summarizeActionCheckResult(result: TavernActionCheckToolResult): string
     return String(result.summary || errorText || '').trim();
 }
 
+function resolveActionCheckInsertAfterChars(text = '', result: TavernActionCheckToolResult, fallbackOffset = 0): number {
+    const sourceText = String(text || '');
+    const fallback = Math.max(0, Math.min(sourceText.length, Number(fallbackOffset) || 0));
+    if (!result.ok) {return fallback;}
+    const anchor = String(result.insertAfter ?? '');
+    if (!anchor.trim()) {return fallback;}
+    const index = sourceText.lastIndexOf(anchor);
+    if (index < 0) {return fallback;}
+    return Math.max(0, Math.min(sourceText.length, index + anchor.length));
+}
+
 export interface TavernRunStreamSnapshot {
     text?: string;
     thoughts?: Array<{ label?: string; text?: string }>;
@@ -2006,13 +2017,15 @@ async function runTavernActionCheckLoop(input: {
                 ? executeTavernActionCheck(args, { rollDie: input.actionCheckRoll })
                 : buildDeniedActionCheckToolResult(toolCall.name);
             if (toolResult.ok) {
+                const eventInsertAfterChars = resolveActionCheckInsertAfterChars(finalText, toolResult, insertAfterChars);
                 runtimeEvents.push(createActionCheckEvent({
                     action: toolResult.action,
                     stat: toolResult.stat,
                     difficulty: toolResult.difficulty,
                     roll: toolResult.roll,
                     success: toolResult.success,
-                    insertAfterChars,
+                    outcome: toolResult.outcome,
+                    insertAfterChars: eventInsertAfterChars,
                     toolCallId: String(toolCall.id || ''),
                     summary: summarizeActionCheckResult(toolResult),
                     stakes: toolResult.stakes,

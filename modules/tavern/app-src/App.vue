@@ -1152,6 +1152,7 @@ const runtimeActionCheckSignature = computed(() => runtimeActionCheckEvents.valu
         event.action,
         event.roll,
         event.difficulty,
+        event.outcome || '',
         event.insertAfterChars,
         event.success ? 1 : 0,
     ].join(':'))
@@ -1696,6 +1697,7 @@ function actionCheckEventsCacheSignature(events: TavernActionCheckRuntimeEvent[]
             event.action,
             event.roll,
             event.difficulty,
+            event.outcome || '',
             event.insertAfterChars,
             event.success ? 1 : 0,
             event.summary || '',

@@ -50,3 +50,53 @@ test('action check regex markers preserve normalized stakes across whole-event r
     assert.equal(normalized.events[0].stakes, normalizedStakes);
     assert.equal(normalized.events[0].insertAfterChars, rawText.indexOf('，') - '猛地'.length);
 });
+
+test('action check runtime events normalize bare-d20 difficulty and critical outcomes', () => {
+    const criticalFailure = createActionCheckEvent({
+        action: '轻推门板',
+        stat: '力量',
+        difficulty: -10,
+        roll: 1,
+        success: true,
+        insertAfterChars: 0,
+    });
+    assert.equal(criticalFailure.difficulty, 1);
+    assert.equal(criticalFailure.success, false);
+    assert.equal(criticalFailure.outcome, 'criticalFailure');
+
+    const criticalSuccess = createActionCheckEvent({
+        action: '强行跃过深渊',
+        stat: '敏捷',
+        difficulty: 99,
+        roll: 20,
+        success: false,
+        insertAfterChars: 0,
+    });
+    assert.equal(criticalSuccess.difficulty, 21);
+    assert.equal(criticalSuccess.success, true);
+    assert.equal(criticalSuccess.outcome, 'criticalSuccess');
+
+    const impossibleWithoutTwenty = createActionCheckEvent({
+        action: '强行说服守卫放行',
+        stat: '魅力',
+        difficulty: 21,
+        roll: 19,
+        success: true,
+        outcome: 'success',
+        insertAfterChars: 0,
+    });
+    assert.equal(impossibleWithoutTwenty.success, false);
+    assert.equal(impossibleWithoutTwenty.outcome, 'failure');
+
+    const correctedCriticalFailure = createActionCheckEvent({
+        action: '推开半掩的门',
+        stat: '力量',
+        difficulty: 1,
+        roll: 1,
+        success: true,
+        outcome: 'success',
+        insertAfterChars: 0,
+    });
+    assert.equal(correctedCriticalFailure.success, false);
+    assert.equal(correctedCriticalFailure.outcome, 'criticalFailure');
+});

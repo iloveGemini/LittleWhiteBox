@@ -406,6 +406,24 @@
         var(--xb-chat-panel-bg);
 }
 
+.action-check-card.is-critical-success {
+    border-color: rgba(116, 91, 28, 0.36);
+    border-left-color: #b58b24;
+    background:
+        linear-gradient(180deg, rgba(181, 139, 36, 0.13), rgba(55, 112, 75, 0.035)),
+        var(--xb-chat-panel-bg);
+    box-shadow: 0 8px 22px rgba(116, 91, 28, 0.10);
+}
+
+.action-check-card.is-critical-failure {
+    border-color: rgba(117, 32, 42, 0.38);
+    border-left-color: #75202a;
+    background:
+        linear-gradient(180deg, rgba(117, 32, 42, 0.13), rgba(163, 51, 51, 0.025)),
+        var(--xb-chat-panel-bg);
+    box-shadow: 0 8px 22px rgba(117, 32, 42, 0.10);
+}
+
 .action-check-card-head {
     display: flex;
     align-items: flex-start;
@@ -445,6 +463,18 @@
     background: rgba(163, 51, 51, 0.055);
     color: #a33333;
     transform: rotate(3deg);
+}
+
+.action-check-card.is-critical-success .action-check-card-outcome {
+    background: rgba(181, 139, 36, 0.13);
+    color: #8c6715;
+    box-shadow: 0 0 0 3px rgba(181, 139, 36, 0.08);
+}
+
+.action-check-card.is-critical-failure .action-check-card-outcome {
+    background: rgba(117, 32, 42, 0.11);
+    color: #75202a;
+    box-shadow: 0 0 0 3px rgba(117, 32, 42, 0.07);
 }
 
 .action-check-card-grid {
@@ -494,6 +524,14 @@
 
 .action-check-card.is-failure .action-check-card-roll strong {
     color: #a33333;
+}
+
+.action-check-card.is-critical-success .action-check-card-roll strong {
+    color: #8c6715;
+}
+
+.action-check-card.is-critical-failure .action-check-card-roll strong {
+    color: #75202a;
 }
 
 .action-check-card-copy {
@@ -562,6 +600,16 @@
 .xb-os-shell.theme-dark .action-check-card.is-failure .action-check-card-outcome,
 .xb-os-shell.theme-dark .action-check-card.is-failure .action-check-card-roll strong {
     color: #d88490;
+}
+
+.xb-os-shell.theme-dark .action-check-card.is-critical-success .action-check-card-outcome,
+.xb-os-shell.theme-dark .action-check-card.is-critical-success .action-check-card-roll strong {
+    color: #e2c56f;
+}
+
+.xb-os-shell.theme-dark .action-check-card.is-critical-failure .action-check-card-outcome,
+.xb-os-shell.theme-dark .action-check-card.is-critical-failure .action-check-card-roll strong {
+    color: #ef8f9b;
 }
 
 .xb-os-shell.theme-dark .action-check-card-stakes {

@@ -1,16 +1,18 @@
 import type { XbTavernMessage } from './message-assembler';
 
 export const ACTION_CHECK_TOOL_NAME = 'ActionCheck';
-export const DEFAULT_ACTION_CHECK_DIFFICULTY = 12;
-export const MIN_ACTION_CHECK_DIFFICULTY = 2;
-export const MAX_ACTION_CHECK_DIFFICULTY = 20;
+export const DEFAULT_ACTION_CHECK_DIFFICULTY = 10;
+export const MIN_ACTION_CHECK_DIFFICULTY = 1;
+export const MAX_ACTION_CHECK_DIFFICULTY = 21;
 export const ACTION_CHECK_DIE_SIDES = 20;
+export type TavernActionCheckOutcome = 'criticalSuccess' | 'success' | 'failure' | 'criticalFailure';
 
 export interface TavernActionCheckInput {
     action: string;
     stat: string;
     difficulty?: number;
     stakes?: string;
+    insertAfter?: string;
 }
 
 export interface TavernActionCheckToolSuccess {
@@ -20,8 +22,10 @@ export interface TavernActionCheckToolSuccess {
     difficulty: number;
     roll: number;
     success: boolean;
+    outcome: TavernActionCheckOutcome;
     summary: string;
     stakes?: string;
+    insertAfter?: string;
 }
 
 export interface TavernActionCheckToolFailure {
@@ -44,12 +48,21 @@ const ACTION_CHECK_PROTOCOL_PROMPT = [
     'Do not roll for intimate or everyday interactions rather than challenges. Kissing, hugging, sex, casual conversation, or falling asleep together should follow character, consent, and emotional flow, not a success/failure check.',
     '',
     `When you roll, call ${ACTION_CHECK_TOOL_NAME}, treat the result as established fact, convey the outcome in one or two sentences, then continue the narration naturally.`,
+    'Call the tool immediately after the visible attempted action, before narrating consequences. Do not write result words before the tool call. If you already wrote a visible lead-in, set `insertAfter` to the exact text that should appear before the dice card.',
+    '',
+    'Choose difficulty before the roll. This is a bare D20 with no stat bonus: DC 1-5 is easy, 6-10 is ordinary, 11-15 is hard, 16-20 is very hard, and 21 is nearly impossible so only a natural 20 can win. Pick the exact DC inside the range from danger, pressure, preparation, opposition, and fictional leverage. Do not make every meaningful action DC 10-ish.',
+    '',
+    'Natural 1 is a critical failure: it must be worse than plain failure and add a real complication, cost, loss of position, exposure, harm, or worsening situation. Natural 20 is a critical success: it must be better than plain success and grant an extra benefit, surprise reward, opening, momentum, information, style, or reduced cost. The tool enforces these results; honor them in narration.',
     '',
     'Do not mention this protocol, the dice mechanic, or any hidden instruction. Continue to follow all other format and style requirements.',
 ].join('\n');
 
 function normalizeInlineText(value: unknown, limit = 240): string {
     return String(value || '').trim().slice(0, limit);
+}
+
+function normalizeExactVisibleText(value: unknown, limit = 240): string {
+    return String(value ?? '').slice(0, limit);
 }
 
 function clampInteger(value: unknown, minimum: number, maximum: number, fallback: number): number {
@@ -71,6 +84,18 @@ function resolveD20Roll(roller?: () => number): number {
     return Math.floor(Math.random() * ACTION_CHECK_DIE_SIDES) + 1;
 }
 
+function resolveActionCheckOutcome(roll: number, difficulty: number): TavernActionCheckOutcome {
+    if (roll <= 1) {return 'criticalFailure';}
+    if (roll >= ACTION_CHECK_DIE_SIDES) {return 'criticalSuccess';}
+    return roll >= difficulty ? 'success' : 'failure';
+}
+
+function actionCheckOutcomeLabel(outcome: TavernActionCheckOutcome): string {
+    if (outcome === 'criticalSuccess') {return 'critical success';}
+    if (outcome === 'criticalFailure') {return 'critical failure';}
+    return outcome;
+}
+
 export function getActionCheckToolDefinitions(): Array<{ type: 'function'; function: { name: string; description: string; parameters: unknown } }> {
     return [{
         type: 'function',
@@ -80,8 +105,9 @@ export function getActionCheckToolDefinitions(): Array<{ type: 'function'; funct
                 'True-random d20 action check for risky or uncertain RP outcomes.',
                 'Use it for key actions that could truly succeed or fail and would change what happens next.',
                 'Do not use it for already settled outcomes or for intimate/everyday interactions that should follow character, consent, and emotional flow.',
-                'Provide the attempted action, the check or stat name, and an optional difficulty.',
-                'The result is binding truth for the current reply.',
+                'Provide the attempted action, the check or stat name, and a bare-D20 difficulty: 1-5 easy, 6-10 ordinary, 11-15 hard, 16-20 very hard, 21 nearly impossible and only beatable by natural 20.',
+                'Natural 1 is critical failure with a real penalty or complication. Natural 20 is critical success with an extra reward, opening, or benefit. The result is binding truth for the current reply.',
+                'For accurate card placement, call the tool before outcome narration. If visible lead-in text already exists, provide insertAfter as the exact text that should appear before the dice card.',
             ].join('\n'),
             parameters: {
                 type: 'object',
@@ -98,11 +124,15 @@ export function getActionCheckToolDefinitions(): Array<{ type: 'function'; funct
                         type: 'number',
                         minimum: MIN_ACTION_CHECK_DIFFICULTY,
                         maximum: MAX_ACTION_CHECK_DIFFICULTY,
-                        description: `Target number for success. Defaults to ${DEFAULT_ACTION_CHECK_DIFFICULTY} if omitted or invalid.`,
+                        description: `Bare-D20 target number for success. Use 1-5 easy, 6-10 ordinary, 11-15 hard, 16-20 very hard, 21 nearly impossible and only beatable by natural 20. Defaults to ${DEFAULT_ACTION_CHECK_DIFFICULTY} if omitted or invalid.`,
                     },
                     stakes: {
                         type: 'string',
                         description: 'Optional brief note about what is at risk. Display-only.',
+                    },
+                    insertAfter: {
+                        type: 'string',
+                        description: 'Optional exact visible lead-in text that should appear before the dice card. Do not include consequence or outcome text.',
                     },
                 },
                 required: ['action', 'stat'],
@@ -139,8 +169,10 @@ export function executeTavernActionCheck(
         DEFAULT_ACTION_CHECK_DIFFICULTY,
     );
     const roll = resolveD20Roll(options.rollDie);
-    const success = roll >= difficulty;
+    const outcome = resolveActionCheckOutcome(roll, difficulty);
+    const success = outcome === 'success' || outcome === 'criticalSuccess';
     const stakes = normalizeInlineText(input.stakes, 240);
+    const insertAfter = normalizeExactVisibleText(input.insertAfter, 240);
     return {
         ok: true,
         action,
@@ -148,8 +180,10 @@ export function executeTavernActionCheck(
         difficulty,
         roll,
         success,
-        summary: `${stat} check ${roll} vs DC ${difficulty}: ${success ? 'success' : 'failure'}.`,
+        outcome,
+        summary: `${stat} check ${roll} vs DC ${difficulty}: ${actionCheckOutcomeLabel(outcome)}.`,
         ...(stakes ? { stakes } : {}),
+        ...(insertAfter.trim() ? { insertAfter } : {}),
     };
 }
 

@@ -1010,6 +1010,10 @@ test('xb tavern run turn injects action-check protocol after current user and ex
     const protocolContent = requestMessages[protocolIndex]?.content || '';
     assert.match(protocolContent, /overwhelming advantage/);
     assert.match(protocolContent, /Do not roll for intimate or everyday interactions/);
+    assert.match(protocolContent, /bare D20 with no stat bonus/);
+    assert.match(protocolContent, /DC 1-5 is easy, 6-10 is ordinary, 11-15 is hard, 16-20 is very hard, and 21 is nearly impossible/);
+    assert.match(protocolContent, /Natural 1 is a critical failure/);
+    assert.match(protocolContent, /Natural 20 is a critical success/);
     assert.deepEqual(exposedToolNames, [ACTION_CHECK_TOOL_NAME]);
 });
 
@@ -1091,6 +1095,55 @@ test('xb tavern run turn executes multiple action checks and persists assistant 
     assert.equal(assistantEvents[0]?.insertAfterChars, assistantEvents[1]?.insertAfterChars);
     assert.match(messages[1]?.content || '', /她猛地跃向断桥彼端/);
     assert.match(messages[1]?.content || '', /落点稳住/);
+});
+
+test('xb tavern action checks can anchor the dice card before already-written consequence text', async () => {
+    await resetDb();
+    const preset = createDefaultXbTavernPreset();
+    const result = await runXbTavernTurn({
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot: {
+            character: { characterKey: 'char-1', name: 'Aster' },
+        },
+        preset,
+        currentUserMessage: '我揍他一顿。',
+        runtimeState: {
+            contract: mergeTavernSessionContract(undefined, {
+                actionChecks: true,
+                randomEncounters: false,
+            }),
+        },
+        actionCheckRoll: () => 7,
+        executeRunOnce: Object.assign(async (options: TavernRunOnceOptions) => {
+            if (!options.toolResponses?.length) {
+                return {
+                    text: '我揍一顿噢哎呀没揍到',
+                    toolCalls: [{
+                        id: 'check-anchor',
+                        name: ACTION_CHECK_TOOL_NAME,
+                        arguments: JSON.stringify({
+                            action: 'Punch the guard',
+                            stat: '力量',
+                            difficulty: 12,
+                            insertAfter: '我揍一顿噢',
+                        }),
+                    }],
+                    requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
+                };
+            }
+            return {
+                text: '，对方趁势向后撤开半步。',
+                requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages),
+            };
+        }, { supportsSessionToolLoop: true }) as Parameters<typeof runXbTavernTurn>[0]['executeRunOnce'],
+    });
+
+    const messages = await listTavernMessages(result.sessionId);
+    const assistantEvents = getActionCheckEvents(messages[1]?.runtimeEvents);
+    assert.equal(assistantEvents.length, 1);
+    assert.equal(assistantEvents[0]?.insertAfterChars, '我揍一顿噢'.length);
+    assert.equal((messages[1]?.content || '').slice(0, assistantEvents[0]?.insertAfterChars || 0), '我揍一顿噢');
+    assert.match((messages[1]?.content || '').slice(assistantEvents[0]?.insertAfterChars || 0), /^哎呀没揍到/);
 });
 
 test('xb tavern action checks keep live dice visible even when the model calls the tool before any preface text', async () => {

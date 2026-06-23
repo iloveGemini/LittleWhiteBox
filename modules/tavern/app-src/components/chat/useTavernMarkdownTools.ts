@@ -1576,14 +1576,26 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
         window.addEventListener('message', handleTavernHtmlIframeMessage as EventListener);
     }
 
+    function actionCheckOutcomeLabel(event: TavernActionCheckRuntimeEvent) {
+        if (event.outcome === 'criticalSuccess') {return '大成功';}
+        if (event.outcome === 'criticalFailure') {return '大失败';}
+        return event.success ? '判定成功' : '判定失败';
+    }
+
+    function actionCheckOutcomeClass(event: TavernActionCheckRuntimeEvent) {
+        if (event.outcome === 'criticalSuccess') {return 'is-success is-critical-success';}
+        if (event.outcome === 'criticalFailure') {return 'is-failure is-critical-failure';}
+        return event.success ? 'is-success' : 'is-failure';
+    }
+
     function buildActionCheckAriaLabel(event: TavernActionCheckRuntimeEvent) {
-        const outcome = event.success ? '判定成功' : '判定失败';
+        const outcome = actionCheckOutcomeLabel(event);
         const action = String(event.action || '').trim();
         const stakes = String(event.stakes || '').trim();
         return [
             `行动判定：${event.stat}。`,
             `掷骰 ${event.roll} 对抗难度 ${event.difficulty}。`,
-            `${outcome}.`,
+            `${outcome}。`,
             action ? `行动意图：${action}。` : '',
             stakes ? `风险：${stakes}。` : '',
         ].filter(Boolean).join(' ');
@@ -1591,7 +1603,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
 
     function createActionCheckCard(event: TavernActionCheckRuntimeEvent) {
         const card = document.createElement('span');
-        card.className = `action-check-card ${event.success ? 'is-success' : 'is-failure'}`;
+        card.className = `action-check-card ${actionCheckOutcomeClass(event)}`;
         card.setAttribute('role', 'group');
         card.setAttribute('aria-label', buildActionCheckAriaLabel(event));
 
@@ -1604,7 +1616,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
 
         const outcome = document.createElement('span');
         outcome.className = 'action-check-card-outcome';
-        outcome.textContent = event.success ? '判定成功' : '判定失败';
+        outcome.textContent = actionCheckOutcomeLabel(event);
         head.append(outcome);
 
         const grid = document.createElement('span');
