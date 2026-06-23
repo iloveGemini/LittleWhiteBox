@@ -63,7 +63,8 @@ test('tavern module is lazy-loaded so host import failures stay isolated', () =>
     assert.doesNotMatch(indexSource, /^import\s+(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+["']\.\/modules\/tavern\/tavern\.js["'];?$/m);
     assert.doesNotMatch(indexSource, /^import\s+["']\.\/modules\/tavern\/tavern\.js["'];?$/m);
     assert.match(indexSource, /tavernModulePromise \|\|= import\(["']\.\/modules\/tavern\/tavern\.js["']\)/);
-    assert.match(indexSource, /async function initTavernSafely\(\) \{[\s\S]*try \{[\s\S]*await loadTavernModule\(\);[\s\S]*if \(!isXiaobaixEnabled\) return;[\s\S]*await tavern\.initTavern\?\.\(\);[\s\S]*\} catch \(error\) \{[\s\S]*markTavernUnavailable\(error\);[\s\S]*\}/);
+    assert.doesNotMatch(indexSource, /console\.error\(["']\[LittleWhiteBox\] 小白酒馆加载失败/);
+    assert.match(indexSource, /async function initTavernSafely\(\) \{[\s\S]*try \{[\s\S]*await loadTavernModule\(\);[\s\S]*if \(!isXiaobaixEnabled\) return;[\s\S]*await tavern\.initTavern\?\.\(\);[\s\S]*\} catch \(error\) \{[\s\S]*markTavernUnavailable\(error\);[\s\S]*console\.warn\(["']\[LittleWhiteBox\] 小白酒馆不可用，其他功能继续运行["'], error\);[\s\S]*\}/);
     assert.match(indexSource, /async function openTavernSafely\(\) \{[\s\S]*await loadTavernModule\(\);[\s\S]*await tavern\.initTavern\?\.\(\);[\s\S]*await tavern\.openTavern\(\);[\s\S]*showTavernUnsupportedNotice\(error\);/);
     assert.match(indexSource, /async function cleanupTavernSafely\(\) \{[\s\S]*const tavern = tavernModule;[\s\S]*await tavern\?\.cleanupTavern\?\.\(\);/);
     assert.doesNotMatch(indexSource, /async function cleanupTavernSafely\(\)[\s\S]*loadTavernModule\(\)/);

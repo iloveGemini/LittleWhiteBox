@@ -80,7 +80,6 @@ async function loadTavernModule() {
         })
         .catch((error) => {
             tavernLoadError = error;
-            console.error("[LittleWhiteBox] 小白酒馆加载失败", error);
             throw error;
         });
     return tavernModulePromise;
@@ -97,6 +96,7 @@ async function initTavernSafely() {
         await tavern.initTavern?.();
     } catch (error) {
         markTavernUnavailable(error);
+        console.warn("[LittleWhiteBox] 小白酒馆不可用，其他功能继续运行", error);
     }
 }
 
