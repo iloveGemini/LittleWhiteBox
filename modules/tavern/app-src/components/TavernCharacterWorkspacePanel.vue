@@ -192,7 +192,7 @@ watch(
       v-if="pendingError"
       class="character-select-error"
     >
-      [SYS_ERROR] {{ pendingError }}
+      角色列表读取失败：{{ pendingError }}
     </div>
 
     <section
@@ -212,7 +212,7 @@ watch(
             >
           </label>
           <div class="index-meta">
-            {{ visibleCharacters.length }} / {{ filteredCount }} ENTRIES
+            {{ visibleCharacters.length }} / {{ filteredCount }} 项
           </div>
         </div>
 
@@ -260,15 +260,15 @@ watch(
                 <small
                   v-if="character.characterKey === liveCharacterKey"
                   class="tag active"
-                >ACTIVE</small>
+                >当前</small>
                 <small
                   v-if="character.characterKey === pendingCharacterSessionKey"
                   class="tag loading"
-                >LOADING...</small>
+                >打开中</small>
                 <small
                   v-else-if="character.characterKey === pendingPreviewCharacterKey"
                   class="tag loading"
-                >READING...</small>
+                >读取中</small>
               </span>
             </span>
           </button>
@@ -278,7 +278,7 @@ watch(
             class="archive-load-more character-load-more"
             @click="loadMore"
           >
-            加载更多残卷 ({{ Math.min(hiddenCount, batchSize) }})
+            加载更多角色 ({{ Math.min(hiddenCount, batchSize) }})
           </button>
         </div>
 
@@ -286,7 +286,7 @@ watch(
           v-if="!visibleCharacters.length"
           class="empty-note"
         >
-          [SYS_WARN] 未检索到匹配档案。
+          没有匹配的角色。
         </div>
       </aside>
 
@@ -296,9 +296,6 @@ watch(
       >
         <div class="dossier-header">
           <div class="dossier-identity">
-            <p class="sys-mono">
-              ID: {{ selectedCharacter.characterKey.substring(0, 24) || 'UNKNOWN' }}
-            </p>
             <div class="dossier-title-row">
               <h3>{{ selectedCharacter.name }}</h3>
               <div class="dossier-title-actions">
@@ -528,7 +525,7 @@ watch(
       >
         <div class="cyber-placeholder">
           <div class="ring" />
-          <span>AWAITING<br>SELECTION</span>
+          <span>选择角色</span>
         </div>
       </main>
     </section>
@@ -538,7 +535,7 @@ watch(
       class="character-empty"
     >
       <div class="empty-content">
-        <h2>数据库脱节</h2>
+        <h2>暂无角色卡</h2>
         <p>本地缓存在酒馆内未找到可用角色，请在主控端加载后重试。</p>
         <button
           type="button"

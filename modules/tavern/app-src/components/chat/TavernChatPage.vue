@@ -140,13 +140,13 @@ const authorNoteRoleOptions = [
     { value: XBTavernPromptRole.ASSISTANT, label: 'Assistant' },
 ];
 const chatAppMenuItems: Array<{ key: ChatQuickWorkspace; label: string; mobileLabel: string }> = [
-    { key: 'characters', label: '角色卡', mobileLabel: '角色' },
-    { key: 'api', label: 'API 配置', mobileLabel: 'API' },
-    { key: 'chatPreset', label: '聊天预设', mobileLabel: '聊天' },
-    { key: 'assistantPreset', label: '助手预设', mobileLabel: '助手' },
-    { key: 'worldbooks', label: '世界书', mobileLabel: '世界' },
+    { key: 'characters', label: '角色卡', mobileLabel: '角色卡' },
+    { key: 'api', label: 'API 配置', mobileLabel: 'API 配置' },
+    { key: 'chatPreset', label: '聊天预设', mobileLabel: '聊天预设' },
+    { key: 'assistantPreset', label: '助手预设', mobileLabel: '助手预设' },
+    { key: 'worldbooks', label: '世界书', mobileLabel: '世界书' },
     { key: 'regex', label: '正则', mobileLabel: '正则' },
-    { key: 'base', label: '基础设置', mobileLabel: '设置' },
+    { key: 'base', label: '基础设置', mobileLabel: '基础设置' },
 ];
 
 function closeMobileChatPanel() {
@@ -881,10 +881,12 @@ onUpdated(() => {
     <div
       v-if="quickSettingsOpen"
       class="chat-quick-settings-overlay"
+      :class="quickSettingsLayoutClass"
       role="presentation"
     >
       <section
         class="chat-quick-settings-dialog"
+        :class="quickSettingsLayoutClass"
         role="dialog"
         aria-modal="true"
         aria-labelledby="chat-quick-settings-title"

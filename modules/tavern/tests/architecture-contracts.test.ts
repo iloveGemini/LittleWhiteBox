@@ -498,6 +498,7 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.match(chatPageSource, /type ChatQuickWorkspace =[\s\S]*'characters'[\s\S]*'api'[\s\S]*'chatPreset'[\s\S]*'assistantPreset'[\s\S]*'worldbooks'[\s\S]*'regex'[\s\S]*'base';/);
     assert.match(chatPageSource, /const quickSettingsOpen = ref<ChatQuickWorkspace \| null>\(null\)/);
     assert.match(chatPageSource, /const chatAppMenuItems:[\s\S]*key: 'characters'[\s\S]*key: 'api'[\s\S]*key: 'chatPreset'[\s\S]*key: 'assistantPreset'[\s\S]*key: 'worldbooks'[\s\S]*key: 'regex'[\s\S]*key: 'base'/);
+    assert.match(chatPageSource, /mobileLabel: '角色卡'[\s\S]*mobileLabel: 'API 配置'[\s\S]*mobileLabel: '聊天预设'[\s\S]*mobileLabel: '助手预设'[\s\S]*mobileLabel: '世界书'[\s\S]*mobileLabel: '基础设置'/);
     assert.match(chatPageSource, /class="home-corner-actions page-corner-actions chat-app-menu-shell"[\s\S]*title="首页"[\s\S]*class="home-icon-button chat-app-menu-button"[\s\S]*title="酒馆操作菜单"/);
     assert.match(chatPageSource, /class="chat-mobile-action-group"[\s\S]*title="首页"[\s\S]*class="chat-mobile-icon-button chat-mobile-utility-button chat-app-menu-button"[\s\S]*title="酒馆操作菜单"/);
     assert.doesNotMatch(chatPageSource, /class="chat-mobile-icon-button chat-mobile-utility-button"[\s\S]*title="聊天预设"[\s\S]*@click="openChatAppWorkspace\('chatPreset'\)"/);
@@ -523,9 +524,11 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.match(chatLayoutCss, /\.chat-quick-settings-overlay \{[\s\S]*position: absolute;[\s\S]*backdrop-filter: blur\(16px\);/);
     assert.match(chatLayoutCss, /\.chat-quick-settings-dialog \{[\s\S]*max-height: min\(88vh, 900px\);/);
     assert.match(chatLayoutCss, /\.chat-quick-settings-dialog \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\);/);
+    assert.match(chatPageSource, /class="chat-quick-settings-overlay"[\s\S]*:class="quickSettingsLayoutClass"[\s\S]*class="chat-quick-settings-dialog"[\s\S]*:class="quickSettingsLayoutClass"/);
+    assert.match(chatLayoutCss, /@media \(max-width: 760px\) \{[\s\S]*\.tavern-chat\.xb-page \.chat-quick-settings-overlay\.is-characters-workspace \{[\s\S]*align-items: stretch;[\s\S]*padding: 0;[\s\S]*\.tavern-chat\.xb-page \.chat-quick-settings-dialog\.is-characters-workspace \{[\s\S]*height: 100%;[\s\S]*max-height: none;[\s\S]*border-radius: 0;/);
     assert.match(chatLayoutCss, /\.tavern-chat\.xb-page \.chat-app-menu-popover \{[\s\S]*top: calc\(100% \+ 8px\);[\s\S]*right: 0;[\s\S]*display: grid;[\s\S]*width: 132px;/);
     assert.match(chatLayoutCss, /\.tavern-chat\.xb-page \.chat-app-menu-item \{[\s\S]*width: 100%;[\s\S]*min-height: 32px;/);
-    assert.match(chatLayoutCss, /@media \(max-width: 760px\) \{[\s\S]*\.tavern-chat\.xb-page \.chat-app-menu-shell-mobile \{[\s\S]*position: relative;[\s\S]*\.tavern-chat\.xb-page \.chat-app-menu-shell-mobile \.chat-app-menu-popover \{[\s\S]*width: 92px;/);
+    assert.match(chatLayoutCss, /@media \(max-width: 760px\) \{[\s\S]*\.tavern-chat\.xb-page \.chat-app-menu-shell-mobile \{[\s\S]*position: relative;[\s\S]*\.tavern-chat\.xb-page \.chat-app-menu-shell-mobile \.chat-app-menu-popover \{[\s\S]*width: 108px;/);
     assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 34px 0 0;/);
     assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 22px 0 0;/);
     assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 18px 0 0;/);
@@ -539,6 +542,7 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-characters-workspace,[\s\S]*\.settings-layout\.chat-quick-settings-layout\.is-characters-workspace \.xb-main \{[\s\S]*height: 100%;[\s\S]*overflow: hidden;/);
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-characters-workspace \.character-workspace-panel \{[\s\S]*height: 100%;[\s\S]*min-height: 0;[\s\S]*overflow: hidden;/);
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-characters-workspace \.character-archive \{[\s\S]*flex: 1 1 auto;[\s\S]*overflow: hidden;/);
+    assert.match(chatQuickSettingsCss, /@media \(max-width: 760px\) \{[\s\S]*\.settings-layout\.chat-quick-settings-layout\.is-characters-workspace \.character-preview-panel\.dossier-view \{[\s\S]*border-top: 0;[\s\S]*border-radius: 0;[\s\S]*box-shadow: none;[\s\S]*\.settings-layout\.chat-quick-settings-layout\.is-characters-workspace \.character-preview-panel\.dossier-view::before \{[\s\S]*display: none;/);
     assert.match(chatQuickSettingsCss, /\.chat-quick-settings-body\.is-chatPreset-workspace \{[\s\S]*height: 100%;[\s\S]*display: grid;[\s\S]*overflow: hidden;/);
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-chatPreset-workspace,[\s\S]*\.settings-layout\.chat-quick-settings-layout\.is-chatPreset-workspace \.xb-main,[\s\S]*\.settings-layout\.chat-quick-settings-layout\.is-chatPreset-workspace \.step-panel \{[\s\S]*height: 100%;[\s\S]*overflow: hidden;/);
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-chatPreset-workspace \.preset-workspace \{[\s\S]*height: 100%;[\s\S]*display: flex;[\s\S]*overflow: hidden;/);
@@ -702,7 +706,8 @@ test('tavern character cards are available as a settings workspace', () => {
 
     assert.equal(existsSync(resolve(root, 'modules/tavern/app-src/components/TavernCharacterSelectPage.vue')), false);
     assert.match(settingsControllerSource, /export type TavernSettingsWorkspaceKey = 'characters' \| 'api'/);
-    assert.match(settingsControllerSource, /key: 'characters'[\s\S]*label: '角色卡'/);
+    assert.match(settingsControllerSource, /key: 'characters'[\s\S]*label: '角色卡'[\s\S]*mobileLabel: '角色卡'/);
+    assert.match(settingsControllerSource, /key: 'worldbooks'[\s\S]*label: '世界书'[\s\S]*mobileLabel: '世界书'[\s\S]*key: 'assistantPreset'[\s\S]*label: '助手预设'[\s\S]*mobileLabel: '助手预设'[\s\S]*key: 'base'[\s\S]*label: '基础设定'[\s\S]*mobileLabel: '基础设定'/);
     assert.match(settingsControllerSource, /key === 'characters'/);
     assert.match(settingsControllerSource, /normalized === 'characters'/);
     assert.match(settingsPageSource, /<TavernCharacterWorkspacePanel[\s\S]*activeSettingsWorkspace === 'characters'/);
@@ -1325,6 +1330,8 @@ test('tavern character archive separates new chat from existing session selectio
     assert.match(characterSource, /const characterDefinitionFields = computed[\s\S]*label: '角色备注'[\s\S]*characterDepthPrompt/);
     assert.match(characterSource, /const characterDefinitionFields = computed[\s\S]*label: '制作者备注'[\s\S]*creatorNotes/);
     assert.match(characterSource, /const characterDefinitionFields = computed[\s\S]*label: '示例对话'[\s\S]*mesExample/);
+    assert.doesNotMatch(characterSource, /sys-mono|SYS_ERROR|SYS_WARN|ENTRIES|ACTIVE|LOADING|READING|AWAITING|UNKNOWN|数据库脱节|残卷/);
+    assert.doesNotMatch(previewCss, /\.sys-mono/);
     assert.match(characterSource, /class="character-definition-overlay"[\s\S]*aria-label="角色卡详情"/);
     assert.match(characterSource, /v-for="field in characterDefinitionFields"/);
     assert.match(characterSource, />\s*会话档案\s*</);
@@ -1341,11 +1348,12 @@ test('tavern character archive separates new chat from existing session selectio
     assert.match(previewCss, /\.dossier-title-actions \{[\s\S]*display: flex;[\s\S]*gap: 8px;/);
     assert.match(previewCss, /\.character-definition-button,\n\.character-worldbook-button/);
     assert.match(previewCss, /\.session-archive-button/);
-    assert.match(previewCss, /\.dossier-title-actions \.session-archive-button,\n\.dossier-title-actions \.enter-chat-button \{[\s\S]*padding-left: 16px;[\s\S]*padding-right: 16px;/);
+    assert.match(previewCss, /\.dossier-title-actions \.session-archive-button,\n\.dossier-title-actions \.enter-chat-button \{[\s\S]*padding-left: 12px;[\s\S]*padding-right: 12px;/);
     assert.match(previewCss, /\.character-definition-dialog \{[\s\S]*width: min\(560px, 100%\);/);
     assert.match(previewCss, /\.character-definition-section dd \{[\s\S]*white-space: pre-wrap;/);
     assert.match(previewCss, /\.character-session-archive \{[\s\S]*width: min\(520px, 100%\);/);
-    assert.match(previewCss, /grid-template-columns: 42px 42px minmax\(0, 1fr\) minmax\(0, 1fr\);/);
+    assert.match(previewCss, /@media \(max-width: 640px\) \{[\s\S]*\.character-definition-overlay,[\s\S]*\.character-session-archive-overlay,[\s\S]*\.character-worldbook-picker-overlay \{[\s\S]*place-items: stretch;[\s\S]*padding: 0;[\s\S]*\.character-definition-dialog,[\s\S]*\.character-session-archive,[\s\S]*\.character-worldbook-picker \{[\s\S]*width: 100%;[\s\S]*height: 100%;[\s\S]*max-height: none;[\s\S]*border-radius: 0;/);
+    assert.match(previewCss, /grid-template-columns: 40px 40px max-content max-content;/);
 });
 
 test('tavern deleting a selected chat never falls through to another character session', () => {

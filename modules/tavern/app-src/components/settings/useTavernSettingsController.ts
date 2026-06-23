@@ -627,12 +627,12 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         {
             key: 'characters',
             label: '角色卡',
-            mobileLabel: '角色',
+            mobileLabel: '角色卡',
         },
         {
             key: 'worldbooks',
             label: '世界书',
-            mobileLabel: '世界',
+            mobileLabel: '世界书',
         },
         {
             key: 'chatPreset',
@@ -643,7 +643,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         {
             key: 'assistantPreset',
             label: '助手预设',
-            mobileLabel: '助手',
+            mobileLabel: '助手预设',
             badge: assistantPresetDirty.value ? '未保存' : '',
         },
         {
@@ -659,7 +659,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         {
             key: 'base',
             label: '基础设定',
-            mobileLabel: '基础',
+            mobileLabel: '基础设定',
         },
     ]);
     const currentTavernUser = computed(() => tavernUsers.value.find((item) => item.id === currentTavernUserId.value) || null);

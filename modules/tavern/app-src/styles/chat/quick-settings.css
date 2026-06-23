@@ -273,6 +273,16 @@
         overflow: hidden;
     }
 
+    .settings-layout.chat-quick-settings-layout.is-characters-workspace .character-preview-panel.dossier-view {
+        border-top: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .settings-layout.chat-quick-settings-layout.is-characters-workspace .character-preview-panel.dossier-view::before {
+        display: none;
+    }
+
     .settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .preset-studio,
     .settings-layout.chat-quick-settings-layout.is-worldbooks-workspace .worldbook-overview-grid {
         min-height: 0;
