@@ -162,8 +162,6 @@ interface TavernDialogState {
 const SOURCE_APP = 'xb-tavern-app';
 const SOURCE_HOST = 'xb-tavern-host';
 const CHARACTER_ARCHIVE_BATCH_SIZE = 48;
-const CHAT_SIDEBAR_INITIAL_LIMIT = 6;
-const CHAT_SIDEBAR_BATCH_SIZE = 12;
 const MANAGER_RUN_VISIBLE_LIMIT = 12;
 const MEMORY_TURN_INITIAL_LIMIT = 36;
 const MEMORY_TURN_BATCH_SIZE = 48;
@@ -274,12 +272,10 @@ const characterSearchText = ref('');
 const characterVisibleLimit = ref(CHARACTER_ARCHIVE_BATCH_SIZE);
 const memoryFileSearchText = ref('');
 const memoryFileGroupVisibleLimits = ref<Record<string, number>>({});
-const chatSidebarSessionLimit = ref(CHAT_SIDEBAR_INITIAL_LIMIT);
 const brokenAvatarUrls = ref<Record<string, true>>({});
 type AppView = 'home' | 'chat' | 'settings' | 'about';
 type ChatFocus = 'chat' | 'manager';
 type ChatLayout = 'chat' | 'balanced' | 'editor';
-type ChatSidePanel = 'sessions' | 'memory';
 const TAVERN_THEME_STORAGE_KEY = 'LittleWhiteBox_Tavern_theme';
 function readInitialView(): AppView {
     const hash = String(window.location.hash || '').replace(/^#\/?/, '');
@@ -375,7 +371,6 @@ const activeSettingsWorkspace = ref<TavernSettingsWorkspaceKey>(readInitialSetti
 const homeThemeDark = ref(readInitialTavernThemeDark());
 const chatFocus = ref<ChatFocus>('chat');
 const chatLayout = ref<ChatLayout>('balanced');
-const chatSidePanel = ref<ChatSidePanel>('memory');
 const chatComposeTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const managerComposeTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const managerWorkRef = ref<HTMLElement | null>(null);
@@ -829,6 +824,21 @@ const selectedCharacterSessions = computed<TavernSessionRecord[]>(() => {
             - (Number(left.updatedAt) || Number(left.createdAt) || 0)
         ));
 });
+const currentChatCharacterSessions = computed<TavernSessionRecord[]>(() => {
+    const characterKey = String(
+        selectedSession.value?.characterKey
+        || effectiveContext.value.character?.characterKey
+        || '',
+    ).trim();
+    if (!characterKey) {return [];}
+    return sessions.value
+        .filter((session) => String(session.characterKey || '').trim() === characterKey)
+        .slice()
+        .sort((left, right) => (
+            (Number(right.updatedAt) || Number(right.createdAt) || 0)
+            - (Number(left.updatedAt) || Number(left.createdAt) || 0)
+        ));
+});
 const selectedCharacterGreetingOptions = computed(() => {
     const character = selectedCharacterPreview.value;
     if (!character) {return [];}
@@ -935,24 +945,6 @@ const {
     managerRuns,
     visibleRunLimit: MANAGER_RUN_VISIBLE_LIMIT,
 });
-const filteredChatSidebarSessions = computed(() => {
-    const currentCharacterKey = String(selectedSession.value?.characterKey || effectiveContext.value.character?.characterKey || '').trim();
-    return currentCharacterKey
-        ? sessions.value.filter((session) => String(session.characterKey || '').trim() === currentCharacterKey)
-        : sessions.value;
-});
-const chatSidebarSessions = computed(() => {
-    const filtered = filteredChatSidebarSessions.value;
-    const visible = filtered.slice(0, chatSidebarSessionLimit.value);
-    if (selectedSessionId.value && !visible.some((session) => session.id === selectedSessionId.value)) {
-        const selected = filtered.find((session) => session.id === selectedSessionId.value);
-        if (selected) {visible.unshift(selected);}
-    }
-    return visible;
-});
-const filteredChatSidebarSessionCount = computed(() => filteredChatSidebarSessions.value.length);
-const hiddenChatSidebarSessionCount = computed(() => Math.max(0, filteredChatSidebarSessionCount.value - chatSidebarSessions.value.length));
-
 function rememberSessionMessageCount(sessionId = '', count = 0) {
     const id = String(sessionId || '').trim();
     if (!id) {return;}
@@ -1001,10 +993,6 @@ async function refreshSessionMessageCountsForSessions(targetSessions: TavernSess
         next[id] = Math.max(0, Math.floor(Number(count) || 0));
     });
     sessionMessageCounts.value = next;
-}
-
-async function refreshVisibleSessionMessageCounts() {
-    await refreshSessionMessageCountsForSessions(chatSidebarSessions.value);
 }
 
 const activeMemoryFiles = computed(() => memoryFiles.value.filter((file) => file.status !== 'stale'));
@@ -1290,12 +1278,12 @@ watch([
     rememberSessionMessageCount(String(sessionId || ''), Number(count) || 0);
 });
 
-watch(() => chatSidebarSessions.value.map((session) => session.id).join('|'), () => {
-    void refreshVisibleSessionMessageCounts();
-}, { immediate: true });
-
 watch(() => selectedCharacterSessions.value.map((session) => session.id).join('|'), () => {
     void refreshSessionMessageCountsForSessions(selectedCharacterSessions.value);
+}, { immediate: true });
+
+watch(() => currentChatCharacterSessions.value.map((session) => session.id).join('|'), () => {
+    void refreshSessionMessageCountsForSessions(currentChatCharacterSessions.value);
 }, { immediate: true });
 
 function describeError(error: unknown) {
@@ -4589,17 +4577,10 @@ watch(() => selectedSessionId.value, () => {
     managerScrollPane.resetPositionState();
     memoryFileSearchText.value = '';
     memoryFileGroupVisibleLimits.value = {};
-    chatSidebarSessionLimit.value = CHAT_SIDEBAR_INITIAL_LIMIT;
     void nextTick(() => {
         scrollChatToBottom(true);
         scrollManagerToBottom(true);
     });
-});
-
-watch([() => activeMemoryFiles.value.length, () => filteredChatSidebarSessionCount.value], ([memoryCount, sessionCount]) => {
-    if (chatSidePanel.value === 'sessions' && memoryCount && !sessionCount) {
-        chatSidePanel.value = 'memory';
-    }
 });
 
 watch(runtimeError, (message) => {
@@ -4700,8 +4681,8 @@ provide(TAVERN_APP_UI_CONTEXT, {
         canRerunMessage,
         canSendMessage,
         createNewChatSession,
+        currentChatCharacterSessions,
         currentAuthorNote,
-        CHAT_SIDEBAR_BATCH_SIZE,
         chatAutoScroll,
         chatFocus,
         chatLayout,
@@ -4710,9 +4691,6 @@ provide(TAVERN_APP_UI_CONTEXT, {
         chatComposeTextareaRef,
         chatScrollControlsActive,
         chatScrollRef,
-        chatSidebarSessionLimit,
-        chatSidebarSessions,
-        chatSidePanel,
         chatSubtitle,
         copyMessage,
         currentUserMessage,
@@ -4729,7 +4707,6 @@ provide(TAVERN_APP_UI_CONTEXT, {
         drawMessageStatusText,
         drawMessageTitle,
         drawProgressText,
-        filteredChatSidebarSessionCount,
         formatMessageTime,
         handleChatScroll,
         handleChatSubmit,
@@ -4738,7 +4715,6 @@ provide(TAVERN_APP_UI_CONTEXT, {
         handleChatWheel,
         handleComposeInput,
         handleComposeKeydown,
-        hiddenChatSidebarSessionCount,
         isDrawingMessage,
         isEditingMessage,
         isCancellingRun,

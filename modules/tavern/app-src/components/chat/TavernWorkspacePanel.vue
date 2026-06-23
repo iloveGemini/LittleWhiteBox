@@ -10,7 +10,7 @@ import { createSeedMapDocument } from '../../../shared/map-state-seed';
 import type { TavernAtlasDocument, TavernMapDocument, TavernMapElement } from '../../../shared/structured-state';
 
 defineProps<{
-    mobileMemoryDirectoryOpen: boolean;
+    memoryDirectoryOpen: boolean;
 }>();
 const emit = defineEmits<{
     (event: 'close'): void;
@@ -140,6 +140,9 @@ const mapInfoStats = computed(() => {
         { label: '标注', value: String(countByCat('label') + countByCat('marker')) },
     ];
 });
+const memoryDirectoryButtonLabel = computed(() => (
+    selectedMemoryFileEntry.value ? memoryFileDisplayName(selectedMemoryFileEntry.value) : ''
+));
 
 watch([atlasActiveMapDocId, mapStateDocuments], () => {
     const docs = Array.isArray(mapStateDocuments.value) ? mapStateDocuments.value : [];
@@ -164,11 +167,11 @@ const {
     handleSheetHandlePointerUp,
 } = useMobileSheetDrag(closeMobileChatPanel);
 
-function toggleMobileMemoryDirectory() {
+function toggleMemoryDirectory() {
     emit('toggle-memory-directory');
 }
 
-function selectMobileMemoryFile(path: string) {
+function selectDirectoryMemoryFile(path: string) {
     void selectMemoryFile(path).then((selected) => {
         if (selected) {
             emit('close-memory-directory');
@@ -338,13 +341,28 @@ function selectMobileMemoryFile(path: string) {
     <section
       v-else-if="chatWorkspacePanel === 'memory'"
       class="tavern-memory-workspace"
-      :class="{ 'is-memory-directory-open': mobileMemoryDirectoryOpen }"
+      :class="{ 'is-memory-directory-open': memoryDirectoryOpen }"
     >
-      <aside class="tavern-memory-directory">
-        <header class="tavern-memory-directory-head">
-          <strong>记忆文档</strong>
-          <span>{{ activeMemoryFiles.length }}</span>
-        </header>
+      <button
+        type="button"
+        class="tavern-memory-selector"
+        :class="{ 'is-open': memoryDirectoryOpen }"
+        :disabled="!memoryFiles.length"
+        :aria-expanded="memoryDirectoryOpen ? 'true' : 'false'"
+        aria-controls="xb-tavern-memory-directory"
+        title="选择记忆文档"
+        aria-label="选择记忆文档"
+        @click="toggleMemoryDirectory"
+      >
+        <span>记忆文档</span>
+        <strong>{{ memoryDirectoryButtonLabel || '选择记忆档案' }}</strong>
+        <em>{{ activeMemoryFiles.length }} 个</em>
+        <i aria-hidden="true" />
+      </button>
+      <aside
+        id="xb-tavern-memory-directory"
+        class="tavern-memory-directory"
+      >
         <label
           v-if="memoryFiles.length"
           class="memory-search tavern-memory-search"
@@ -364,7 +382,10 @@ function selectMobileMemoryFile(path: string) {
             :key="group.key"
             class="memory-file-group"
           >
-            <div class="memory-file-group-title">
+            <div
+              v-if="group.files.length !== 1 || memoryFileDisplayName(group.files[0]) !== group.title"
+              class="memory-file-group-title"
+            >
               <span>{{ group.title }}</span>
               <em>{{ group.totalCount }}</em>
             </div>
@@ -375,7 +396,7 @@ function selectMobileMemoryFile(path: string) {
                 type="button"
                 class="memory-file"
                 :class="{ active: selectedMemoryFilePath === file.path, stale: file.status === 'stale' }"
-                @click="selectMobileMemoryFile(file.path)"
+                @click="selectDirectoryMemoryFile(file.path)"
               >
                 <span class="memory-file-main">{{ memoryFileDisplayName(file) }}</span>
               </button>
@@ -403,18 +424,6 @@ function selectMobileMemoryFile(path: string) {
           还没有记忆档案。
         </p>
       </aside>
-      <button
-        type="button"
-        class="tavern-mobile-memory-picker"
-        :class="{ 'is-open': mobileMemoryDirectoryOpen }"
-        :disabled="!memoryFiles.length"
-        title="选择记忆文档"
-        aria-label="选择记忆文档"
-        @click="toggleMobileMemoryDirectory"
-      >
-        <span>{{ selectedMemoryFileEntry ? memoryFileDisplayName(selectedMemoryFileEntry) : '选择记忆文档' }}</span>
-        <em aria-hidden="true">⌄</em>
-      </button>
       <TavernMemoryEditor
         v-model:draft="memoryEditorDraft"
         :document-available="memoryEditorDocumentAvailable"

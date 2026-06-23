@@ -13,7 +13,6 @@ import {
 import TavernCharacterWorkspacePanel from '../TavernCharacterWorkspacePanel.vue';
 import TavernAssistantPresetSettingsPanel from '../settings/TavernAssistantPresetSettingsPanel.vue';
 import TavernBaseSettingsPanel from '../settings/TavernBaseSettingsPanel.vue';
-import TavernChatSidebar from './TavernChatSidebar.vue';
 import TavernChatPresetSettingsPanel from '../settings/TavernChatPresetSettingsPanel.vue';
 import TavernConversationPanel from './TavernConversationPanel.vue';
 import TavernManagerPanel from './TavernManagerPanel.vue';
@@ -52,7 +51,6 @@ const {
     chatScrollRef,
     currentAuthorNote,
     saveCurrentAuthorNote,
-    chatSidePanel,
     messageKey,
     updateChatScrollButtons,
     visibleChatMessages,
@@ -109,12 +107,11 @@ const authorNoteModalOpen = ref(false);
 const authorNoteDraft = ref<XbTavernAuthorNote>(normalizeXbTavernAuthorNote(DEFAULT_XB_TAVERN_AUTHOR_NOTE));
 const authorNoteSaving = ref(false);
 const authorNoteStatus = ref('');
-const mobileChatPanel = ref<'none' | 'directory' | 'workspace'>('none');
-const mobileMemoryDirectoryOpen = ref(false);
+const mobileChatPanel = ref<'none' | 'workspace'>('none');
+const memoryDirectoryOpen = ref(false);
 const isMobileChatViewport = useTavernMediaQuery('(max-width: 760px)');
 
 const contractDraftDirty = computed(() => JSON.stringify(contractDraft.value) !== JSON.stringify(sessionContract.value));
-const shouldMountChatDirectory = computed(() => !isMobileChatViewport.value || mobileChatPanel.value === 'directory');
 const shouldMountChatWorkspace = computed(() => !isMobileChatViewport.value || mobileChatPanel.value === 'workspace');
 const chatPaneVisible = computed(() => activeView.value === 'chat' && chatFocus.value === 'chat');
 const managerPaneVisible = computed(() => activeView.value === 'chat' && chatFocus.value === 'manager');
@@ -152,19 +149,7 @@ const chatAppMenuItems: Array<{ key: ChatQuickWorkspace; label: string; mobileLa
 function closeMobileChatPanel() {
     closeChatAppMenu();
     mobileChatPanel.value = 'none';
-    mobileMemoryDirectoryOpen.value = false;
-}
-
-function toggleMobileChatPanel(panel: 'directory' | 'workspace') {
-    closeChatAppMenu();
-    mobileChatPanel.value = mobileChatPanel.value === panel ? 'none' : panel;
-}
-
-function openMobileSessionsPanel() {
-    closeChatAppMenu();
-    chatSidePanel.value = 'sessions';
-    mobileChatPanel.value = 'directory';
-    mobileMemoryDirectoryOpen.value = false;
+    memoryDirectoryOpen.value = false;
 }
 
 function toggleMobileWorkspacePanel(panel: 'state' | 'memory' | 'event') {
@@ -172,22 +157,12 @@ function toggleMobileWorkspacePanel(panel: 'state' | 'memory' | 'event') {
     const sameOpenPanel = mobileChatPanel.value === 'workspace' && chatWorkspacePanel.value === panel;
     chatWorkspacePanel.value = panel;
     mobileChatPanel.value = sameOpenPanel ? 'none' : 'workspace';
-    mobileMemoryDirectoryOpen.value = false;
+    memoryDirectoryOpen.value = false;
 }
 
-function handleMobileDirectoryClick(event: Event) {
-    const target = event.target instanceof HTMLElement ? event.target : null;
-    if (target?.closest?.('.chat-mobile-sheet-handle')) {
-        closeMobileChatPanel();
-        return;
-    }
-    if (!target?.closest?.('.session-open, .memory-file:not(.memory-file-more)')) {return;}
-    closeMobileChatPanel();
-}
-
-function toggleMobileMemoryDirectory() {
+function toggleMemoryDirectory() {
     closeChatAppMenu();
-    mobileMemoryDirectoryOpen.value = !mobileMemoryDirectoryOpen.value;
+    memoryDirectoryOpen.value = !memoryDirectoryOpen.value;
 }
 
 function openContractModal() {
@@ -348,6 +323,7 @@ watch(() => sessionContract.value, (value) => {
 watch(() => selectedSessionId.value, () => {
     contractError.value = '';
     contractModalOpen.value = false;
+    memoryDirectoryOpen.value = false;
     contractDraft.value = normalizeTavernSessionContract(sessionContract.value);
     if (quickSettingsOpen.value === 'characters') {
         quickSettingsOpen.value = null;
@@ -444,7 +420,6 @@ onUpdated(() => {
       `chat-focus-${chatFocus}`,
       `chat-layout-${chatLayout}`,
       {
-        'is-mobile-directory-open': mobileChatPanel === 'directory',
         'is-mobile-workspace-open': mobileChatPanel === 'workspace',
       },
     ]"
@@ -741,12 +716,6 @@ onUpdated(() => {
       aria-label="收起面板"
       @click="closeMobileChatPanel"
     />
-    <TavernChatSidebar
-      v-if="shouldMountChatDirectory"
-      @click="handleMobileDirectoryClick"
-      @close="closeMobileChatPanel"
-    />
-
     <section
       class="chat-workbench"
       :class="{ 'is-manager': chatFocus === 'manager' }"
@@ -755,7 +724,6 @@ onUpdated(() => {
         <TavernConversationPanel
           @open-contract="openContractModal"
           @open-author-note="openAuthorNoteModal"
-          @open-session-archive="openMobileSessionsPanel"
         />
         <TavernManagerPanel @open-contract="openContractModal" />
       </div>
@@ -763,10 +731,10 @@ onUpdated(() => {
 
     <TavernWorkspacePanel
       v-if="shouldMountChatWorkspace"
-      :mobile-memory-directory-open="mobileMemoryDirectoryOpen"
+      :memory-directory-open="memoryDirectoryOpen"
       @close="closeMobileChatPanel"
-      @close-memory-directory="mobileMemoryDirectoryOpen = false"
-      @toggle-memory-directory="toggleMobileMemoryDirectory"
+      @close-memory-directory="memoryDirectoryOpen = false"
+      @toggle-memory-directory="toggleMemoryDirectory"
     />
     <TavernContractModal
       v-if="contractModalOpen"

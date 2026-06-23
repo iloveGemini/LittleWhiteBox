@@ -17,7 +17,6 @@ import type { TavernMessageRecord } from '../../../shared/session-db';
 
 const emit = defineEmits<{
     (event: 'open-contract'): void;
-    (event: 'open-session-archive'): void;
     (event: 'open-author-note'): void;
 }>();
 
@@ -37,8 +36,10 @@ const {
     canRerunMessage,
     canSendMessage,
     createNewChatSession,
+    currentChatCharacterSessions,
     chatComposeTextareaRef,
     chatFocus,
+    chatLayout,
     chatMessages,
     chatMessageWindow,
     chatScrollControlsActive,
@@ -83,6 +84,9 @@ const {
     scrollChatToBottom,
     scrollChatToTop,
     selectedSessionId,
+    selectSession,
+    sessionDisplayTitle,
+    sessionFloorLabel,
     showChatScrollBottom,
     showChatScrollTop,
     startEditMessage,
@@ -185,6 +189,7 @@ const runtimeThoughtDisclosureId = 'chat:runtime-thoughts';
 const isMobileActionTrayViewport = useTavernMediaQuery('(max-width: 760px)');
 const activeMessageActionsKey = ref('');
 const composeMenuOpen = ref(false);
+const sessionArchiveOpen = ref(false);
 
 function messageThoughtDisclosureId(message: TavernMessageRecord) {
     return `chat:thought:${messageKey(message)}`;
@@ -230,7 +235,7 @@ async function createSessionFromComposeMenu() {
 
 function openSessionArchiveFromComposeMenu() {
     closeComposeMenu();
-    emit('open-session-archive');
+    sessionArchiveOpen.value = true;
 }
 
 function openAuthorNoteFromComposeMenu() {
@@ -243,6 +248,15 @@ function openRequestLogFromComposeMenu() {
     openPromptInspector('history');
 }
 
+function closeSessionArchive() {
+    sessionArchiveOpen.value = false;
+}
+
+async function openArchivedSession(sessionId: string) {
+    await selectSession(sessionId);
+    closeSessionArchive();
+}
+
 watch(
     [activeView, chatFocus, selectedSessionId],
     ([view, focus]) => {
@@ -250,6 +264,7 @@ watch(
             thoughtDisclosure.reset();
             clearMessageActionTray();
             closeComposeMenu();
+            closeSessionArchive();
         }
     },
 );
@@ -260,6 +275,7 @@ watch(
         thoughtDisclosure.reset();
         clearMessageActionTray();
         closeComposeMenu();
+        closeSessionArchive();
     },
 );
 
@@ -288,6 +304,37 @@ watch(isMobileActionTrayViewport, (isMobile) => {
       >
     </div>
     <header class="chat-head">
+      <div class="chat-head-main">
+        <div
+          class="xb-workspace-controller chat-layout-controller"
+          aria-label="区域大小"
+        >
+          <button
+            type="button"
+            class="xb-layout-button"
+            :class="{ 'is-active': chatLayout === 'chat' }"
+            @click="chatLayout = 'chat'"
+          >
+            聊天
+          </button>
+          <button
+            type="button"
+            class="xb-layout-button"
+            :class="{ 'is-active': chatLayout === 'balanced' }"
+            @click="chatLayout = 'balanced'"
+          >
+            平衡
+          </button>
+          <button
+            type="button"
+            class="xb-layout-button"
+            :class="{ 'is-active': chatLayout === 'editor' }"
+            @click="chatLayout = 'editor'"
+          >
+            记忆
+          </button>
+        </div>
+      </div>
       <div class="chat-head-actions">
         <button
           type="button"
@@ -758,6 +805,51 @@ watch(isMobileActionTrayViewport, (isMobile) => {
           </button>
         </form>
       </div>
+    </div>
+    <div
+      v-if="sessionArchiveOpen"
+      class="character-session-archive-overlay chat-session-archive-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="会话档案"
+      @click.self="closeSessionArchive"
+    >
+      <section class="character-session-archive chat-session-archive">
+        <header>
+          <div>
+            <strong>会话档案</strong>
+            <span>{{ currentChatCharacterSessions.length }} 个会话</span>
+          </div>
+          <button
+            type="button"
+            class="session-archive-close"
+            aria-label="关闭会话档案"
+            @click="closeSessionArchive"
+          />
+        </header>
+        <div
+          v-if="currentChatCharacterSessions.length"
+          class="session-archive-list"
+        >
+          <button
+            v-for="session in currentChatCharacterSessions"
+            :key="session.id"
+            type="button"
+            class="session-archive-item"
+            :class="{ active: session.id === selectedSessionId }"
+            @click="openArchivedSession(session.id)"
+          >
+            <span class="session-archive-item-title">{{ sessionDisplayTitle(session) || '未命名会话' }}</span>
+            <span class="session-archive-item-meta">{{ sessionFloorLabel(session) }}</span>
+          </button>
+        </div>
+        <p
+          v-else
+          class="session-archive-empty"
+        >
+          当前角色还没有其他会话。
+        </p>
+      </section>
     </div>
   </section>
 </template>

@@ -63,6 +63,17 @@
     font: 12px/1 var(--xb-font-ui);
 }
 
+.xb-os-shell.theme-dark .tavern-chat.xb-page .tavern-map-select {
+    border-color: rgba(220, 210, 190, 0.14);
+    background: rgba(255, 255, 255, 0.055);
+    color: var(--xb-text-main);
+}
+
+.xb-os-shell.theme-dark .tavern-chat.xb-page .tavern-map-select option {
+    background: #1b1916;
+    color: var(--xb-text-main);
+}
+
 .tavern-chat.xb-page .tavern-map-canvas {
     position: relative;
     min-height: 0;

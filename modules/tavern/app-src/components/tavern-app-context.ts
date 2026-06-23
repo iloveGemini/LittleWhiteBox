@@ -311,8 +311,8 @@ export interface TavernChatContext {
     canRerunMessage: TavernCommand<[message: TavernMessageRecord], boolean>;
     canSendMessage: TavernReadable<boolean>;
     createNewChatSession: TavernCommand<[], Promise<void>>;
+    currentChatCharacterSessions: TavernReadable<TavernSessionRecord[]>;
     currentAuthorNote: TavernReadable<XbTavernAuthorNote>;
-    CHAT_SIDEBAR_BATCH_SIZE: number;
     chatAutoScroll: Ref<boolean>;
     chatFocus: Ref<string>;
     chatLayout: Ref<string>;
@@ -321,9 +321,6 @@ export interface TavernChatContext {
     chatComposeTextareaRef: Ref<HTMLTextAreaElement | null>;
     chatScrollControlsActive: Ref<boolean>;
     chatScrollRef: Ref<HTMLElement | null>;
-    chatSidebarSessionLimit: Ref<number>;
-    chatSidebarSessions: TavernReadable<TavernSessionRecord[]>;
-    chatSidePanel: Ref<string>;
     chatSubtitle: TavernReadable<string>;
     copyMessage: TavernCommand<[message: TavernMessageRecord], Promise<void>>;
     currentUserMessage: Ref<string>;
@@ -340,7 +337,6 @@ export interface TavernChatContext {
     drawMessageStatusText: TavernCommand<[message: TavernMessageRecord], string>;
     drawMessageTitle: TavernCommand<[message: TavernMessageRecord], string>;
     drawProgressText: Ref<string>;
-    filteredChatSidebarSessionCount: TavernReadable<number>;
     formatMessageTime: TavernCommand<[value: unknown], string>;
     handleChatScroll: TavernCommand;
     handleChatSubmit: TavernCommand;
@@ -349,7 +345,6 @@ export interface TavernChatContext {
     handleChatWheel: TavernCommand<[event: WheelEvent]>;
     handleComposeInput: TavernCommand<[event: Event]>;
     handleComposeKeydown: TavernCommand<[event: KeyboardEvent]>;
-    hiddenChatSidebarSessionCount: TavernReadable<number>;
     isDrawingMessage: TavernCommand<[message: TavernMessageRecord], boolean>;
     isEditingMessage: TavernCommand<[message: TavernMessageRecord], boolean>;
     isCancellingRun: Ref<boolean>;

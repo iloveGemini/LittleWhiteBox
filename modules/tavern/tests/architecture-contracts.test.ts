@@ -511,7 +511,7 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.match(chatPageSource, /function handleChatAppMenuOutsidePointer[\s\S]*desktopChatAppMenuRef\.value\?\.contains\(target\)[\s\S]*mobileChatAppMenuRef\.value\?\.contains\(target\)[\s\S]*closeChatAppMenu\(\);/);
     assert.match(chatPageSource, /ref="desktopChatAppMenuRef"[\s\S]*class="home-corner-actions page-corner-actions chat-app-menu-shell"/);
     assert.match(chatPageSource, /ref="mobileChatAppMenuRef"[\s\S]*class="chat-app-menu-shell chat-app-menu-shell-mobile"/);
-    assert.match(chatPageSource, /watch\(\(\) => selectedSessionId\.value, \(\) => \{[\s\S]*if \(quickSettingsOpen\.value === 'characters'\) \{[\s\S]*quickSettingsOpen\.value = null;/);
+    assert.match(chatPageSource, /watch\(\(\) => selectedSessionId\.value, \(\) => \{[\s\S]*memoryDirectoryOpen\.value = false;[\s\S]*if \(quickSettingsOpen\.value === 'characters'\) \{[\s\S]*quickSettingsOpen\.value = null;/);
     assert.match(chatPageSource, /document\.addEventListener\('pointerdown', handleChatAppMenuOutsidePointer\)[\s\S]*document\.addEventListener\('keydown', handleChatAppMenuKeydown\)/);
     assert.doesNotMatch(chatPageSource, /syncWorldbooksFromHost\(\{ keepSelection: true \}\)/);
     assert.match(chatPageSource, /class="chat-quick-settings-overlay"[\s\S]*v-if="quickSettingsOpen === 'api'"[\s\S]*class="tavern-api-settings chat-quick-api-root"[\s\S]*v-else[\s\S]*class="settings-layout chat-quick-settings-layout"/);
@@ -1082,10 +1082,13 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     const contractModalSource = readRepoFile('modules/tavern/app-src/components/chat/TavernContractModal.vue');
     const contextSource = readRepoFile('modules/tavern/app-src/components/tavern-app-context.ts');
     const cssSource = readRepoFile('modules/tavern/app-src/styles/chat/messages.css');
+    const layoutCss = readRepoFile('modules/tavern/app-src/styles/chat/layout.css');
     const composeCss = readRepoFile('modules/tavern/app-src/styles/chat/compose.css');
     const memoryCss = readRepoFile('modules/tavern/app-src/styles/chat/memory-editor.css');
+    const mapCss = readRepoFile('modules/tavern/app-src/styles/chat/map.css');
     const managerCss = readRepoFile('modules/tavern/app-src/styles/chat/manager.css');
-    const sidebarCss = readRepoFile('modules/tavern/app-src/styles/chat/sidebar.css');
+    const chatCss = readRepoFile('modules/tavern/app-src/styles/chat.css');
+    const memoryEditorSource = readRepoFile('modules/tavern/app-src/components/TavernMemoryEditor.vue');
     assert.match(conversationPanelSource, /hasRenderableLiveAssistantContent/);
     assert.match(conversationPanelSource, /hasRenderableLiveAssistantMarkdown/);
     assert.match(conversationPanelSource, /runtimeActionCheckEvents/);
@@ -1141,7 +1144,15 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.match(conversationPanelSource, /v-model="currentUserMessage"[\s\S]*rows="1"/);
     assert.match(contextSource, /createNewChatSession: TavernCommand<\[\], Promise<void>>/);
     assert.match(appSource, /async function createNewChatSession\(\) \{[\s\S]*resolveRuntimeContextForSession\(selectedSessionId\.value\)[\s\S]*resetSessionPreviewState\(\);[\s\S]*await createSessionAndOpenChat\(\{ contextSnapshot: snapshotContext \}\);/);
-    assert.match(chatPageSource, /function openMobileSessionsPanel\(\) \{[\s\S]*chatSidePanel\.value = 'sessions';[\s\S]*mobileChatPanel\.value = 'directory';/);
+    assert.doesNotMatch(chatCss, /sidebar\.css/);
+    assert.doesNotMatch(chatPageSource, /TavernChatSidebar|chatSidePanel|shouldMountChatDirectory|openMobileSessionsPanel|mobileChatPanel = ref<'none' \| 'directory'|is-mobile-directory-open/);
+    assert.doesNotMatch(appSource, /CHAT_SIDEBAR|chatSidebar|chatSidePanel|ChatSidePanel/);
+    assert.doesNotMatch(contextSource, /CHAT_SIDEBAR|chatSidebar|chatSidePanel/);
+    assert.match(layoutCss, /\.tavern-chat\.xb-page,[\s\S]*grid-template-columns: minmax\(520px, 0\.98fr\) minmax\(460px, 1\.02fr\);/);
+    assert.match(layoutCss, /@media \(max-width: 980px\) \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 0\.86fr\);/);
+    assert.doesNotMatch(layoutCss, /@media \(max-width: 980px\) \{[\s\S]*\.chat-head-actions button:last-child \{[\s\S]*display: none;/);
+    assert.match(layoutCss, /\.chat-head \{[\s\S]*justify-content: space-between;/);
+    assert.match(conversationPanelSource, /<header class="chat-head">[\s\S]*class="chat-head-main"[\s\S]*class="xb-workspace-controller chat-layout-controller"[\s\S]*chatLayout === 'chat'[\s\S]*chatLayout === 'balanced'[\s\S]*chatLayout === 'editor'[\s\S]*class="chat-head-actions"/);
     assert.match(chatPageSource, /class="chat-mobile-context-row"[\s\S]*title="地图"[\s\S]*title="记忆"[\s\S]*title="事件"[\s\S]*title="契约"/);
     assert.doesNotMatch(conversationPanelSource, /title="事件"/);
     assert.match(contractModalSource, /契约[\s\S]*玩家 — 代理人誓约[\s\S]*故事开始之前，定义你的代理人被允许做什么。/);
@@ -1150,9 +1161,9 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.doesNotMatch(chatPageSource, /class="chat-mobile-context-row"[\s\S]*>\s*会话\s*</);
     assert.match(chatPageSource, /:class="\{ 'is-active': mobileChatPanel === 'workspace' && chatWorkspacePanel === 'state' \}"/);
     assert.match(chatPageSource, /:class="\{ 'is-active': mobileChatPanel === 'workspace' && chatWorkspacePanel === 'memory' \}"/);
-    assert.match(chatPageSource, /<TavernConversationPanel[\s\S]*@open-session-archive="openMobileSessionsPanel"/);
     assert.match(conversationPanelSource, /createNewChatSession,[\s\S]*const composeMenuOpen = ref\(false\)/);
-    assert.match(conversationPanelSource, /defineEmits<\{[\s\S]*\(event: 'open-session-archive'\): void;/);
+    assert.match(conversationPanelSource, /const sessionArchiveOpen = ref\(false\)/);
+    assert.doesNotMatch(conversationPanelSource, /open-session-archive/);
     assert.match(conversationPanelSource, /class="chat-compose-dock"[\s\S]*class="chat-compose-shell"[\s\S]*class="compose-menu-shell"[\s\S]*<form\s+class="chat-compose"/);
     assert.doesNotMatch(conversationPanelSource, /<form\s+class="chat-compose"[\s\S]*class="compose-menu-shell"/);
     assert.match(conversationPanelSource, /class="compose-menu-button"[\s\S]*aria-label="聊天操作"[\s\S]*aria-controls="xb-tavern-compose-menu"[\s\S]*@click\.stop="toggleComposeMenu"/);
@@ -1183,7 +1194,13 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.match(appSource, /async function saveCurrentAuthorNote\(note: XbTavernAuthorNote\)[\s\S]*authorNote: normalized/);
     assert.match(appSource, /async function saveCurrentAuthorNote\(note: XbTavernAuthorNote\)[\s\S]*contextSnapshot: nextContext/);
     assert.match(appSource, /if \(selectedSessionId\.value !== sessionId\) \{return;\}[\s\S]*context\.value = nextContext/);
-    assert.match(conversationPanelSource, /function openSessionArchiveFromComposeMenu\(\) \{[\s\S]*emit\('open-session-archive'\);/);
+    assert.match(conversationPanelSource, /function openSessionArchiveFromComposeMenu\(\) \{[\s\S]*closeComposeMenu\(\);[\s\S]*sessionArchiveOpen\.value = true;[\s\S]*\}/);
+    assert.match(contextSource, /currentChatCharacterSessions: TavernReadable<TavernSessionRecord\[\]>/);
+    assert.match(appSource, /const currentChatCharacterSessions = computed<TavernSessionRecord\[\]>\(\(\) => \{[\s\S]*selectedSession\.value\?\.characterKey[\s\S]*effectiveContext\.value\.character\?\.characterKey[\s\S]*\.filter\(\(session\) => String\(session\.characterKey \|\| ''\)\.trim\(\) === characterKey\)/);
+    assert.match(appSource, /watch\(\(\) => currentChatCharacterSessions\.value\.map\(\(session\) => session\.id\)\.join\('\|'\), \(\) => \{[\s\S]*refreshSessionMessageCountsForSessions\(currentChatCharacterSessions\.value\)/);
+    assert.match(appSource, /chat: \{[\s\S]*currentChatCharacterSessions,/);
+    assert.doesNotMatch(conversationPanelSource, /useTavernCharacterContext|selectedCharacterSessions/);
+    assert.match(conversationPanelSource, /v-if="sessionArchiveOpen"[\s\S]*class="character-session-archive-overlay chat-session-archive-overlay"[\s\S]*v-for="session in currentChatCharacterSessions"[\s\S]*@click="openArchivedSession\(session\.id\)"/);
     assert.match(managerPanelSource, /v-model="managerInputDraft"[\s\S]*rows="1"/);
     assert.match(workspacePanelSource, /<button[\s\S]*chatWorkspacePanel === 'state'[\s\S]*>\s*地图\s*<\/button>/);
     assert.match(workspacePanelSource, /class="tavern-state-viewport"[\s\S]*class="tavern-state-inline-switcher"[\s\S]*场景图[\s\S]*世界图/);
@@ -1217,9 +1234,21 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.match(composeCss, /\.chat-compose textarea \{[\s\S]*min-height: 32px;[\s\S]*max-height: 76px;[\s\S]*padding: 5px 6px 5px 12px;/);
     assert.match(composeCss, /\.chat-compose>button \{[\s\S]*justify-self: center;[\s\S]*width: 32px;[\s\S]*min-width: 32px;[\s\S]*height: 32px;[\s\S]*border: 0;[\s\S]*border-radius: 999px;/);
     assert.doesNotMatch(composeCss, /\.chat-compose>button \{[^}]*border-left:/);
-    assert.match(sidebarCss, /@media \(max-width: 760px\) \{[\s\S]*\.tavern-chat\.xb-page \.chat-side \{[\s\S]*top: calc\(86px \+ env\(safe-area-inset-top, 0px\)\);[\s\S]*bottom: 0;[\s\S]*height: auto;[\s\S]*border-radius: 0;/);
-    assert.doesNotMatch(sidebarCss, /height: min\(72vh, 620px\);/);
+    assert.doesNotMatch(memoryEditorSource, /tavern-memory-directory-button|directoryOpen|directoryLabel|toggle-directory/);
+    assert.match(workspacePanelSource, /class="tavern-memory-workspace"[\s\S]*:class="\{ 'is-memory-directory-open': memoryDirectoryOpen \}"[\s\S]*class="tavern-memory-selector"[\s\S]*:aria-expanded="memoryDirectoryOpen \? 'true' : 'false'"[\s\S]*aria-controls="xb-tavern-memory-directory"[\s\S]*@click="toggleMemoryDirectory"[\s\S]*id="xb-tavern-memory-directory"[\s\S]*class="tavern-memory-directory"[\s\S]*<TavernMemoryEditor/);
+    assert.match(workspacePanelSource, /v-if="group\.files\.length !== 1 \|\| memoryFileDisplayName\(group\.files\[0\]\) !== group\.title"/);
+    assert.doesNotMatch(workspacePanelSource, /tavern-memory-directory-close|:directory-open="memoryDirectoryOpen"|@toggle-directory="toggleMemoryDirectory"/);
+    assert.match(memoryCss, /\.tavern-chat\.xb-page \.tavern-memory-selector \{[\s\S]*grid-template-columns: auto minmax\(0, 1fr\) auto 18px;[\s\S]*border-bottom: 1px solid var\(--xb-rule\);/);
+    assert.match(memoryCss, /\.tavern-chat\.xb-page \.tavern-memory-directory \{[\s\S]*max-height: 0;[\s\S]*overflow: hidden;[\s\S]*pointer-events: none;/);
+    assert.match(memoryCss, /\.tavern-chat\.xb-page \.tavern-memory-workspace\.is-memory-directory-open \.tavern-memory-directory \{[\s\S]*max-height: min\(42vh, 380px\);[\s\S]*overflow: auto;[\s\S]*pointer-events: auto;/);
+    assert.match(memoryCss, /\.tavern-chat\.xb-page \.tavern-memory-directory \.memory-file-group \{[\s\S]*display: grid;[\s\S]*gap: 6px;/);
+    assert.match(memoryCss, /\.tavern-chat\.xb-page \.tavern-memory-directory \.memory-file-tree \{[\s\S]*display: flex;[\s\S]*flex-wrap: wrap;/);
+    assert.match(memoryCss, /@media \(max-width: 760px\) \{[\s\S]*\.tavern-chat\.xb-page \.tavern-memory-directory \.memory-file-tree \{[\s\S]*display: grid;/);
+    assert.doesNotMatch(memoryCss, /\.tavern-chat\.xb-page \.tavern-memory-directory \{[^}]*position: absolute;|top: 58px|max-height: min\(62vh, 460px\)/);
+    assert.doesNotMatch(memoryCss, /tavern-mobile-memory-picker/);
+    assert.doesNotMatch(memoryCss, /@media \(max-width: 760px\) \{[\s\S]*\.tavern-chat\.xb-page \.tavern-memory-selector span \{[\s\S]*display: none;/);
     assert.match(memoryCss, /@media \(max-width: 760px\) \{[\s\S]*\.tavern-chat\.xb-page \.tavern-workspace-tabs \{[\s\S]*display: none;/);
+    assert.match(mapCss, /\.xb-os-shell\.theme-dark \.tavern-chat\.xb-page \.tavern-map-select \{[\s\S]*background: rgba\(255, 255, 255, 0\.055\);[\s\S]*color: var\(--xb-text-main\);/);
     assert.match(managerCss, /\.tavern-chat\.xb-page \.manager-compose button\.primary-action \{[\s\S]*min-height: 32px;/);
     assert.doesNotMatch(managerCss, /\.tavern-chat\.xb-page \.manager-compose button\.primary-action \{[\s\S]*min-height: 58px;/);
     assert.doesNotMatch(cssSource, /\.chat-bubble\.from-assistant\s*\{[^}]*border-left:/);
@@ -1244,7 +1273,7 @@ test('tavern keeps the app exit button on home only', () => {
     }
 });
 
-test('tavern memory sidebar keeps session-scoped lazy file loading and index-backed search text', () => {
+test('tavern memory workspace keeps session-scoped lazy file loading and index-backed search text', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const memoryWorkspaceSource = readRepoFile('modules/tavern/app-src/components/chat/useTavernMemoryWorkspace.ts');
     assert.match(appSource, /selectedMemoryFileRecord\.value\?\.sessionId === selectedSessionId\.value/);
