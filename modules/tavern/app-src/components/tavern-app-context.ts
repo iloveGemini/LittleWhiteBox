@@ -157,6 +157,66 @@ export interface TavernWorldbookEntryDraft {
     revision: string;
 }
 
+export interface TavernCharacterOption {
+    characterKey: string;
+    nativeCharacterId?: string;
+    name: string;
+    avatar?: string;
+    shallow?: boolean;
+    description?: string;
+    personality?: string;
+    scenario?: string;
+    firstMessage?: string;
+    alternateGreetings?: string[];
+    mesExample?: string;
+    creatorNotes?: string;
+    characterDepthPrompt?: string;
+    searchCorpus?: string;
+}
+
+export interface TavernCharacterWorldbookState {
+    nativeCharacterId: string;
+    characterName: string;
+    boundWorldbookName: string;
+    boundExists: boolean;
+    hasEmbeddedBook: boolean;
+    embeddedBookName: string;
+    worldbookOptions: string[];
+}
+
+export interface TavernCharacterContext {
+    avatarAvailable: TavernCommand<[avatar?: string], boolean>;
+    batchSize: number;
+    characterWorldbookBusy: Ref<boolean>;
+    characterWorldbookState: Ref<TavernCharacterWorldbookState | null>;
+    characters: TavernReadable<TavernCharacterOption[]>;
+    enterSelected: TavernCommand<[], Promise<void>>;
+    filteredCount: TavernReadable<number>;
+    hiddenCount: TavernReadable<number>;
+    liveCharacterKey: TavernReadable<string>;
+    loadMore: TavernCommand;
+    movePreview: TavernCommand<[delta: number]>;
+    openCharacterWorldbook: TavernCommand<[], Promise<void>>;
+    openSession: TavernCommand<[sessionId: string], Promise<void>>;
+    pendingCharacterSessionKey: Ref<string>;
+    pendingError: Ref<string>;
+    pendingPreviewCharacterKey: Ref<string>;
+    refresh: TavernCommand<[], Promise<void>>;
+    rememberBrokenAvatar: TavernCommand<[avatar?: string]>;
+    searchText: Ref<string>;
+    select: TavernCommand<[characterKey: string], Promise<void>>;
+    selectFirstVisible: TavernCommand;
+    selectGreeting: TavernCommand<[index: number]>;
+    selectLastVisible: TavernCommand;
+    selectedCharacter: TavernReadable<TavernCharacterOption | null>;
+    selectedCharacterSessions: TavernReadable<TavernSessionRecord[]>;
+    selectedGreetingIndex: Ref<number>;
+    sessionFloorLabel: TavernCommand<[session?: TavernSessionRecord | null], string>;
+    shortText: TavernCommand<[value?: string, limit?: number], string>;
+    syncWorldbookState: TavernCommand<[characterKey?: string], Promise<void>>;
+    visibleCharacters: TavernReadable<TavernCharacterOption[]>;
+}
+
 export interface TavernRegexScriptDraft {
     scriptName?: string;
     findRegex?: string;
@@ -497,6 +557,7 @@ export interface TavernSettingsContext {
     homeThemeDark: Ref<boolean>;
     importAssistantPreset: TavernCommand<[payload: unknown], Promise<boolean>>;
     isEditingWorldbookEntry: TavernCommand<[entry: TavernWorldbookPreviewEntryRow], boolean>;
+    loadTavernUsers: TavernCommand<[], Promise<void>>;
     linesFromList: TavernCommand<[value: unknown], string>;
     listFromLines: TavernCommand<[value?: string], string[]>;
     movePromptRow: TavernCommand<[identifier: string, direction: -1 | 1]>;
@@ -513,6 +574,7 @@ export interface TavernSettingsContext {
     promptRowIndex: TavernCommand<[identifier: string], number>;
     promptSearchText: Ref<string>;
     promptVisibleLimit: Ref<number>;
+    refreshPresets: TavernCommand<[], Promise<void>>;
     refreshRegexFromHost: TavernCommand<[], Promise<void>>;
     REGEX_GROUP_BATCH_SIZE: number;
     regexDirty: TavernReadable<boolean>;
@@ -586,6 +648,7 @@ export interface TavernSettingsContext {
 
 export interface TavernAppUiContext {
     shell: TavernShellContext;
+    character: TavernCharacterContext;
     chat: TavernChatContext;
     manager: TavernManagerContext;
     memory: TavernMemoryContext;
@@ -605,6 +668,10 @@ export function useTavernAppUiContext(): TavernAppUiContext {
 
 export function useTavernShellContext(): TavernShellContext {
     return useTavernAppUiContext().shell;
+}
+
+export function useTavernCharacterContext(): TavernCharacterContext {
+    return useTavernAppUiContext().character;
 }
 
 export function useTavernChatContext(): TavernChatContext {

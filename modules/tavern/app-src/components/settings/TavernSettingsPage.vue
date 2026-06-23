@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import TavernCornerActions from '../TavernCornerActions.vue';
+import TavernCharacterWorkspacePanel from '../TavernCharacterWorkspacePanel.vue';
 import TavernSettingsSidebar from '../TavernSettingsSidebar.vue';
 import TavernApiSettingsPanel from './TavernApiSettingsPanel.vue';
 import TavernBaseSettingsPanel from './TavernBaseSettingsPanel.vue';
@@ -42,6 +43,10 @@ const {
     />
 
     <section class="xb-main">
+      <TavernCharacterWorkspacePanel
+        v-if="activeSettingsWorkspace === 'characters'"
+      />
+
       <TavernApiSettingsPanel
         v-if="activeSettingsWorkspace === 'api'"
       />

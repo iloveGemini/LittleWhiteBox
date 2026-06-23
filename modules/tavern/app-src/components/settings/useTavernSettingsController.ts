@@ -43,7 +43,7 @@ import type {
     TavernWorldbookPreviewRow,
 } from '../tavern-app-context';
 
-export type TavernSettingsWorkspaceKey = 'api' | 'chatPreset' | 'worldbooks' | 'regex' | 'assistantPreset' | 'base';
+export type TavernSettingsWorkspaceKey = 'characters' | 'api' | 'chatPreset' | 'worldbooks' | 'regex' | 'assistantPreset' | 'base';
 
 interface TavernWorldbookSyncOptions {
     keepSelection?: boolean;
@@ -397,7 +397,7 @@ const PRESET_SAVE_FEEDBACK_RESET_MS = 1800;
 export function readInitialSettingsWorkspace(): TavernSettingsWorkspaceKey {
     const hash = String(window.location.hash || '').replace(/^#\/?/, '');
     const key = hash.split('/')[1];
-    if (key === 'api' || key === 'chatPreset' || key === 'worldbooks' || key === 'regex' || key === 'assistantPreset' || key === 'base') {return key;}
+    if (key === 'characters' || key === 'api' || key === 'chatPreset' || key === 'worldbooks' || key === 'regex' || key === 'assistantPreset' || key === 'base') {return key;}
     return 'api';
 }
 
@@ -624,6 +624,11 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
     const selectedRegexRow = computed(() => regexScriptRows.value.find((row) => row.key === selectedRegexKey.value) || null);
     const regexDirty = computed(() => snapshotNativeDraft(regexDraft.value) !== activeRegexScriptJson.value);
     const settingsNavItems = computed<TavernSettingsNavItem[]>(() => [
+        {
+            key: 'characters',
+            label: '角色卡',
+            mobileLabel: '角色',
+        },
         {
             key: 'worldbooks',
             label: '世界书',
@@ -1924,6 +1929,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
     function selectSettingsWorkspace(workspace: string) {
         const normalized = workspace as TavernSettingsWorkspaceKey;
         if (normalized === 'api'
+            || normalized === 'characters'
             || normalized === 'chatPreset'
             || normalized === 'worldbooks'
             || normalized === 'regex'
@@ -2064,6 +2070,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         homeThemeDark: options.homeThemeDark,
         importAssistantPreset,
         isEditingWorldbookEntry,
+        loadTavernUsers,
         linesFromList,
         listFromLines,
         movePromptRow,
@@ -2080,6 +2087,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         promptRowIndex,
         promptSearchText,
         promptVisibleLimit,
+        refreshPresets,
         refreshRegexFromHost,
         currentTavernUser,
         currentTavernUserId,

@@ -1,66 +1,14 @@
-/* Tavern characters: page layout */
+/* Tavern characters: workspace layout */
 
-.character-select-page {
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    background:
-        radial-gradient(ellipse at top, rgba(var(--xb-accent-rgb), 0.08) 0%, transparent 60%),
-        var(--xb-bg-deep);
-    color: var(--xb-ink);
-}
-
-.character-desk {
-    width: min(1320px, 92%);
-    height: calc(100vh - 64px);
+.character-workspace-panel {
+    flex: 1 1 auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 24px;
-    margin: 32px auto;
 }
 
-.character-select-head {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 16px;
-    border-bottom: 2px solid var(--xb-rule-strong);
-    padding-bottom: 16px;
-}
-
-.head-left,
-.head-balance {
-    min-width: 0;
-}
-
-.head-balance {
-    width: 82px;
-    height: 32px;
-    pointer-events: none;
-}
-
-.character-title-copy {
-    text-align: center;
-}
-
-.character-select-head .eyebrow {
-    margin: 0 0 4px;
-    color: var(--xb-stamp);
-    font-family: var(--xb-font-mono);
-    font-size: 11px;
-    letter-spacing: 0.3em;
-}
-
-.character-select-head h2 {
-    margin: 0;
-    color: var(--xb-ink);
-    font-family: var(--xb-font-serif);
-    font-size: 28px;
-    font-weight: 500;
-    letter-spacing: 0.05em;
-}
-
-.character-select-page .os-sys-button {
+.character-workspace-panel .os-sys-button {
     min-height: 32px;
     display: inline-flex;
     align-items: center;
@@ -75,20 +23,37 @@
     transition: all 0.2s ease;
 }
 
-.character-select-page .os-sys-button:hover:not(:disabled) {
+.character-workspace-panel .os-sys-button:hover:not(:disabled) {
     border-color: var(--xb-stamp);
     background: rgba(var(--xb-accent-rgb), 0.05);
     color: var(--xb-ink);
 }
 
-.character-select-page .os-sys-button.primary {
+.character-workspace-panel .os-sys-button.primary {
     border-color: var(--xb-ink);
     background: var(--xb-ink);
     color: var(--xb-bg-deep);
 }
 
-.character-select-page .os-sys-button.primary:hover:not(:disabled) {
+.character-workspace-panel .os-sys-button.primary:hover:not(:disabled) {
     opacity: 0.85;
+}
+
+.settings-layout.is-characters-workspace .xb-main {
+    overflow: hidden;
+}
+
+.settings-layout.is-characters-workspace .character-workspace-panel {
+    width: 100%;
+    min-height: 0;
+    gap: 14px;
+    padding: 18px;
+}
+
+.settings-layout.is-characters-workspace .character-archive,
+.settings-layout.is-characters-workspace .character-empty {
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .character-archive {
@@ -196,12 +161,6 @@
 }
 
 @media (max-width: 980px) {
-    .character-desk {
-        width: min(100% - 32px, 1320px);
-        height: auto;
-        min-height: calc(100vh - 64px);
-    }
-
     .character-archive {
         flex-direction: column;
     }
@@ -216,71 +175,7 @@
 }
 
 @media (max-width: 640px) {
-    .character-select-page {
-        height: 100dvh;
-        min-height: 100svh;
-        overflow: hidden;
-    }
-
-    .character-desk {
-        width: 100%;
-        height: 100dvh;
-        min-height: 0;
-        gap: 0;
-        margin: 0;
-    }
-
-    .character-select-head {
-        flex: 0 0 auto;
-        min-height: calc(54px + env(safe-area-inset-top, 0px));
-        align-items: center;
-        flex-direction: row;
-        gap: 8px;
-        border-bottom: 1px solid var(--xb-rule);
-        background: rgba(244, 243, 238, 0.92);
-        padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px;
-        backdrop-filter: blur(18px);
-    }
-
-    .xb-os-shell.theme-dark .character-select-head {
-        background: rgba(18, 17, 15, 0.92);
-    }
-
-    .head-left,
-    .head-balance {
-        flex: 0 0 auto;
-    }
-
-    .character-title-copy {
-        flex: 1 1 auto;
-        min-width: 0;
-        text-align: center;
-    }
-
-    .character-select-head .eyebrow {
-        display: none;
-    }
-
-    .character-select-head h2 {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        font-size: 17px;
-        letter-spacing: 0;
-    }
-
-    .head-balance {
-        width: 58px;
-        height: 34px;
-    }
-
-    .character-select-page .os-sys-button {
-        min-height: 34px;
-        border-radius: 999px;
-        padding: 0 11px;
-    }
-
-    .character-select-page .os-sys-button .icon {
+    .character-workspace-panel .os-sys-button .icon {
         display: none;
     }
 
@@ -315,5 +210,11 @@
 
     .index-meta {
         display: none;
+    }
+
+    .settings-layout.is-characters-workspace .character-workspace-panel {
+        min-height: 100%;
+        gap: 0;
+        padding: 0;
     }
 }

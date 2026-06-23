@@ -188,12 +188,13 @@ test('tavern worldbook settings page edits existing named entries without whole-
     assert.doesNotMatch(panelSource, /xb-tavern:set-worldbook-active/);
 });
 
-test('tavern character select page keeps a dense index and selected-card preview', () => {
-    const panelSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterSelectPage.vue');
+test('tavern character workspace keeps a dense index and selected-card preview', () => {
+    const panelSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterWorkspacePanel.vue');
     const layoutCss = readRepoFile('modules/tavern/app-src/styles/characters/layout.css');
     const cardsCss = readRepoFile('modules/tavern/app-src/styles/characters/cards.css');
     const previewCss = readRepoFile('modules/tavern/app-src/styles/characters/preview.css');
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    assert.equal(existsSync(resolve(root, 'modules/tavern/app-src/components/TavernCharacterSelectPage.vue')), false);
     assert.match(panelSource, /class="character-index-panel"/);
     assert.match(panelSource, /character-preview-panel dossier-view/);
     assert.match(panelSource, /class="character-preview-panel dossier-empty"/);
@@ -212,6 +213,11 @@ test('tavern character select page keeps a dense index and selected-card preview
     assert.doesNotMatch(appSource, /CHARACTER_CONTEXT_TIMEOUT_MS|host_request_timeout/);
     assert.match(appSource, /function hasCharacterPreviewDetails/);
     assert.match(appSource, /pendingCharacterPreviewKey/);
+    assert.match(appSource, /function openCharacterSelect\(\)[\s\S]*openSettingsWorkspace\('characters'\)/);
+    assert.doesNotMatch(appSource, /TavernCharacterSelectPage|activeView === 'characters'|activeView\.value = 'characters'|view === 'characters'/);
+    assert.doesNotMatch(appSource, /document\.querySelectorAll<HTMLElement>\('\[data-character-card-id\]'\)/);
+    assert.match(panelSource, /const listRef = ref<HTMLElement \| null>\(null\)/);
+    assert.match(panelSource, /root\.querySelectorAll<HTMLElement>\('\[data-character-card-id\]'\)/);
     assert.doesNotMatch(panelSource, /刷新列表/);
     assert.doesNotMatch(panelSource, /这里不重写角色卡/);
     assert.doesNotMatch(panelSource, /archive-toolbar/);

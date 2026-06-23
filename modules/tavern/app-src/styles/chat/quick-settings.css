@@ -66,6 +66,36 @@
     align-items: center;
 }
 
+.chat-quick-settings-body.is-characters-workspace {
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    overflow: hidden;
+}
+
+.settings-layout.chat-quick-settings-layout.is-characters-workspace,
+.settings-layout.chat-quick-settings-layout.is-characters-workspace .xb-main {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.settings-layout.chat-quick-settings-layout.is-characters-workspace .character-workspace-panel {
+    height: 100%;
+    min-height: 0;
+    gap: 0;
+    overflow: hidden;
+    padding: 0;
+}
+
+.settings-layout.chat-quick-settings-layout.is-characters-workspace .character-archive {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 0;
+    box-shadow: none;
+}
+
 .chat-quick-settings-body.is-chatPreset-workspace {
     height: 100%;
     min-height: 0;
@@ -228,6 +258,19 @@
     .settings-layout.chat-quick-settings-layout .step-panel > .preset-page-head .panel-pills {
         display: flex;
         justify-content: flex-start;
+    }
+
+    .settings-layout.chat-quick-settings-layout.is-characters-workspace,
+    .settings-layout.chat-quick-settings-layout.is-characters-workspace .xb-main,
+    .settings-layout.chat-quick-settings-layout.is-characters-workspace .character-workspace-panel {
+        height: 100%;
+        overflow: hidden;
+    }
+
+    .settings-layout.chat-quick-settings-layout.is-characters-workspace .character-archive {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
     }
 
     .settings-layout.chat-quick-settings-layout.is-chatPreset-workspace .preset-studio,

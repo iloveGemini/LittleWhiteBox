@@ -102,7 +102,6 @@ import {
     type TavernManagerProtocolEvent,
 } from './runtime/manager';
 import TavernAboutPage from './components/TavernAboutPage.vue';
-import TavernCharacterSelectPage from './components/TavernCharacterSelectPage.vue';
 import TavernHomePage from './components/TavernHomePage.vue';
 import TavernChatPage from './components/chat/TavernChatPage.vue';
 import { useTavernManagerDisplay } from './components/chat/useTavernManagerDisplay';
@@ -114,7 +113,12 @@ import {
     useTavernSettingsController,
     type TavernSettingsWorkspaceKey,
 } from './components/settings/useTavernSettingsController';
-import { TAVERN_APP_UI_CONTEXT, type TavernDialogOptions } from './components/tavern-app-context';
+import {
+    TAVERN_APP_UI_CONTEXT,
+    type TavernCharacterOption,
+    type TavernCharacterWorldbookState,
+    type TavernDialogOptions,
+} from './components/tavern-app-context';
 
 interface TavernDiagnostics {
     ok?: boolean;
@@ -134,33 +138,6 @@ interface RequestAuditSnapshot {
     providerLabel?: string;
     model?: string;
     toolMode?: string;
-}
-
-interface TavernCharacterOption {
-    characterKey: string;
-    nativeCharacterId?: string;
-    name: string;
-    avatar?: string;
-    shallow?: boolean;
-    description?: string;
-    personality?: string;
-    scenario?: string;
-    firstMessage?: string;
-    alternateGreetings?: string[];
-    mesExample?: string;
-    creatorNotes?: string;
-    characterDepthPrompt?: string;
-    searchCorpus?: string;
-}
-
-interface TavernCharacterWorldbookState {
-    nativeCharacterId: string;
-    characterName: string;
-    boundWorldbookName: string;
-    boundExists: boolean;
-    hasEmbeddedBook: boolean;
-    embeddedBookName: string;
-    worldbookOptions: string[];
 }
 
 interface TavernCharacterWorldbookActionResult {
@@ -299,7 +276,7 @@ const memoryFileSearchText = ref('');
 const memoryFileGroupVisibleLimits = ref<Record<string, number>>({});
 const chatSidebarSessionLimit = ref(CHAT_SIDEBAR_INITIAL_LIMIT);
 const brokenAvatarUrls = ref<Record<string, true>>({});
-type AppView = 'home' | 'chat' | 'characters' | 'settings' | 'about';
+type AppView = 'home' | 'chat' | 'settings' | 'about';
 type ChatFocus = 'chat' | 'manager';
 type ChatLayout = 'chat' | 'balanced' | 'editor';
 type ChatSidePanel = 'sessions' | 'memory';
@@ -307,7 +284,7 @@ const TAVERN_THEME_STORAGE_KEY = 'LittleWhiteBox_Tavern_theme';
 function readInitialView(): AppView {
     const hash = String(window.location.hash || '').replace(/^#\/?/, '');
     const [view] = hash.split('/');
-    if (view === 'chat' || view === 'characters' || view === 'settings' || view === 'about') {
+    if (view === 'chat' || view === 'settings' || view === 'about') {
         return view;
     }
     return 'home';
@@ -402,7 +379,6 @@ const chatSidePanel = ref<ChatSidePanel>('memory');
 const chatComposeTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const managerComposeTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const managerWorkRef = ref<HTMLElement | null>(null);
-const characterArchivePageRef = ref<InstanceType<typeof TavernCharacterSelectPage> | null>(null);
 const chatScrollPane = useTavernScrollPane({
     totalItems: () => selectedSessionMessageTotal.value,
     defaultLimit: hiddenOutsideCount,
@@ -1279,16 +1255,17 @@ watch(selectedCharacterPreviewKey, () => {
     characterWorldbookStatus.value = '';
     characterWorldbookSelectionOpen.value = false;
     characterWorldbookSelectionOptions.value = [];
-    if (activeView.value === 'characters') {
-        scrollSelectedCharacterPreviewIntoView();
-    }
 });
 
-watch([activeView, selectedCharacterPreviewKey, liveCharacterKey], ([view, previewKey]) => {
-    if (view !== 'characters') {return;}
-    const targetKey = String(previewKey || '').trim();
-    if (!targetKey) {return;}
-    void syncCharacterWorldbookState(targetKey);
+watch([activeView, activeSettingsWorkspace], ([view, workspace], [previousView, previousWorkspace]) => {
+    if (
+        view === 'settings'
+        && workspace === 'characters'
+        && (previousView !== view || previousWorkspace !== workspace)
+    ) {
+        pendingCharacterError.value = '';
+        void refreshCharacterList();
+    }
 });
 
 watch(selectedCharacterGreetingOptions, (options) => {
@@ -2372,10 +2349,9 @@ function onHostMessage(event: MessageEvent) {
 }
 
 function openCharacterSelect() {
-    activeView.value = 'characters';
     pendingCharacterError.value = '';
     selectedCharacterPreviewKey.value = '';
-    refreshCharacterList();
+    openSettingsWorkspace('characters');
 }
 
 async function refreshCharacterList() {
@@ -2394,7 +2370,6 @@ async function selectCharacterForPreview(characterKey: string) {
     const targetKey = String(characterKey || '').trim();
     if (!targetKey || pendingCharacterSessionKey.value) {return;}
     selectedCharacterPreviewKey.value = targetKey;
-    void syncCharacterWorldbookState(targetKey);
     const current = findCharacterByKey(targetKey);
     if (current && current.shallow !== true && hasCharacterPreviewDetails(current)) {return;}
     const sequence = ++characterPreviewRequestSequence;
@@ -2527,46 +2502,29 @@ function selectCharacterGreeting(index: number) {
     selectedCharacterGreetingIndex.value = Math.max(0, Math.min(options.length - 1, Number(index) || 0));
 }
 
-function scrollSelectedCharacterPreviewIntoView() {
-    void nextTick(() => {
-        characterArchivePageRef.value?.scrollSelectedIntoView();
-    });
-}
-
 function moveCharacterPreview(delta: number) {
     const cards = visibleCharacterCards.value;
     if (!cards.length || pendingCharacterSessionKey.value) {return;}
     const currentKey = String(selectedCharacterPreview.value?.characterKey || selectedCharacterPreviewKey.value || '').trim();
     if (!currentKey) {
         selectedCharacterPreviewKey.value = cards[delta < 0 ? cards.length - 1 : 0]?.characterKey || '';
-        scrollSelectedCharacterPreviewIntoView();
         return;
     }
     const currentIndex = Math.max(0, cards.findIndex((character) => character.characterKey === currentKey));
     const nextIndex = Math.min(cards.length - 1, Math.max(0, currentIndex + delta));
     selectedCharacterPreviewKey.value = cards[nextIndex]?.characterKey || '';
-    scrollSelectedCharacterPreviewIntoView();
 }
 
-function handleCharacterArchiveKeydown(event: KeyboardEvent) {
-    if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        moveCharacterPreview(1);
-    } else if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        moveCharacterPreview(-1);
-    } else if (event.key === 'Home') {
-        event.preventDefault();
-        selectedCharacterPreviewKey.value = visibleCharacterCards.value[0]?.characterKey || '';
-        scrollSelectedCharacterPreviewIntoView();
-    } else if (event.key === 'End') {
-        event.preventDefault();
-        selectedCharacterPreviewKey.value = visibleCharacterCards.value.at(-1)?.characterKey || '';
-        scrollSelectedCharacterPreviewIntoView();
-    } else if (event.key === 'Enter') {
-        event.preventDefault();
-        characterArchivePageRef.value?.openSessionArchive();
-    }
+function selectFirstVisibleCharacter() {
+    selectedCharacterPreviewKey.value = visibleCharacterCards.value[0]?.characterKey || '';
+}
+
+function selectLastVisibleCharacter() {
+    selectedCharacterPreviewKey.value = visibleCharacterCards.value.at(-1)?.characterKey || '';
+}
+
+function loadMoreCharacters() {
+    characterVisibleLimit.value += CHARACTER_ARCHIVE_BATCH_SIZE;
 }
 
 async function enterSelectedCharacter() {
@@ -3059,8 +3017,10 @@ async function removeSession(sessionId: string, event?: Event) {
     if (deletedCharacterKey) {
         selectedCharacterPreviewKey.value = deletedCharacterKey;
         void syncCharacterWorldbookState(deletedCharacterKey);
+        openSettingsWorkspace('characters');
+        return;
     }
-    activeView.value = deletedCharacterKey ? 'characters' : 'home';
+    activeView.value = 'home';
 }
 
 function openChatView() {
@@ -4700,6 +4660,38 @@ provide(TAVERN_APP_UI_CONTEXT, {
         rememberBrokenAvatar,
         shortText,
     },
+    character: {
+        avatarAvailable,
+        batchSize: CHARACTER_ARCHIVE_BATCH_SIZE,
+        characterWorldbookBusy,
+        characterWorldbookState,
+        characters: characterCards,
+        enterSelected: enterSelectedCharacter,
+        filteredCount: computed(() => filteredCharacterCards.value.length),
+        hiddenCount: hiddenCharacterCount,
+        liveCharacterKey,
+        loadMore: loadMoreCharacters,
+        movePreview: moveCharacterPreview,
+        openCharacterWorldbook: openSelectedCharacterWorldbook,
+        openSession: selectSession,
+        pendingCharacterSessionKey,
+        pendingError: pendingCharacterError,
+        pendingPreviewCharacterKey: pendingCharacterPreviewKey,
+        refresh: refreshCharacterList,
+        rememberBrokenAvatar,
+        searchText: characterSearchText,
+        select: selectCharacterForPreview,
+        selectFirstVisible: selectFirstVisibleCharacter,
+        selectGreeting: selectCharacterGreeting,
+        selectLastVisible: selectLastVisibleCharacter,
+        selectedCharacter: selectedCharacterPreview,
+        selectedCharacterSessions,
+        selectedGreetingIndex: selectedCharacterGreetingIndex,
+        sessionFloorLabel,
+        shortText,
+        syncWorldbookState: syncCharacterWorldbookState,
+        visibleCharacters: visibleCharacterCards,
+    },
     chat: {
         actionFeedback,
         cancelEditMessage,
@@ -4931,6 +4923,9 @@ async function runPostReadyStartupTasks() {
     if (activeView.value === 'settings' && activeSettingsWorkspace.value === 'base') {
         void loadTavernUsers();
     }
+    if (activeView.value === 'settings' && activeSettingsWorkspace.value === 'characters') {
+        void refreshCharacterList();
+    }
     if (selectedSessionId.value) {
         void syncSessionCharacterContextSafely({ sessionId: selectedSessionId.value, force: true });
     }
@@ -5014,41 +5009,6 @@ onUnmounted(() => {
         :dark="homeThemeDark"
         @toggle-theme="homeThemeDark = !homeThemeDark"
         @back="activeView = 'home'"
-      />
-
-      <TavernCharacterSelectPage
-        v-if="activeView === 'characters'"
-        ref="characterArchivePageRef"
-        v-model:search-text="characterSearchText"
-        :dark="homeThemeDark"
-        :pending-error="pendingCharacterError"
-        :characters="characterCards"
-        :visible-characters="visibleCharacterCards"
-        :filtered-count="filteredCharacterCards.length"
-        :live-character-key="liveCharacterKey"
-        :selected-character="selectedCharacterPreview"
-        :selected-character-sessions="selectedCharacterSessions"
-        :selected-greeting-index="selectedCharacterGreetingIndex"
-        :pending-preview-character-key="pendingCharacterPreviewKey"
-        :pending-character-session-key="pendingCharacterSessionKey"
-        :character-worldbook-state="characterWorldbookState"
-        :character-worldbook-busy="characterWorldbookBusy"
-        :hidden-count="hiddenCharacterCount"
-        :batch-size="CHARACTER_ARCHIVE_BATCH_SIZE"
-        :avatar-available="avatarAvailable"
-        :session-floor-label="sessionFloorLabel"
-        :short-text="shortText"
-        @toggle-theme="homeThemeDark = !homeThemeDark"
-        @back="activeView = 'home'"
-        @refresh="refreshCharacterList"
-        @select="selectCharacterForPreview"
-        @select-greeting="selectCharacterGreeting"
-        @enter-selected="enterSelectedCharacter"
-        @open-character-worldbook="openSelectedCharacterWorldbook"
-        @open-session="selectSession"
-        @load-more="characterVisibleLimit += CHARACTER_ARCHIVE_BATCH_SIZE"
-        @keydown="handleCharacterArchiveKeydown"
-        @avatar-error="rememberBrokenAvatar"
       />
 
       <TavernChatPage

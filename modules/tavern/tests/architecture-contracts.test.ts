@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { test } from 'node:test';
 
@@ -247,7 +247,7 @@ test('tavern desktop worldbook editor keeps dense readable rows', () => {
 test('tavern character and global worldbook actions stay on native ST boundaries', () => {
     const hostSource = readRepoFile('modules/tavern/host/worldbooks.ts');
     const tavernSource = readRepoFile('modules/tavern/tavern.ts');
-    const characterSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterSelectPage.vue');
+    const characterPanelSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterWorkspacePanel.vue');
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const worldbookSource = readRepoFile('modules/tavern/app-src/components/settings/TavernWorldbooksSettingsPanel.vue');
     const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
@@ -259,8 +259,8 @@ test('tavern character and global worldbook actions stay on native ST boundaries
     assert.match(hostSource, /export async function setTavernGlobalWorldbooks/);
     assert.doesNotMatch(hostSource, /importEmbeddedWorldInfo/);
     assert.doesNotMatch(hostSource, /openWorldInfoEditor/);
-    assert.doesNotMatch(`${hostSource}\n${appSource}\n${characterSource}`, /not_current_character|只能给当前酒馆角色|请先切到当前角色/);
-    assert.doesNotMatch(characterSource, /isCurrentCharacter === false/);
+    assert.doesNotMatch(`${hostSource}\n${appSource}\n${characterPanelSource}`, /not_current_character|只能给当前酒馆角色|请先切到当前角色/);
+    assert.doesNotMatch(characterPanelSource, /isCurrentCharacter === false/);
     assert.match(hostSource, /function prepareCharacterEditorForWorldbookBinding/);
     assert.match(hostSource, /getOneCharacter/);
     assert.match(hostSource, /unshallowCharacter/);
@@ -290,8 +290,8 @@ test('tavern character and global worldbook actions stay on native ST boundaries
     assert.match(tavernSource, /case 'xb-tavern:get-global-worldbooks':/);
     assert.match(tavernSource, /case 'xb-tavern:set-global-worldbooks':/);
     assert.doesNotMatch(tavernSource, /chat-worldbook/);
-    assert.match(characterSource, /const characterWorldbookBound = computed/);
-    assert.match(characterSource, /class="dossier-title-row"[\s\S]*<h3>\{\{ selectedCharacter\.name \}\}<\/h3>[\s\S]*'is-bound': characterWorldbookBound[\s\S]*open-character-worldbook[\s\S]*会话档案[\s\S]*新建聊天/);
+    assert.match(characterPanelSource, /const characterWorldbookBound = computed/);
+    assert.match(characterPanelSource, /class="dossier-title-row"[\s\S]*<h3>\{\{ selectedCharacter\.name \}\}<\/h3>[\s\S]*'is-bound': characterWorldbookBound[\s\S]*@click="openCharacterWorldbook"[\s\S]*会话档案[\s\S]*新建聊天/);
     assert.match(appSource, /requestHost\('xb-tavern:get-character-worldbook-state'/);
     assert.match(appSource, /requestHost\('xb-tavern:activate-character-worldbook'/);
     assert.match(appSource, /requestHost\('xb-tavern:bind-character-worldbook'/);
@@ -493,14 +493,28 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.match(cornerSource, /includeWorldbooks\?: boolean/);
     assert.match(cornerSource, /homeLast\?: boolean/);
     assert.match(cornerSource, /v-if="includeChatPreset"[\s\S]*class="home-icon-button page-chat-preset-button"[\s\S]*v-if="includeApi"[\s\S]*class="home-icon-button page-api-button"[\s\S]*v-if="includeWorldbooks"[\s\S]*class="home-icon-button page-worldbooks-button"[\s\S]*class="home-icon-button home-theme-button"[\s\S]*v-if="includeHome && homeLast"[\s\S]*class="home-icon-button page-home-button"/);
-    assert.match(chatPageSource, /<TavernCornerActions[\s\S]*include-api[\s\S]*include-chat-preset[\s\S]*include-home[\s\S]*include-worldbooks[\s\S]*home-last[\s\S]*@api="openQuickSettingsModal\('api'\)"[\s\S]*@chat-preset="openQuickSettingsModal\('chatPreset'\)"[\s\S]*@worldbooks="openQuickSettingsModal\('worldbooks'\)"/);
+    assert.doesNotMatch(chatPageSource, /TavernCornerActions|include-api|include-chat-preset|include-worldbooks|openQuickSettingsModal/);
     assert.match(settingsPageSource, /<TavernCornerActions[\s\S]*include-home[\s\S]*home-last[\s\S]*@home="activeView = 'home'"[\s\S]*@toggle-theme="homeThemeDark = !homeThemeDark"/);
-    assert.match(chatPageSource, /class="chat-mobile-action-group"[\s\S]*title="聊天预设"[\s\S]*title="API 配置"[\s\S]*title="世界书"[\s\S]*title="首页"/);
-    assert.match(chatPageSource, /const quickSettingsOpen = ref<'api' \| 'chatPreset' \| 'worldbooks' \| null>\(null\)/);
-    assert.match(chatPageSource, /function openQuickSettingsModal\(workspace: 'api' \| 'chatPreset' \| 'worldbooks'\)[\s\S]*activeSettingsWorkspace\.value = workspace;[\s\S]*syncChatPresetFromHost\(\)[\s\S]*syncWorldbooksForCurrentCharacter\(\)[\s\S]*syncGlobalWorldbooksFromHost\(\)/);
+    assert.match(chatPageSource, /type ChatQuickWorkspace =[\s\S]*'characters'[\s\S]*'api'[\s\S]*'chatPreset'[\s\S]*'assistantPreset'[\s\S]*'worldbooks'[\s\S]*'regex'[\s\S]*'base';/);
+    assert.match(chatPageSource, /const quickSettingsOpen = ref<ChatQuickWorkspace \| null>\(null\)/);
+    assert.match(chatPageSource, /const chatAppMenuItems:[\s\S]*key: 'characters'[\s\S]*key: 'api'[\s\S]*key: 'chatPreset'[\s\S]*key: 'assistantPreset'[\s\S]*key: 'worldbooks'[\s\S]*key: 'regex'[\s\S]*key: 'base'/);
+    assert.match(chatPageSource, /class="home-corner-actions page-corner-actions chat-app-menu-shell"[\s\S]*title="首页"[\s\S]*class="home-icon-button chat-app-menu-button"[\s\S]*title="酒馆操作菜单"/);
+    assert.match(chatPageSource, /class="chat-mobile-action-group"[\s\S]*title="首页"[\s\S]*class="chat-mobile-icon-button chat-mobile-utility-button chat-app-menu-button"[\s\S]*title="酒馆操作菜单"/);
+    assert.doesNotMatch(chatPageSource, /class="chat-mobile-icon-button chat-mobile-utility-button"[\s\S]*title="聊天预设"[\s\S]*@click="openChatAppWorkspace\('chatPreset'\)"/);
+    assert.doesNotMatch(chatPageSource, /class="chat-mobile-icon-button chat-mobile-utility-button"[\s\S]*title="API 配置"[\s\S]*@click="openChatAppWorkspace\('api'\)"/);
+    assert.doesNotMatch(chatPageSource, /class="chat-mobile-icon-button chat-mobile-utility-button"[\s\S]*title="世界书"[\s\S]*@click="openChatAppWorkspace\('worldbooks'\)"/);
+    assert.match(chatPageSource, /class="chat-app-menu-popover"[\s\S]*v-for="item in chatAppMenuItems"[\s\S]*class="chat-app-menu-item"[\s\S]*@click="openChatAppWorkspace\(item\.key\)"/);
+    assert.match(chatPageSource, /function openChatAppWorkspace\(workspace: ChatQuickWorkspace\)[\s\S]*closeChatAppMenu\(\);[\s\S]*closeMobileChatPanel\(\);[\s\S]*activeSettingsWorkspace\.value = workspace;[\s\S]*quickSettingsOpen\.value = workspace;[\s\S]*workspace === 'characters'[\s\S]*refreshCharacterList\(\)[\s\S]*workspace === 'chatPreset'[\s\S]*syncChatPresetFromHost\(\)[\s\S]*workspace === 'assistantPreset'[\s\S]*refreshPresets\(\)[\s\S]*workspace === 'worldbooks'[\s\S]*syncWorldbooksForCurrentCharacter\(\)[\s\S]*syncGlobalWorldbooksFromHost\(\)[\s\S]*workspace === 'regex'[\s\S]*refreshRegexFromHost\(\)[\s\S]*workspace === 'base'[\s\S]*loadTavernUsers\(\)/);
+    assert.doesNotMatch(chatPageSource, /ref="chatAppMenuRef"|const chatAppMenuRef = ref/);
+    assert.match(chatPageSource, /const desktopChatAppMenuRef = ref<HTMLElement \| null>\(null\);[\s\S]*const mobileChatAppMenuRef = ref<HTMLElement \| null>\(null\);/);
+    assert.match(chatPageSource, /function handleChatAppMenuOutsidePointer[\s\S]*desktopChatAppMenuRef\.value\?\.contains\(target\)[\s\S]*mobileChatAppMenuRef\.value\?\.contains\(target\)[\s\S]*closeChatAppMenu\(\);/);
+    assert.match(chatPageSource, /ref="desktopChatAppMenuRef"[\s\S]*class="home-corner-actions page-corner-actions chat-app-menu-shell"/);
+    assert.match(chatPageSource, /ref="mobileChatAppMenuRef"[\s\S]*class="chat-app-menu-shell chat-app-menu-shell-mobile"/);
+    assert.match(chatPageSource, /watch\(\(\) => selectedSessionId\.value, \(\) => \{[\s\S]*if \(quickSettingsOpen\.value === 'characters'\) \{[\s\S]*quickSettingsOpen\.value = null;/);
+    assert.match(chatPageSource, /document\.addEventListener\('pointerdown', handleChatAppMenuOutsidePointer\)[\s\S]*document\.addEventListener\('keydown', handleChatAppMenuKeydown\)/);
     assert.doesNotMatch(chatPageSource, /syncWorldbooksFromHost\(\{ keepSelection: true \}\)/);
     assert.match(chatPageSource, /class="chat-quick-settings-overlay"[\s\S]*v-if="quickSettingsOpen === 'api'"[\s\S]*class="tavern-api-settings chat-quick-api-root"[\s\S]*v-else[\s\S]*class="settings-layout chat-quick-settings-layout"/);
-    assert.match(chatPageSource, /<TavernChatPresetSettingsPanel[\s\S]*v-if="quickSettingsOpen === 'chatPreset'"[\s\S]*\/>[\s\S]*<TavernWorldbooksSettingsPanel[\s\S]*v-else-if="quickSettingsOpen === 'worldbooks'"[\s\S]*\/>/);
+    assert.match(chatPageSource, /<TavernCharacterWorkspacePanel[\s\S]*v-if="quickSettingsOpen === 'characters'"[\s\S]*\/>[\s\S]*<TavernChatPresetSettingsPanel[\s\S]*v-else-if="quickSettingsOpen === 'chatPreset'"[\s\S]*\/>[\s\S]*<TavernAssistantPresetSettingsPanel[\s\S]*v-else-if="quickSettingsOpen === 'assistantPreset'"[\s\S]*\/>[\s\S]*<TavernWorldbooksSettingsPanel[\s\S]*v-else-if="quickSettingsOpen === 'worldbooks'"[\s\S]*\/>[\s\S]*<TavernRegexSettingsPanel[\s\S]*v-else-if="quickSettingsOpen === 'regex'"[\s\S]*\/>[\s\S]*<TavernBaseSettingsPanel[\s\S]*v-else-if="quickSettingsOpen === 'base'"[\s\S]*\/>/);
     assert.match(chatPageSource, /class="chat-quick-settings-body"[\s\S]*:class="quickSettingsLayoutClass"/);
     assert.doesNotMatch(chatPageSource, /class="chat-quick-settings-overlay"[\s\S]*@click\.self="closeQuickSettingsModal"/);
     assert.match(chatPageSource, /class="chat-quick-settings-close"[\s\S]*@click="closeQuickSettingsModal"/);
@@ -509,6 +523,9 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.match(chatLayoutCss, /\.chat-quick-settings-overlay \{[\s\S]*position: absolute;[\s\S]*backdrop-filter: blur\(16px\);/);
     assert.match(chatLayoutCss, /\.chat-quick-settings-dialog \{[\s\S]*max-height: min\(88vh, 900px\);/);
     assert.match(chatLayoutCss, /\.chat-quick-settings-dialog \{[\s\S]*grid-template-rows: auto minmax\(0, 1fr\);/);
+    assert.match(chatLayoutCss, /\.tavern-chat\.xb-page \.chat-app-menu-popover \{[\s\S]*top: calc\(100% \+ 8px\);[\s\S]*right: 0;[\s\S]*display: grid;[\s\S]*width: 132px;/);
+    assert.match(chatLayoutCss, /\.tavern-chat\.xb-page \.chat-app-menu-item \{[\s\S]*width: 100%;[\s\S]*min-height: 32px;/);
+    assert.match(chatLayoutCss, /@media \(max-width: 760px\) \{[\s\S]*\.tavern-chat\.xb-page \.chat-app-menu-shell-mobile \{[\s\S]*position: relative;[\s\S]*\.tavern-chat\.xb-page \.chat-app-menu-shell-mobile \.chat-app-menu-popover \{[\s\S]*width: 92px;/);
     assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 34px 0 0;/);
     assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 22px 0 0;/);
     assert.match(chatLayoutCss, /--xb-chat-scroll-padding: 18px 0 0;/);
@@ -518,6 +535,10 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout \{[\s\S]*--xb-settings-control-bg: var\(--xb-bg-card\);[\s\S]*--xb-settings-sheet-bg: var\(--xb-chat-pop-bg\);/);
     assert.match(chatQuickSettingsCss, /\.xb-os-shell\.theme-light \.settings-layout\.chat-quick-settings-layout \{[\s\S]*--xb-settings-control-bg: var\(--xb-paper-plain\);[\s\S]*--xb-settings-control-focus-bg: #ffffff;/);
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout \.xb-main \{[\s\S]*background: transparent;[\s\S]*padding: 0;/);
+    assert.match(chatQuickSettingsCss, /\.chat-quick-settings-body\.is-characters-workspace \{[\s\S]*height: 100%;[\s\S]*display: grid;[\s\S]*overflow: hidden;/);
+    assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-characters-workspace,[\s\S]*\.settings-layout\.chat-quick-settings-layout\.is-characters-workspace \.xb-main \{[\s\S]*height: 100%;[\s\S]*overflow: hidden;/);
+    assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-characters-workspace \.character-workspace-panel \{[\s\S]*height: 100%;[\s\S]*min-height: 0;[\s\S]*overflow: hidden;/);
+    assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-characters-workspace \.character-archive \{[\s\S]*flex: 1 1 auto;[\s\S]*overflow: hidden;/);
     assert.match(chatQuickSettingsCss, /\.chat-quick-settings-body\.is-chatPreset-workspace \{[\s\S]*height: 100%;[\s\S]*display: grid;[\s\S]*overflow: hidden;/);
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-chatPreset-workspace,[\s\S]*\.settings-layout\.chat-quick-settings-layout\.is-chatPreset-workspace \.xb-main,[\s\S]*\.settings-layout\.chat-quick-settings-layout\.is-chatPreset-workspace \.step-panel \{[\s\S]*height: 100%;[\s\S]*overflow: hidden;/);
     assert.match(chatQuickSettingsCss, /\.settings-layout\.chat-quick-settings-layout\.is-chatPreset-workspace \.preset-workspace \{[\s\S]*height: 100%;[\s\S]*display: flex;[\s\S]*overflow: hidden;/);
@@ -654,10 +675,10 @@ test('tavern UI context is grouped by page responsibility instead of one flat ba
     assert.doesNotMatch(contextSource, /TavernContextBucket/);
     assert.doesNotMatch(contextSource, /Record<string,\s*any>/);
     assert.doesNotMatch(contextSource, /\[key:\s*string\]:\s*any/);
-    for (const bucket of ['Shell', 'Chat', 'Manager', 'Memory', 'Workspace', 'Settings']) {
+    for (const bucket of ['Shell', 'Character', 'Chat', 'Manager', 'Memory', 'Workspace', 'Settings']) {
         assert.match(contextSource, new RegExp(`interface Tavern${bucket}Context`));
     }
-    for (const bucket of ['shell', 'chat', 'manager', 'memory', 'workspace']) {
+    for (const bucket of ['shell', 'character', 'chat', 'manager', 'memory', 'workspace']) {
         assert.match(contextSource, new RegExp(`${bucket}: Tavern${bucket[0].toUpperCase()}${bucket.slice(1)}Context`));
         assert.match(appSource, new RegExp(`${bucket}: \\{`));
     }
@@ -671,6 +692,29 @@ test('tavern UI context is grouped by page responsibility instead of one flat ba
     assert.match(workspacePanelSource, /useTavernWorkspaceContext/);
     assert.doesNotMatch(workspacePanelSource, /useTavernChatContext/);
     assert.match(settingsPageSource, /useTavernSettingsContext/);
+});
+
+test('tavern character cards are available as a settings workspace', () => {
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const settingsPageSource = readRepoFile('modules/tavern/app-src/components/settings/TavernSettingsPage.vue');
+    const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
+    const characterPanelSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterWorkspacePanel.vue');
+
+    assert.equal(existsSync(resolve(root, 'modules/tavern/app-src/components/TavernCharacterSelectPage.vue')), false);
+    assert.match(settingsControllerSource, /export type TavernSettingsWorkspaceKey = 'characters' \| 'api'/);
+    assert.match(settingsControllerSource, /key: 'characters'[\s\S]*label: '角色卡'/);
+    assert.match(settingsControllerSource, /key === 'characters'/);
+    assert.match(settingsControllerSource, /normalized === 'characters'/);
+    assert.match(settingsPageSource, /<TavernCharacterWorkspacePanel[\s\S]*activeSettingsWorkspace === 'characters'/);
+    assert.match(appSource, /function openCharacterSelect\(\)[\s\S]*openSettingsWorkspace\('characters'\)/);
+    assert.match(appSource, /view === 'settings'[\s\S]*workspace === 'characters'[\s\S]*refreshCharacterList\(\)/);
+    assert.doesNotMatch(appSource, /TavernCharacterSelectPage|activeView === 'characters'|activeView\.value = 'characters'|view === 'characters'/);
+    assert.doesNotMatch(appSource, /document\.querySelectorAll<HTMLElement>\('\[data-character-card-id\]'\)/);
+    assert.match(characterPanelSource, /const listRef = ref<HTMLElement \| null>\(null\)/);
+    assert.match(characterPanelSource, /root\.querySelectorAll<HTMLElement>\('\[data-character-card-id\]'\)/);
+    assert.match(characterPanelSource, /syncWorldbookState\(targetKey\)/);
+    assert.doesNotMatch(characterPanelSource, /defineExpose/);
+    assert.doesNotMatch(characterPanelSource, /TavernCornerActions|@toggle-theme|@back=/);
 });
 
 test('tavern settings controller owns settings page state and host sync', () => {
@@ -1183,7 +1227,7 @@ test('tavern streaming action-check UI renders from live runtime events and keep
 test('tavern keeps the app exit button on home only', () => {
     const homeSource = readRepoFile('modules/tavern/app-src/components/TavernHomePage.vue');
     const aboutSource = readRepoFile('modules/tavern/app-src/components/TavernAboutPage.vue');
-    const characterSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterSelectPage.vue');
+    const characterSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterWorkspacePanel.vue');
     const chatSource = readRepoFile('modules/tavern/app-src/components/chat/TavernChatPage.vue');
     const settingsSource = readRepoFile('modules/tavern/app-src/components/settings/TavernSettingsPage.vue');
 
@@ -1254,23 +1298,23 @@ test('tavern worldbook preview keeps summary lean and expanded content ephemeral
 });
 
 test('tavern character archive separates new chat from existing session selection', () => {
-    const characterSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterSelectPage.vue');
+    const characterSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterWorkspacePanel.vue');
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const previewCss = readRepoFile('modules/tavern/app-src/styles/characters/preview.css');
     const sessionDbSource = readRepoFile('modules/tavern/shared/session-db.ts');
 
     assert.match(appSource, /const selectedCharacterSessions = computed<TavernSessionRecord\[\]>/);
-    assert.match(appSource, /:selected-character-sessions="selectedCharacterSessions"/);
-    assert.match(appSource, /:session-floor-label="sessionFloorLabel"/);
+    assert.match(appSource, /selectedCharacterSessions,/);
+    assert.match(appSource, /sessionFloorLabel,/);
     assert.match(appSource, /function sessionFloorLabel\(session\?: TavernSessionRecord \| null\)[\s\S]*return '统计中'/);
     assert.match(appSource, /async function refreshSessionMessageCountsForSessions\(targetSessions: TavernSessionRecord\[\] = \[\]\)/);
     assert.match(appSource, /watch\(\(\) => selectedCharacterSessions\.value\.map\(\(session\) => session\.id\)\.join\('\|'\)[\s\S]*refreshSessionMessageCountsForSessions\(selectedCharacterSessions\.value\)/);
     assert.match(sessionDbSource, /export async function countTavernMessages[\s\S]*\.where\('sessionId'\)\.equals\(id\)\.count\(\)/);
     assert.doesNotMatch(sessionDbSource, /countTavernMessages[\s\S]*toArray\(\)\)\.length/);
-    assert.match(appSource, /@open-session="selectSession"/);
-    assert.match(characterSource, /selectedCharacterSessions: TavernCharacterSessionOption\[\]/);
-    assert.match(characterSource, /sessionFloorLabel: \(session: TavernCharacterSessionOption\) => string;/);
-    assert.match(characterSource, /function sessionArchiveMeta\(session: TavernCharacterSessionOption\)[\s\S]*props\.sessionFloorLabel\(session\)/);
+    assert.match(appSource, /openSession: selectSession/);
+    assert.match(characterSource, /selectedCharacterSessions,/);
+    assert.match(characterSource, /sessionFloorLabel,/);
+    assert.match(characterSource, /function sessionArchiveMeta\(session: TavernSessionRecord\)[\s\S]*sessionFloorLabel\(session\)/);
     assert.doesNotMatch(characterSource, /sessionArchiveMeta[\s\S]*chatPresetName|sessionArchiveMeta[\s\S]*presetName/);
     assert.match(characterSource, /class="dossier-summary"[\s\S]*selectedCharacter\.description[\s\S]*selectedCharacter\.personality[\s\S]*selectedCharacter\.scenario/);
     assert.doesNotMatch(characterSource, /class="data-section-title"/);
@@ -1291,7 +1335,7 @@ test('tavern character archive separates new chat from existing session selectio
     assert.match(appSource, /class="worldbook-picker-close"[\s\S]*aria-label="关闭"[\s\S]*\/>/);
     assert.match(characterSource, /v-for="session in selectedCharacterSessions"/);
     assert.match(characterSource, /@click="openSession\(session\.id\)"/);
-    assert.match(characterSource, /@click="\$emit\('enter-selected'\)"/);
+    assert.match(characterSource, /@click="enterSelected"/);
     assert.match(characterSource, /<main\s+v-if="!selectedCharacter"\s+class="character-preview-panel dossier-empty"/);
     assert.doesNotMatch(characterSource, /@dblclick="\$emit\('enter-character'/);
     assert.match(previewCss, /\.dossier-title-actions \{[\s\S]*display: flex;[\s\S]*gap: 8px;/);
@@ -1310,7 +1354,7 @@ test('tavern deleting a selected chat never falls through to another character s
     assert.match(appSource, /const deletedCharacterKey = String\(session\?\.characterKey \|\| ''\)\.trim\(\);/);
     assert.match(appSource, /const nextSameCharacterSession = deletedCharacterKey[\s\S]*\.filter\(\(item\) => item\.id !== id && String\(item\.characterKey \|\| ''\)\.trim\(\) === deletedCharacterKey\)/);
     assert.match(appSource, /if \(nextSameCharacterSession\?\.id\) \{[\s\S]*await setSelectedTavernSessionId\(nextSameCharacterSession\.id\);[\s\S]*activeView\.value = 'chat';/);
-    assert.match(appSource, /selectedSessionId\.value = '';[\s\S]*await setSelectedTavernSessionId\(''\);[\s\S]*selectedCharacterPreviewKey\.value = deletedCharacterKey;[\s\S]*activeView\.value = deletedCharacterKey \? 'characters' : 'home';/);
+    assert.match(appSource, /selectedSessionId\.value = '';[\s\S]*await setSelectedTavernSessionId\(''\);[\s\S]*selectedCharacterPreviewKey\.value = deletedCharacterKey;[\s\S]*openSettingsWorkspace\('characters'\);[\s\S]*activeView\.value = 'home';/);
 });
 
 test('tavern heavy disclosure details bind to ephemeral state instead of keeping bodies mounted', () => {
@@ -1328,7 +1372,7 @@ test('tavern heavy disclosure details bind to ephemeral state instead of keeping
 
     assert.deepEqual(unboundDetails, []);
 
-    const characterSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterSelectPage.vue');
+    const characterSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterWorkspacePanel.vue');
     const conversationSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
     const managerSource = readRepoFile('modules/tavern/app-src/components/chat/TavernManagerPanel.vue');
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');

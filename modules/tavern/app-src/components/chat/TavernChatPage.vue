@@ -1,19 +1,23 @@
 <script setup lang="ts">
-import { computed, onBeforeUpdate, onUpdated, ref, watch } from 'vue';
+import { computed, onBeforeUpdate, onMounted, onUnmounted, onUpdated, ref, watch } from 'vue';
 import { captureElementScrollState, restoreElementScrollState, type ElementScrollSnapshot } from '../../scroll-state';
-import TavernCornerActions from '../TavernCornerActions.vue';
 import TavernContractModal from './TavernContractModal.vue';
 import {
+    useTavernCharacterContext,
     useTavernChatContext,
     useTavernManagerContext,
     useTavernSettingsContext,
     useTavernShellContext,
     useTavernWorkspaceContext,
 } from '../tavern-app-context';
+import TavernCharacterWorkspacePanel from '../TavernCharacterWorkspacePanel.vue';
+import TavernAssistantPresetSettingsPanel from '../settings/TavernAssistantPresetSettingsPanel.vue';
+import TavernBaseSettingsPanel from '../settings/TavernBaseSettingsPanel.vue';
 import TavernChatSidebar from './TavernChatSidebar.vue';
 import TavernChatPresetSettingsPanel from '../settings/TavernChatPresetSettingsPanel.vue';
 import TavernConversationPanel from './TavernConversationPanel.vue';
 import TavernManagerPanel from './TavernManagerPanel.vue';
+import TavernRegexSettingsPanel from '../settings/TavernRegexSettingsPanel.vue';
 import TavernWorkspacePanel from './TavernWorkspacePanel.vue';
 import TavernWorldbooksSettingsPanel from '../settings/TavernWorldbooksSettingsPanel.vue';
 import {
@@ -31,6 +35,7 @@ import {
 import { useTavernMediaQuery } from '../useTavernMediaQuery';
 
 const shell = useTavernShellContext();
+const character = useTavernCharacterContext();
 const chat = useTavernChatContext();
 const manager = useTavernManagerContext();
 const settings = useTavernSettingsContext();
@@ -68,17 +73,35 @@ const {
 const {
     activeSettingsWorkspace,
     apiSettingsRootRef,
+    loadTavernUsers,
+    refreshPresets,
+    refreshRegexFromHost,
     syncChatPresetFromHost,
     syncGlobalWorldbooksFromHost,
     syncWorldbooksForCurrentCharacter,
 } = settings;
+const {
+    refresh: refreshCharacterList,
+} = character;
+
+type ChatQuickWorkspace =
+    | 'characters'
+    | 'api'
+    | 'chatPreset'
+    | 'assistantPreset'
+    | 'worldbooks'
+    | 'regex'
+    | 'base';
 
 let pendingChatScrollSnapshot: ElementScrollSnapshot | null = null;
 let pendingManagerScrollSnapshot: ElementScrollSnapshot | null = null;
 let chatScrollAnchorDirty = true;
 let managerScrollAnchorDirty = true;
 const contractModalOpen = ref(false);
-const quickSettingsOpen = ref<'api' | 'chatPreset' | 'worldbooks' | null>(null);
+const quickSettingsOpen = ref<ChatQuickWorkspace | null>(null);
+const chatAppMenuOpen = ref(false);
+const desktopChatAppMenuRef = ref<HTMLElement | null>(null);
+const mobileChatAppMenuRef = ref<HTMLElement | null>(null);
 const contractSaving = ref(false);
 const contractError = ref('');
 const contractDraft = ref<TavernSessionContract>(normalizeTavernSessionContract(sessionContract.value));
@@ -116,23 +139,36 @@ const authorNoteRoleOptions = [
     { value: XBTavernPromptRole.USER, label: 'User' },
     { value: XBTavernPromptRole.ASSISTANT, label: 'Assistant' },
 ];
+const chatAppMenuItems: Array<{ key: ChatQuickWorkspace; label: string; mobileLabel: string }> = [
+    { key: 'characters', label: '角色卡', mobileLabel: '角色' },
+    { key: 'api', label: 'API 配置', mobileLabel: 'API' },
+    { key: 'chatPreset', label: '聊天预设', mobileLabel: '聊天' },
+    { key: 'assistantPreset', label: '助手预设', mobileLabel: '助手' },
+    { key: 'worldbooks', label: '世界书', mobileLabel: '世界' },
+    { key: 'regex', label: '正则', mobileLabel: '正则' },
+    { key: 'base', label: '基础设置', mobileLabel: '设置' },
+];
 
 function closeMobileChatPanel() {
+    closeChatAppMenu();
     mobileChatPanel.value = 'none';
     mobileMemoryDirectoryOpen.value = false;
 }
 
 function toggleMobileChatPanel(panel: 'directory' | 'workspace') {
+    closeChatAppMenu();
     mobileChatPanel.value = mobileChatPanel.value === panel ? 'none' : panel;
 }
 
 function openMobileSessionsPanel() {
+    closeChatAppMenu();
     chatSidePanel.value = 'sessions';
     mobileChatPanel.value = 'directory';
     mobileMemoryDirectoryOpen.value = false;
 }
 
 function toggleMobileWorkspacePanel(panel: 'state' | 'memory' | 'event') {
+    closeChatAppMenu();
     const sameOpenPanel = mobileChatPanel.value === 'workspace' && chatWorkspacePanel.value === panel;
     chatWorkspacePanel.value = panel;
     mobileChatPanel.value = sameOpenPanel ? 'none' : 'workspace';
@@ -150,10 +186,12 @@ function handleMobileDirectoryClick(event: Event) {
 }
 
 function toggleMobileMemoryDirectory() {
+    closeChatAppMenu();
     mobileMemoryDirectoryOpen.value = !mobileMemoryDirectoryOpen.value;
 }
 
 function openContractModal() {
+    closeChatAppMenu();
     contractError.value = '';
     contractDraft.value = normalizeTavernSessionContract(sessionContract.value);
     contractModalOpen.value = true;
@@ -165,8 +203,12 @@ function closeContractModal() {
 }
 
 const quickSettingsTitle = computed(() => {
+    if (quickSettingsOpen.value === 'characters') {return '角色卡';}
     if (quickSettingsOpen.value === 'worldbooks') {return '世界书';}
     if (quickSettingsOpen.value === 'chatPreset') {return '聊天预设';}
+    if (quickSettingsOpen.value === 'assistantPreset') {return '助手预设';}
+    if (quickSettingsOpen.value === 'regex') {return '正则';}
+    if (quickSettingsOpen.value === 'base') {return '基础设置';}
     return 'API 配置';
 });
 
@@ -174,16 +216,37 @@ const quickSettingsLayoutClass = computed(() => (
     quickSettingsOpen.value ? `is-${quickSettingsOpen.value}-workspace` : ''
 ));
 
-function openQuickSettingsModal(workspace: 'api' | 'chatPreset' | 'worldbooks') {
+function closeChatAppMenu() {
+    chatAppMenuOpen.value = false;
+}
+
+function toggleChatAppMenu() {
+    chatAppMenuOpen.value = !chatAppMenuOpen.value;
+}
+
+function openChatAppWorkspace(workspace: ChatQuickWorkspace) {
+    closeChatAppMenu();
     closeMobileChatPanel();
     activeSettingsWorkspace.value = workspace;
     quickSettingsOpen.value = workspace;
+    if (workspace === 'characters') {
+        void refreshCharacterList();
+    }
     if (workspace === 'chatPreset') {
         void syncChatPresetFromHost();
+    }
+    if (workspace === 'assistantPreset') {
+        void refreshPresets();
     }
     if (workspace === 'worldbooks') {
         void syncWorldbooksForCurrentCharacter();
         void syncGlobalWorldbooksFromHost();
+    }
+    if (workspace === 'regex') {
+        void refreshRegexFromHost();
+    }
+    if (workspace === 'base') {
+        void loadTavernUsers();
     }
 }
 
@@ -231,6 +294,24 @@ function setChatApiSettingsRootRef(element: Element | null) {
     apiSettingsRootRef.value = element instanceof HTMLElement ? element : null;
 }
 
+function handleChatAppMenuOutsidePointer(event: PointerEvent) {
+    if (!chatAppMenuOpen.value) {return;}
+    const target = event.target instanceof Node ? event.target : null;
+    if (
+        target
+        && (
+            desktopChatAppMenuRef.value?.contains(target)
+            || mobileChatAppMenuRef.value?.contains(target)
+        )
+    ) {return;}
+    closeChatAppMenu();
+}
+
+function handleChatAppMenuKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Escape' || !chatAppMenuOpen.value) {return;}
+    closeChatAppMenu();
+}
+
 function toggleContractDraft(key: TavernContractPermissionKey) {
     contractDraft.value = {
         ...contractDraft.value,
@@ -268,9 +349,13 @@ watch(() => selectedSessionId.value, () => {
     contractError.value = '';
     contractModalOpen.value = false;
     contractDraft.value = normalizeTavernSessionContract(sessionContract.value);
+    if (quickSettingsOpen.value === 'characters') {
+        quickSettingsOpen.value = null;
+    }
 });
 
 watch(() => activeView.value, (view) => {
+    closeChatAppMenu();
     if (view !== 'chat') {
         quickSettingsOpen.value = null;
         authorNoteModalOpen.value = false;
@@ -290,6 +375,16 @@ watch(chatScrollAnchorSignature, () => {
 watch(managerScrollAnchorSignature, () => {
     managerScrollAnchorDirty = true;
 }, { flush: 'sync' });
+
+onMounted(() => {
+    document.addEventListener('pointerdown', handleChatAppMenuOutsidePointer);
+    document.addEventListener('keydown', handleChatAppMenuKeydown);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('pointerdown', handleChatAppMenuOutsidePointer);
+    document.removeEventListener('keydown', handleChatAppMenuKeydown);
+});
 
 onBeforeUpdate(() => {
     pendingChatScrollSnapshot = null;
@@ -354,19 +449,106 @@ onUpdated(() => {
       },
     ]"
   >
-    <TavernCornerActions
-      include-api
-      include-chat-preset
-      include-home
-      include-worldbooks
-      home-last
-      :dark="homeThemeDark"
-      @api="openQuickSettingsModal('api')"
-      @chat-preset="openQuickSettingsModal('chatPreset')"
-      @home="activeView = 'home'"
-      @toggle-theme="homeThemeDark = !homeThemeDark"
-      @worldbooks="openQuickSettingsModal('worldbooks')"
-    />
+    <div
+      ref="desktopChatAppMenuRef"
+      class="home-corner-actions page-corner-actions chat-app-menu-shell"
+    >
+      <button
+        type="button"
+        class="home-icon-button home-theme-button"
+        :title="homeThemeDark ? '切换到白天' : '切换到夜间'"
+        :aria-label="homeThemeDark ? '切换到白天' : '切换到夜间'"
+        @click="homeThemeDark = !homeThemeDark"
+      >
+        <svg
+          v-if="homeThemeDark"
+          class="xb-theme-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle
+            cx="12"
+            cy="12"
+            r="4"
+          />
+          <path d="M12 2v2" />
+          <path d="M12 20v2" />
+          <path d="m4.93 4.93 1.41 1.41" />
+          <path d="m17.66 17.66 1.41 1.41" />
+          <path d="M2 12h2" />
+          <path d="M20 12h2" />
+          <path d="m6.34 17.66-1.41 1.41" />
+          <path d="m19.07 4.93-1.41 1.41" />
+        </svg>
+        <span
+          v-else
+          class="xb-theme-glyph"
+          aria-hidden="true"
+        >☾</span>
+      </button>
+      <button
+        type="button"
+        class="home-icon-button page-home-button"
+        title="首页"
+        aria-label="首页"
+        @click="activeView = 'home'"
+      >
+        <svg
+          class="xb-home-icon"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 11.5 12 4l9 7.5" />
+          <path d="M5.5 10.5V20h13v-9.5" />
+          <path d="M9.5 20v-5.5h5V20" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="home-icon-button chat-app-menu-button"
+        title="酒馆操作菜单"
+        aria-label="酒馆操作菜单"
+        :aria-expanded="chatAppMenuOpen"
+        @click="toggleChatAppMenu"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path d="M5 7h14" />
+          <path d="M5 12h14" />
+          <path d="M5 17h14" />
+        </svg>
+      </button>
+      <div
+        v-if="chatAppMenuOpen"
+        class="chat-app-menu-popover"
+        role="menu"
+        aria-label="酒馆操作"
+      >
+        <button
+          v-for="item in chatAppMenuItems"
+          :key="item.key"
+          type="button"
+          class="chat-app-menu-item"
+          role="menuitem"
+          @click="openChatAppWorkspace(item.key)"
+        >
+          <span class="chat-app-menu-label-full">{{ item.label }}</span>
+          <span class="chat-app-menu-label-mobile">{{ item.mobileLabel }}</span>
+        </button>
+      </div>
+    </div>
     <header
       v-if="isMobileChatViewport"
       class="chat-mobile-topbar"
@@ -398,72 +580,6 @@ onUpdated(() => {
           </button>
         </div>
         <div class="chat-mobile-action-group">
-          <button
-            type="button"
-            class="chat-mobile-icon-button chat-mobile-utility-button"
-            title="聊天预设"
-            aria-label="聊天预设"
-            @click="openQuickSettingsModal('chatPreset')"
-          >
-            <svg
-              class="chat-mobile-svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path
-                stroke-width="1.6"
-                d="M5 5h14v10H9l-4 4V5ZM8 9h8M8 12h5"
-              />
-            </svg>
-          </button>
-          <button
-            type="button"
-            class="chat-mobile-icon-button chat-mobile-utility-button"
-            title="API 配置"
-            aria-label="API 配置"
-            @click="openQuickSettingsModal('api')"
-          >
-            <svg
-              class="chat-mobile-svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path
-                stroke-width="1.6"
-                d="M9 7V3M15 7V3M7 11h10M8 7h8v5a4 4 0 0 1-8 0V7ZM12 16v5"
-              />
-            </svg>
-          </button>
-          <button
-            type="button"
-            class="chat-mobile-icon-button chat-mobile-utility-button"
-            title="世界书"
-            aria-label="世界书"
-            @click="openQuickSettingsModal('worldbooks')"
-          >
-            <svg
-              class="chat-mobile-svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path
-                stroke-width="1.6"
-                d="M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18ZM3.8 9h16.4M3.8 15h16.4M12 3c2 2.2 3 5.2 3 9s-1 6.8-3 9M12 3c-2 2.2-3 5.2-3 9s1 6.8 3 9"
-              />
-            </svg>
-          </button>
           <button
             type="button"
             class="chat-mobile-icon-button chat-mobile-utility-button"
@@ -532,6 +648,47 @@ onUpdated(() => {
               <path d="M9.5 20v-5.5h5V20" />
             </svg>
           </button>
+          <div
+            ref="mobileChatAppMenuRef"
+            class="chat-app-menu-shell chat-app-menu-shell-mobile"
+          >
+            <button
+              type="button"
+              class="chat-mobile-icon-button chat-mobile-utility-button chat-app-menu-button"
+              title="酒馆操作菜单"
+              aria-label="酒馆操作菜单"
+              :aria-expanded="chatAppMenuOpen"
+              @click="toggleChatAppMenu"
+            >
+              <svg
+                class="chat-mobile-svg"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M5 7h14" />
+                <path d="M5 12h14" />
+                <path d="M5 17h14" />
+              </svg>
+            </button>
+            <div
+              v-if="chatAppMenuOpen"
+              class="chat-app-menu-popover"
+              role="menu"
+              aria-label="酒馆操作"
+            >
+              <button
+                v-for="item in chatAppMenuItems"
+                :key="item.key"
+                type="button"
+                class="chat-app-menu-item"
+                role="menuitem"
+                @click="openChatAppWorkspace(item.key)"
+              >
+                <span class="chat-app-menu-label-full">{{ item.label }}</span>
+                <span class="chat-app-menu-label-mobile">{{ item.mobileLabel }}</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="chat-mobile-context-row">
@@ -761,11 +918,23 @@ onUpdated(() => {
             :class="quickSettingsLayoutClass"
           >
             <section class="xb-main">
+              <TavernCharacterWorkspacePanel
+                v-if="quickSettingsOpen === 'characters'"
+              />
               <TavernChatPresetSettingsPanel
-                v-if="quickSettingsOpen === 'chatPreset'"
+                v-else-if="quickSettingsOpen === 'chatPreset'"
+              />
+              <TavernAssistantPresetSettingsPanel
+                v-else-if="quickSettingsOpen === 'assistantPreset'"
               />
               <TavernWorldbooksSettingsPanel
                 v-else-if="quickSettingsOpen === 'worldbooks'"
+              />
+              <TavernRegexSettingsPanel
+                v-else-if="quickSettingsOpen === 'regex'"
+              />
+              <TavernBaseSettingsPanel
+                v-else-if="quickSettingsOpen === 'base'"
               />
             </section>
           </div>

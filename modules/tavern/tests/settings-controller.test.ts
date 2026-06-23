@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { computed, nextTick, ref } from 'vue';
 
 import { normalizeTavernDisplaySettings } from '../shared/settings';
-import { useTavernSettingsController } from '../app-src/components/settings/useTavernSettingsController';
+import { useTavernSettingsController, type TavernSettingsWorkspaceKey } from '../app-src/components/settings/useTavernSettingsController';
 
 function flushAsyncState() {
     return new Promise((resolve) => {
@@ -16,7 +16,7 @@ function flushAsyncState() {
 
 test('display settings revert to the last committed values when host save fails', async () => {
     const activeView = ref('home');
-    const activeSettingsWorkspace = ref<'api' | 'chatPreset' | 'worldbooks' | 'regex' | 'assistantPreset' | 'base'>('base');
+    const activeSettingsWorkspace = ref<TavernSettingsWorkspaceKey>('base');
     const agentConfig = ref<Record<string, unknown>>({});
     const tavernDisplaySettings = ref(normalizeTavernDisplaySettings({
         hiddenOutsideCount: 5,
@@ -61,7 +61,7 @@ test('display settings revert to the last committed values when host save fails'
 
 test('runtime chat preset follows the LittleWhiteBox selected preset state', async () => {
     const activeView = ref('chat');
-    const activeSettingsWorkspace = ref<'api' | 'chatPreset' | 'worldbooks' | 'regex' | 'assistantPreset' | 'base'>('chatPreset');
+    const activeSettingsWorkspace = ref<TavernSettingsWorkspaceKey>('chatPreset');
     const agentConfig = ref<Record<string, unknown>>({});
     const tavernDisplaySettings = ref(normalizeTavernDisplaySettings({}));
     const controller = useTavernSettingsController({
@@ -113,7 +113,7 @@ test('runtime chat preset follows the LittleWhiteBox selected preset state', asy
 
 test('chat preset save feedback stays on the save button instead of the status banner', async () => {
     const activeView = ref('settings');
-    const activeSettingsWorkspace = ref<'api' | 'chatPreset' | 'worldbooks' | 'regex' | 'assistantPreset' | 'base'>('chatPreset');
+    const activeSettingsWorkspace = ref<TavernSettingsWorkspaceKey>('chatPreset');
     const agentConfig = ref<Record<string, unknown>>({});
     const tavernDisplaySettings = ref(normalizeTavernDisplaySettings({}));
     const controller = useTavernSettingsController({
@@ -167,7 +167,7 @@ test('chat preset save feedback stays on the save button instead of the status b
 
 test('chat preset server save reports timeout through the save button', async () => {
     const activeView = ref('settings');
-    const activeSettingsWorkspace = ref<'api' | 'chatPreset' | 'worldbooks' | 'regex' | 'assistantPreset' | 'base'>('chatPreset');
+    const activeSettingsWorkspace = ref<TavernSettingsWorkspaceKey>('chatPreset');
     const agentConfig = ref<Record<string, unknown>>({});
     const tavernDisplaySettings = ref(normalizeTavernDisplaySettings({}));
     const timers: Array<{ callback: () => void; delay?: number }> = [];
