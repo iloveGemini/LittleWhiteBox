@@ -1298,6 +1298,8 @@ test('tavern heavy disclosure details bind to ephemeral state instead of keeping
     const characterSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterSelectPage.vue');
     const conversationSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
     const managerSource = readRepoFile('modules/tavern/app-src/components/chat/TavernManagerPanel.vue');
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const markdownToolsSource = readRepoFile('modules/tavern/app-src/components/chat/useTavernMarkdownTools.ts');
     assert.match(characterSource, /useTavernEphemeralDisclosureScope/);
     assert.match(characterSource, /:open="advancedDefinitionDisclosure\.isOpen[\s\S]*class="data-section greeting-picker"/);
     assert.match(characterSource, /v-if="hasMultipleGreetings && advancedDefinitionDisclosure\.isOpen/);
@@ -1305,8 +1307,20 @@ test('tavern heavy disclosure details bind to ephemeral state instead of keeping
     assert.match(conversationSource, /class="tavern-thought-details"[\s\S]*:open="thoughtDisclosure\.isOpen/);
     assert.match(conversationSource, /v-if="thoughtDisclosure\.isOpen\(messageThoughtDisclosureId\(message\)\)"/);
     assert.match(managerSource, /useTavernEphemeralDisclosureScope/);
-    assert.match(managerSource, /v-if="managerDisclosure\.isOpen[\s\S]*class="manager-tool-turn-body"/);
-    assert.match(managerSource, /class="manager-work-drawer"[\s\S]*:open="managerDisclosure\.isOpen/);
+    assert.match(managerSource, /class="manager-work-band"[\s\S]*:open="managerDisclosure\.isOpen/);
+    assert.match(managerSource, /class="manager-work-band"[\s\S]*class="chat-scroll-shell manager-scroll-shell"/);
+    assert.match(managerSource, /v-for="item in managerChatMessageItems"/);
+    assert.match(managerSource, /class="manager-work-section manager-work-live-draft"/);
+    assert.match(managerSource, /isManagerAssistantRunning && !liveManagerChatMessageItems\.length/);
+    assert.match(managerSource, /function handleManagerWorkBandToggle[\s\S]*enhanceManagerMarkdown\(\)[\s\S]*updateManagerScrollButtons\(\)/);
+    assert.match(appSource, /totalItems:\s*\(\) => managerChatMessageDisplayItems\.value\.length/);
+    assert.match(appSource, /getMessageWindow\(\{[\s\S]*\}, managerChatMessageDisplayItems\.value\.length/);
+    assert.match(appSource, /const managerWorkRef = ref<HTMLElement \| null>\(null\)/);
+    assert.match(appSource, /managerWorkMarkdownSignature/);
+    assert.match(markdownToolsSource, /managerWorkRef\?: Ref<HTMLElement \| null>/);
+    assert.match(markdownToolsSource, /options\.managerScrollRef\.value, options\.managerWorkRef\?\.value/);
+    assert.doesNotMatch(managerSource, /class="manager-work-drawer"/);
+    assert.doesNotMatch(managerSource, /class="manager-tool-turn/);
 });
 
 test('tavern settings and chat pages reset ephemeral expanded DOM on scope changes', () => {

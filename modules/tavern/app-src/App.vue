@@ -91,6 +91,7 @@ import {
     createManagerStreamToolDraftState,
     managerToolTurnPreview,
     managerToolTurnSummary,
+    type ManagerChatDisplayItem,
     type ManagerMessageDisplayItem,
 } from './manager-tool-display';
 import {
@@ -400,6 +401,7 @@ const chatLayout = ref<ChatLayout>('balanced');
 const chatSidePanel = ref<ChatSidePanel>('memory');
 const chatComposeTextareaRef = ref<HTMLTextAreaElement | null>(null);
 const managerComposeTextareaRef = ref<HTMLTextAreaElement | null>(null);
+const managerWorkRef = ref<HTMLElement | null>(null);
 const characterArchivePageRef = ref<InstanceType<typeof TavernCharacterSelectPage> | null>(null);
 const chatScrollPane = useTavernScrollPane({
     totalItems: () => selectedSessionMessageTotal.value,
@@ -407,7 +409,7 @@ const chatScrollPane = useTavernScrollPane({
     loadBatchSize,
 });
 const managerScrollPane = useTavernScrollPane({
-    totalItems: () => managerChatDisplayItems.value.length,
+    totalItems: () => managerChatMessageDisplayItems.value.length,
     defaultLimit: hiddenOutsideCount,
     loadBatchSize,
 });
@@ -632,6 +634,7 @@ const {
 } = useTavernMarkdownTools({
     chatScrollRef,
     managerScrollRef,
+    managerWorkRef,
     htmlRenderEnabled,
     htmlThemeDark: homeThemeDark,
     alertDialog: alertTavernDialog,
@@ -1189,6 +1192,8 @@ const runtimeActionCheckSignature = computed(() => runtimeActionCheckEvents.valu
     ].join(':'))
     .join('|'));
 const managerChatDisplayItems = computed(() => buildManagerChatDisplayItems(managerChatMessages.value));
+const managerChatMessageDisplayItems = computed(() => managerChatDisplayItems.value
+    .filter((item): item is ManagerMessageDisplayItem => item.kind === 'message'));
 const liveManagerProtocolMessages = computed(() => {
     const liveState = managerLiveProtocolState.value;
     if (!liveState || liveState.sessionId !== selectedSessionId.value) {return [];}
@@ -1197,8 +1202,8 @@ const liveManagerProtocolMessages = computed(() => {
 const liveManagerChatDisplayItems = computed(() => buildManagerChatDisplayItems(liveManagerProtocolMessages.value));
 const managerMessageWindow = computed(() => getMessageWindow({
     uiMessageWindowLimit: managerMessageWindowLimit.value,
-}, managerChatDisplayItems.value.length, { defaultLimit: hiddenOutsideCount.value }));
-const visibleManagerChatItems = computed(() => managerChatDisplayItems.value.slice(managerMessageWindow.value.startIndex));
+}, managerChatMessageDisplayItems.value.length, { defaultLimit: hiddenOutsideCount.value }));
+const visibleManagerChatItems = computed<ManagerChatDisplayItem[]>(() => managerChatMessageDisplayItems.value.slice(managerMessageWindow.value.startIndex));
 const visibleManagerChatMessages = computed(() => visibleManagerChatItems.value
     .filter((item): item is ManagerMessageDisplayItem => item.kind === 'message')
     .map((item) => item.message));
@@ -1213,6 +1218,22 @@ const liveManagerMarkdownSignature = computed(() => liveManagerChatDisplayItems.
     .map((item) => item.kind === 'message'
         ? `${item.message.sessionId}:${item.message.order}:${markdownSignature(item.message.content)}`
         : `${item.key}:${markdownSignature(item.assistantMessage.content)}:${item.calls.map((call) => `${call.id}:${markdownSignature(call.resultText)}`).join(',')}`)
+    .concat(htmlRenderEnabled.value ? 'html-render:on' : 'html-render:off')
+    .concat(homeThemeDark.value ? 'theme:dark' : 'theme:light')
+    .join('|'));
+const managerWorkMarkdownSignature = computed(() => managerRuns.value
+    .flatMap((run) => {
+        const trace = Array.isArray(run.toolTrace) ? run.toolTrace : [];
+        return trace.map((item, index) => {
+            const record = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+            return [
+                run.id,
+                index,
+                record.id || '',
+                markdownSignature(String(record.preface || '')),
+            ].join(':');
+        });
+    })
     .concat(htmlRenderEnabled.value ? 'html-render:on' : 'html-render:off')
     .concat(homeThemeDark.value ? 'theme:dark' : 'theme:light')
     .join('|'));
@@ -4568,6 +4589,7 @@ watch([
     () => managerMessageWindow.value.startIndex,
     () => visibleManagerMarkdownSignature.value,
     () => liveManagerMarkdownSignature.value,
+    () => managerWorkMarkdownSignature.value,
     () => isManagerAssistantRunning.value,
     () => homeThemeDark.value,
     () => activeView.value,
@@ -4773,6 +4795,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
         currentManagerWorkRun,
         deleteManagerMessageTurn,
         editingMessageDraft,
+        enhanceManagerMarkdown,
         formatRunActivityLine,
         formatRunIssueLine,
         formatRunInputLine,
@@ -4807,6 +4830,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
         managerRunTone,
         managerScrollControlsActive,
         managerScrollRef,
+        managerWorkRef,
         managerStatusLabel,
         managerToolStatusLabel,
         managerToolTone,

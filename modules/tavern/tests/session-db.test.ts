@@ -3472,7 +3472,7 @@ test('tavern manager preserves streamed thoughts and provider tool replay payloa
     assert.equal(((trace?.[0]?.thoughts as Array<{ text?: string }>) || [])[0]?.text, '这里有空间状态变化。');
 });
 
-test('tavern manager chat forwards streamed tool drafts for live tool-turn UI', async () => {
+test('tavern manager chat forwards streamed tool drafts for live manager work status', async () => {
     await db.delete();
     await db.open();
 

@@ -339,6 +339,7 @@ export interface TavernManagerContext {
     currentManagerWorkRun: TavernReadable<TavernManagerRunRecord | null>;
     deleteManagerMessageTurn: TavernCommand<[message: TavernManagerMessageRecord], Promise<void>>;
     editingMessageDraft: Ref<string>;
+    enhanceManagerMarkdown: TavernCommand;
     formatRunActivityLine: TavernCommand<[run: TavernManagerRunRecord], string>;
     formatRunIssueLine: TavernCommand<[run: TavernManagerRunRecord], string>;
     formatRunInputLine: TavernCommand<[run: TavernManagerRunRecord], string>;
@@ -373,6 +374,7 @@ export interface TavernManagerContext {
     managerRunTone: TavernCommand<[runOrStatus: TavernManagerRunRecord | string], string>;
     managerScrollControlsActive: Ref<boolean>;
     managerScrollRef: Ref<HTMLElement | null>;
+    managerWorkRef: Ref<HTMLElement | null>;
     managerStatusLabel: TavernCommand<[status?: string], string>;
     managerToolStatusLabel: TavernCommand<[item: { status?: string; ok?: boolean }], string>;
     managerToolTone: TavernCommand<[item: { status?: string; ok?: boolean }], string>;

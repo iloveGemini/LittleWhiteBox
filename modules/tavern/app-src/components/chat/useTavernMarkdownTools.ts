@@ -15,6 +15,7 @@ export const TAVERN_INLINE_IMAGE_PROGRESS_EVENT = 'xb-tavern:inline-image-progre
 export interface TavernMarkdownToolsOptions {
     chatScrollRef: Ref<HTMLElement | null>;
     managerScrollRef: Ref<HTMLElement | null>;
+    managerWorkRef?: Ref<HTMLElement | null>;
     htmlRenderEnabled: Ref<boolean>;
     htmlThemeDark: Ref<boolean>;
     alertDialog: (options: { title?: string; message?: string; confirmText?: string; tone?: 'default' | 'danger' | 'warning' } | string) => Promise<void>;
@@ -247,7 +248,7 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
 
     function getTavernHtmlIframeForSource(source: MessageEventSource | null): HTMLIFrameElement | null {
         if (!source) {return null;}
-        const roots = [options.chatScrollRef.value, options.managerScrollRef.value].filter(Boolean) as HTMLElement[];
+        const roots = [options.chatScrollRef.value, options.managerScrollRef.value, options.managerWorkRef?.value].filter(Boolean) as HTMLElement[];
         for (const root of roots) {
             const frames = Array.from(root.querySelectorAll<HTMLIFrameElement>(TAVERN_HTML_IFRAME_SELECTOR));
             const match = frames.find((iframe) => iframe.contentWindow === source);
@@ -1740,21 +1741,23 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
     }
 
     function enhanceManagerMarkdown() {
-        const root = options.managerScrollRef.value;
-        if (!root?.querySelectorAll) {return;}
-        root.querySelectorAll<HTMLElement>('.xb-tavern-markdown').forEach((node) => {
-            if (!canEnhanceMarkdownRoot(node)) {return;}
-            const signature = node.dataset.markdownSignature || '';
-            if (node.dataset.markdownEnhanced === signature) {return;}
-            enhanceTavernHtmlCodeBlocks(node);
-            enhanceMarkdownContent(node, {
-                codeBlockClassName: 'xb-tavern-codeblock',
-                codeCopyClassName: 'xb-tavern-code-copy',
-                flattenPreCode: true,
-                htmlBlockMode: options.htmlRenderEnabled.value ? undefined : 'code',
-                skipPreSelector: TAVERN_HTML_PRE_SELECTOR,
+        const roots = [options.managerScrollRef.value, options.managerWorkRef?.value].filter(Boolean) as HTMLElement[];
+        roots.forEach((root) => {
+            if (!root?.querySelectorAll) {return;}
+            root.querySelectorAll<HTMLElement>('.xb-tavern-markdown').forEach((node) => {
+                if (!canEnhanceMarkdownRoot(node)) {return;}
+                const signature = node.dataset.markdownSignature || '';
+                if (node.dataset.markdownEnhanced === signature) {return;}
+                enhanceTavernHtmlCodeBlocks(node);
+                enhanceMarkdownContent(node, {
+                    codeBlockClassName: 'xb-tavern-codeblock',
+                    codeCopyClassName: 'xb-tavern-code-copy',
+                    flattenPreCode: true,
+                    htmlBlockMode: options.htmlRenderEnabled.value ? undefined : 'code',
+                    skipPreSelector: TAVERN_HTML_PRE_SELECTOR,
+                });
+                node.dataset.markdownEnhanced = signature;
             });
-            node.dataset.markdownEnhanced = signature;
         });
     }
 
