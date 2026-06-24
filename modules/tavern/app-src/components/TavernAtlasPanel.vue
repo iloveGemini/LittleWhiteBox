@@ -166,6 +166,15 @@ function atlasNodeGlyphScaleTransform(): string {
     return gameIconScaleTransform(18);
 }
 
+function atlasLinkForLayout(linkId: string): TavernAtlasLink | undefined {
+    return atlas.value.links.find((item) => item.id === linkId);
+}
+
+function atlasLinkLabel(linkId: string): string {
+    const link = atlasLinkForLayout(linkId);
+    return String(link?.label || link?.kind || '').trim();
+}
+
 function resetAtlasPan() {
     atlasPanOffset.value = [0, 0];
     atlasZoom.value = 1;
@@ -345,10 +354,21 @@ function handleAtlasWheel(event: WheelEvent) {
             v-for="link in layout.links"
             :key="link.id"
             class="tavern-atlas-link"
-            :class="`kind-${atlas.links.find((item) => item.id === link.id)?.kind || 'path'}`"
+            :class="`kind-${atlasLinkForLayout(link.id)?.kind || 'path'}`"
             :d="link.path"
             filter="url(#tavern-atlas-sketch)"
           />
+          <text
+            v-for="link in layout.links"
+            :key="`${link.id}:label`"
+            class="tavern-atlas-link-label"
+            :class="`kind-${atlasLinkForLayout(link.id)?.kind || 'path'}`"
+            :x="link.labelX"
+            :y="link.labelY"
+            text-anchor="middle"
+          >
+            {{ atlasLinkLabel(link.id) }}
+          </text>
           <g
             v-for="node in layout.nodes"
             :key="node.key"
@@ -566,11 +586,23 @@ function handleAtlasWheel(event: WheelEvent) {
 .tavern-atlas-link {
     fill: none;
     stroke: #7e6746;
-    stroke-width: 2;
+    stroke-width: 2.1;
     stroke-dasharray: 7 5;
     stroke-linecap: round;
     stroke-linejoin: round;
-    opacity: 0.74;
+    opacity: 0.82;
+}
+
+.tavern-atlas-link.kind-road {
+    stroke: #7a4b25;
+    stroke-width: 2.45;
+    stroke-dasharray: none;
+    opacity: 0.86;
+}
+
+.tavern-atlas-link.kind-path {
+    stroke: #7e6746;
+    stroke-dasharray: 7 5;
 }
 
 .tavern-atlas-link.kind-portal {
@@ -585,6 +617,25 @@ function handleAtlasWheel(event: WheelEvent) {
     stroke: #6f604a;
     stroke-width: 1.8;
     stroke-dasharray: 2 4;
+}
+
+.tavern-atlas-link-label {
+    fill: rgba(45, 33, 24, 0.82);
+    paint-order: stroke;
+    pointer-events: none;
+    stroke: rgba(236, 222, 186, 0.92);
+    stroke-linejoin: round;
+    stroke-width: 5;
+    font: 10px/1 var(--xb-font-ui);
+}
+
+.tavern-atlas-link-label.kind-road {
+    fill: #5a361e;
+    font-weight: 600;
+}
+
+.tavern-atlas-link-label.kind-portal {
+    fill: #653b85;
 }
 
 .tavern-atlas-node {

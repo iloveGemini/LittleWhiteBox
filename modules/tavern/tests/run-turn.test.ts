@@ -1959,6 +1959,9 @@ test('xb tavern run turn defers accepted-turn manager work until the next user s
     assert.match(managerPrompt, /First appearance does not require a prior/i);
     assert.match(managerPrompt, /what defines the boundary, where entrances and exits are/i);
     assert.match(managerPrompt, /For indoor scenes, use an outer-wall rect as the anchor/i);
+    assert.match(managerPrompt, /Let the scene pressure shape composition/i);
+    assert.match(managerPrompt, /A house becomes walls, doors, windows, yard, and road edge/i);
+    assert.match(managerPrompt, /Do not invent a complete floor plan just to make the map look full/i);
     assert.match(managerPrompt, /`meta\.viewBox` is the camera/i);
     assert.match(managerPrompt, /at least one drawable spatial geometry element/i);
     assert.match(managerPrompt, /Place text labels 15-25 units beside what they describe/i);
