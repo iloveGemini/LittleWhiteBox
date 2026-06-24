@@ -349,7 +349,6 @@ export interface TavernChatContext {
     isEditingMessage: TavernCommand<[message: TavernMessageRecord], boolean>;
     isCancellingRun: Ref<boolean>;
     isRunning: Ref<boolean>;
-    latestErrorMessage: TavernReadable<string>;
     markdownSignature: TavernCommand<[text?: string], string>;
     htmlRenderEnabled: Ref<boolean>;
     messageKey: TavernCommand<[message: TavernMessageRecord], string>;

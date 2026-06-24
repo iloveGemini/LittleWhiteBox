@@ -456,25 +456,6 @@
     white-space: nowrap;
 }
 
-.chat-compose .compose-error {
-    position: relative;
-    z-index: 1;
-    grid-column: 1 / -1;
-    border-left: 2px solid var(--xb-danger);
-    background: var(--xb-chat-pop-bg);
-    color: var(--xb-danger);
-    margin: -6px 0 0;
-    padding: 7px 10px;
-    font-size: 12px;
-}
-
-.chat-compose-shell>.compose-error {
-    grid-column: 1 / -1;
-    margin: 0;
-    border-bottom: 1px solid var(--xb-rule);
-    background: transparent;
-}
-
 @media (max-width: 980px) {
     .tavern-chat.xb-page .chat-main {
         --xb-compose-safe-space: 40px;

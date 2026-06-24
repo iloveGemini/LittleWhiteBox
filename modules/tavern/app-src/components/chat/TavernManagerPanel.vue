@@ -67,7 +67,6 @@ const {
     managerCompactionOverlay,
     managerComposeTextareaRef,
     managerInputDraft,
-    managerInputStatus,
     managerMessageWindow,
     managerRuns,
     managerRunTone,
@@ -628,6 +627,10 @@ watch(
         >
           还没有和助手对话。
         </p>
+        <div
+          class="chat-compose-spacer"
+          aria-hidden="true"
+        />
       </div>
       <TavernScrollControls
         extra-class="manager-scroll-helpers"
@@ -639,32 +642,42 @@ watch(
       />
     </div>
 
-    <form
-      class="manager-compose chat-compose"
-      @submit.prevent="handleManagerSubmit"
-    >
+    <div class="chat-compose-dock manager-compose-dock">
       <div
-        v-if="managerInputStatus"
-        class="compose-error"
+        class="chat-compose-shell manager-compose-shell"
+        :class="{ 'has-text': !!managerInputDraft.trim() }"
       >
-        {{ managerInputStatus }}
+        <form
+          class="manager-compose chat-compose"
+          @submit.prevent="handleManagerSubmit"
+        >
+          <textarea
+            :ref="setManagerComposeTextareaRef"
+            v-model="managerInputDraft"
+            rows="1"
+            placeholder="和助手说一句话..."
+            :disabled="isManagerAssistantRunning"
+            @input="handleComposeInput"
+            @keydown="handleManagerComposeKeydown"
+          />
+          <button
+            type="submit"
+            class="primary-action"
+            :disabled="!canSendManagerMessage"
+            :aria-label="isManagerAssistantCancelling ? '正在停止' : isManagerAssistantRunning ? '停止' : '发送'"
+          >
+            <span
+              class="compose-send-icon"
+              aria-hidden="true"
+            >
+              {{ isManagerAssistantCancelling ? '...' : isManagerAssistantRunning ? '■' : '➤' }}
+            </span>
+            <span class="compose-send-label">
+              {{ isManagerAssistantCancelling ? '正在停止' : isManagerAssistantRunning ? '停止' : '发送' }}
+            </span>
+          </button>
+        </form>
       </div>
-      <textarea
-        :ref="setManagerComposeTextareaRef"
-        v-model="managerInputDraft"
-        rows="1"
-        placeholder="和助手说一句话..."
-        :disabled="isManagerAssistantRunning"
-        @input="handleComposeInput"
-        @keydown="handleManagerComposeKeydown"
-      />
-      <button
-        type="submit"
-        class="primary-action"
-        :disabled="!canSendManagerMessage"
-      >
-        {{ isManagerAssistantCancelling ? '正在停止' : isManagerAssistantRunning ? '停止' : '发送' }}
-      </button>
-    </form>
+    </div>
   </section>
 </template>

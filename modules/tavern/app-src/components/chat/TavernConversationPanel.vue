@@ -67,7 +67,6 @@ const {
     isEditingMessage,
     isCancellingRun,
     isRunning,
-    latestErrorMessage,
     markdownSignature,
     htmlRenderEnabled,
     messageKey,
@@ -702,12 +701,6 @@ watch(isMobileActionTrayViewport, (isMobile) => {
         class="chat-compose-shell"
         :class="{ 'has-text': !!currentUserMessage.trim() }"
       >
-        <div
-          v-if="latestErrorMessage"
-          class="compose-error"
-        >
-          {{ latestErrorMessage }}
-        </div>
         <div class="compose-menu-shell">
           <button
             type="button"

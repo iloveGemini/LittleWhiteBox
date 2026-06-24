@@ -168,14 +168,6 @@ textarea:disabled {
     background: #fff;
 }
 
-.compose-error {
-    grid-column: 1 / -1;
-    border-left: 2px solid var(--xb-danger);
-    color: var(--xb-danger);
-    padding-left: 10px;
-    font-size: 12px;
-}
-
 .panel h2 {
     margin: 0 0 12px;
     color: var(--xb-text-main);
@@ -374,6 +366,33 @@ pre {
         linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent 160px),
         linear-gradient(90deg, rgba(115, 222, 200, 0.028), transparent 28%, rgba(212, 180, 109, 0.018) 72%, transparent),
         var(--xb-bg-deep);
+}
+
+.tavern-toast {
+    position: fixed;
+    top: max(18px, env(safe-area-inset-top, 0px));
+    left: 50%;
+    z-index: 100300;
+    max-width: min(520px, calc(100vw - 28px));
+    border: 1px solid var(--xb-rule);
+    border-radius: 10px;
+    background: var(--xb-chat-pop-bg, var(--xb-bg-card));
+    color: var(--xb-text-main);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.18);
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.35;
+    pointer-events: none;
+    transform: translateX(-50%);
+}
+
+.tavern-toast.tone-warning {
+    border-color: rgba(224, 187, 105, 0.45);
+}
+
+.tavern-toast.tone-danger {
+    border-color: rgba(185, 90, 80, 0.55);
+    color: var(--xb-danger);
 }
 
 .eyebrow {

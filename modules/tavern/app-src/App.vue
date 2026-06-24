@@ -198,7 +198,11 @@ const historyMode = ref<'raw' | 'squash'>('raw');
 const runtimeText = ref('');
 const runtimeThoughts = ref<Array<{ label?: string; text?: string }>>([]);
 const runtimeError = ref('');
-const composeErrorMessage = ref('');
+const tavernToast = ref<{
+    id: number;
+    message: string;
+    tone: 'info' | 'warning' | 'danger';
+} | null>(null);
 const runtimeProvider = ref('');
 const runtimeModel = ref('');
 const runtimeUserMessageVisible = ref(false);
@@ -622,7 +626,7 @@ let characterPreviewRequestSequence = 0;
 let characterWorldbookRequestSequence = 0;
 let simulateRequestSequence = 0;
 let managerCompactionOverlayHideTimer: number | null = null;
-let composeErrorHideTimer: number | null = null;
+let tavernToastTimer: number | null = null;
 let managerRecordsPollTimer: number | null = null;
 let managerRecordsPollRunning = false;
 let sessionContextSyncSequence = 0;
@@ -917,11 +921,6 @@ const chatMessageWindow = computed(() => {
     };
 });
 const visibleChatMessages = computed(() => loadedSessionMessages.value);
-const latestErrorMessage = computed(() => selectedSessionCharacterError.value || composeErrorMessage.value);
-const latestSavedChatError = computed(() => {
-    const lastMessage = latestSessionMessage.value;
-    return lastMessage?.error ? `${lastMessage.sessionId}:${lastMessage.order}:${lastMessage.content || ''}` : '';
-});
 const {
     archivedManagerRuns,
     currentManagerWorkRun,
@@ -1292,31 +1291,25 @@ function describeError(error: unknown) {
     return error instanceof Error ? error.message : String(error || 'unknown_error');
 }
 
-function clearComposeError() {
-    if (composeErrorHideTimer) {
-        window.clearTimeout(composeErrorHideTimer);
-        composeErrorHideTimer = null;
-    }
-    composeErrorMessage.value = '';
-}
-
-function showComposeError(message = '', durationMs = 4200) {
+function showTavernToast(
+    message = '',
+    options: { tone?: 'info' | 'warning' | 'danger'; durationMs?: number } = {},
+) {
     const text = String(message || '').trim();
-    if (!text) {
-        clearComposeError();
-        return;
+    if (!text) {return;}
+    if (tavernToastTimer) {
+        window.clearTimeout(tavernToastTimer);
+        tavernToastTimer = null;
     }
-    if (composeErrorHideTimer) {
-        window.clearTimeout(composeErrorHideTimer);
-        composeErrorHideTimer = null;
-    }
-    composeErrorMessage.value = text;
-    composeErrorHideTimer = window.setTimeout(() => {
-        composeErrorHideTimer = null;
-        if (composeErrorMessage.value === text) {
-            composeErrorMessage.value = '';
-        }
-    }, durationMs);
+    tavernToast.value = {
+        id: Date.now(),
+        message: text,
+        tone: options.tone || 'info',
+    };
+    tavernToastTimer = window.setTimeout(() => {
+        tavernToastTimer = null;
+        tavernToast.value = null;
+    }, Math.max(1200, options.durationMs ?? 3600));
 }
 
 function postToHost(type: string, payload: Record<string, unknown> = {}) {
@@ -2076,7 +2069,6 @@ function setSelectedSessionCharacterError(error: unknown, sessionId = selectedSe
     if (String(sessionId || '').trim() !== String(selectedSessionId.value || '').trim()) {return;}
     const errorText = describeError(error);
     selectedSessionCharacterError.value = errorText;
-    showComposeError(errorText, 8000);
 }
 
 function buildSessionContextSnapshotBase(session: TavernSessionRecord): XbTavernContext {
@@ -3906,7 +3898,7 @@ async function resolveSlashCommandMessageText(messageText: string, options: { re
     if (!pipe) {
         currentUserMessage.value = '';
         void nextTick(() => resetTextareaHeight(chatComposeTextareaRef.value));
-        showComposeError('斜杠命令已执行，没有输出。', 2600);
+        showTavernToast('命令已执行，没有输出。', { tone: 'info', durationMs: 2200 });
         return '';
     }
     return pipe;
@@ -4348,16 +4340,15 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
         cancelActiveRun();
         return;
     }
-    clearComposeError();
     let messageText = String(options.messageText ?? currentUserMessage.value ?? '').trim();
     if (!messageText) {
         runtimeError.value = '先写一句话。';
-        showComposeError('先写一句话。');
+        showTavernToast('先写一句话。', { tone: 'info', durationMs: 1800 });
         return;
     }
     if (selectedSessionCharacterError.value) {
         runtimeError.value = selectedSessionCharacterError.value;
-        showComposeError(selectedSessionCharacterError.value, 8000);
+        showTavernToast(selectedSessionCharacterError.value, { tone: 'warning', durationMs: 7000 });
         return;
     }
     try {
@@ -4365,7 +4356,7 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
     } catch (error) {
         const errorText = describeError(error);
         runtimeError.value = errorText;
-        showComposeError(errorText);
+        showTavernToast(`命令执行失败：${errorText}`, { tone: 'warning', durationMs: 5000 });
         return;
     }
     if (!messageText) {
@@ -4376,7 +4367,6 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
     isRunning.value = true;
     isCancellingRun.value = false;
     runtimeError.value = '';
-    clearComposeError();
     cancelPendingRuntimeStreamFrame();
     pendingRuntimeStreamSnapshot = null;
     runtimeText.value = '';
@@ -4407,6 +4397,7 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
         runtimeUserMessageVisible.value = true;
         scrollChatToBottom(true);
     }
+    let assistantMessageSaved = false;
     try {
         if (controller.signal.aborted) {
             const pendingUserMessage = runtimePendingUserMessage.value;
@@ -4474,6 +4465,7 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
                 scrollChatToBottom(true);
             },
             onAssistantMessageSaved: async (sessionId, message) => {
+                assistantMessageSaved = true;
                 selectedSessionId.value = sessionId;
                 flushRuntimeStreamSnapshotNow();
                 upsertLoadedSessionMessage(message);
@@ -4504,7 +4496,11 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
             currentUserMessage.value = pendingUserMessage;
             void nextTick(() => resetTextareaHeight(chatComposeTextareaRef.value));
         }
-        runtimeError.value = error instanceof Error ? error.message : String(error || 'run_failed');
+        const errorText = describeError(error || 'run_failed');
+        runtimeError.value = errorText;
+        if (!assistantMessageSaved) {
+            showTavernToast(errorText, { tone: 'warning', durationMs: 6000 });
+        }
     } finally {
         if (activeRunController.value === controller) {
             activeRunController.value = null;
@@ -4594,20 +4590,6 @@ watch(() => selectedSessionId.value, () => {
         scrollChatToBottom(true);
         scrollManagerToBottom(true);
     });
-});
-
-watch(runtimeError, (message) => {
-    if (message) {
-        showComposeError(message);
-    }
-});
-
-watch(latestSavedChatError, (signature) => {
-    if (!signature) {return;}
-    const errorText = signature.split(':').slice(2).join(':').trim();
-    if (errorText) {
-        showComposeError(errorText);
-    }
 });
 
 watch(selectedMemoryFileEntry, async (file) => {
@@ -4732,7 +4714,6 @@ provide(TAVERN_APP_UI_CONTEXT, {
         isEditingMessage,
         isCancellingRun,
         isRunning,
-        latestErrorMessage,
         markdownSignature,
         htmlRenderEnabled,
         messageKey,
@@ -4957,9 +4938,9 @@ onUnmounted(() => {
     tavernDrawController.value?.abort();
     chatScrollPane.cleanup();
     managerScrollPane.cleanup();
-    if (composeErrorHideTimer) {
-        window.clearTimeout(composeErrorHideTimer);
-        composeErrorHideTimer = null;
+    if (tavernToastTimer) {
+        window.clearTimeout(tavernToastTimer);
+        tavernToastTimer = null;
     }
     if (managerRecordsPollTimer) {
         window.clearInterval(managerRecordsPollTimer);
@@ -5008,6 +4989,17 @@ onUnmounted(() => {
         v-if="activeView === 'settings'"
       />
     </section>
+
+    <div
+      v-if="tavernToast"
+      :key="tavernToast.id"
+      class="tavern-toast"
+      :class="`tone-${tavernToast.tone}`"
+      role="status"
+      aria-live="polite"
+    >
+      {{ tavernToast.message }}
+    </div>
 
     <TavernRequestLogModal
       v-if="showPromptInspector"
