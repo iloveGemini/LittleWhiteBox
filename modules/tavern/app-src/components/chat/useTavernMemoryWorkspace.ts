@@ -18,6 +18,7 @@ export interface TavernMemoryWorkspaceOptions {
     selectedMemoryFilePath: Ref<string>;
     selectedMemoryFileRecord: Ref<TavernMemoryFileRecord | null>;
     selectedSessionId: Ref<string>;
+    commitAcceptedState: (sessionId?: string) => Promise<void>;
     confirmDialog: (options: { title?: string; message?: string; confirmText?: string; cancelText?: string; tone?: 'default' | 'danger' | 'warning' } | string) => Promise<boolean>;
     refreshRecords: (sessionId?: string) => Promise<void>;
 }
@@ -92,6 +93,7 @@ export function useTavernMemoryWorkspace(options: TavernMemoryWorkspaceOptions) 
         options.memoryEditorStatus.value = '保存中';
         try {
             await writeTavernMemoryFile(options.selectedSessionId.value, file.path, options.memoryEditorDraft.value, { source: 'user' });
+            await options.commitAcceptedState(options.selectedSessionId.value);
             await options.refreshRecords(options.selectedSessionId.value);
             options.memoryEditorLoadedPath.value = file.path;
             options.memoryEditorBaseContent.value = options.memoryEditorDraft.value;

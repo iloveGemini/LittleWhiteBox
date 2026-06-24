@@ -1103,13 +1103,20 @@ test('tavern draw progress keeps a local cooldown ticker instead of freezing the
 test('tavern memory editor actions live outside the app controller', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const memoryWorkspaceSource = readRepoFile('modules/tavern/app-src/components/chat/useTavernMemoryWorkspace.ts');
+    const contextSource = readRepoFile('modules/tavern/app-src/components/tavern-app-context.ts');
     assert.match(appSource, /useTavernMemoryWorkspace/);
     assert.doesNotMatch(appSource, /async function saveSelectedMemoryFile/);
     assert.doesNotMatch(appSource, /async function loadSelectedMemoryFileRecord/);
     assert.doesNotMatch(appSource, /function enterMemoryEditMode/);
     assert.match(memoryWorkspaceSource, /async function saveSelectedMemoryFile/);
+    assert.match(memoryWorkspaceSource, /writeTavernMemoryFile\(options\.selectedSessionId\.value, file\.path[\s\S]*await options\.commitAcceptedState\(options\.selectedSessionId\.value\);[\s\S]*await options\.refreshRecords\(options\.selectedSessionId\.value\);/);
     assert.match(memoryWorkspaceSource, /async function loadSelectedMemoryFileRecord/);
     assert.match(memoryWorkspaceSource, /function enterMemoryEditMode/);
+    assert.match(contextSource, /commitAcceptedState: TavernCommand<\[sessionId\?: string\], Promise<void>>/);
+    assert.match(appSource, /async function commitAcceptedState\(sessionId = selectedSessionId\.value\) \{[\s\S]*await saveAcceptedStateSnapshot\(id\);[\s\S]*\}/);
+    assert.match(appSource, /commitAcceptedState,/);
+    assert.match(appSource, /if \(\(result\.changedFiles \|\| \[\]\)\.length \|\| \(result\.changedTasks \|\| \[\]\)\.length\) \{[\s\S]*await commitAcceptedState\(managerSessionId\);[\s\S]*\}[\s\S]*await refreshManagerRecords\(managerSessionId\);/);
+    assert.doesNotMatch(appSource, /changedStates[\s\S]{0,120}commitAcceptedState/);
 });
 
 test('tavern streaming action-check UI renders from live runtime events and keeps dark card styling aligned', () => {

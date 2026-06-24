@@ -2790,6 +2790,33 @@ test('accepted state snapshot saves memory and tasks on the same floor', async (
     assert.equal((await listTavernTaskSnapshots(session.id))[0]?.floor, 1);
 });
 
+test('accepted state snapshot preserves user memory edits against later rollback', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Manual accepted memory' });
+    await appendTavernMessage(session.id, { role: 'user', content: '第一步。' });
+    const assistant1 = await appendTavernMessage(session.id, { role: 'assistant', content: '第一步成立。' });
+    await appendTavernMessage(session.id, { role: 'user', content: '第二步。' });
+    const assistant2 = await appendTavernMessage(session.id, { role: 'assistant', content: '第二步成立。' });
+
+    await writeTavernMemoryFile(session.id, 'memory/state.md', '# 会话记忆\n\n旧锚点。', { source: 'manager' });
+    await saveAcceptedStateSnapshot(session.id, assistant1.order);
+    await writeTavernMemoryFile(session.id, 'memory/state.md', '# 会话记忆\n\n用户手动修正。', { source: 'user' });
+    const saved = await saveAcceptedStateSnapshot(session.id);
+    const duplicate = await saveAcceptedStateSnapshot(session.id);
+
+    assert.equal(saved.floor, assistant2.order);
+    assert.equal(saved.memorySnapshotSaved, true);
+    assert.equal(duplicate.memorySnapshotSaved, false);
+    assert.deepEqual((await listTavernMemorySnapshots(session.id)).map((snapshot) => snapshot.floor), [assistant1.order, assistant2.order]);
+
+    await writeTavernMemoryFile(session.id, 'memory/state.md', '# 会话记忆\n\n未来临时内容。', { source: 'manager' });
+    await restoreTavernMemoryToFloor(session.id, assistant2.order);
+
+    assert.match((await getTavernMemoryFile(session.id, 'memory/state.md'))?.content || '', /用户手动修正/);
+});
+
 test('manager event snapshot rolls back failed event writes', async () => {
     await db.delete();
     await db.open();

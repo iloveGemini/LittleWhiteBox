@@ -65,6 +65,7 @@ import {
 } from '../shared/session-db';
 import { getTavernAtlasStateForSession, getTavernMapStateForSession, type TavernMapStateDocumentItem } from '../shared/structured-state';
 import { listTavernTasks, restoreTavernTasksToFloor, trimTavernTaskSnapshotsFromFloor } from '../shared/tasks';
+import { saveAcceptedStateSnapshot } from '../shared/accepted-state';
 import {
     normalizeTavernSessionContract,
     type TavernSessionContract,
@@ -3067,6 +3068,12 @@ function shortText(value = '', limit = 180) {
     return text.length > limit ? `${text.slice(0, limit)}...` : text;
 }
 
+async function commitAcceptedState(sessionId = selectedSessionId.value) {
+    const id = String(sessionId || '').trim();
+    if (!id) {return;}
+    await saveAcceptedStateSnapshot(id);
+}
+
 const {
     discardMemoryDraft,
     enterMemoryEditMode,
@@ -3090,6 +3097,7 @@ const {
     selectedMemoryFilePath,
     selectedMemoryFileRecord,
     selectedSessionId,
+    commitAcceptedState,
     confirmDialog: confirmTavernDialog,
     refreshRecords: refreshManagerRecords,
 });
@@ -4256,6 +4264,9 @@ async function sendManagerQuestion(
         if (selectedSessionId.value === managerSessionId) {
             managerChatMessages.value = await listTavernManagerMessages(managerSessionId);
         }
+        if ((result.changedFiles || []).length || (result.changedTasks || []).length) {
+            await commitAcceptedState(managerSessionId);
+        }
         await refreshManagerRecords(managerSessionId);
         managerInputStatus.value = '';
     } catch (error) {
@@ -4818,6 +4829,7 @@ provide(TAVERN_APP_UI_CONTEXT, {
     },
     memory: {
         activeMemoryFiles,
+        commitAcceptedState,
         discardMemoryDraft,
         enterMemoryEditMode,
         expandMemoryFileGroup,

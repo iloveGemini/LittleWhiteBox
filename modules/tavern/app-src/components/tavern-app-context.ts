@@ -455,6 +455,7 @@ export interface TavernManagerContext {
 
 export interface TavernMemoryContext {
     activeMemoryFiles: TavernReadable<TavernMemoryIndexFileEntry[]>;
+    commitAcceptedState: TavernCommand<[sessionId?: string], Promise<void>>;
     discardMemoryDraft: TavernCommand;
     enterMemoryEditMode: TavernCommand;
     expandMemoryFileGroup: TavernCommand<[groupKey?: string]>;
