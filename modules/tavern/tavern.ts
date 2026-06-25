@@ -50,6 +50,7 @@ interface TavernFacade {
     open: () => Promise<void>;
     close: () => void;
     refreshContext: (options?: Record<string, unknown>) => Promise<void>;
+    refreshDrawStatus: () => void;
     refreshRenderSettings: () => void;
 }
 
@@ -444,12 +445,16 @@ function handleDrawStatus(payload: Record<string, unknown> = {}): void {
     });
 }
 
+function refreshDrawStatus(): void {
+    postToFrame('xb-tavern:draw-status-changed', getDrawStatus());
+}
+
 function getDrawProviderSettingsFacade(provider = ''): DrawProviderSettingsFacade | undefined {
     const key = String(provider || '').trim().toLowerCase();
     if (key === 'novelai' || key === 'novel') {
         return window.xiaobaixNovelDraw;
     }
-    if (key === 'sd-webui' || key === 'sd' || key === 'stable-diffusion') {
+    if (key === 'sdwebui' || key === 'sd-webui' || key === 'sd' || key === 'stable-diffusion') {
         return window.xiaobaixSdDraw;
     }
     if (key === 'comfyui' || key === 'comfy') {
@@ -1317,6 +1322,7 @@ export async function initTavern(): Promise<void> {
         open: openTavern,
         close: closeTavern,
         refreshContext,
+        refreshDrawStatus,
         refreshRenderSettings,
     };
 }

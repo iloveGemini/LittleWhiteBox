@@ -340,12 +340,15 @@ function handleDrawStatus(payload = {}) {
     ...getDrawStatus()
   });
 }
+function refreshDrawStatus() {
+  postToFrame("xb-tavern:draw-status-changed", getDrawStatus());
+}
 function getDrawProviderSettingsFacade(provider = "") {
   const key = String(provider || "").trim().toLowerCase();
   if (key === "novelai" || key === "novel") {
     return window.xiaobaixNovelDraw;
   }
-  if (key === "sd-webui" || key === "sd" || key === "stable-diffusion") {
+  if (key === "sdwebui" || key === "sd-webui" || key === "sd" || key === "stable-diffusion") {
     return window.xiaobaixSdDraw;
   }
   if (key === "comfyui" || key === "comfy") {
@@ -1184,6 +1187,7 @@ async function initTavern() {
     open: openTavern,
     close: closeTavern,
     refreshContext,
+    refreshDrawStatus,
     refreshRenderSettings
   };
 }

@@ -178,6 +178,12 @@ async function initActiveDrawProvider() {
     }
 }
 
+function notifyTavernDrawStatusChanged() {
+    try {
+        window.xiaobaixTavern?.refreshDrawStatus?.();
+    } catch { }
+}
+
 function installDrawFacade() {
     function joinDrawTags(...parts) {
         return parts
@@ -918,7 +924,11 @@ async function setupSettings() {
                 extension_settings[EXT_ID].drawProvider = next;
                 saveSettingsDebounced();
 
-                await initActiveDrawProvider();
+                try {
+                    await initActiveDrawProvider();
+                } finally {
+                    notifyTavernDrawStatusChanged();
+                }
                 try { refreshFourthWallFloorTools(); } catch { }
                 syncFeatureActionButtons();
             });
@@ -1079,6 +1089,7 @@ async function setupSettings() {
             settings.drawProvider = 'disabled';
             extension_settings[EXT_ID].drawProvider = 'disabled';
             $('#xiaobaix_draw_provider').val('disabled');
+            notifyTavernDrawStatusChanged();
             syncFeatureActionButtons();
             setChecked('xiaobaix_use_blob', false);
             settings.wrapperIframe = true;

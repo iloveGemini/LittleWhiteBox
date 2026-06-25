@@ -1279,6 +1279,7 @@ test('tavern draw capsule stays in-app and opens native provider settings', () =
     const chatPageSource = readRepoFile('modules/tavern/app-src/components/chat/TavernChatPage.vue');
     const layoutCss = readRepoFile('modules/tavern/app-src/styles/chat/layout.css');
     const tavernHostSource = readRepoFile('modules/tavern/tavern.ts');
+    const indexSource = readRepoFile('index.js');
     const novelDrawSource = readRepoFile('modules/draw/providers/novelai/novel-draw.js');
     const sdDrawSource = readRepoFile('modules/draw/providers/sd-webui/sd-draw.js');
     const comfyDrawSource = readRepoFile('modules/draw/providers/comfyui/comfy-draw.js');
@@ -1299,6 +1300,8 @@ test('tavern draw capsule stays in-app and opens native provider settings', () =
     assert.match(appSource, /function findLatestDrawableAssistantMessage\(\): TavernMessageRecord \| null \{[\s\S]*message\.role === 'assistant'[\s\S]*canDrawMessage\(message\)/);
     assert.match(appSource, /async function drawLatestAssistantMessage\(\): Promise<void> \{[\s\S]*showTavernToast\('没有可配图的回复'[\s\S]*if \(isDrawingMessage\(message\)\) \{[\s\S]*await drawMessage\(message\);[\s\S]*showTavernToast\('画图模块初始化中'/);
     assert.match(appSource, /async function openTavernDrawSettings\(\): Promise<void> \{[\s\S]*requestHost\('xb-tavern:draw-open-settings'/);
+    assert.match(appSource, /function applyTavernDrawStatus\(payload: Record<string, unknown> = \{\}\) \{[\s\S]*provider: String\(payload\.provider \|\| 'disabled'\)[\s\S]*ready: payload\.ready === true/);
+    assert.match(appSource, /if \(data\.type === 'xb-tavern:draw-status-changed'\) \{[\s\S]*applyTavernDrawStatus\(data\.payload \|\| \{\}\);[\s\S]*return;/);
     assert.match(appSource, /postToHost\('xb-tavern:frame-ready'\);[\s\S]*void refreshTavernDrawStatus\(\);/);
 
     assert.match(conversationSource, /<div class="chat-head-actions">[\s\S]*class="tavern-draw-capsule"[\s\S]*class="contract-trigger"/);
@@ -1306,6 +1309,9 @@ test('tavern draw capsule stays in-app and opens native provider settings', () =
     assert.doesNotMatch(`${appSource}\n${conversationSource}\n${chatPageSource}`, /nd-capsule|nd-floating|floating-panel/);
 
     assert.match(tavernHostSource, /case 'xb-tavern:draw-open-settings':[\s\S]*void handleDrawOpenSettings\(data\.payload \|\| \{\}\);/);
+    assert.match(tavernHostSource, /refreshDrawStatus: \(\) => void;/);
+    assert.match(tavernHostSource, /function refreshDrawStatus\(\): void \{[\s\S]*postToFrame\('xb-tavern:draw-status-changed', getDrawStatus\(\)\);[\s\S]*\}/);
+    assert.match(tavernHostSource, /window\.xiaobaixTavern = \{[\s\S]*refreshDrawStatus,/);
     const openSettingsSource = tavernHostSource.match(/async function handleDrawOpenSettings\(payload: Record<string, unknown> = \{\}\): Promise<void> \{[\s\S]*?\n\}\n\nasync function handleDrawGenerate/)?.[0] || '';
     assert.ok(openSettingsSource);
     assert.match(openSettingsSource, /getDrawProviderSettingsFacade\(provider\)/);
@@ -1314,6 +1320,10 @@ test('tavern draw capsule stays in-app and opens native provider settings', () =
     assert.match(tavernHostSource, /xiaobaixNovelDraw\?: DrawProviderSettingsFacade;/);
     assert.match(tavernHostSource, /xiaobaixSdDraw\?: DrawProviderSettingsFacade;/);
     assert.match(tavernHostSource, /xiaobaixComfyDraw\?: DrawProviderSettingsFacade;/);
+    assert.match(tavernHostSource, /key === 'sdwebui' \|\| key === 'sd-webui' \|\| key === 'sd' \|\| key === 'stable-diffusion'/);
+    assert.match(indexSource, /function notifyTavernDrawStatusChanged\(\) \{[\s\S]*window\.xiaobaixTavern\?\.refreshDrawStatus\?\.\(\);[\s\S]*\}/);
+    assert.match(indexSource, /await cleanupDrawProvider\(prev\);[\s\S]*settings\.drawProvider = next;[\s\S]*try \{[\s\S]*await initActiveDrawProvider\(\);[\s\S]*\} finally \{[\s\S]*notifyTavernDrawStatusChanged\(\);[\s\S]*\}/);
+    assert.match(indexSource, /settings\.drawProvider = 'disabled';[\s\S]*extension_settings\[EXT_ID\]\.drawProvider = 'disabled';[\s\S]*notifyTavernDrawStatusChanged\(\);/);
 
     assert.match(novelDrawSource, /z-index:100002!important/);
     assert.match(sdDrawSource, /z-index:100002!important/);

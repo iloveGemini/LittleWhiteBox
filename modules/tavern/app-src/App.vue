@@ -1590,16 +1590,20 @@ function startDrawCooldownCountdown(jobKey: string, data: Record<string, unknown
     }
 }
 
+function applyTavernDrawStatus(payload: Record<string, unknown> = {}) {
+    tavernDrawStatus.value = {
+        provider: String(payload.provider || 'disabled'),
+        enabled: payload.enabled === true,
+        ready: payload.ready === true,
+    };
+}
+
 async function refreshTavernDrawStatus() {
     try {
         const result = await requestHost('xb-tavern:draw-status', {});
-        tavernDrawStatus.value = {
-            provider: String(result.provider || 'disabled'),
-            enabled: result.enabled === true,
-            ready: result.ready === true,
-        };
+        applyTavernDrawStatus(result);
     } catch {
-        tavernDrawStatus.value = { provider: 'disabled', enabled: false, ready: false };
+        applyTavernDrawStatus({ provider: 'disabled', enabled: false, ready: false });
     }
     return tavernDrawStatus.value;
 }
@@ -2362,6 +2366,10 @@ function onHostMessage(event: MessageEvent) {
     if (data.source !== SOURCE_HOST) {return;}
     if (data.type === 'xb-tavern:host-result') {
         resolveHostRequest(data.payload || {});
+        return;
+    }
+    if (data.type === 'xb-tavern:draw-status-changed') {
+        applyTavernDrawStatus(data.payload || {});
         return;
     }
     if (data.type === 'xb-tavern:draw-progress') {
