@@ -337,7 +337,6 @@ export interface TavernChatContext {
     drawMessageStatusClass: TavernCommand<[message: TavernMessageRecord], string>;
     drawMessageStatusText: TavernCommand<[message: TavernMessageRecord], string>;
     drawMessageTitle: TavernCommand<[message: TavernMessageRecord], string>;
-    drawProgressText: Ref<string>;
     formatMessageTime: TavernCommand<[value: unknown], string>;
     handleChatScroll: TavernCommand;
     handleChatSubmit: TavernCommand;

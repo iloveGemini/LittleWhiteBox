@@ -1228,17 +1228,31 @@ test('tavern draw jobs are message-queued and route progress by host request', (
     assert.match(appSource, /const drawJobs = ref<Record<string, TavernDrawJob>>\(\{\}\);/);
     assert.match(appSource, /const drawQueue = ref<string\[]>\(\[]\);/);
     assert.match(appSource, /const drawRequestJobKeys = new Map<string, string>\(\);/);
+    assert.doesNotMatch(appSource, /drawProgressText/);
     assert.match(appSource, /type TavernDrawJobStatus = 'queued' \| 'running' \| 'success' \| 'failed' \| 'cancelled';/);
+    assert.match(appSource, /sourceTextHash: string;/);
+    assert.match(appSource, /finishId: number;/);
     assert.doesNotMatch(appSource, /drawingMessageKey|drawStatusMessageKey|tavernDrawController/);
 
     assert.match(appSource, /function requestHost\(type: string, payload: Record<string, unknown> = \{\}, options: \{ signal\?: AbortSignal; requestId\?: string \} = \{\}\)/);
     assert.match(appSource, /const requestId = String\(options\.requestId \|\| ''\)\.trim\(\) \|\| createHostRequestId\(\);/);
     assert.match(appSource, /const requestId = createHostRequestId\('draw'\);[\s\S]*drawRequestJobKeys\.set\(requestId, jobKey\);[\s\S]*requestHost\('xb-tavern:draw-generate'[\s\S]*\{ signal: controller\.signal, requestId \}/);
 
+    assert.match(appSource, /function finishDrawJobStatus\(jobKey = '', patch: Partial<TavernDrawJob>, durationMs = 0\): void \{[\s\S]*const finishId = drawFinishSerial \+= 1;[\s\S]*current\.finishId !== finishId/);
     assert.match(appSource, /function enqueueDrawMessageJob\(message: TavernMessageRecord\): void \{[\s\S]*status: 'queued'[\s\S]*drawQueue\.value = \[\.\.\.drawQueue\.value\.filter/);
     assert.match(appSource, /async function processNextDrawJob\(\): Promise<void> \{[\s\S]*if \(runningDrawJobKey\(\)\) \{return;\}[\s\S]*await runDrawJob\(nextKey\);/);
-    assert.match(appSource, /async function runDrawJob\(jobKey = ''\): Promise<void> \{[\s\S]*const currentMessage = await getTavernMessage\(job\.sessionId, job\.order\);[\s\S]*const latestMessage = await getTavernMessage\(job\.sessionId, job\.order\);[\s\S]*insertTavernImageMarkers\(latestMessage!\.content \|\| '', images\);/);
-    assert.match(appSource, /const latestMessage = await getTavernMessage\(job\.sessionId, job\.order\);[\s\S]*if \(controller\.signal\.aborted\) \{[\s\S]*progressText: '配图已取消'[\s\S]*return;[\s\S]*const result = \(resultPayload\.result \|\| resultPayload\)/);
+    assert.match(appSource, /async function runDrawJob\(jobKey = ''\): Promise<void> \{[\s\S]*const currentMessage = await getTavernMessage\(job\.sessionId, job\.order\);[\s\S]*const sourceTextHash = markdownSignature\(cleanText\);[\s\S]*setDrawJob\(jobKey, \{ sourceTextHash \}\);[\s\S]*const latestMessage = await getTavernMessage\(job\.sessionId, job\.order\);[\s\S]*insertTavernImageMarkers\(latestMessage!\.content \|\| '', images\);/);
+    assert.match(appSource, /const latestMessage = await getTavernMessage\(job\.sessionId, job\.order\);[\s\S]*if \(controller\.signal\.aborted\) \{[\s\S]*progressText: '配图已取消'[\s\S]*return;[\s\S]*const latestSourceTextHash = drawSourceTextHash\(latestMessage!\.content \|\| ''\);[\s\S]*progressText: '源楼层已变化'[\s\S]*const result = \(resultPayload\.result \|\| resultPayload\)/);
+    assert.match(appSource, /flashMessageAction\(updated \|\| latestMessage!, 'draw', !allFailed && !!updated\);/);
+
+    assert.match(appSource, /function cancelDrawJob\(jobKey = ''\): void \{[\s\S]*job\.controller\?\.abort\(\);[\s\S]*clearDrawCooldownTimer\(\);/);
+    assert.match(appSource, /function cancelDrawJobsForMessageRange\(sessionId = '', fromOrder = 0\): void \{[\s\S]*job\.sessionId === id && Number\(job\.order\) >= startOrder[\s\S]*cancelDrawJob\(job\.key\);/);
+    assert.match(appSource, /function cancelDrawJobsForSession\(sessionId = ''\): void \{[\s\S]*job\.sessionId === id[\s\S]*cancelDrawJob\(job\.key\);/);
+    assert.match(appSource, /async function removeSession\(sessionId: string, event\?: Event\) \{[\s\S]*cancelDrawJobsForSession\(id\);[\s\S]*await cancelAndRollbackXbTavernManagersForMessageRange\(id, 0\);/);
+    assert.match(appSource, /async function deleteMessageTurn\(message: TavernMessageRecord\) \{[\s\S]*const fromOrder = Math\.min\(\.\.\.ordersToDelete\);[\s\S]*cancelDrawJobsForMessageRange\(message\.sessionId, fromOrder\);/);
+    assert.match(appSource, /async function rerunFromMessage\(message: TavernMessageRecord\) \{[\s\S]*cancelDrawJobsForMessageRange\(message\.sessionId, userMessage\.order \+ 1\);[\s\S]*await runOnce/);
+    assert.match(appSource, /async function runOnce\(options: \{ messageText\?: string; reuseUserMessageOrder\?: number; rerollRuntimeEvents\?: boolean \} = \{\}\) \{[\s\S]*if \(isReusedUserMessageRun && selectedSessionId\.value\) \{[\s\S]*cancelDrawJobsForMessageRange\(selectedSessionId\.value, reusedUserMessageOrder \+ 1\);[\s\S]*pruneLoadedSessionMessagesFromOrder/);
+    assert.match(appSource, /async function saveEditMessage\(message: TavernMessageRecord[\s\S]*cancelDrawJob\(messageKey\(message\)\);[\s\S]*const updated = await updateTavernMessage/);
 
     assert.ok(canDrawSource);
     assert.match(canDrawSource, /if \(isDrawingMessage\(message\)\) \{return true;\}/);

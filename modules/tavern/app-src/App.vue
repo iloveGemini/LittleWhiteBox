@@ -213,9 +213,9 @@ const isCancellingRun = ref(false);
 const tavernDrawStatus = ref({ provider: 'disabled', enabled: false, ready: false });
 const drawJobs = ref<Record<string, TavernDrawJob>>({});
 const drawQueue = ref<string[]>([]);
-const drawProgressText = ref('');
 const drawRequestJobKeys = new Map<string, string>();
 let drawCooldownTimer: number | null = null;
+let drawFinishSerial = 0;
 let runtimeStreamFrame = 0;
 let pendingRuntimeStreamSnapshot: TavernRunStreamSnapshot | null = null;
 const sessions = ref<TavernSessionRecord[]>([]);
@@ -334,9 +334,11 @@ interface TavernDrawJob {
     statusKind: 'running' | 'success' | 'error';
     progressText: string;
     requestId: string;
+    sourceTextHash: string;
     queuedAt: number;
     startedAt: number;
     finishedAt: number;
+    finishId: number;
     controller?: AbortController;
 }
 const pendingHostRequests = new Map<string, PendingHostRequest>();
@@ -1491,9 +1493,6 @@ function setDrawJob(jobKey = '', patch: Partial<TavernDrawJob>): void {
             ...patch,
         },
     };
-    if (patch.progressText !== undefined) {
-        drawProgressText.value = String(patch.progressText || '');
-    }
 }
 
 function removeDrawJob(jobKey = ''): void {
@@ -1507,15 +1506,18 @@ function removeDrawJob(jobKey = ''): void {
 function finishDrawJobStatus(jobKey = '', patch: Partial<TavernDrawJob>, durationMs = 0): void {
     const key = String(jobKey || '').trim();
     if (!key) {return;}
+    const finishedAt = Date.now();
+    const finishId = drawFinishSerial += 1;
     setDrawJob(key, {
         ...patch,
-        finishedAt: Date.now(),
+        finishedAt,
+        finishId,
         controller: undefined,
     });
     if (durationMs > 0) {
         window.setTimeout(() => {
             const current = drawJobs.value[key];
-            if (!current || ['queued', 'running'].includes(current.status)) {return;}
+            if (!current || ['queued', 'running'].includes(current.status) || current.finishId !== finishId) {return;}
             removeDrawJob(key);
         }, durationMs);
     }
@@ -3002,6 +3004,7 @@ async function removeSession(sessionId: string, event?: Event) {
     if (isDeletingSelectedSession && isRunning.value) {
         activeRunController.value?.abort();
     }
+    cancelDrawJobsForSession(id);
     await cancelAndRollbackXbTavernManagersForMessageRange(id, 0);
     const removed = await deleteTavernSession(id);
     if (!removed) {return;}
@@ -3368,6 +3371,10 @@ function canDrawMessage(message: TavernMessageRecord) {
     return !!stripTavernImageMarkers(message.content || '');
 }
 
+function drawSourceTextHash(content = ''): string {
+    return markdownSignature(stripTavernImageMarkers(content));
+}
+
 function drawMessageTitle(message: TavernMessageRecord) {
     const job = drawJobForMessage(message);
     if (job?.status === 'queued') {
@@ -3439,9 +3446,31 @@ function cancelDrawJob(jobKey = ''): void {
         return;
     }
     job.controller?.abort();
+    clearDrawCooldownTimer();
     setDrawJob(key, {
         progressText: '正在停止画图',
         statusKind: 'running',
+    });
+}
+
+function cancelDrawJobsForMessageRange(sessionId = '', fromOrder = 0): void {
+    const id = String(sessionId || '').trim();
+    const startOrder = Number(fromOrder);
+    if (!id || !Number.isFinite(startOrder)) {return;}
+    Object.values(drawJobs.value).forEach((job) => {
+        if (job.sessionId === id && Number(job.order) >= startOrder) {
+            cancelDrawJob(job.key);
+        }
+    });
+}
+
+function cancelDrawJobsForSession(sessionId = ''): void {
+    const id = String(sessionId || '').trim();
+    if (!id) {return;}
+    Object.values(drawJobs.value).forEach((job) => {
+        if (job.sessionId === id) {
+            cancelDrawJob(job.key);
+        }
     });
 }
 
@@ -3467,9 +3496,11 @@ function enqueueDrawMessageJob(message: TavernMessageRecord): void {
             statusKind: 'running',
             progressText: '排队中',
             requestId: '',
+            sourceTextHash: '',
             queuedAt: now,
             startedAt: 0,
             finishedAt: 0,
+            finishId: 0,
         },
     };
     drawQueue.value = [...drawQueue.value.filter((item) => item !== key), key];
@@ -3531,6 +3562,8 @@ async function runDrawJob(jobKey = ''): Promise<void> {
             return;
         }
         const cleanText = stripTavernImageMarkers(currentMessage!.content || '');
+        const sourceTextHash = markdownSignature(cleanText);
+        setDrawJob(jobKey, { sourceTextHash });
         const resultPayload = await requestHost('xb-tavern:draw-generate', {
             payload: {
                 source: 'tavern',
@@ -3571,6 +3604,16 @@ async function runDrawJob(jobKey = ''): Promise<void> {
             flashMessageAction(latestMessage!, 'draw', false);
             return;
         }
+        const latestSourceTextHash = drawSourceTextHash(latestMessage!.content || '');
+        if (latestSourceTextHash !== sourceTextHash) {
+            finishDrawJobStatus(jobKey, {
+                status: 'cancelled',
+                statusKind: 'error',
+                progressText: '源楼层已变化',
+            }, 2600);
+            flashMessageAction(latestMessage!, 'draw', false);
+            return;
+        }
         const result = (resultPayload.result || resultPayload) as Record<string, unknown>;
         const images = Array.isArray(result.images) ? result.images : [];
         const insertion = insertTavernImageMarkers(latestMessage!.content || '', images);
@@ -3603,7 +3646,7 @@ async function runDrawJob(jobKey = ''): Promise<void> {
             statusKind: allFailed ? 'error' : 'success',
             progressText: allFailed ? '配图失败' : `${DRAW_COMPLETION_NOTICE_TEXT}${fallbackText}`,
         }, allFailed ? 4200 : 2600);
-        flashMessageAction(updated || latestMessage!, 'draw', !!updated);
+        flashMessageAction(updated || latestMessage!, 'draw', !allFailed && !!updated);
         void nextTick(enhanceChatMarkdown);
     } catch (error) {
         const current = await getTavernMessage(job.sessionId, job.order).catch((): null => null);
@@ -3761,6 +3804,7 @@ async function saveEditMessage(message: TavernMessageRecord, options: { rerun?: 
     })) {return;}
     const substitutedContent = await substituteEditedMessageContent(message, content);
     const regexedContent = await applyEditRegexToMessageContent(message, substitutedContent);
+    cancelDrawJob(messageKey(message));
     const updated = await updateTavernMessage(message.sessionId, message.order, {
         content: regexedContent,
         ...(shouldClearRuntimeEvents ? { runtimeEvents: [] } : {}),
@@ -3841,6 +3885,7 @@ async function deleteMessageTurn(message: TavernMessageRecord) {
         tone: 'danger',
     })) {return;}
     const fromOrder = Math.min(...ordersToDelete);
+    cancelDrawJobsForMessageRange(message.sessionId, fromOrder);
     await cancelAndRollbackXbTavernManagersForMessageRange(message.sessionId, fromOrder);
     const deleted = await deleteTavernMessages(message.sessionId, ordersToDelete);
     if (deleted > 0) {
@@ -3871,6 +3916,7 @@ async function rerunFromMessage(message: TavernMessageRecord) {
         flashMessageAction(message, 'rerun', false);
         return;
     }
+    cancelDrawJobsForMessageRange(message.sessionId, userMessage.order + 1);
     flashMessageAction(message, 'rerun', true);
     await runOnce({
         messageText: userMessage.content,
@@ -4598,6 +4644,7 @@ async function runOnce(options: { messageText?: string; reuseUserMessageOrder?: 
     }
     resetChatMessageWindowState();
     if (isReusedUserMessageRun && selectedSessionId.value) {
+        cancelDrawJobsForMessageRange(selectedSessionId.value, reusedUserMessageOrder + 1);
         pruneLoadedSessionMessagesFromOrder(selectedSessionId.value, reusedUserMessageOrder + 1);
     }
     const shouldShowPendingUserMessage = !isReusedUserMessageRun;
@@ -4922,7 +4969,6 @@ provide(TAVERN_APP_UI_CONTEXT, {
         drawMessageStatusClass,
         drawMessageStatusText,
         drawMessageTitle,
-        drawProgressText,
         formatMessageTime,
         handleChatScroll,
         handleChatSubmit,
