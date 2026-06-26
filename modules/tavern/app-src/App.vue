@@ -99,6 +99,7 @@ import {
 } from './features/accepted-rollback/accepted-rollback';
 import { createTavernChatRunState, useTavernChatRunController } from './features/chat-run/useTavernChatRunController';
 import { useTavernDrawController } from './features/draw/useTavernDrawController';
+import { useTavernHostBridge, type TavernHostMessageData } from './features/host-bridge/useTavernHostBridge';
 import { createTavernSessionState, useTavernSessionController } from './features/session/useTavernSessionController';
 import TavernAboutPage from './components/TavernAboutPage.vue';
 import TavernHomePage from './components/TavernHomePage.vue';
@@ -158,8 +159,6 @@ interface TavernDialogState {
     resolve: (value: boolean | string | null) => void;
 }
 
-const SOURCE_APP = 'xb-tavern-app';
-const SOURCE_HOST = 'xb-tavern-host';
 const CHARACTER_ARCHIVE_BATCH_SIZE = 48;
 const MANAGER_RUN_VISIBLE_LIMIT = 12;
 const MEMORY_TURN_INITIAL_LIMIT = 36;
@@ -301,13 +300,6 @@ function readInitialTavernThemeDark(): boolean {
     }
     return false;
 }
-interface PendingHostRequest {
-    resolve: (value: Record<string, unknown>) => void;
-    reject: (error: Error) => void;
-    type: string;
-    abort?: () => void;
-    signal?: AbortSignal;
-}
 interface DisplayRegexTextRequest {
     key: string;
     text: string;
@@ -325,7 +317,6 @@ interface PendingRuntimeDisplayRegexRequest {
     latest: DisplayRegexTextRequest;
     inFlight: boolean;
 }
-const pendingHostRequests = new Map<string, PendingHostRequest>();
 function normalizedSearchText(value = '') {
     return String(value || '').trim().toLocaleLowerCase();
 }
@@ -593,6 +584,19 @@ function handleTavernDialogTab(event: KeyboardEvent) {
     }
 }
 
+const hostBridge = useTavernHostBridge({
+    onHostRequestResolved: (type) => {
+        if (['xb-tavern:list-regex-scripts', 'xb-tavern:save-regex-script', 'xb-tavern:delete-regex-script'].includes(type)) {
+            clearDisplayRegexCache();
+        }
+    },
+});
+const {
+    createHostRequestId,
+    postToHost,
+    reportStartupProgress,
+    requestHost,
+} = hostBridge;
 const {
     clearMarkdownCache,
     disposeMarkdownTools,
@@ -1163,21 +1167,6 @@ const chatSubtitle = computed(() => {
 });
 const canSendMessage = computed(() => !isCancellingRun.value && (isRunning.value || (!selectedSessionCharacterError.value && !!currentUserMessage.value.trim())));
 const canSendManagerMessage = computed(() => !isManagerAssistantCancelling.value && (isManagerAssistantRunning.value || (!!selectedSessionId.value && !!managerInputDraft.value.trim())));
-function clonePostMessagePayload<T>(value: T): T {
-    const seen = new WeakSet<object>();
-    try {
-        return JSON.parse(JSON.stringify(value, (_key, item) => {
-            if (typeof item === 'bigint') {return String(item);}
-            if (typeof item === 'function' || typeof item === 'symbol') {return undefined;}
-            if (!item || typeof item !== 'object') {return item;}
-            if (seen.has(item)) {return undefined;}
-            seen.add(item);
-            return item;
-        })) as T;
-    } catch {
-        return {} as T;
-    }
-}
 
 watch(characterSearchText, () => {
     characterVisibleLimit.value = CHARACTER_ARCHIVE_BATCH_SIZE;
@@ -1258,53 +1247,6 @@ function showTavernToast(
         tavernToastTimer = null;
         tavernToast.value = null;
     }, Math.max(1200, options.durationMs ?? 3600));
-}
-
-function postToHost(type: string, payload: Record<string, unknown> = {}) {
-    const safePayload = clonePostMessagePayload(payload);
-    window.parent?.postMessage({ source: SOURCE_APP, type, payload: safePayload }, window.location.origin);
-}
-
-function reportStartupProgress(percent: number, action: string) {
-    postToHost('xb-tavern:startup-progress', { percent, action });
-}
-
-function createHostRequestId(prefix = 'host') {
-    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function createAbortError() {
-    try {
-        return new DOMException('request_aborted', 'AbortError') as unknown as Error;
-    } catch {
-        return new Error('request_aborted');
-    }
-}
-
-function requestHost(type: string, payload: Record<string, unknown> = {}, options: { signal?: AbortSignal; requestId?: string } = {}) {
-    const requestId = String(options.requestId || '').trim() || createHostRequestId();
-    if (options.signal?.aborted) {
-        return Promise.reject(createAbortError());
-    }
-    postToHost(type, { ...payload, requestId });
-    return new Promise<Record<string, unknown>>((resolve, reject) => {
-        const cleanup = () => {
-            const pending = pendingHostRequests.get(requestId);
-            if (pending?.abort && options.signal) {
-                options.signal.removeEventListener('abort', pending.abort);
-            }
-            pendingHostRequests.delete(requestId);
-        };
-        const abort = () => {
-            cleanup();
-            postToHost('xb-tavern:cancel-request', { requestId });
-            reject(createAbortError());
-        };
-        if (options.signal) {
-            options.signal.addEventListener('abort', abort, { once: true });
-        }
-        pendingHostRequests.set(requestId, { resolve, reject, type, abort: options.signal ? abort : undefined, signal: options.signal });
-    });
 }
 
 async function applyTavernRegex(items: TavernApplyRegexItem[]): Promise<TavernApplyRegexResult> {
@@ -1948,36 +1890,6 @@ async function resolveRuntimeContextForSession(sessionId = selectedSessionId.val
     }
 }
 
-function resolveHostRequest(payload: Record<string, unknown> = {}) {
-    const requestId = String(payload.requestId || '');
-    const pending = pendingHostRequests.get(requestId);
-    if (!pending) {return;}
-    if (pending.abort && pending.signal) {
-        pending.signal.removeEventListener('abort', pending.abort);
-    }
-    pendingHostRequests.delete(requestId);
-    if (payload.ok === false) {
-        const errorText = String(payload.error || 'host_request_failed');
-        const error = new Error(`${pending.type}: ${errorText}`);
-        const errorStack = String(payload.errorStack || '');
-        if (errorStack) {
-            error.stack = `${error.message}\n${errorStack}`;
-        }
-        console.error('[小白酒馆] host request failed', {
-            type: pending.type,
-            error: errorText,
-            errorName: String(payload.errorName || ''),
-            errorStack,
-        });
-        pending.reject(error);
-        return;
-    }
-    pending.resolve(payload);
-    if (['xb-tavern:list-regex-scripts', 'xb-tavern:save-regex-script', 'xb-tavern:delete-regex-script'].includes(pending.type)) {
-        clearDisplayRegexCache();
-    }
-}
-
 function installHostRequestHeadersProvider(payload: Record<string, unknown> = {}) {
     const fallbackHeaders = payload.hostRequestHeaders && typeof payload.hostRequestHeaders === 'object'
         ? payload.hostRequestHeaders as Record<string, unknown>
@@ -2059,36 +1971,42 @@ function hasCharacterPreviewDetails(character: TavernCharacterOption | null | un
     );
 }
 
-function onHostMessage(event: MessageEvent) {
-    if (event.origin !== window.location.origin) {return;}
-    const data = event.data || {};
-    if (data.source !== SOURCE_HOST) {return;}
-    if (data.type === 'xb-tavern:host-result') {
-        resolveHostRequest(data.payload || {});
-        return;
-    }
-    if (drawContext.handleHostMessage(data)) {return;}
+function hostMessagePayload(data: TavernHostMessageData): Record<string, unknown> {
+    return data.payload && typeof data.payload === 'object' ? data.payload : {};
+}
+
+function handleInlineImageProgressHostMessage(data: TavernHostMessageData) {
     if (data.type === TAVERN_INLINE_IMAGE_PROGRESS_EVENT) {
         window.dispatchEvent(new CustomEvent(TAVERN_INLINE_IMAGE_PROGRESS_EVENT, {
-            detail: data.payload && typeof data.payload === 'object' ? data.payload : {},
+            detail: hostMessagePayload(data),
         }));
-        return;
+        return true;
     }
+    return false;
+}
+
+function handleConfigHostMessage(data: TavernHostMessageData) {
     if (data.type === 'xb-tavern:config') {
         reportStartupProgress(80, 'applyHostPayload');
-        applyHostPayload(data.payload || {});
+        applyHostPayload(hostMessagePayload(data));
         initialConfigApplied = true;
         startPostReadyStartupTasksAfterInitialConfig();
-        return;
+        return true;
     }
     if (data.type === 'xb-tavern:context') {
-        applyHostPayload(data.payload || {});
-        return;
+        applyHostPayload(hostMessagePayload(data));
+        return true;
     }
     if (data.type === 'xb-tavern:config-saved') {
-        handleApiConfigSaved(data.payload || {});
+        handleApiConfigSaved(hostMessagePayload(data));
+        return true;
     }
+    return false;
 }
+
+hostBridge.addMessageHandler((data) => drawContext.handleHostMessage(data));
+hostBridge.addMessageHandler(handleInlineImageProgressHostMessage);
+hostBridge.addMessageHandler(handleConfigHostMessage);
 
 function openCharacterSelect() {
     pendingCharacterError.value = '';
@@ -4166,9 +4084,7 @@ async function runPostReadyStartupTasks() {
 }
 
 onMounted(async () => {
-    // onHostMessage validates origin and message source before accepting payloads.
-    // eslint-disable-next-line no-restricted-syntax
-    window.addEventListener('message', onHostMessage);
+    hostBridge.mount();
     managerRecordsPollTimer = window.setInterval(() => {
         void pollLiveManagerRecords();
     }, 2000);
@@ -4177,23 +4093,16 @@ onMounted(async () => {
     }
     syncApiSettingsConfigFromAgentConfig();
     await nextTick();
-    postToHost('xb-tavern:frame-ready');
+    hostBridge.postToHost('xb-tavern:frame-ready');
     void drawContext.refreshTavernDrawStatus();
 });
 
 onUnmounted(() => {
-    window.removeEventListener('message', onHostMessage);
+    hostBridge.dispose(new Error('tavern_unmounted'));
     disposeMarkdownTools();
     clearRuntimeAssistantLiveState();
     drawContext.clearCooldownTimer();
     setHostChatCompletionsRequestHeadersProvider(null);
-    pendingHostRequests.forEach((request) => {
-        if (request.abort && request.signal) {
-            request.signal.removeEventListener('abort', request.abort);
-        }
-        request.reject(new Error('tavern_unmounted'));
-    });
-    pendingHostRequests.clear();
     chatRunController.abortActiveRun();
     managerAssistantController.value?.abort();
     drawContext.abortAllJobs();

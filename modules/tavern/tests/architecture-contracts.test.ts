@@ -82,21 +82,22 @@ function sourceMatches(pattern: RegExp): Array<{ path: string; line: number; tex
 
 test('tavern source keeps cross-frame messages behind clone-safe wrappers', () => {
     const directPostMessages = sourceMatches(/postMessage\(/);
-    assert.deepEqual(directPostMessages, [
-        {
-            path: 'modules/tavern/app-src/App.vue',
-            line: directPostMessages[0]?.line,
-            text: "window.parent?.postMessage({ source: SOURCE_APP, type, payload: safePayload }, window.location.origin);",
-        },
-        {
-            path: 'modules/tavern/app-src/components/chat/useTavernMarkdownTools.ts',
-            line: directPostMessages[1]?.line,
-            text: 'window.parent?.postMessage(safePayload, window.location.origin);',
-        },
-    ]);
-    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    assert.deepEqual(
+        directPostMessages.map(({ path, text }) => ({ path, text })).sort((left, right) => left.path.localeCompare(right.path)),
+        [
+            {
+                path: 'modules/tavern/app-src/components/chat/useTavernMarkdownTools.ts',
+                text: 'window.parent?.postMessage(safePayload, window.location.origin);',
+            },
+            {
+                path: 'modules/tavern/app-src/features/host-bridge/useTavernHostBridge.ts',
+                text: "window.parent?.postMessage({ source: SOURCE_APP, type, payload: safePayload }, window.location.origin);",
+            },
+        ],
+    );
+    const bridgeSource = readRepoFile('modules/tavern/app-src/features/host-bridge/useTavernHostBridge.ts');
     const hostSource = readRepoFile('modules/tavern/tavern.ts');
-    assert.match(appSource, /function postToHost[\s\S]*const safePayload = clonePostMessagePayload\(payload\);[\s\S]*postMessage/);
+    assert.match(bridgeSource, /function postToHost[\s\S]*const safePayload = clonePostMessagePayload\(payload\);[\s\S]*postMessage/);
     assert.match(hostSource, /function postToFrame[\s\S]*const message = cloneFramePayload\(\{ type, payload \}\);[\s\S]*postToIframe/);
 });
 
@@ -136,19 +137,20 @@ test('tavern event panel renders title-based directions without user hooks', () 
 test('tavern startup posts frame-ready before heavy app tasks and prewarms host config', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const chatRunSource = readRepoFile('modules/tavern/app-src/features/chat-run/useTavernChatRunController.ts');
+    const hostBridgeSource = readRepoFile('modules/tavern/app-src/features/host-bridge/useTavernHostBridge.ts');
     const hostSource = readRepoFile('modules/tavern/tavern.ts');
     const htmlSource = readRepoFile('modules/tavern/tavern.html');
     const mountedIndex = appSource.indexOf('onMounted(async () => {');
-    const readyIndex = appSource.indexOf("postToHost('xb-tavern:frame-ready');", mountedIndex);
+    const readyIndex = appSource.indexOf("hostBridge.postToHost('xb-tavern:frame-ready');", mountedIndex);
     assert.notEqual(mountedIndex, -1);
     assert.notEqual(readyIndex, -1);
     const beforeReady = appSource.slice(mountedIndex, readyIndex);
     assert.doesNotMatch(beforeReady, /refreshPresets\(\)|refreshSessions\(\)|warmupMemoryTokenizer\(\)|preloadXbTavernMemoryTokenizer\(\)/);
-    assert.match(appSource, /await nextTick\(\);\s*postToHost\('xb-tavern:frame-ready'\);/);
+    assert.match(appSource, /await nextTick\(\);\s*hostBridge\.postToHost\('xb-tavern:frame-ready'\);/);
     assert.doesNotMatch(appSource.slice(readyIndex, appSource.indexOf('onUnmounted', readyIndex)), /void runPostReadyStartupTasks\(\);/);
-    assert.match(appSource, /if \(data\.type === 'xb-tavern:config'\) \{[\s\S]*applyHostPayload\(data\.payload \|\| \{\}\);[\s\S]*initialConfigApplied = true;[\s\S]*startPostReadyStartupTasksAfterInitialConfig\(\);/);
+    assert.match(appSource, /if \(data\.type === 'xb-tavern:config'\) \{[\s\S]*applyHostPayload\(hostMessagePayload\(data\)\);[\s\S]*initialConfigApplied = true;[\s\S]*startPostReadyStartupTasksAfterInitialConfig\(\);/);
     assert.match(appSource, /function startPostReadyStartupTasksAfterInitialConfig\(\) \{[\s\S]*postReadyStartupStarted = true;[\s\S]*void runPostReadyStartupTasks\(\);/);
-    assert.match(appSource, /function reportStartupProgress\(percent: number, action: string\)[\s\S]*postToHost\('xb-tavern:startup-progress', \{ percent, action \}\)/);
+    assert.match(hostBridgeSource, /function reportStartupProgress\(percent: number, action: string\)[\s\S]*postToHost\('xb-tavern:startup-progress', \{ percent, action \}\)/);
     assert.match(appSource, /async function runPostReadyStartupTasks\(\) \{[\s\S]*reportStartupProgress\(85, 'refreshPresets'\);[\s\S]*Promise\.allSettled\(\[\s*refreshPresets\(\),\s*refreshSessions\(\),\s*\]\)[\s\S]*reportStartupProgress\(100, 'enterTavern'\);/);
     assert.doesNotMatch(appSource, /scheduleMemoryTokenizerWarmup|promoteMemoryTokenizerWarmup|preloadXbTavernMemoryTokenizer|getXbTavernMemoryTokenizerStatus/);
     assert.match(appSource, /const chatRunController = useTavernChatRunController\(\{/);
@@ -464,7 +466,8 @@ test('tavern request log is sourced from runtime request snapshots', () => {
     assert.match(chatRunSource, /runXbTavernTurn\(\{[\s\S]*buildNativeChatPrompt: options\.buildNativeChatPrompt,/);
     assert.match(appSource, /xb-tavern:build-native-chat-prompt[\s\S]*signal: input\.signal/);
     assert.doesNotMatch(appSource, /host_request_timeout|HOST_REQUEST_TIMEOUT_MS|const timeoutMs =/);
-    assert.match(appSource, /postToHost\('xb-tavern:cancel-request', \{ requestId \}\);/);
+    const hostBridgeSource = readRepoFile('modules/tavern/app-src/features/host-bridge/useTavernHostBridge.ts');
+    assert.match(hostBridgeSource, /postToHost\('xb-tavern:cancel-request', \{ requestId \}\);/);
     assert.match(chatRunSource, /state\.runtimePendingUserMessage\.value = messageText/);
     assert.match(conversationSource, /class="chat-bubble from-user pending-user"/);
     assert.match(runtimeSource, /async function applyNativeChatPromptBuild/);
@@ -959,10 +962,23 @@ test('tavern base settings panel exposes a three-segment chat font size control 
 });
 
 test('tavern user host bridge stays separate from context assembly', () => {
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const hostBridgeSource = readRepoFile('modules/tavern/app-src/features/host-bridge/useTavernHostBridge.ts');
     const contextSource = readRepoFile('modules/tavern/host/sillytavern-context.ts');
     const usersSource = readRepoFile('modules/tavern/host/users.ts');
     const tavernSource = readRepoFile('modules/tavern/tavern.ts');
 
+    assert.match(appSource, /const hostBridge = useTavernHostBridge\(\{/);
+    assert.doesNotMatch(appSource, /const pendingHostRequests|function requestHost|function postToHost|function resolveHostRequest/);
+    assert.match(hostBridgeSource, /const pendingHostRequests = new Map<string, PendingHostRequest>\(\);/);
+    assert.match(hostBridgeSource, /function requestHost\(type: string, payload: Record<string, unknown> = \{\}, requestOptions: \{ signal\?: AbortSignal; requestId\?: string \} = \{\}\)/);
+    assert.match(hostBridgeSource, /function onHostMessage\(event: MessageEvent\) \{[\s\S]*if \(event\.origin !== window\.location\.origin\) \{return;\}[\s\S]*if \(data\.source !== SOURCE_HOST\) \{return;\}/);
+    assert.match(hostBridgeSource, /if \(data\.type === 'xb-tavern:host-result'\) \{[\s\S]*resolveHostRequest\(data\.payload \|\| \{\}\);[\s\S]*return;/);
+    assert.match(hostBridgeSource, /for \(const handler of messageHandlers\) \{[\s\S]*if \(handler\(data\)\) \{return;\}/);
+    assert.match(hostBridgeSource, /function mount\(\) \{[\s\S]*window\.addEventListener\('message', onHostMessage\);[\s\S]*function dispose\(error: Error = new Error\('tavern_host_bridge_disposed'\)\) \{[\s\S]*window\.removeEventListener\('message', onHostMessage\);[\s\S]*pendingHostRequests\.forEach/);
+    assert.match(appSource, /onMounted\(async \(\) => \{[\s\S]*hostBridge\.mount\(\);[\s\S]*hostBridge\.postToHost\('xb-tavern:frame-ready'\);[\s\S]*onUnmounted\(\(\) => \{[\s\S]*hostBridge\.dispose\(new Error\('tavern_unmounted'\)\);/);
+    assert.match(appSource, /hostBridge\.addMessageHandler\(\(data\) => drawContext\.handleHostMessage\(data\)\);[\s\S]*hostBridge\.addMessageHandler\(handleInlineImageProgressHostMessage\);[\s\S]*hostBridge\.addMessageHandler\(handleConfigHostMessage\);/);
+    assert.doesNotMatch(hostBridgeSource, /applyHostPayload|handleApiConfigSaved|TAVERN_INLINE_IMAGE_PROGRESS_EVENT|drawContext/);
     assert.doesNotMatch(contextSource, /getUserAvatars|setUserAvatar|listTavernUsers|switchTavernUser/);
     assert.match(usersSource, /getUserAvatars/);
     assert.match(usersSource, /setUserAvatar/);
@@ -1452,8 +1468,9 @@ test('tavern draw jobs are message-queued and route progress by host request', (
     assert.match(drawSource, /finishId: number;/);
     assert.doesNotMatch(appSource, /drawingMessageKey|drawStatusMessageKey/);
 
-    assert.match(appSource, /function requestHost\(type: string, payload: Record<string, unknown> = \{\}, options: \{ signal\?: AbortSignal; requestId\?: string \} = \{\}\)/);
-    assert.match(appSource, /const requestId = String\(options\.requestId \|\| ''\)\.trim\(\) \|\| createHostRequestId\(\);/);
+    const hostBridgeSource = readRepoFile('modules/tavern/app-src/features/host-bridge/useTavernHostBridge.ts');
+    assert.match(hostBridgeSource, /function requestHost\(type: string, payload: Record<string, unknown> = \{\}, requestOptions: \{ signal\?: AbortSignal; requestId\?: string \} = \{\}\)/);
+    assert.match(hostBridgeSource, /const requestId = String\(requestOptions\.requestId \|\| ''\)\.trim\(\) \|\| createHostRequestId\(\);/);
     assert.match(drawSource, /const requestId = options\.createHostRequestId\('draw'\);[\s\S]*drawRequestJobKeys\.set\(requestId, jobKey\);[\s\S]*options\.requestHost\('xb-tavern:draw-generate'[\s\S]*\{ signal: controller\.signal, requestId \}/);
 
     assert.match(drawSource, /function finishDrawJobStatus\(jobKey = '', patch: Partial<TavernDrawJob>, durationMs = 0\): void \{[\s\S]*const finishId = drawFinishSerial \+= 1;[\s\S]*current\.finishId !== finishId/);
@@ -1557,8 +1574,8 @@ test('tavern draw capsule mirrors native capsule structure with in-app quick set
     assert.match(drawSource, /async function refreshTavernDrawQuickSettings\(\): Promise<TavernDrawQuickSettings> \{[\s\S]*options\.requestHost\('xb-tavern:draw-quick-settings'/);
     assert.match(drawSource, /async function updateTavernDrawQuickSettings\(patch: Record<string, unknown> = \{\}\): Promise<void> \{[\s\S]*options\.requestHost\('xb-tavern:draw-update-quick-settings'/);
     assert.match(drawSource, /function applyTavernDrawStatus\(payload: Record<string, unknown> = \{\}\) \{[\s\S]*provider: String\(payload\.provider \|\| 'disabled'\)[\s\S]*ready: payload\.ready === true/);
-    assert.match(appSource, /if \(drawContext\.handleHostMessage\(data\)\) \{return;\}/);
-    assert.match(appSource, /postToHost\('xb-tavern:frame-ready'\);[\s\S]*void drawContext\.refreshTavernDrawStatus\(\);/);
+    assert.match(appSource, /hostBridge\.addMessageHandler\(\(data\) => drawContext\.handleHostMessage\(data\)\);/);
+    assert.match(appSource, /hostBridge\.postToHost\('xb-tavern:frame-ready'\);[\s\S]*void drawContext\.refreshTavernDrawStatus\(\);/);
 
     assert.match(conversationSource, /import TavernDrawCapsule from '\.\/TavernDrawCapsule\.vue';/);
     assert.match(conversationSource, /useTavernDrawContext/);

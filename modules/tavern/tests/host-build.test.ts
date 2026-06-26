@@ -77,9 +77,9 @@ test('tavern host can return a fresh live context on demand', () => {
 });
 
 test('tavern app requests sanitize payload before postMessage', () => {
-    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
-    assert.match(appSource, /function clonePostMessagePayload/);
-    assert.match(appSource, /const safePayload = clonePostMessagePayload\(payload\);/);
+    const bridgeSource = readRepoFile('modules/tavern/app-src/features/host-bridge/useTavernHostBridge.ts');
+    assert.match(bridgeSource, /function clonePostMessagePayload/);
+    assert.match(bridgeSource, /const safePayload = clonePostMessagePayload\(payload\);/);
 });
 
 test('tavern chat typography follows host SillyTavern font metrics inside the iframe', () => {
