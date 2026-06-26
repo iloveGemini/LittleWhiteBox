@@ -3,6 +3,12 @@ export interface ElementScrollSnapshot {
     nearBottom: boolean;
     anchorKey: string;
     anchorTopOffset: number;
+    anchors: ElementScrollAnchorSnapshot[];
+}
+
+export interface ElementScrollAnchorSnapshot {
+    key: string;
+    topOffset: number;
 }
 
 interface AnchorConfig {
@@ -19,7 +25,7 @@ export function captureElementScrollState(
     const containerRect = typeof node.getBoundingClientRect === 'function'
         ? node.getBoundingClientRect()
         : null;
-    const anchor = containerRect && anchorConfig
+    const anchors = containerRect && anchorConfig
         ? Array.from(node.querySelectorAll<HTMLElement>(anchorConfig.itemSelector))
             .map((item) => ({
                 key: item?.dataset?.[anchorConfig.datasetKey] || '',
@@ -27,13 +33,24 @@ export function captureElementScrollState(
                     ? item.getBoundingClientRect()
                     : null,
             }))
-            .find((item) => item.key && item.rect && item.rect.bottom >= containerRect.top + 1)
-        : null;
+            .filter((item) => (
+                item.key
+                && item.rect
+                && item.rect.bottom >= containerRect.top + 1
+                && item.rect.top <= containerRect.bottom - 1
+            ))
+            .map((item) => ({
+                key: item.key,
+                topOffset: item.rect ? item.rect.top - containerRect.top : 0,
+            }))
+        : [];
+    const anchor = anchors[0] || null;
     return {
         scrollTop: Number(node.scrollTop || 0),
         nearBottom: distanceToBottom < 80,
         anchorKey: anchor?.key || '',
-        anchorTopOffset: anchor?.rect ? anchor.rect.top - containerRect.top : 0,
+        anchorTopOffset: anchor?.topOffset || 0,
+        anchors,
     };
 }
 
@@ -60,19 +77,30 @@ export function restoreElementScrollState(
     }
     if (options.preserveScrollTop) {
         node.scrollTop = Math.min(Math.max(0, snapshot.scrollTop), node.scrollHeight);
-        if (snapshot.anchorKey && anchorConfig) {
+        const anchors = snapshot.anchors?.length
+            ? snapshot.anchors
+            : snapshot.anchorKey
+                ? [{ key: snapshot.anchorKey, topOffset: snapshot.anchorTopOffset }]
+                : [];
+        if (anchors.length && anchorConfig) {
             const containerRect = typeof node.getBoundingClientRect === 'function'
                 ? node.getBoundingClientRect()
                 : null;
-            const anchorNode = Array.from(node.querySelectorAll<HTMLElement>(anchorConfig.itemSelector))
-                .find((item) => item?.dataset?.[anchorConfig.datasetKey] === snapshot.anchorKey);
-            const anchorRect = typeof anchorNode?.getBoundingClientRect === 'function'
-                ? anchorNode.getBoundingClientRect()
-                : null;
-            if (containerRect && anchorRect) {
-                const nextOffset = anchorRect.top - containerRect.top;
+            const currentAnchors = Array.from(node.querySelectorAll<HTMLElement>(anchorConfig.itemSelector));
+            const matchedAnchor = anchors
+                .map((anchorItem) => {
+                    const anchorNode = currentAnchors
+                        .find((item) => item?.dataset?.[anchorConfig.datasetKey] === anchorItem.key);
+                    const anchorRect = typeof anchorNode?.getBoundingClientRect === 'function'
+                        ? anchorNode.getBoundingClientRect()
+                        : null;
+                    return anchorRect ? { rect: anchorRect, topOffset: anchorItem.topOffset } : null;
+                })
+                .find((item): item is { rect: DOMRect; topOffset: number } => !!item);
+            if (containerRect && matchedAnchor) {
+                const nextOffset = matchedAnchor.rect.top - containerRect.top;
                 node.scrollTop = Math.min(
-                    Math.max(0, node.scrollTop + nextOffset - Number(snapshot.anchorTopOffset || 0)),
+                    Math.max(0, node.scrollTop + nextOffset - Number(matchedAnchor.topOffset || 0)),
                     node.scrollHeight,
                 );
             }

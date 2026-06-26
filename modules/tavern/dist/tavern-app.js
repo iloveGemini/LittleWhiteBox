@@ -46005,15 +46005,19 @@ var cne = ["title", "aria-label"], dne = {
 }), Ine = Cne;
 function lx(e, t) {
   if (!e) return null;
-  const n = e.scrollHeight - e.scrollTop - e.clientHeight, r = typeof e.getBoundingClientRect == "function" ? e.getBoundingClientRect() : null, s = r && t ? Array.from(e.querySelectorAll(t.itemSelector)).map((a) => ({
-    key: a?.dataset?.[t.datasetKey] || "",
-    rect: typeof a?.getBoundingClientRect == "function" ? a.getBoundingClientRect() : null
-  })).find((a) => a.key && a.rect && a.rect.bottom >= r.top + 1) : null;
+  const n = e.scrollHeight - e.scrollTop - e.clientHeight, r = typeof e.getBoundingClientRect == "function" ? e.getBoundingClientRect() : null, s = r && t ? Array.from(e.querySelectorAll(t.itemSelector)).map((o) => ({
+    key: o?.dataset?.[t.datasetKey] || "",
+    rect: typeof o?.getBoundingClientRect == "function" ? o.getBoundingClientRect() : null
+  })).filter((o) => o.key && o.rect && o.rect.bottom >= r.top + 1 && o.rect.top <= r.bottom - 1).map((o) => ({
+    key: o.key,
+    topOffset: o.rect ? o.rect.top - r.top : 0
+  })) : [], a = s[0] || null;
   return {
     scrollTop: Number(e.scrollTop || 0),
     nearBottom: n < 80,
-    anchorKey: s?.key || "",
-    anchorTopOffset: s?.rect ? s.rect.top - r.top : 0
+    anchorKey: a?.key || "",
+    anchorTopOffset: a?.topOffset || 0,
+    anchors: s
   };
 }
 function ux(e, t, n, r = {}) {
@@ -46027,11 +46031,22 @@ function ux(e, t, n, r = {}) {
       return;
     }
     if (r.preserveScrollTop) {
-      if (e.scrollTop = Math.min(Math.max(0, t.scrollTop), e.scrollHeight), t.anchorKey && n) {
-        const s = typeof e.getBoundingClientRect == "function" ? e.getBoundingClientRect() : null, a = Array.from(e.querySelectorAll(n.itemSelector)).find((l) => l?.dataset?.[n.datasetKey] === t.anchorKey), o = typeof a?.getBoundingClientRect == "function" ? a.getBoundingClientRect() : null;
-        if (s && o) {
-          const l = o.top - s.top;
-          e.scrollTop = Math.min(Math.max(0, e.scrollTop + l - Number(t.anchorTopOffset || 0)), e.scrollHeight);
+      e.scrollTop = Math.min(Math.max(0, t.scrollTop), e.scrollHeight);
+      const s = t.anchors?.length ? t.anchors : t.anchorKey ? [{
+        key: t.anchorKey,
+        topOffset: t.anchorTopOffset
+      }] : [];
+      if (s.length && n) {
+        const a = typeof e.getBoundingClientRect == "function" ? e.getBoundingClientRect() : null, o = Array.from(e.querySelectorAll(n.itemSelector)), l = s.map((i) => {
+          const u = o.find((f) => f?.dataset?.[n.datasetKey] === i.key), d = typeof u?.getBoundingClientRect == "function" ? u.getBoundingClientRect() : null;
+          return d ? {
+            rect: d,
+            topOffset: i.topOffset
+          } : null;
+        }).find((i) => !!i);
+        if (a && l) {
+          const i = l.rect.top - a.top;
+          e.scrollTop = Math.min(Math.max(0, e.scrollTop + i - Number(l.topOffset || 0)), e.scrollHeight);
         }
       }
       return;
