@@ -3982,6 +3982,7 @@ const chatContext = {
     displayRuntimeRenderProjection,
     displayRuntimeThoughtBlocks,
     displayCharacterName,
+    displayUserName: userName,
     formatMessageTime,
     handleChatScroll,
     handleChatSubmit,
@@ -4132,6 +4133,7 @@ const workspaceContext = {
     atlasStateDocument,
     atlasStatePatches,
     chatWorkspacePanel,
+    displayUserName: userName,
     mapStateDocuments,
     mapStateDocument,
     mapStatePatches,
@@ -4139,6 +4141,7 @@ const workspaceContext = {
     sessionContract,
     stateMemoryFile,
     tavernTasks,
+    visibleUserAvatar,
 } satisfies TavernWorkspaceContext;
 
 const appUiContext = {

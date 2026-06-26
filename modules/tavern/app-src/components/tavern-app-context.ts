@@ -343,6 +343,7 @@ export interface TavernChatContext {
     displayRuntimeRenderProjection: TavernCommand<[text?: string, events?: TavernActionCheckRuntimeEvent[]], { text: string; actionCheckEvents: TavernActionCheckRuntimeEvent[] }>;
     displayRuntimeThoughtBlocks: TavernCommand<[thoughts?: Array<{ label?: string; text?: string }>], Array<{ label?: string; text?: string }>>;
     displayCharacterName: TavernReadable<string>;
+    displayUserName: TavernReadable<string>;
     formatMessageTime: TavernCommand<[value: unknown], string>;
     handleChatScroll: TavernCommand;
     handleChatSubmit: TavernCommand;
@@ -493,6 +494,7 @@ export interface TavernWorkspaceContext {
     atlasStateDocument: Ref<TavernStructuredStateDocumentRecord | null>;
     atlasStatePatches: Ref<TavernStructuredStatePatchRecord[]>;
     chatWorkspacePanel: Ref<string>;
+    displayUserName: TavernReadable<string>;
     mapStateDocuments: Ref<TavernMapStateDocumentItem[]>;
     mapStateDocument: Ref<TavernStructuredStateDocumentRecord | null>;
     mapStatePatches: Ref<TavernStructuredStatePatchRecord[]>;
@@ -500,6 +502,7 @@ export interface TavernWorkspaceContext {
     sessionContract: TavernReadable<TavernSessionContract>;
     stateMemoryFile: Ref<TavernMemoryFileRecord | null>;
     tavernTasks: Ref<TavernTaskRecord[]>;
+    visibleUserAvatar: TavernReadable<string>;
 }
 
 export interface TavernSettingsContext {

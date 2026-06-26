@@ -19,7 +19,7 @@ import {
 } from '../map-glyphs';
 
 type MapReplayMode = 'full' | 'patch' | 'timeline';
-type MapRenderLayer = 'fill' | 'line' | 'light' | 'label';
+type MapRenderLayer = 'fill' | 'avatar' | 'line' | 'light' | 'label';
 type MapOpKind = 'add' | 'modify' | 'remove' | 'stable';
 type MapBlendMode = 'normal' | 'multiply' | 'screen' | 'overlay';
 
@@ -49,6 +49,11 @@ interface MapRenderItem {
     glyphScaleTransform?: string;
     fillRule: 'nonzero' | 'evenodd';
     gameIcon: boolean;
+    avatarHref?: string;
+    patternId?: string;
+    patternX?: number;
+    patternY?: number;
+    patternSize?: number;
 }
 
 interface MapReplayFrame {
@@ -69,11 +74,15 @@ const props = withDefaults(defineProps<{
     document: TavernStructuredStateDocumentRecord | null;
     patches: TavernStructuredStatePatchRecord[];
     compact?: boolean;
+    playerDisplayName?: string;
+    playerAvatarUrl?: string;
 }>(), {
     documents: () => [],
     activeDocId: 'main',
     selectedDocId: '',
     compact: false,
+    playerDisplayName: 'User',
+    playerAvatarUrl: '',
 });
 const emit = defineEmits<{
     (event: 'update:selectedDocId', docId: string): void;
@@ -230,6 +239,8 @@ const totalPatchCount = computed(() => selectedDocPatches.value.length);
 const mapDocuments = computed(() => Array.isArray(props.documents) && props.documents.length
     ? props.documents
     : props.document ? [{ ...props.document, active: true }] : []);
+const normalizedPlayerDisplayName = computed(() => String(props.playerDisplayName || '').trim() || 'User');
+const normalizedPlayerAvatarUrl = computed(() => String(props.playerAvatarUrl || '').trim());
 const timelineLabel = computed(() => activeTimelineFrame.value ? `${activeTimelineFrame.value.index + 1} / ${timelineFrames.value.length}` : '0 / 0');
 const hasRenderableMap = computed(() => isRenderableMapDocument(activeMapDocument.value));
 const showMapBadge = computed(() => !!activePatch.value);
@@ -532,6 +543,22 @@ function sourceElementForDerivedLabel(element: TavernMapElement): TavernMapEleme
     return (activeMapDocument.value?.elements || []).find((item) => item.id === sourceId) || null;
 }
 
+function isPlayerActorElement(element: TavernMapElement | null | undefined): boolean {
+    return String(element?.cat || '').trim().toLowerCase() === 'actor'
+        && String(element?.actorKey || element?.id || '').trim().toLowerCase() === 'player';
+}
+
+function displayTextForElement(element: TavernMapElement): string {
+    if (isPlayerActorElement(element)) {
+        return normalizedPlayerDisplayName.value;
+    }
+    const source = sourceElementForDerivedLabel(element);
+    if (source && isPlayerActorElement(source)) {
+        return normalizedPlayerDisplayName.value;
+    }
+    return String(element.text || '');
+}
+
 function labelLayoutPriority(item: MapRenderItem): number {
     const source = sourceElementForDerivedLabel(item.element);
     const cat = String(source?.cat || item.element.cat || '').trim().toLowerCase();
@@ -557,9 +584,12 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
         : replayMode.value === 'full'
             ? index * 115
             : opKind === 'stable' ? 0 : index * 30;
+    const isPlayer = isPlayerActorElement(element);
 
     if (element.text) {
         const [labelX, labelY] = labelPosition(element);
+        const text = displayTextForElement(element);
+        if (!text) {return [];}
         return [{
             element,
             id: `${element.id}-label`,
@@ -576,7 +606,7 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             durationMs: 900,
             length: 60,
             opKind,
-            text: element.text,
+            text,
             x: labelX,
             y: labelY,
             fontSize: labelFontSize(element),
@@ -613,6 +643,67 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             delayMs: baseDelay,
             durationMs,
             length,
+            opKind,
+            text: '',
+            x: 0,
+            y: 0,
+            fontSize: 0,
+            anchor: 'middle',
+            transform: '',
+            fillRule: 'nonzero',
+            gameIcon: false,
+        });
+        return items;
+    }
+    if (isPlayer && normalizedPlayerAvatarUrl.value && forcedOpKind !== 'remove') {
+        const avatarRadius = 12;
+        const outlineRadius = 13.25;
+        const patternId = `${String(element.id || 'player').trim()}-player-avatar`;
+        items.push({
+            element,
+            id: `${element.id}-avatar`,
+            layer: 'avatar',
+            path: circleToPath({ ...element, circle: avatarRadius }),
+            color,
+            fill: `url(#${patternId})`,
+            blend: 'normal',
+            opacity: certaintyOpacity(element),
+            z,
+            strokeWidth: 0,
+            dash: '',
+            delayMs: baseDelay,
+            durationMs,
+            length: Math.max(48, Math.PI * 2 * avatarRadius),
+            opKind,
+            text: '',
+            x: 0,
+            y: 0,
+            fontSize: 0,
+            anchor: 'middle',
+            transform: '',
+            fillRule: 'nonzero',
+            gameIcon: false,
+            avatarHref: normalizedPlayerAvatarUrl.value,
+            patternId,
+            patternX: element.at[0] - avatarRadius,
+            patternY: element.at[1] - avatarRadius,
+            patternSize: avatarRadius * 2,
+        });
+        items.push({
+            element,
+            id: `${element.id}-player-outline`,
+            layer: 'line',
+            path: circleToPath({ ...element, circle: outlineRadius }),
+            color: '#18120f',
+            fill: 'none',
+            blend: 'normal',
+            opacity: 0.86 * certaintyOpacity(element),
+            z,
+            strokeWidth: 1.15,
+            dash: '3 2',
+            delayMs: baseDelay,
+            durationMs,
+            length: Math.max(48, Math.PI * 2 * outlineRadius),
             opKind,
             text: '',
             x: 0,
@@ -707,20 +798,20 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
         fillRule: 'nonzero',
         gameIcon: false,
     });
-    if (element.cat === 'actor' && String(element.actorKey || element.id || '').trim().toLowerCase() === 'player') {
+    if (isPlayer) {
         const ringRadius = element.icon ? 18 : typeof element.circle === 'number' ? element.circle + 5 : 16;
         items.push({
             element,
-            id: `${element.id}-player-ring`,
+            id: `${element.id}-player-outline`,
             layer: 'line',
             path: circleToPath({ ...element, circle: ringRadius }),
-            color: '#4ea1ff',
+            color: '#18120f',
             fill: 'none',
             blend: 'normal',
             opacity: 0.72 * certaintyOpacity(element),
             z,
-            strokeWidth: 2,
-            dash: '',
+            strokeWidth: 1.15,
+            dash: '3 2',
             delayMs: baseDelay,
             durationMs,
             length: Math.max(48, Math.PI * 2 * ringRadius),
@@ -743,6 +834,9 @@ const renderItems = computed<MapRenderItem[]>(() => (activeMapDocument.value?.el
 
 const fillItems = computed(() => renderItems.value
     .filter((item) => item.layer === 'fill')
+    .sort((left, right) => left.z - right.z || compareMapStableText(left.element.id, right.element.id) || compareMapStableText(left.id, right.id)));
+const avatarItems = computed(() => renderItems.value
+    .filter((item) => item.layer === 'avatar')
     .sort((left, right) => left.z - right.z || compareMapStableText(left.element.id, right.element.id) || compareMapStableText(left.id, right.id)));
 const lineItems = computed(() => renderItems.value.filter((item) => item.layer === 'line'));
 const regularLineItems = computed(() => lineItems.value.filter((item) => !item.gameIcon));
@@ -1415,10 +1509,41 @@ function handleMapWheel(event: WheelEvent) {
               stop-opacity="0.18"
             />
           </radialGradient>
+          <pattern
+            v-for="item in avatarItems"
+            :id="item.patternId"
+            :key="item.patternId"
+            :x="item.patternX"
+            :y="item.patternY"
+            :width="item.patternSize"
+            :height="item.patternSize"
+            patternUnits="userSpaceOnUse"
+          >
+            <image
+              :href="item.avatarHref"
+              :x="item.patternX"
+              :y="item.patternY"
+              :width="item.patternSize"
+              :height="item.patternSize"
+              preserveAspectRatio="xMidYMid slice"
+            />
+          </pattern>
         </defs>
         <g class="map-fill-layer">
           <path
             v-for="item in fillItems"
+            :key="item.id"
+            :d="item.path"
+            :fill="item.fill"
+            :transform="item.transform"
+            :fill-rule="item.fillRule"
+            :class="itemClass(item)"
+            :style="itemStyle(item)"
+          />
+        </g>
+        <g class="map-avatar-layer">
+          <path
+            v-for="item in avatarItems"
             :key="item.id"
             :d="item.path"
             :fill="item.fill"

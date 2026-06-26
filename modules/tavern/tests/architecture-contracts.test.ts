@@ -772,6 +772,27 @@ test('tavern map update badge stays collapsed until requested', () => {
     assert.doesNotMatch(mapCss, /tavern-map-active-button/);
 });
 
+test('tavern scene map player marker uses current user identity instead of generic player label', () => {
+    const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const contextSource = readRepoFile('modules/tavern/app-src/components/tavern-app-context.ts');
+    const workspacePanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernWorkspacePanel.vue');
+    const mapPanelSource = readRepoFile('modules/tavern/app-src/components/TavernMapPanel.vue');
+
+    assert.match(contextSource, /export interface TavernWorkspaceContext[\s\S]*displayUserName: TavernReadable<string>;[\s\S]*visibleUserAvatar: TavernReadable<string>;/);
+    assert.match(appSource, /const workspaceContext = \{[\s\S]*displayUserName: userName,[\s\S]*visibleUserAvatar,[\s\S]*\} satisfies TavernWorkspaceContext;/);
+    assert.doesNotMatch(workspacePanelSource, /useTavernChatContext/);
+    assert.match(workspacePanelSource, /const \{[\s\S]*chatWorkspacePanel,[\s\S]*displayUserName,[\s\S]*visibleUserAvatar,[\s\S]*\} = workspace;/);
+    assert.match(workspacePanelSource, /if \(actorKey === 'player'\) \{\s*return String\(displayUserName\.value \|\| 'User'\)\.trim\(\) \|\| 'User';\s*\}/);
+    assert.match(workspacePanelSource, /:player-display-name="displayUserName"[\s\S]*:player-avatar-url="visibleUserAvatar"/);
+    assert.match(mapPanelSource, /playerDisplayName\?: string;[\s\S]*playerAvatarUrl\?: string;/);
+    assert.match(mapPanelSource, /const normalizedPlayerDisplayName = computed\(\(\) => String\(props\.playerDisplayName \|\| ''\)\.trim\(\) \|\| 'User'\)/);
+    assert.match(mapPanelSource, /const normalizedPlayerAvatarUrl = computed\(\(\) => String\(props\.playerAvatarUrl \|\| ''\)\.trim\(\)\)/);
+    assert.match(mapPanelSource, /if \(isPlayer && normalizedPlayerAvatarUrl\.value && forcedOpKind !== 'remove'\) \{/);
+    assert.match(mapPanelSource, /layer: 'avatar'/);
+    assert.match(mapPanelSource, /dash: '3 2'/);
+    assert.doesNotMatch(mapPanelSource, /#4ea1ff/);
+});
+
 test('tavern map glyph attribution keeps runtime license metadata', () => {
     const glyphSource = readRepoFile('modules/tavern/app-src/map-glyphs.ts');
 

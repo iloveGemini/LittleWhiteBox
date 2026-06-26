@@ -23,6 +23,8 @@ const session = useTavernSessionContext();
 const workspace = useTavernWorkspaceContext();
 const {
     chatWorkspacePanel,
+    displayUserName,
+    visibleUserAvatar,
 } = workspace;
 const {
     activeMemoryFiles,
@@ -128,9 +130,16 @@ const mapDigestLines = computed(() => String(selectedMapRecord.value?.digest || 
     .map((line) => line.trim())
     .filter(Boolean)
     .slice(0, 3));
+function mapActorDisplayName(element: TavernMapElement): string {
+    const actorKey = String(element.actorKey || element.id || '').trim().toLowerCase();
+    if (actorKey === 'player') {
+        return String(displayUserName.value || 'User').trim() || 'User';
+    }
+    return String(element.text || element.id || '').trim();
+}
 const mapActorNames = computed(() => selectedMapElements.value
     .filter((element) => element.cat === 'actor')
-    .map((element) => String(element.text || element.id || '').trim())
+    .map((element) => mapActorDisplayName(element))
     .filter(Boolean)
     .slice(0, 6));
 const mapInfoStats = computed(() => {
@@ -261,6 +270,8 @@ function selectDirectoryMemoryFile(path: string) {
           :active-doc-id="activeMapDocId"
           :document="selectedMapRecord"
           :patches="selectedMapPatches"
+          :player-display-name="displayUserName"
+          :player-avatar-url="visibleUserAvatar"
         />
         <TavernAtlasPanel
           v-else-if="stateWorkspaceView === 'world'"

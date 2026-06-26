@@ -334,6 +334,13 @@
     vector-effect: non-scaling-stroke;
 }
 
+.tavern-chat.xb-page .map-avatar.is-animated {
+    opacity: 0;
+    animation:
+        tavern-map-fill-in 1s ease-out calc(var(--map-delay) + 120ms) forwards,
+        tavern-map-op-glow 1.2s ease-out calc(var(--map-delay) + 150ms) both;
+}
+
 .tavern-chat.xb-page .map-line.is-animated {
     stroke-dasharray: var(--map-length);
     stroke-dashoffset: var(--map-length);
