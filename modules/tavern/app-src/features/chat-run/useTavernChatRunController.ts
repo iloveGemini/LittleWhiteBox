@@ -77,6 +77,7 @@ export interface TavernChatRunControllerOptions {
     resolveRuntimeContextForSession: (sessionId?: string) => Promise<XbTavernContext>;
     resolveSlashCommandMessageText: (messageText: string, options?: { reuseUserMessageOrder?: number }) => Promise<string>;
     scrollChatToBottom: (force?: boolean) => void;
+    setSelectedSessionId: (sessionId: string) => void;
     setSuppressNextChatWindowLimitReload: () => void;
     showToast: (message: string, options?: { tone?: 'info' | 'warning' | 'danger'; durationMs?: number }) => void;
     thoughtBlocks: (messageOrThoughts: unknown) => Array<{ label?: string; text?: string }>;
@@ -312,7 +313,7 @@ export function useTavernChatRunController(options: TavernChatRunControllerOptio
                     scheduleRuntimeStreamSnapshot(snapshot);
                 },
                 onUserMessageSaved: async (sessionId, message) => {
-                    options.selectedSessionId.value = sessionId;
+                    options.setSelectedSessionId(sessionId);
                     options.upsertLoadedSessionMessage(message);
                     options.touchSessionLocally(sessionId, message.createdAt);
                     state.runtimeUserMessageVisible.value = true;
@@ -325,7 +326,7 @@ export function useTavernChatRunController(options: TavernChatRunControllerOptio
                 },
                 onAssistantMessageSaved: async (sessionId, message) => {
                     assistantMessageSaved = true;
-                    options.selectedSessionId.value = sessionId;
+                    options.setSelectedSessionId(sessionId);
                     flushRuntimeStreamSnapshotNow();
                     options.upsertLoadedSessionMessage(message);
                     options.touchSessionLocally(sessionId, message.createdAt);
@@ -336,7 +337,7 @@ export function useTavernChatRunController(options: TavernChatRunControllerOptio
                     await options.refreshManagerRecords(sessionId);
                 },
             });
-            options.selectedSessionId.value = result.sessionId;
+            options.setSelectedSessionId(result.sessionId);
             flushRuntimeStreamSnapshotNow();
             clearRuntimeAssistantLiveState();
             state.runtimeError.value = result.error || '';

@@ -484,6 +484,7 @@ test('tavern request log is sourced from runtime request snapshots', () => {
 
 test('tavern chat hot paths use message windows instead of full session scans', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const sessionSource = readRepoFile('modules/tavern/app-src/features/session/useTavernSessionController.ts');
     const runtimeSource = readRepoFile('modules/tavern/app-src/runtime/run-once.ts');
     const sessionDbSource = readRepoFile('modules/tavern/shared/session-db.ts');
     const simulateBody = runtimeSource.slice(
@@ -496,9 +497,12 @@ test('tavern chat hot paths use message windows instead of full session scans', 
         sessionDbSource.indexOf('export async function listLatestTavernUserMessages'),
     );
 
-    assert.match(appSource, /const loadedSessionMessages = ref<TavernMessageRecord\[\]>\(\[\]\);/);
-    assert.match(appSource, /selectedSessionMessageTotal/);
-    assert.match(appSource, /loadSelectedSessionMessageWindow/);
+    assert.match(appSource, /const sessionState = createTavernSessionState\(\);/);
+    assert.doesNotMatch(appSource, /const loadedSessionMessages = ref<TavernMessageRecord\[\]>\(\[\]\);/);
+    assert.match(sessionSource, /const loadedSessionMessages = ref<TavernMessageRecord\[\]>\(\[\]\);/);
+    assert.match(sessionSource, /selectedSessionMessageTotal/);
+    assert.match(sessionSource, /async function loadSelectedSessionMessageWindow/);
+    assert.match(appSource, /const sessionController = useTavernSessionController\(sessionState,/);
     assert.match(appSource, /async function rebuildSelectedSessionRuntimeState\(\)[\s\S]*await listTavernMessages\(selectedSessionId\.value\)/);
     assert.doesNotMatch(appSource, /async function selectSession[\s\S]{0,320}listTavernMessages\(/);
     assert.doesNotMatch(appSource, /async function refreshSessions[\s\S]{0,520}listTavernMessages\(/);
@@ -999,6 +1003,7 @@ test('tavern manager display projection stays out of the app controller', () => 
 test('tavern accepted-turn manager maintenance runs in background after the next user send starts', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const chatRunSource = readRepoFile('modules/tavern/app-src/features/chat-run/useTavernChatRunController.ts');
+    const sessionSource = readRepoFile('modules/tavern/app-src/features/session/useTavernSessionController.ts');
     const runOnceSource = readRepoFile('modules/tavern/app-src/runtime/run-once.ts');
     const managerSource = readRepoFile('modules/tavern/app-src/runtime/manager.ts');
     const memoryFilesSource = readRepoFile('modules/tavern/shared/memory-files.ts');
@@ -1010,7 +1015,7 @@ test('tavern accepted-turn manager maintenance runs in background after the next
     const schedulerSource = runOnceSource.slice(schedulerStart, runTurnStart);
     const runTurnSource = runOnceSource.slice(runTurnStart);
     const productionRunTurnCall = chatRunSource.match(/const result = await runXbTavernTurn\(\{[\s\S]*?runManager: true,[\s\S]*?onManagerRunSaved:[\s\S]*?\n[ ]{12}\}\);/);
-    const removeSessionBody = appSource.match(/async function removeSession\(sessionId: string, event\?: Event\) \{[\s\S]*?const removed = await deleteTavernSession\(id\);/);
+    const removeSessionBody = sessionSource.match(/async function removeSession\(sessionId: string\) \{[\s\S]*?const removed = await deleteTavernSession\(id\);/);
 
     assert.match(runOnceSource, /markXbTavernManagerTurnPending/);
     assert.match(runOnceSource, /runPendingAcceptedTurnManager/);
@@ -1027,7 +1032,7 @@ test('tavern accepted-turn manager maintenance runs in background after the next
     assert.ok(productionRunTurnCall);
     assert.doesNotMatch(productionRunTurnCall[0], /executeManagerOnce/);
     assert.ok(removeSessionBody);
-    assert.match(removeSessionBody[0], /await cancelAndRollbackXbTavernManagersForMessageRange\(id, 0\);[\s\S]*const removed = await deleteTavernSession\(id\);/);
+    assert.match(removeSessionBody[0], /await options\.cancelAndRollbackManagersForSession\(id\);[\s\S]*const removed = await deleteTavernSession\(id\);/);
     assert.doesNotMatch(removeSessionBody[0], /waitForPendingAcceptedTurnManagers/);
     assert.match(runOnceSource, /await saveAcceptedStateSnapshot\(baseSession\.id\);/);
     assert.match(runOnceSource, /markXbTavernManagerTurnPending\(\{[\s\S]*assistantMessage[\s\S]*turn: nextTurn/);
@@ -1429,6 +1434,7 @@ test('tavern draw jobs are message-queued and route progress by host request', (
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const drawSource = readRepoFile('modules/tavern/app-src/features/draw/useTavernDrawController.ts');
     const chatRunSource = readRepoFile('modules/tavern/app-src/features/chat-run/useTavernChatRunController.ts');
+    const sessionSource = readRepoFile('modules/tavern/app-src/features/session/useTavernSessionController.ts');
     const canDrawSource = drawSource.match(/function canDrawMessage\(message: TavernMessageRecord\) \{[\s\S]*?\n {4}\}/)?.[0] || '';
     const insertMarkersSource = drawSource.match(/function insertTavernImageMarkers\(content = '', images: unknown\[] = \[]\) \{[\s\S]*?\n\}\n\nfunction formatDrawProgress/)?.[0] || '';
 
@@ -1460,7 +1466,8 @@ test('tavern draw jobs are message-queued and route progress by host request', (
     assert.match(drawSource, /function cancelJob\(jobKey = ''\): void \{[\s\S]*job\.controller\?\.abort\(\);[\s\S]*clearCooldownTimer\(\);/);
     assert.match(drawSource, /function cancelJobsForMessageRange\(sessionId = '', fromOrder = 0\): void \{[\s\S]*job\.sessionId === id && Number\(job\.order\) >= startOrder[\s\S]*cancelJob\(job\.key\);/);
     assert.match(drawSource, /function cancelJobsForSession\(sessionId = ''\): void \{[\s\S]*job\.sessionId === id[\s\S]*cancelJob\(job\.key\);/);
-    assert.match(appSource, /async function removeSession\(sessionId: string, event\?: Event\) \{[\s\S]*drawContext\.cancelJobsForSession\(id\);[\s\S]*await cancelAndRollbackXbTavernManagersForMessageRange\(id, 0\);/);
+    assert.match(appSource, /cancelDrawJobsForSession: drawContext\.cancelJobsForSession/);
+    assert.match(sessionSource, /async function removeSession\(sessionId: string\) \{[\s\S]*options\.cancelDrawJobsForSession\(id\);[\s\S]*await options\.cancelAndRollbackManagersForSession\(id\);/);
     assert.match(appSource, /async function deleteMessageTurn\(message: TavernMessageRecord\) \{[\s\S]*const fromOrder = Math\.min\(\.\.\.ordersToDelete\);[\s\S]*drawContext\.cancelJobsForMessageRange\(message\.sessionId, fromOrder\);/);
     assert.match(appSource, /async function rerunFromMessage\(message: TavernMessageRecord\) \{[\s\S]*drawContext\.cancelJobsForMessageRange\(message\.sessionId, userMessage\.order \+ 1\);[\s\S]*await runOnce/);
     assert.match(appSource, /cancelDrawJobsForMessageRange: drawContext\.cancelJobsForMessageRange/);
@@ -1619,6 +1626,7 @@ test('tavern memory editor actions live outside the app controller', () => {
 test('tavern streaming action-check UI renders from live runtime events and keeps dark card styling aligned', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const chatRunSource = readRepoFile('modules/tavern/app-src/features/chat-run/useTavernChatRunController.ts');
+    const sessionSource = readRepoFile('modules/tavern/app-src/features/session/useTavernSessionController.ts');
     const chatPageSource = readRepoFile('modules/tavern/app-src/components/chat/TavernChatPage.vue');
     const conversationPanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
     const managerPanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernManagerPanel.vue');
@@ -1646,13 +1654,19 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.match(markdownToolsSource, /if \(event\.stakes\) \{[\s\S]*className = 'action-check-card-stakes'[\s\S]*textContent = event\.stakes/);
     assert.match(chatRunSource, /function clearRuntimeAssistantLiveState\(\) \{[\s\S]*state\.runtimeText\.value = '';[\s\S]*state\.runtimeThoughts\.value = \[\];[\s\S]*state\.runtimeActionCheckEvents\.value = \[\];[\s\S]*state\.runtimeUserMessageVisible\.value = false;/);
     assert.match(chatRunSource, /state\.runtimeUserMessageVisible\.value = false;[\s\S]*state\.runtimeProvider\.value = ''/);
-    assert.match(appSource, /function upsertLoadedSessionMessage\(message: TavernMessageRecord\) \{[\s\S]*messageOrder >= tailOrder[\s\S]*loadedSessionMessages\.value = \[\.\.\.currentMessages, message\];/);
-    assert.match(appSource, /function pruneLoadedSessionMessagesFromOrder\(sessionId = '', fromOrder = Number\.POSITIVE_INFINITY\): number \{[\s\S]*Number\(message\.order\) < firstRemovedOrder[\s\S]*loadedSessionMessages\.value = remainingMessages;[\s\S]*selectedSessionLatestAssistantOrder\.value = remainingMessages/);
+    assert.match(appSource, /function upsertLoadedSessionMessage\(message: TavernMessageRecord\) \{[\s\S]*sessionController\.upsertLoadedSessionMessage\(message\);/);
+    assert.match(sessionSource, /function upsertLoadedSessionMessage\(message: TavernMessageRecord\) \{[\s\S]*messageOrder >= tailOrder[\s\S]*state\.loadedSessionMessages\.value = \[\.\.\.currentMessages, message\];/);
+    assert.match(appSource, /function pruneLoadedSessionMessagesFromOrder\(sessionId = '', fromOrder = Number\.POSITIVE_INFINITY\): number \{[\s\S]*return sessionController\.pruneLoadedSessionMessagesFromOrder\(sessionId, fromOrder\);/);
+    assert.match(sessionSource, /function pruneLoadedSessionMessagesFromOrder\(sessionId = '', fromOrder = Number\.POSITIVE_INFINITY\): number \{[\s\S]*Number\(message\.order\) < firstRemovedOrder[\s\S]*state\.loadedSessionMessages\.value = remainingMessages;[\s\S]*state\.selectedSessionLatestAssistantOrder\.value = remainingMessages/);
     assert.doesNotMatch(appSource, /\[\.\.\.loadedSessionMessages\.value, message\]\.sort\(\(left, right\) => left\.order - right\.order\)/);
-    assert.match(appSource, /let suppressNextChatWindowLimitReload = false;/);
-    assert.match(appSource, /setSuppressNextChatWindowLimitReload: \(\) => \{[\s\S]*suppressNextChatWindowLimitReload = true;/);
+    assert.doesNotMatch(appSource, /let suppressNextChatWindowLimitReload = false;/);
+    assert.match(sessionSource, /let suppressNextChatWindowLimitReloadPending = false;/);
+    assert.match(appSource, /setSuppressNextChatWindowLimitReload: sessionController\.suppressNextChatWindowLimitReload/);
     assert.match(chatRunSource, /const reusedUserMessageOrder = Number\(runOptions\.reuseUserMessageOrder\);[\s\S]*const isReusedUserMessageRun = Number\.isFinite\(reusedUserMessageOrder\);[\s\S]*options\.setSuppressNextChatWindowLimitReload\(\);[\s\S]*options\.resetChatMessageWindowState\(\);[\s\S]*options\.pruneLoadedSessionMessagesFromOrder\(options\.selectedSessionId\.value, reusedUserMessageOrder \+ 1\);[\s\S]*state\.runtimeUserMessageVisible\.value = true;/);
-    assert.match(appSource, /watch\(\(\) => chatMessageWindowLimit\.value, \(\) => \{[\s\S]*if \(suppressNextChatWindowLimitReload\) \{[\s\S]*suppressNextChatWindowLimitReload = false;[\s\S]*return;[\s\S]*void loadSelectedSessionMessageWindow\(\);/);
+    assert.match(appSource, /watch\(\(\) => chatMessageWindowLimit\.value, \(\) => \{[\s\S]*sessionController\.handleChatMessageWindowLimitChanged\(\);/);
+    assert.match(sessionSource, /function handleChatMessageWindowLimitChanged\(\) \{[\s\S]*if \(suppressNextChatWindowLimitReloadPending\) \{[\s\S]*suppressNextChatWindowLimitReloadPending = false;[\s\S]*return;[\s\S]*void loadSelectedSessionMessageWindow\(\);/);
+    assert.doesNotMatch(chatRunSource, /options\.selectedSessionId\.value\s*=/);
+    assert.match(chatRunSource, /onUserMessageSaved:[\s\S]*options\.setSelectedSessionId\(sessionId\);[\s\S]*onAssistantMessageSaved:[\s\S]*options\.setSelectedSessionId\(sessionId\);[\s\S]*options\.setSelectedSessionId\(result\.sessionId\);/);
     assert.match(chatRunSource, /catch \(error\) \{[\s\S]*clearRuntimeAssistantLiveState\(\);[\s\S]*if \(isReusedUserMessageRun && options\.selectedSessionId\.value\) \{[\s\S]*await options\.loadSelectedSessionMessageWindow\(\{ sessionId: options\.selectedSessionId\.value \}\);/);
     const userSavedCallback = chatRunSource.match(/onUserMessageSaved: async \(sessionId, message\) => \{[\s\S]*?\n[ ]{16}\},\n[ ]{16}onAssistantMessageSaved/);
     assert.ok(userSavedCallback);
@@ -1662,7 +1676,7 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.ok(assistantSavedCallback);
     assert.match(assistantSavedCallback[0], /flushRuntimeStreamSnapshotNow\(\);[\s\S]*options\.upsertLoadedSessionMessage\(message\);[\s\S]*options\.touchSessionLocally\(sessionId, message\.createdAt\);[\s\S]*clearRuntimeAssistantLiveState\(\);/);
     assert.doesNotMatch(assistantSavedCallback[0], /refreshSessions\(\)/);
-    assert.match(chatRunSource, /options\.selectedSessionId\.value = result\.sessionId;[\s\S]*flushRuntimeStreamSnapshotNow\(\);[\s\S]*clearRuntimeAssistantLiveState\(\);[\s\S]*await options\.refreshSessions\(\);[\s\S]*options\.scrollChatToBottom\(\);/);
+    assert.match(chatRunSource, /options\.setSelectedSessionId\(result\.sessionId\);[\s\S]*flushRuntimeStreamSnapshotNow\(\);[\s\S]*clearRuntimeAssistantLiveState\(\);[\s\S]*await options\.refreshSessions\(\);[\s\S]*options\.scrollChatToBottom\(\);/);
     assert.doesNotMatch(chatRunSource, /await options\.refreshSessions\(\);\s*await options\.refreshManagerRecords\(result\.sessionId\);/);
     assert.match(conversationPanelSource, /const liveAssistantCanRender = computed\(\(\) => isRunning\.value && runtimeUserMessageVisible\.value\)/);
     assert.match(conversationPanelSource, /v-if="liveAssistantCanRender && liveAssistantVisible"[\s\S]*data-chat-anchor-key="streaming:content"/);
@@ -1917,14 +1931,17 @@ test('tavern worldbook preview keeps summary lean and expanded content ephemeral
 test('tavern character archive separates new chat from existing session selection', () => {
     const characterSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterWorkspacePanel.vue');
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const sessionSource = readRepoFile('modules/tavern/app-src/features/session/useTavernSessionController.ts');
     const previewCss = readRepoFile('modules/tavern/app-src/styles/characters/preview.css');
     const sessionDbSource = readRepoFile('modules/tavern/shared/session-db.ts');
 
     assert.match(appSource, /const selectedCharacterSessions = computed<TavernSessionRecord\[\]>/);
     assert.match(appSource, /selectedCharacterSessions,/);
     assert.match(appSource, /sessionFloorLabel,/);
-    assert.match(appSource, /function sessionFloorLabel\(session\?: TavernSessionRecord \| null\)[\s\S]*return '统计中'/);
-    assert.match(appSource, /async function refreshSessionMessageCountsForSessions\(targetSessions: TavernSessionRecord\[\] = \[\]\)/);
+    assert.match(appSource, /function sessionFloorLabel\(session\?: TavernSessionRecord \| null\)[\s\S]*return sessionController\.sessionFloorLabel\(session\);/);
+    assert.match(sessionSource, /function sessionFloorLabel\(session\?: TavernSessionRecord \| null\)[\s\S]*return '统计中'/);
+    assert.match(appSource, /async function refreshSessionMessageCountsForSessions\(targetSessions: TavernSessionRecord\[\] = \[\]\)[\s\S]*sessionController\.refreshSessionMessageCountsForSessions\(targetSessions\);/);
+    assert.match(sessionSource, /async function refreshSessionMessageCountsForSessions\(targetSessions: TavernSessionRecord\[\] = \[\]\)[\s\S]*countTavernMessages\(id\)/);
     assert.match(appSource, /watch\(\(\) => selectedCharacterSessions\.value\.map\(\(session\) => session\.id\)\.join\('\|'\)[\s\S]*refreshSessionMessageCountsForSessions\(selectedCharacterSessions\.value\)/);
     assert.match(sessionDbSource, /export async function countTavernMessages[\s\S]*\.where\('sessionId'\)\.equals\(id\)\.count\(\)/);
     assert.doesNotMatch(sessionDbSource, /countTavernMessages[\s\S]*toArray\(\)\)\.length/);
@@ -1972,11 +1989,13 @@ test('tavern character archive separates new chat from existing session selectio
 
 test('tavern deleting a selected chat never falls through to another character session', () => {
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const sessionSource = readRepoFile('modules/tavern/app-src/features/session/useTavernSessionController.ts');
 
-    assert.match(appSource, /const deletedCharacterKey = String\(session\?\.characterKey \|\| ''\)\.trim\(\);/);
-    assert.match(appSource, /const nextSameCharacterSession = deletedCharacterKey[\s\S]*\.filter\(\(item\) => item\.id !== id && String\(item\.characterKey \|\| ''\)\.trim\(\) === deletedCharacterKey\)/);
-    assert.match(appSource, /if \(nextSameCharacterSession\?\.id\) \{[\s\S]*await setSelectedTavernSessionId\(nextSameCharacterSession\.id\);[\s\S]*activeView\.value = 'chat';/);
-    assert.match(appSource, /selectedSessionId\.value = '';[\s\S]*await setSelectedTavernSessionId\(''\);[\s\S]*selectedCharacterPreviewKey\.value = deletedCharacterKey;[\s\S]*openSettingsWorkspace\('characters'\);[\s\S]*activeView\.value = 'home';/);
+    assert.match(appSource, /async function removeSession\(sessionId: string, event\?: Event\) \{[\s\S]*event\?\.stopPropagation\(\);[\s\S]*await sessionController\.removeSession\(sessionId\);/);
+    assert.match(sessionSource, /const deletedCharacterKey = String\(session\?\.characterKey \|\| ''\)\.trim\(\);/);
+    assert.match(sessionSource, /const nextSameCharacterSession = deletedCharacterKey[\s\S]*\.filter\(\(item\) => item\.id !== id && String\(item\.characterKey \|\| ''\)\.trim\(\) === deletedCharacterKey\)/);
+    assert.match(sessionSource, /if \(nextSameCharacterSession\?\.id\) \{[\s\S]*await persistSelectedSessionId\(nextSameCharacterSession\.id\);[\s\S]*options\.activeView\.value = 'chat';/);
+    assert.match(sessionSource, /state\.selectedSessionId\.value = '';[\s\S]*await persistSelectedSessionId\(''\);[\s\S]*options\.selectedCharacterPreviewKey\.value = deletedCharacterKey;[\s\S]*options\.openCharacterSettingsWorkspace\(\);[\s\S]*options\.activeView\.value = 'home';/);
 });
 
 test('tavern heavy disclosure details bind to ephemeral state instead of keeping bodies mounted', () => {
@@ -2177,6 +2196,7 @@ test('tavern character identity uses stable keys and explicit native ids', () =>
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const settingsControllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
     const sessionSource = readRepoFile('modules/tavern/shared/session-db.ts');
+    const appSessionSource = readRepoFile('modules/tavern/app-src/features/session/useTavernSessionController.ts');
     const runtimeSource = readRepoFile('modules/tavern/app-src/runtime/run-once.ts');
     const worldbookSource = readRepoFile('modules/tavern/host/worldbooks.ts');
     const nativePromptSource = readRepoFile('modules/tavern/host/native-prompt.ts');
@@ -2215,7 +2235,9 @@ test('tavern character identity uses stable keys and explicit native ids', () =>
     assert.match(appSource, /async function refreshCharacterList\(\) \{[\s\S]*const payload = await getHostContext\(\{ includeHistory: false, includeWorldbooks: false \}\);[\s\S]*applyCharacterListPayload\(payload\);/);
     assert.match(appSource, /function applySessionSnapshotContext\(session\?: TavernSessionRecord \| null\): void[\s\S]*context\.value = preserveSessionAuthorNote\(session\.contextSnapshot \|\| \{\}, session\);/);
     assert.match(appSource, /async function syncSessionCharacterContextSafely[\s\S]*catch \(error\) \{[\s\S]*setSelectedSessionCharacterError\(error, targetSessionId\);/);
-    assert.match(appSource, /async function selectSession\(sessionId: string\)[\s\S]*applySessionSnapshotContext\(session\);[\s\S]*void syncSessionCharacterContextSafely\(\{ sessionId, force: true \}\);/);
+    assert.match(appSource, /applySessionSnapshotContext,/);
+    assert.match(appSource, /syncSessionCharacterContextSafely,/);
+    assert.match(appSessionSource, /async function selectSession\(sessionId: string\)[\s\S]*options\.applySessionSnapshotContext\(session\);[\s\S]*void options\.syncSessionCharacterContextSafely\(\{ sessionId: id, force: true \}\);/);
     assert.doesNotMatch(appSource, /void syncSessionCharacterContext\(\{/);
     assert.match(appSource, /\.filter\(\(session\) => String\(session\.characterKey \|\| ''\)\.trim\(\) === characterKey\)/);
     assert.match(appSource, /postToHost\('xb-tavern:refresh-context', \{ nativeCharacterId, includeHistory: false \}\)/);

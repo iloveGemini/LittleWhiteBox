@@ -277,6 +277,7 @@ test('tavern worldbook sync uses native source overview with current context', (
     const contextSource = readRepoFile('modules/tavern/host/sillytavern-context.ts');
     const contextBuildSource = readRepoFile('modules/tavern/host/sillytavern-context.js');
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const sessionSource = readRepoFile('modules/tavern/app-src/features/session/useTavernSessionController.ts');
     const worldbookSource = readRepoFile('modules/tavern/host/worldbooks.ts');
     assert.match(
         settingsControllerSource,
@@ -328,7 +329,9 @@ test('tavern worldbook sync uses native source overview with current context', (
     assert.doesNotMatch(worldbookSource, /extension_prompts\[key\] = cloneJson\(value\)/);
     assert.match(contextSource, /worldbookSources,/);
     assert.match(contextSource, /worldbookSourcesSynced: true/);
-    assert.match(appSource, /syncSessionCharacterContextSafely\(\{ sessionId: selectedSessionId\.value, force: true \}\)/);
+    assert.match(appSource, /syncSessionCharacterContextSafely,/);
+    assert.match(sessionSource, /options\.syncSessionCharacterContextSafely\(\{ sessionId: state\.selectedSessionId\.value \}\)/);
+    assert.match(sessionSource, /options\.syncSessionCharacterContextSafely\(\{ sessionId: id, force: true \}\)/);
 });
 
 test('tavern worldbook host bridge exposes named entry edit endpoints and native runtime result', () => {
