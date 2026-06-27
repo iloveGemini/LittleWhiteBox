@@ -95,6 +95,8 @@ test('tavern app requests sanitize payload before postMessage', () => {
 test('tavern chat typography follows host SillyTavern font metrics inside the iframe', () => {
     const hostSource = readRepoFile('modules/tavern/host/sillytavern-context.ts');
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
+    const conversationPanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernConversationPanel.vue');
+    const managerPanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernManagerPanel.vue');
     const markdownSource = readRepoFile('modules/agent-core/ui/message-markdown.js');
     const markdownToolsSource = readRepoFile('modules/tavern/app-src/components/chat/useTavernMarkdownTools.ts');
     const baseCss = readRepoFile('modules/tavern/app-src/styles/base.css');
@@ -113,6 +115,9 @@ test('tavern chat typography follows host SillyTavern font metrics inside the if
     assert.match(appSource, /const hostProseLineHeightPx = ref\('23px'\);/);
     assert.match(appSource, /--xb-host-main-font-size/);
     assert.match(appSource, /--xb-host-prose-line-height/);
+    assert.match(conversationPanelSource, /copyMessage,/);
+    assert.match(conversationPanelSource, /@click="copyMessage\(message\)"[\s\S]*actionFeedback\(message, 'copy'\) === 'success' \? '✓' : actionFeedback\(message, 'copy'\) === 'error' \? '!' : '⧉'/);
+    assert.match(managerPanelSource, /@click="copyManagerMessage\(item\.message\)"[\s\S]*managerActionFeedback\(item\.message, 'copy'\) === 'success' \? '✓' : managerActionFeedback\(item\.message, 'copy'\) === 'error' \? '!' : '⧉'/);
     assert.match(markdownCss, /font-size: var\(--xb-tavern-reading-font-size, 15px\);/);
     assert.match(markdownCss, /\.xb-tavern-markdown pre \{[\s\S]*background: rgba\(26, 26, 26, 0\.035\);/);
     assert.match(tavernPreRule, /display: block;/);
@@ -144,6 +149,11 @@ test('tavern chat typography follows host SillyTavern font metrics inside the if
     assert.match(markdownSource, /if \(flattenPreCode && codeNode\) \{[\s\S]*pre\.insertBefore\(codeNode\.firstChild, codeNode\);[\s\S]*codeNode\.remove\(\);/);
     assert.match(markdownToolsSource, /flattenPreCode: true,/);
     assert.match(markdownSource, /textarea\.style\.fontSize = '16px';[\s\S]*textarea\.focus\(\{ preventScroll: true \}\);[\s\S]*textarea\.focus\(\);/);
+    assert.ok(
+        markdownSource.indexOf("doc.execCommand?.('copy')") >= 0
+        && markdownSource.indexOf("doc.execCommand?.('copy')") < markdownSource.indexOf('win.navigator?.clipboard?.writeText'),
+        'markdown code copy should try the synchronous DOM clipboard path before async Clipboard API fallback',
+    );
     assert.match(markdownSource, /copyButton\.addEventListener\('pointerdown', \(event\) => \{[\s\S]*event\.stopPropagation\(\);[\s\S]*\}\);/);
     assert.match(markdownSource, /copyButton\.addEventListener\('pointerup', \(event\) => \{[\s\S]*event\.stopPropagation\(\);[\s\S]*\}\);/);
     assert.match(markdownSource, /copyButton\.addEventListener\('touchstart', \(event\) => \{[\s\S]*event\.stopPropagation\(\);[\s\S]*\}, \{ passive: true \}\);/);
@@ -159,6 +169,8 @@ test('tavern chat typography follows host SillyTavern font metrics inside the if
     assert.match(messagesCss, /@media \(max-width: 760px\) \{[\s\S]*\.chat-bubble>\.message-actions \{[\s\S]*opacity: 0;[\s\S]*pointer-events: none;[\s\S]*\.chat-bubble\.is-action-tray-open>\.message-actions[\s\S]*opacity: 1;[\s\S]*pointer-events: auto;/);
     assert.doesNotMatch(messagesCss, /\.message-actions \{[\s\S]*border-top: 1px solid rgba\(120, 112, 98, 0\.16\);/);
     assert.doesNotMatch(messagesCss, /\.message-actions \{[\s\S]*border-bottom: 1px solid rgba\(120, 112, 98, 0\.14\);/);
+    assert.match(messagesCss, /\.tavern-chat\.xb-page \.chat-scroll \{[\s\S]*background: var\(--xb-chat-scroll-bg\);/);
+    assert.doesNotMatch(messagesCss, /\.tavern-chat\.xb-page \.chat-scroll \{[\s\S]*repeating-linear-gradient/);
     assert.match(composeCss, /line-height: var\(--xb-tavern-reading-line-height, 23px\);/);
     assert.match(messagesCss, /font-size: var\(--xb-tavern-reading-font-size, 15px\);/);
     assert.match(memoryCss, /line-height: var\(--xb-host-prose-line-height, 23px\);/);

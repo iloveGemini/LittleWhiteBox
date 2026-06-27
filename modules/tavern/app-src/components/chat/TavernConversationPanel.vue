@@ -42,6 +42,7 @@ const {
     chatLayout,
     chatScrollControlsActive,
     chatScrollRef,
+    copyMessage,
     currentUserMessage,
     deleteMessageTurn,
     displayMessageContent,
@@ -476,6 +477,15 @@ watch(isMobileActionTrayViewport, (isMobile) => {
                 @click="drawMessage(message)"
               >
                 {{ isDrawingMessage(message) ? '■' : '🎨' }}
+              </button>
+              <button
+                type="button"
+                :class="actionFeedback(message, 'copy')"
+                title="复制"
+                aria-label="复制"
+                @click="copyMessage(message)"
+              >
+                {{ actionFeedback(message, 'copy') === 'success' ? '✓' : actionFeedback(message, 'copy') === 'error' ? '!' : '⧉' }}
               </button>
               <button
                 type="button"

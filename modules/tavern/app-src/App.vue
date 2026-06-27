@@ -2861,29 +2861,48 @@ async function copyTextWithFallback(text = '') {
     const normalized = String(text || '');
     if (!normalized) {return false;}
     try {
+        const textarea = document.createElement('textarea');
+        try {
+            textarea.value = normalized;
+            textarea.setAttribute('readonly', 'readonly');
+            textarea.style.position = 'fixed';
+            textarea.style.left = '0';
+            textarea.style.top = '0';
+            textarea.style.width = '2em';
+            textarea.style.height = '2em';
+            textarea.style.padding = '0';
+            textarea.style.border = '0';
+            textarea.style.outline = '0';
+            textarea.style.boxShadow = 'none';
+            textarea.style.background = 'transparent';
+            textarea.style.opacity = '0';
+            textarea.style.pointerEvents = 'none';
+            textarea.style.fontSize = '16px';
+            document.body.appendChild(textarea);
+            try {
+                textarea.focus({ preventScroll: true });
+            } catch {
+                textarea.focus();
+            }
+            textarea.select();
+            textarea.setSelectionRange(0, textarea.value.length);
+            const copied = document.execCommand('copy');
+            if (copied) {return true;}
+        } finally {
+            textarea.remove();
+        }
+    } catch {
+        // Fall through to the async clipboard path.
+    }
+    try {
         if (navigator.clipboard?.writeText) {
             await navigator.clipboard.writeText(normalized);
             return true;
         }
     } catch {
-        // Fall through to the DOM-based clipboard path.
+        // Fall through to false.
     }
-    try {
-        const textarea = document.createElement('textarea');
-        textarea.value = normalized;
-        textarea.setAttribute('readonly', 'readonly');
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        textarea.style.pointerEvents = 'none';
-        document.body.appendChild(textarea);
-        textarea.select();
-        textarea.setSelectionRange(0, textarea.value.length);
-        const copied = document.execCommand('copy');
-        textarea.remove();
-        return copied;
-    } catch {
-        return false;
-    }
+    return false;
 }
 
 async function copyMessage(message: TavernMessageRecord) {

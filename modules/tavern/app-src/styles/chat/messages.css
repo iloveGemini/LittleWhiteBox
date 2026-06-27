@@ -46,13 +46,7 @@
     flex-direction: column;
     gap: 34px;
     overflow: auto;
-    background:
-        repeating-linear-gradient(0deg,
-            transparent,
-            transparent 39px,
-            rgba(26, 26, 26, 0.025) 39px,
-            rgba(26, 26, 26, 0.025) 40px),
-        var(--xb-chat-scroll-bg);
+    background: var(--xb-chat-scroll-bg);
     padding: var(--xb-chat-scroll-padding);
     scroll-padding: 44px 0 38px;
     scrollbar-width: none;
@@ -61,13 +55,7 @@
 }
 
 .xb-os-shell.theme-dark .tavern-chat.xb-page .chat-scroll {
-    background:
-        repeating-linear-gradient(0deg,
-            transparent,
-            transparent 39px,
-            rgba(184, 178, 166, 0.016) 39px,
-            rgba(184, 178, 166, 0.016) 40px),
-        var(--xb-chat-scroll-bg);
+    background: var(--xb-chat-scroll-bg);
 }
 
 .tavern-chat.xb-page .chat-scroll::-webkit-scrollbar {

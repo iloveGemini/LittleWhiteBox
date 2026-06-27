@@ -392,39 +392,51 @@ async function copyText(text = '', ownerDocument = null) {
     const win = doc?.defaultView || globalThis;
 
     try {
+        if (doc?.createElement && doc.body?.appendChild) {
+            const textarea = doc.createElement('textarea');
+            try {
+                textarea.value = normalized;
+                textarea.setAttribute('readonly', 'readonly');
+                textarea.style.position = 'fixed';
+                textarea.style.left = '0';
+                textarea.style.top = '0';
+                textarea.style.width = '2em';
+                textarea.style.height = '2em';
+                textarea.style.padding = '0';
+                textarea.style.border = '0';
+                textarea.style.outline = '0';
+                textarea.style.boxShadow = 'none';
+                textarea.style.background = 'transparent';
+                textarea.style.opacity = '0';
+                textarea.style.pointerEvents = 'none';
+                textarea.style.fontSize = '16px';
+                doc.body.appendChild(textarea);
+                try {
+                    textarea.focus({ preventScroll: true });
+                } catch {
+                    textarea.focus();
+                }
+                textarea.select();
+                textarea.setSelectionRange(0, textarea.value.length);
+                const copied = doc.execCommand?.('copy') || false;
+                if (copied) return true;
+            } finally {
+                textarea.remove();
+            }
+        }
+    } catch {
+        // Fall through to the async clipboard path.
+    }
+
+    try {
         if (win.navigator?.clipboard?.writeText) {
             await win.navigator.clipboard.writeText(normalized);
             return true;
         }
     } catch {
-        // Fall through to the legacy copy path.
+        // Fall through to false.
     }
-
-    try {
-        if (!doc?.createElement || !doc.body?.appendChild) return false;
-        const textarea = doc.createElement('textarea');
-        textarea.value = normalized;
-        textarea.setAttribute('readonly', 'readonly');
-        textarea.style.position = 'fixed';
-        textarea.style.left = '-9999px';
-        textarea.style.top = '0';
-        textarea.style.opacity = '0';
-        textarea.style.pointerEvents = 'none';
-        textarea.style.fontSize = '16px';
-        doc.body.appendChild(textarea);
-        try {
-            textarea.focus({ preventScroll: true });
-        } catch {
-            textarea.focus();
-        }
-        textarea.select();
-        textarea.setSelectionRange(0, textarea.value.length);
-        const copied = doc.execCommand?.('copy') || false;
-        textarea.remove();
-        return copied;
-    } catch {
-        return false;
-    }
+    return false;
 }
 
 export function enhancePathLinks(rootNode, options = {}) {

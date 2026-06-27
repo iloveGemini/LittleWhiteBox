@@ -549,7 +549,7 @@ watch(
                 aria-label="复制"
                 @click="copyManagerMessage(item.message)"
               >
-                ⧉
+                {{ managerActionFeedback(item.message, 'copy') === 'success' ? '✓' : managerActionFeedback(item.message, 'copy') === 'error' ? '!' : '⧉' }}
               </button>
               <button
                 type="button"

@@ -1152,6 +1152,16 @@ export function injectAssistantStyles(rootId) {
             background: rgba(20, 32, 51, 0.22);
             opacity: 1;
         }
+        .xb-assistant-codeblock .xb-assistant-code-copy.is-copied {
+            background: rgba(61, 132, 93, 0.16);
+            color: #2c6d49;
+            opacity: 1;
+        }
+        .xb-assistant-codeblock .xb-assistant-code-copy.is-failed {
+            background: rgba(176, 59, 71, 0.14);
+            color: #9b2d3a;
+            opacity: 1;
+        }
         .xb-assistant-codeblock pre {
             padding-top: 34px;
         }

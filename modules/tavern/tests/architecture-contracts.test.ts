@@ -790,10 +790,12 @@ test('tavern scene map player marker uses current user identity instead of gener
     assert.match(mapPanelSource, /if \(isPlayer && normalizedPlayerAvatarUrl\.value && forcedOpKind !== 'remove'\) \{/);
     assert.match(mapPanelSource, /layer: 'avatar'/);
     assert.match(mapPanelSource, /dash: '3 2'/);
-    assert.match(mapPanelSource, /id: `\$\{element\.id\}-avatar`,[\s\S]*layer: 'avatar',[\s\S]*fill: `url\(#\$\{patternId\}\)`/);
+    assert.match(mapPanelSource, /id: `\$\{element\.id\}-avatar`,[\s\S]*layer: 'avatar',[\s\S]*fill: 'none'[\s\S]*avatarClipId,/);
     assert.match(mapPanelSource, /id: `\$\{element\.id\}-player-outline`,[\s\S]*layer: 'avatar',[\s\S]*dash: '3 2'/);
     assert.match(mapPanelSource, /id: `\$\{element\.id\}-glyph`,[\s\S]*layer: 'line',[\s\S]*gameIcon: true/);
-    assert.match(mapPanelSource, /const avatarPatternItems = computed<MapAvatarPatternItem\[\]>/);
+    assert.match(mapPanelSource, /const avatarImageItems = computed<MapAvatarImageItem\[\]>/);
+    assert.match(mapPanelSource, /<clipPath[\s\S]*v-for="item in avatarImageItems"[\s\S]*<circle[\s\S]*:r="item\.avatarSize \/ 2"/);
+    assert.match(mapPanelSource, /<image[\s\S]*v-for="item in avatarImageItems"[\s\S]*:clip-path="`url\(#\$\{item\.avatarClipId\}\)`"[\s\S]*preserveAspectRatio="xMidYMid slice"/);
     assert.ok(
         mapPanelSource.indexOf('class="map-avatar-layer"') > mapPanelSource.indexOf('class="map-removed-layer"'),
         'player avatar layer must render after every map content layer',
@@ -1820,8 +1822,7 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.match(conversationPanelSource, /'is-action-tray-open': isMessageActionTrayOpen\(message\)/);
     assert.match(conversationPanelSource, /@click\.stop="toggleMessageActionTray\(message, \$event\)"/);
     assert.match(conversationPanelSource, /class="bubble-identity"[\s\S]*class="bubble-nameplate"[\s\S]*class="message-floor-label"[\s\S]*class="bubble-time-tag"[\s\S]*v-if="!isEditingMessage\(message\)"[\s\S]*class="message-actions"/);
-    assert.match(conversationPanelSource, /class="message-actions"[\s\S]*isDrawingMessage\(message\) \? '■' : '🎨'[\s\S]*<svg[\s\S]*viewBox="0 0 24 24"/);
-    assert.doesNotMatch(conversationPanelSource, /actionFeedback\(message, 'copy'\)|copyMessage\(message\)/);
+    assert.match(conversationPanelSource, /class="message-actions"[\s\S]*isDrawingMessage\(message\) \? '■' : '🎨'[\s\S]*@click="copyMessage\(message\)"[\s\S]*actionFeedback\(message, 'copy'\) === 'success' \? '✓' : actionFeedback\(message, 'copy'\) === 'error' \? '!' : '⧉'[\s\S]*<svg[\s\S]*viewBox="0 0 24 24"/);
     assert.match(conversationPanelSource, /<\/div>\s*<div\s+v-for="\(\s*event, eventIndex\s*\) in \(message\.role === 'user'/);
     assert.doesNotMatch(conversationPanelSource, /inline-runtime-event/);
     assert.doesNotMatch(cssSource, /\.chat-bubble \.chat-runtime-event/);
@@ -1834,6 +1835,8 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.doesNotMatch(cssSource, /\.message-actions \{[\s\S]*border-top: 1px solid rgba\(120, 112, 98, 0\.16\);/);
     assert.doesNotMatch(cssSource, /\.message-actions \{[\s\S]*border-bottom: 1px solid rgba\(120, 112, 98, 0\.14\);/);
     assert.match(cssSource, /\.tavern-chat\.xb-page \.chat-scroll \{[\s\S]*scrollbar-width: none;[\s\S]*-ms-overflow-style: none;/);
+    assert.match(cssSource, /\.tavern-chat\.xb-page \.chat-scroll \{[\s\S]*background: var\(--xb-chat-scroll-bg\);/);
+    assert.doesNotMatch(cssSource, /\.tavern-chat\.xb-page \.chat-scroll \{[\s\S]*repeating-linear-gradient/);
     assert.match(cssSource, /\.tavern-chat\.xb-page \.chat-scroll::-webkit-scrollbar \{[\s\S]*width: 0;[\s\S]*height: 0;/);
     assert.match(conversationPanelSource, /v-model="currentUserMessage"[\s\S]*rows="1"/);
     assert.match(contextSource, /createNewChatSession: TavernCommand<\[\], Promise<void>>/);

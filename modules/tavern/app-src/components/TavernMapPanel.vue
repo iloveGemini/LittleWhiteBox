@@ -50,12 +50,12 @@ interface MapRenderItem {
     fillRule: 'nonzero' | 'evenodd';
     gameIcon: boolean;
     avatarHref?: string;
-    patternId?: string;
-    patternX?: number;
-    patternY?: number;
-    patternSize?: number;
+    avatarClipId?: string;
+    avatarX?: number;
+    avatarY?: number;
+    avatarSize?: number;
 }
-type MapAvatarPatternItem = MapRenderItem & Required<Pick<MapRenderItem, 'avatarHref' | 'patternId' | 'patternX' | 'patternY' | 'patternSize'>>;
+type MapAvatarImageItem = MapRenderItem & Required<Pick<MapRenderItem, 'avatarHref' | 'avatarClipId' | 'avatarX' | 'avatarY' | 'avatarSize'>>;
 
 interface MapReplayFrame {
     revision: number;
@@ -66,6 +66,14 @@ interface MapReplayFrame {
 
 function pickPenAnimationItem<T extends { gameIcon: boolean; layer: string; path: string }>(items: T[]): T | null {
     return items.find((item) => !item.gameIcon && item.layer !== 'label' && !!item.path) || null;
+}
+
+function svgLocalId(value: string): string {
+    return String(value || '')
+        .trim()
+        .replace(/[^A-Za-z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        || 'item';
 }
 
 const props = withDefaults(defineProps<{
@@ -659,14 +667,17 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
     if (isPlayer && normalizedPlayerAvatarUrl.value && forcedOpKind !== 'remove') {
         const avatarRadius = 12;
         const outlineRadius = 13.25;
-        const patternId = `${String(element.id || 'player').trim()}-player-avatar`;
+        const avatarSize = avatarRadius * 2;
+        const avatarX = element.at[0] - avatarRadius;
+        const avatarY = element.at[1] - avatarRadius;
+        const avatarClipId = `map-avatar-${index}-${svgLocalId(String(element.id || 'player'))}`;
         items.push({
             element,
             id: `${element.id}-avatar`,
             layer: 'avatar',
             path: circleToPath({ ...element, circle: avatarRadius }),
             color,
-            fill: `url(#${patternId})`,
+            fill: 'none',
             blend: 'normal',
             opacity: certaintyOpacity(element),
             z,
@@ -685,10 +696,10 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             fillRule: 'nonzero',
             gameIcon: false,
             avatarHref: normalizedPlayerAvatarUrl.value,
-            patternId,
-            patternX: element.at[0] - avatarRadius,
-            patternY: element.at[1] - avatarRadius,
-            patternSize: avatarRadius * 2,
+            avatarClipId,
+            avatarX,
+            avatarY,
+            avatarSize,
         });
         items.push({
             element,
@@ -839,7 +850,8 @@ const fillItems = computed(() => renderItems.value
 const avatarItems = computed(() => renderItems.value
     .filter((item) => item.layer === 'avatar')
     .sort((left, right) => left.z - right.z || compareMapStableText(left.element.id, right.element.id) || compareMapStableText(left.id, right.id)));
-const avatarPatternItems = computed<MapAvatarPatternItem[]>(() => avatarItems.value.filter((item): item is MapAvatarPatternItem => !!item.patternId && !!item.avatarHref));
+const avatarImageItems = computed<MapAvatarImageItem[]>(() => avatarItems.value.filter((item): item is MapAvatarImageItem => !!item.avatarClipId && !!item.avatarHref));
+const avatarPathItems = computed(() => avatarItems.value.filter((item) => !item.avatarHref));
 const lineItems = computed(() => renderItems.value.filter((item) => item.layer === 'line'));
 const regularLineItems = computed(() => lineItems.value.filter((item) => !item.gameIcon));
 const gameIconLineItems = computed(() => lineItems.value.filter((item) => item.gameIcon));
@@ -1511,25 +1523,17 @@ function handleMapWheel(event: WheelEvent) {
               stop-opacity="0.18"
             />
           </radialGradient>
-          <pattern
-            v-for="item in avatarPatternItems"
-            :id="item.patternId"
-            :key="item.patternId"
-            :x="item.patternX"
-            :y="item.patternY"
-            :width="item.patternSize"
-            :height="item.patternSize"
-            patternUnits="userSpaceOnUse"
+          <clipPath
+            v-for="item in avatarImageItems"
+            :id="item.avatarClipId"
+            :key="item.avatarClipId"
           >
-            <image
-              :href="item.avatarHref"
-              :x="item.patternX"
-              :y="item.patternY"
-              :width="item.patternSize"
-              :height="item.patternSize"
-              preserveAspectRatio="xMidYMid slice"
+            <circle
+              :cx="item.avatarX + item.avatarSize / 2"
+              :cy="item.avatarY + item.avatarSize / 2"
+              :r="item.avatarSize / 2"
             />
-          </pattern>
+          </clipPath>
         </defs>
         <g class="map-fill-layer">
           <path
@@ -1693,8 +1697,21 @@ function handleMapWheel(event: WheelEvent) {
           </text>
         </g>
         <g class="map-avatar-layer">
+          <image
+            v-for="item in avatarImageItems"
+            :key="item.id"
+            :href="item.avatarHref"
+            :x="item.avatarX"
+            :y="item.avatarY"
+            :width="item.avatarSize"
+            :height="item.avatarSize"
+            :clip-path="`url(#${item.avatarClipId})`"
+            preserveAspectRatio="xMidYMid slice"
+            :class="itemClass(item)"
+            :style="itemStyle(item)"
+          />
           <path
-            v-for="item in avatarItems"
+            v-for="item in avatarPathItems"
             :key="item.id"
             :d="item.path"
             :fill="item.fill"
