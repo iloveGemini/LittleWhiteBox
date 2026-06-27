@@ -447,7 +447,7 @@ test('tavern map game icon animation does not override SVG transform attributes'
     const removeKeyframes = extractCssBlock(mapCss, '@keyframes tavern-map-remove');
     assert.match(mapPanel, /glyphTransform\?: string/);
     assert.match(mapPanel, /glyphScaleTransform\?: string/);
-    assert.match(mapPanel, /if \(gameIcon\) \{[\s\S]*transform: '',\s*glyphTransform: gameIconTranslateTransform\(element\.at\[0\], element\.at\[1\]\),\s*glyphScaleTransform: gameIconScaleTransform\(\)/);
+    assert.match(mapPanel, /if \(gameIcon\) \{[\s\S]*const \[glyphX, glyphY\] = projectMapPoint\(element\.at\)[\s\S]*transform: '',\s*glyphTransform: gameIconTranslateTransform\(glyphX, glyphY\),\s*glyphScaleTransform: gameIconScaleTransform\(\)/);
     assert.match(mapPanel, /const regularLineItems = computed\(\(\) => lineItems\.value\.filter\(\(item\) => !item\.gameIcon\)\)/);
     assert.match(mapPanel, /const regularLineCasingItems = computed\(\(\) => regularLineItems\.value\.filter\(\(item\) => item\.role === 'line-casing'\)\)/);
     assert.match(mapPanel, /const regularLineCoreItems = computed\(\(\) => regularLineItems\.value\.filter\(\(item\) => item\.role !== 'line-casing'\)\)/);
@@ -745,6 +745,12 @@ test('tavern map update badge stays collapsed until requested', () => {
     assert.match(mapPanelSource, /function toggleMapBadge\(\) \{[\s\S]*mapBadgeExpanded\.value = !mapBadgeExpanded\.value/);
     assert.match(mapPanelSource, /const mapPanOffset = ref<\[number, number\]>\(\[0, 0\]\)/);
     assert.match(mapPanelSource, /const mapZoom = ref\(1\)/);
+    assert.match(mapPanelSource, /getTavernMapPresentationTransform\(activeMapDocument\.value\)/);
+    assert.match(mapPanelSource, /function projectMapPoint\(point: \[number, number\]\)[\s\S]*projectTavernMapPresentationPoint\(point, presentationTransform\.value\)/);
+    assert.match(mapPanelSource, /function mapBodyBounds\(\)[\s\S]*sourceBoundsForDerivedLabel\(item\)/);
+    assert.match(mapPanelSource, /function sourceBoundsForDerivedLabel\(source: TavernMapElement\)[\s\S]*materialEntry\(source\.material\)\?\.layer === 'light'[\s\S]*const radius = 4;/);
+    assert.match(mapPanelSource, /function derivedLabelPosition\(element: TavernMapElement\)[\s\S]*sourceCenterX = \(sourceBounds\.minX \+ sourceBounds\.maxX\) \/ 2[\s\S]*sourceBounds\.minY - actorGap/);
+    assert.match(mapPanelSource, /if \(id\.startsWith\('__label__'\)\) \{return derivedLabelPosition\(element\) \|\| projectedAt;\}/);
     assert.match(mapPanelSource, /const zoomedWidth = width \/ zoom/);
     assert.match(mapPanelSource, /function setMapZoom\(nextZoom: number, anchor\?: \{ clientX: number; clientY: number \}\)/);
     const documentRevisionWatch = mapPanelSource.match(/watch\(\(\) => props\.document\?\.revision,[\s\S]*?\n\}\);/);
@@ -767,12 +773,14 @@ test('tavern map update badge stays collapsed until requested', () => {
     assert.match(mapPanelSource, /const visibleRenderItems = computed<MapRenderItem\[\]>\(\(\) => \{[\s\S]*sceneSurfaceElementId\.value[\s\S]*filter\(\(item\) => item\.element\.id !== surfaceId\)/);
     assert.match(mapPanelSource, /:class="\[`theme-\$\{theme\}`, `mode-\$\{replayMode\}`, \{ 'is-panning': mapDrag, 'has-scene-surface': sceneSurface \}\]"/);
     assert.match(mapPanelSource, /class="map-scene-surface"[\s\S]*:fill="sceneSurface\.fill"[\s\S]*class="map-fill-layer"/);
-    assert.match(mapPanelSource, /id="tavern-map-shadow"[\s\S]*<feDropShadow[\s\S]*flood-opacity="0\.6"/);
+    assert.match(mapPanelSource, /id="tavern-map-shadow"[\s\S]*<feDropShadow[\s\S]*flood-opacity="0\.42"/);
     assert.match(mapPanelSource, /id="tavern-mat-texture"[\s\S]*<feTurbulence[\s\S]*baseFrequency="0\.7"[\s\S]*<feBlend[\s\S]*mode="multiply"/);
     assert.match(mapPanelSource, /id="mat-wood"[\s\S]*id="mat-stone"[\s\S]*id="mat-tile"[\s\S]*id="mat-carpet"[\s\S]*id="mat-bed-sheet"[\s\S]*id="mat-fabric"[\s\S]*id="mat-tatami"[\s\S]*id="mat-sand"[\s\S]*id="mat-marble"[\s\S]*id="mat-blood"[\s\S]*id="mat-water"[\s\S]*id="mat-grass"[\s\S]*id="mat-dirt"[\s\S]*id="mat-snow"[\s\S]*id="mat-metal"[\s\S]*id="mat-rune"/);
     assert.match(mapPanelSource, /id="grad-warm"[\s\S]*stop-color="#ffd9a0"[\s\S]*id="grad-cold"[\s\S]*stop-color="#cfe4ff"/);
-    assert.match(mapPanelSource, /class="map-scene-surface"[\s\S]*filter="url\(#tavern-mat-texture\)"[\s\S]*class="map-fill-layer"[\s\S]*filter="url\(#tavern-mat-texture\)"/);
-    assert.match(mapPanelSource, /<g filter="url\(#tavern-map-shadow\)">[\s\S]*class="map-line-layer"[\s\S]*filter="url\(#tavern-map-sketch\)"/);
+    assert.match(mapPanelSource, /class="map-scene-surface"[\s\S]*filter="url\(#tavern-mat-texture\)"[\s\S]*<g class="map-fill-layer">/);
+    assert.doesNotMatch(mapPanelSource, /<g\s+class="map-fill-layer"[\s\S]{0,120}filter="url\(#tavern-mat-texture\)"/);
+    assert.match(mapPanelSource, /class="map-line-layer"[\s\S]*filter="url\(#tavern-map-sketch\)"[\s\S]*v-for="item in regularLineCasingItems"/);
+    assert.match(mapPanelSource, /<g filter="url\(#tavern-map-shadow\)">[\s\S]*v-for="item in gameIconLineItems"/);
     assert.match(mapPanelSource, /class="map-avatar-layer"[\s\S]*filter="url\(#tavern-map-shadow\)"/);
     assert.match(mapPanelSource, /class="tavern-map-zoom-controls"[\s\S]*@click="zoomMapBy\(-0\.25\)"[\s\S]*{{ mapZoomLabel }}[\s\S]*@click="zoomMapBy\(0\.25\)"/);
     assert.match(mapPanelSource, /@pointerdown="handleMapPointerDown"[\s\S]*@pointermove="handleMapPointerMove"[\s\S]*@pointerup="handleMapPointerEnd"[\s\S]*@pointercancel="handleMapPointerEnd"[\s\S]*@wheel="handleMapWheel"/);
@@ -809,6 +817,7 @@ test('tavern scene map player marker uses current user identity instead of gener
     assert.match(mapPanelSource, /const normalizedPlayerDisplayName = computed\(\(\) => String\(props\.playerDisplayName \|\| ''\)\.trim\(\) \|\| 'User'\)/);
     assert.match(mapPanelSource, /const normalizedPlayerAvatarUrl = computed\(\(\) => String\(props\.playerAvatarUrl \|\| ''\)\.trim\(\)\)/);
     assert.match(mapPanelSource, /if \(isPlayer && normalizedPlayerAvatarUrl\.value && forcedOpKind !== 'remove'\) \{/);
+    assert.match(mapPanelSource, /function sourceIconRadiusForDerivedLabel\(source: TavernMapElement\)[\s\S]*isPlayerActorElement\(source\) && normalizedPlayerAvatarUrl\.value[\s\S]*return 12;/);
     assert.match(mapPanelSource, /layer: 'avatar'/);
     assert.match(mapPanelSource, /dash: '3 2'/);
     assert.match(mapPanelSource, /id: `\$\{element\.id\}-avatar`,[\s\S]*layer: 'avatar',[\s\S]*fill: 'none'[\s\S]*avatarClipId,/);

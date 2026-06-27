@@ -36,6 +36,8 @@ const MATERIAL_LINE_COLORS: Record<string, string> = {
     tile: '#788096',
     wood: '#7b5430',
     metal: '#8d949c',
+    'bed-sheet': '#b5a89a',
+    fabric: '#9c88a8',
     tatami: '#8d7f51',
     sand: '#b79455',
     marble: '#8b92a0',
@@ -50,6 +52,8 @@ const SAME_SURFACE_FILLS: Record<string, string> = {
     stone: 'rgba(255, 255, 255, 0.13)',
     tile: 'rgba(176, 192, 216, 0.14)',
     carpet: 'rgba(255, 218, 136, 0.14)',
+    'bed-sheet': 'rgba(116, 100, 84, 0.12)',
+    fabric: 'rgba(124, 104, 136, 0.14)',
     tatami: 'rgba(68, 60, 38, 0.14)',
     sand: 'rgba(156, 126, 69, 0.16)',
     marble: 'rgba(120, 128, 142, 0.13)',
@@ -60,6 +64,15 @@ const SAME_SURFACE_FILLS: Record<string, string> = {
     snow: 'rgba(74, 112, 124, 0.13)',
     metal: 'rgba(220, 228, 236, 0.12)',
     rune: 'rgba(210, 188, 255, 0.16)',
+};
+
+const SAME_SURFACE_LINE_COLORS: Record<string, string> = {
+    'bed-sheet': '#8c7f72',
+    fabric: '#d8c3e2',
+    tatami: '#6f633d',
+    sand: '#8c6d3c',
+    marble: '#67707d',
+    snow: '#466b78',
 };
 
 function categoryOf(element: TavernMapElement): string {
@@ -131,7 +144,7 @@ export function tavernMapElementColor(element: TavernMapElement, context: Tavern
     const cat = categoryOf(element);
     const material = materialOf(element);
     if (cat === 'terrain' && !tavernMapElementIsSceneSurface(element, context) && tavernMapElementUsesSameSurfaceMaterial(element, context)) {
-        return material === 'snow' ? '#466b78' : '#e5cf7a';
+        return SAME_SURFACE_LINE_COLORS[material] || '#e5cf7a';
     }
     if (['wall', 'door', 'road', 'water', 'terrain'].includes(cat) && material && MATERIAL_LINE_COLORS[material]) {
         return MATERIAL_LINE_COLORS[material];

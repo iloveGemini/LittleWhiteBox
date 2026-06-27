@@ -9,7 +9,12 @@ import { isRenderableMapDocument } from '../../shared/map-state-content';
 import { createSeedMapDocument } from '../../shared/map-state-seed';
 import { applyTrustedMapPatchOps } from '../../shared/map-state-ops';
 import { compareMapStableText, materialEntry, zOf } from '../../shared/map-semantics';
-import { getTavernMapDisplayViewBox, getTavernMapElementBounds, type TavernMapBounds } from '../map-display';
+import {
+    getTavernMapElementBounds,
+    getTavernMapPresentationTransform,
+    projectTavernMapPresentationPoint,
+    type TavernMapBounds,
+} from '../map-display';
 import { layoutTavernMapLabels } from '../map-label-layout';
 import {
     getTavernMapSceneSurfaceBackground,
@@ -30,6 +35,7 @@ import {
     gameIconScaleTransform,
     gameIconTranslateTransform,
     getTavernGameIconGlyph,
+    getTavernMapIconRenderSize,
     TAVERN_MAP_ICON_ATTRIBUTION,
 } from '../map-glyphs';
 
@@ -236,7 +242,8 @@ const removedElements = computed<TavernMapElement[]>(() => {
     return source.filter((item): item is TavernMapElement => !!item && typeof item === 'object' && !Array.isArray(item) && typeof (item as TavernMapElement).id === 'string');
 });
 
-const baseViewBoxArray = computed<[number, number, number, number]>(() => getTavernMapDisplayViewBox(activeMapDocument.value));
+const presentationTransform = computed(() => getTavernMapPresentationTransform(activeMapDocument.value));
+const baseViewBoxArray = computed<[number, number, number, number]>(() => presentationTransform.value.viewBox);
 const viewBoxArray = computed<[number, number, number, number]>(() => {
     const [x, y, width, height] = baseViewBoxArray.value;
     const [offsetX, offsetY] = mapPanOffset.value;
@@ -395,8 +402,16 @@ function numberPair(value: unknown, fallback: [number, number] = [0, 0]): [numbe
     return Number.isFinite(left) && Number.isFinite(right) ? [left, right] : fallback;
 }
 
+function projectMapPoint(point: [number, number]): [number, number] {
+    return projectTavernMapPresentationPoint(point, presentationTransform.value);
+}
+
+function shouldScaleLocalGeometry(element: TavernMapElement): boolean {
+    return ['terrain', 'wall'].includes(String(element.cat || '').trim());
+}
+
 function absolutePoints(element: TavernMapElement, points: Array<[number, number]>): Array<[number, number]> {
-    return points.map(([dx, dy]) => [element.at[0] + dx, element.at[1] + dy]);
+    return points.map(([dx, dy]) => projectMapPoint([element.at[0] + dx, element.at[1] + dy]));
 }
 
 function pointsToPath(points: Array<[number, number]>, closed = false): string {
@@ -423,20 +438,37 @@ function curveToPath(points: Array<[number, number]>, closed = false): string {
 }
 
 function rectToPath(element: TavernMapElement): string {
-    const [x, y] = element.at;
+    const [rawX, rawY] = element.at;
     const [width, height] = numberPair(element.rect, [10, 10]);
+    if (shouldScaleLocalGeometry(element)) {
+        const [left, top] = projectMapPoint([rawX, rawY]);
+        const [right, bottom] = projectMapPoint([rawX + width, rawY + height]);
+        const x = Math.min(left, right);
+        const y = Math.min(top, bottom);
+        const nextWidth = Math.abs(right - left);
+        const nextHeight = Math.abs(bottom - top);
+        return `M ${x} ${y} L ${x + nextWidth} ${y} L ${x + nextWidth} ${y + nextHeight} L ${x} ${y + nextHeight} Z`;
+    }
+    const [centerX, centerY] = projectMapPoint([rawX + width / 2, rawY + height / 2]);
+    const x = Number((centerX - width / 2).toFixed(2));
+    const y = Number((centerY - height / 2).toFixed(2));
     return `M ${x} ${y} L ${x + width} ${y} L ${x + width} ${y + height} L ${x} ${y + height} Z`;
 }
 
-function circleToPath(element: TavernMapElement): string {
-    const [cx, cy] = element.at;
-    const radius = Number(element.circle || 8);
+function circlePathAt(cx: number, cy: number, radius: number): string {
     const r = Number.isFinite(radius) && radius > 0 ? radius : 8;
     return `M ${cx - r} ${cy} A ${r} ${r} 0 1 0 ${cx + r} ${cy} A ${r} ${r} 0 1 0 ${cx - r} ${cy}`;
 }
 
+function circleToPath(element: TavernMapElement): string {
+    const [cx, cy] = projectMapPoint(element.at);
+    const radius = Number(element.circle || 8);
+    const scale = shouldScaleLocalGeometry(element) ? presentationTransform.value.scale : 1;
+    return circlePathAt(cx, cy, Number.isFinite(radius) && radius > 0 ? radius * scale : 8);
+}
+
 function iconToPath(element: TavernMapElement): string {
-    const [x, y] = element.at;
+    const [x, y] = projectMapPoint(element.at);
     const s = 10;
     const h = s / 2;
     const icon = String(element.icon || '+');
@@ -534,18 +566,109 @@ function mergeBounds(left: TavernMapBounds | null, right: TavernMapBounds | null
 function mapBodyBounds(): TavernMapBounds | null {
     return (activeMapDocument.value?.elements || []).reduce<TavernMapBounds | null>((bounds, item) => {
         if (item.text || String(item.cat || '') === 'label') {return bounds;}
-        return mergeBounds(bounds, getTavernMapElementBounds(item));
+        return mergeBounds(bounds, sourceBoundsForDerivedLabel(item));
     }, null);
 }
 
+function sourceIconRadiusForDerivedLabel(source: TavernMapElement): number {
+    if (isPlayerActorElement(source) && normalizedPlayerAvatarUrl.value) {return 12;}
+    if (!source.icon) {return 10;}
+    return getTavernGameIconGlyph(source.icon) ? getTavernMapIconRenderSize(source.icon) / 2 : 6;
+}
+
+function sourceBoundsForDerivedLabel(source: TavernMapElement): TavernMapBounds | null {
+    if (String(source.cat || '').trim() === 'light' || materialEntry(source.material)?.layer === 'light') {
+        const [cx, cy] = projectMapPoint(source.at);
+        const radius = 4;
+        return {
+            minX: cx - radius,
+            minY: cy - radius,
+            maxX: cx + radius,
+            maxY: cy + radius,
+            width: radius * 2,
+            height: radius * 2,
+        };
+    }
+    if (source.rect) {
+        const [rawX, rawY] = source.at;
+        const [width, height] = numberPair(source.rect, [10, 10]);
+        if (shouldScaleLocalGeometry(source)) {
+            const [left, top] = projectMapPoint([rawX, rawY]);
+            const [right, bottom] = projectMapPoint([rawX + width, rawY + height]);
+            return {
+                minX: Math.min(left, right),
+                minY: Math.min(top, bottom),
+                maxX: Math.max(left, right),
+                maxY: Math.max(top, bottom),
+                width: Math.abs(right - left),
+                height: Math.abs(bottom - top),
+            };
+        }
+        const [centerX, centerY] = projectMapPoint([rawX + width / 2, rawY + height / 2]);
+        return {
+            minX: centerX - width / 2,
+            minY: centerY - height / 2,
+            maxX: centerX + width / 2,
+            maxY: centerY + height / 2,
+            width,
+            height,
+        };
+    }
+    if (typeof source.circle === 'number') {
+        const [cx, cy] = projectMapPoint(source.at);
+        const scale = shouldScaleLocalGeometry(source) ? presentationTransform.value.scale : 1;
+        const radius = Math.max(1, Number(source.circle || 8) * scale);
+        return {
+            minX: cx - radius,
+            minY: cy - radius,
+            maxX: cx + radius,
+            maxY: cy + radius,
+            width: radius * 2,
+            height: radius * 2,
+        };
+    }
+    if (source.path || source.curve) {
+        const points = source.path || source.curve || [];
+        return points.reduce<TavernMapBounds | null>((bounds, [dx, dy]) => {
+            const [x, y] = projectMapPoint([source.at[0] + dx, source.at[1] + dy]);
+            const pointBounds: TavernMapBounds = { minX: x, minY: y, maxX: x, maxY: y, width: 0, height: 0 };
+            return mergeBounds(bounds, pointBounds);
+        }, null);
+    }
+    const [cx, cy] = projectMapPoint(source.at);
+    const radius = sourceIconRadiusForDerivedLabel(source);
+    return {
+        minX: cx - radius,
+        minY: cy - radius,
+        maxX: cx + radius,
+        maxY: cy + radius,
+        width: radius * 2,
+        height: radius * 2,
+    };
+}
+
+function derivedLabelPosition(element: TavernMapElement): [number, number] | null {
+    const source = sourceElementForDerivedLabel(element);
+    if (!source) {return null;}
+    const sourceBounds = sourceBoundsForDerivedLabel(source);
+    if (!sourceBounds) {return null;}
+    const sourceCenterX = (sourceBounds.minX + sourceBounds.maxX) / 2;
+    const actorGap = String(source.cat || '').trim() === 'actor' ? 4 : 6;
+    return [
+        Number(sourceCenterX.toFixed(2)),
+        Number((sourceBounds.minY - actorGap).toFixed(2)),
+    ];
+}
+
 function labelPosition(element: TavernMapElement): [number, number] {
-    if (!element.text || String(element.cat || '') !== 'label') {return element.at;}
+    const projectedAt = projectMapPoint(element.at);
+    if (!element.text || String(element.cat || '') !== 'label') {return projectedAt;}
     const id = String(element.id || '').trim().toLowerCase();
-    if (id.startsWith('__label__')) {return element.at;}
+    if (id.startsWith('__label__')) {return derivedLabelPosition(element) || projectedAt;}
     const [viewX, viewY, viewWidth, viewHeight] = viewBoxArray.value;
     const topGuard = viewY + Math.max(72, viewHeight * 0.26);
-    if (!['label', 'room-label', 'scene-label', 'place-label', 'map-label'].includes(id) || element.at[1] >= topGuard) {
-        return element.at;
+    if (!['label', 'room-label', 'scene-label', 'place-label', 'map-label'].includes(id) || projectedAt[1] >= topGuard) {
+        return projectedAt;
     }
     const bodyBounds = mapBodyBounds();
     const left = (bodyBounds?.minX ?? viewX) + 24;
@@ -553,7 +676,7 @@ function labelPosition(element: TavernMapElement): [number, number] {
     const bodyTop = bodyBounds ? bodyBounds.minY + Math.min(90, Math.max(42, bodyBounds.height * 0.22)) : topGuard;
     const y = Math.max(topGuard, bodyTop);
     return [
-        Math.min(right, Math.max(left, element.at[0])),
+        Math.min(right, Math.max(left, projectedAt[0])),
         Math.min(viewY + viewHeight - 24, y),
     ];
 }
@@ -689,14 +812,15 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
         const avatarRadius = 12;
         const outlineRadius = 13.25;
         const avatarSize = avatarRadius * 2;
-        const avatarX = element.at[0] - avatarRadius;
-        const avatarY = element.at[1] - avatarRadius;
+        const [avatarCenterX, avatarCenterY] = projectMapPoint(element.at);
+        const avatarX = avatarCenterX - avatarRadius;
+        const avatarY = avatarCenterY - avatarRadius;
         const avatarClipId = `map-avatar-${index}-${svgLocalId(String(element.id || 'player'))}`;
         items.push({
             element,
             id: `${element.id}-avatar`,
             layer: 'avatar',
-            path: circleToPath({ ...element, circle: avatarRadius }),
+            path: circlePathAt(avatarCenterX, avatarCenterY, avatarRadius),
             color,
             fill: 'none',
             blend: 'normal',
@@ -726,7 +850,7 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             element,
             id: `${element.id}-player-outline`,
             layer: 'avatar',
-            path: circleToPath({ ...element, circle: outlineRadius }),
+            path: circlePathAt(avatarCenterX, avatarCenterY, outlineRadius),
             color: '#18120f',
             fill: 'none',
             blend: 'normal',
@@ -750,6 +874,7 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
         return items;
     }
     if (gameIcon) {
+        const [glyphX, glyphY] = projectMapPoint(element.at);
         items.push({
             element,
             id: `${element.id}-glyph`,
@@ -772,7 +897,7 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             fontSize: 0,
             anchor: 'middle',
             transform: '',
-            glyphTransform: gameIconTranslateTransform(element.at[0], element.at[1]),
+            glyphTransform: gameIconTranslateTransform(glyphX, glyphY),
             glyphScaleTransform: gameIconScaleTransform(),
             fillRule: gameIcon.fillRule,
             gameIcon: true,
@@ -1280,10 +1405,10 @@ function handleMapWheel(event: WheelEvent) {
           >
             <feDropShadow
               dx="0"
-              dy="4"
-              stdDeviation="3"
+              dy="3"
+              stdDeviation="2.2"
               flood-color="#05050a"
-              flood-opacity="0.6"
+              flood-opacity="0.42"
             />
           </filter>
           <filter
@@ -1303,7 +1428,7 @@ function handleMapWheel(event: WheelEvent) {
             <feColorMatrix
               type="matrix"
               in="noise"
-              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.12 0"
+              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.055 0"
               result="grain"
             />
             <feBlend
@@ -2031,10 +2156,7 @@ function handleMapWheel(event: WheelEvent) {
           filter="url(#tavern-mat-texture)"
           :style="sceneSurface.style"
         />
-        <g
-          class="map-fill-layer"
-          filter="url(#tavern-mat-texture)"
-        >
+        <g class="map-fill-layer">
           <path
             v-for="item in fillItems"
             :key="item.id"
@@ -2046,57 +2168,57 @@ function handleMapWheel(event: WheelEvent) {
             :style="itemStyle(item)"
           />
         </g>
+        <g
+          class="map-line-layer"
+          filter="url(#tavern-map-sketch)"
+        >
+          <path
+            v-for="item in regularLineCasingItems"
+            :key="item.id"
+            :d="item.path"
+            :fill="item.fill"
+            :stroke="item.color"
+            :stroke-width="item.strokeWidth"
+            :stroke-dasharray="item.dash"
+            :transform="item.transform"
+            :fill-rule="item.fillRule"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            :class="itemClass(item)"
+            :style="itemStyle(item)"
+          />
+          <path
+            v-for="item in regularLineCoreItems"
+            :key="item.id"
+            :d="item.path"
+            :fill="item.fill"
+            :stroke="item.color"
+            :stroke-width="item.strokeWidth"
+            :stroke-dasharray="item.dash"
+            :transform="item.transform"
+            :fill-rule="item.fillRule"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            :class="itemClass(item)"
+            :style="itemStyle(item)"
+          />
+        </g>
         <g filter="url(#tavern-map-shadow)">
           <g
-            class="map-line-layer"
-            filter="url(#tavern-map-sketch)"
+            v-for="item in gameIconLineItems"
+            :key="item.id"
+            :transform="item.glyphTransform"
+            :class="itemClass(item)"
+            :style="itemStyle(item)"
           >
-            <path
-              v-for="item in regularLineCasingItems"
-              :key="item.id"
-              :d="item.path"
-              :fill="item.fill"
-              :stroke="item.color"
-              :stroke-width="item.strokeWidth"
-              :stroke-dasharray="item.dash"
-              :transform="item.transform"
-              :fill-rule="item.fillRule"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              :class="itemClass(item)"
-              :style="itemStyle(item)"
-            />
-            <path
-              v-for="item in regularLineCoreItems"
-              :key="item.id"
-              :d="item.path"
-              :fill="item.fill"
-              :stroke="item.color"
-              :stroke-width="item.strokeWidth"
-              :stroke-dasharray="item.dash"
-              :transform="item.transform"
-              :fill-rule="item.fillRule"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              :class="itemClass(item)"
-              :style="itemStyle(item)"
-            />
-            <g
-              v-for="item in gameIconLineItems"
-              :key="item.id"
-              :transform="item.glyphTransform"
-              :class="itemClass(item)"
-              :style="itemStyle(item)"
-            >
-              <g :transform="item.glyphScaleTransform">
-                <path
-                  :d="item.path"
-                  :fill="item.fill"
-                  :fill-rule="item.fillRule"
-                  transform="translate(-256, -256)"
-                  class="map-game-icon-path"
-                />
-              </g>
+            <g :transform="item.glyphScaleTransform">
+              <path
+                :d="item.path"
+                :fill="item.fill"
+                :fill-rule="item.fillRule"
+                transform="translate(-256, -256)"
+                class="map-game-icon-path"
+              />
             </g>
           </g>
         </g>

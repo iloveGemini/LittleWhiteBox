@@ -46,7 +46,7 @@ test('map label layout places higher-priority labels first', () => {
     assert.notDeepEqual([laidOut[0]?.x, laidOut[0]?.y], [160, 140]);
 });
 
-test('map label layout keeps labels inside the viewBox when possible', () => {
+test('map label layout allows edge overflow when there are no label collisions', () => {
     const labels = [
         { id: 'edge', text: '边缘标注', x: 8, y: 14, fontSize: 14, anchor: 'middle' },
     ];
@@ -54,8 +54,19 @@ test('map label layout keeps labels inside the viewBox when possible', () => {
     const [laidOut] = layoutTavernMapLabels(labels, [0, 0, 240, 180]);
     const bounds = estimateTavernMapLabelBounds(laidOut!);
 
-    assert.ok(bounds.minX >= 0);
-    assert.ok(bounds.minY >= 0);
+    assert.deepEqual([laidOut?.x, laidOut?.y], [8, 14]);
+    assert.ok(bounds.minX < 0);
+    assert.ok(bounds.minY < 0);
+});
+
+test('map label layout keeps edge labels stable instead of jumping to a side candidate without collisions', () => {
+    const labels = [
+        { id: 'edge', text: '边缘标注', x: 8, y: 14, fontSize: 14, anchor: 'middle' },
+    ];
+
+    const [laidOut] = layoutTavernMapLabels(labels, [0, 0, 240, 180]);
+
+    assert.deepEqual([laidOut?.x, laidOut?.y], [8, 14]);
 });
 
 test('map label layout keeps candidate moves visually close to the anchor', () => {

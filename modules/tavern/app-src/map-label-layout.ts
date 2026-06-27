@@ -23,8 +23,13 @@ export interface TavernMapLabelLayoutOptions<T extends TavernMapLabelLayoutItem>
 const LABEL_PADDING_X = 8;
 const LABEL_PADDING_Y = 4;
 const OVERLAP_WEIGHT = 10_000;
-const OVERFLOW_WEIGHT = 12_000;
 const DISTANCE_WEIGHT = 0.12;
+
+interface TavernMapLabelPlacement {
+    x: number;
+    y: number;
+    bounds: TavernMapLabelBounds;
+}
 
 function isCjkLike(char: string) {
     return /[\u2e80-\u9fff\uf900-\ufaff\uff00-\uffef]/u.test(char);
@@ -62,15 +67,6 @@ function overlapArea(left: TavernMapLabelBounds, right: TavernMapLabelBounds) {
     return width * height;
 }
 
-function overflowArea(bounds: TavernMapLabelBounds, viewBox: [number, number, number, number]) {
-    const [x, y, width, height] = viewBox;
-    const right = x + width;
-    const bottom = y + height;
-    const overflowX = Math.max(0, x - bounds.minX) + Math.max(0, bounds.maxX - right);
-    const overflowY = Math.max(0, y - bounds.minY) + Math.max(0, bounds.maxY - bottom);
-    return overflowX * bounds.height + overflowY * bounds.width;
-}
-
 function labelCandidateOffsets(bounds: TavernMapLabelBounds): Array<[number, number]> {
     const side = Math.max(16, Math.min(42, bounds.height * 1.45));
     const vertical = Math.max(14, Math.min(32, bounds.height * 1.08));
@@ -99,7 +95,8 @@ export function layoutTavernMapLabels<T extends TavernMapLabelLayoutItem>(
     options: TavernMapLabelLayoutOptions<T> = {},
 ): T[] {
     if (!items.length) {return [];}
-    const placements = new Map<number, { x: number; y: number; bounds: TavernMapLabelBounds }>();
+    void viewBox;
+    const placements = new Map<number, TavernMapLabelPlacement>();
     const placedBounds: TavernMapLabelBounds[] = [];
     const indexed = items.map((item, index) => ({ item, index }));
     indexed.sort((left, right) => {
@@ -112,20 +109,30 @@ export function layoutTavernMapLabels<T extends TavernMapLabelLayoutItem>(
 
     indexed.forEach(({ item, index }) => {
         const baseBounds = estimateTavernMapLabelBounds(item);
+        const basePlacement = { x: item.x, y: item.y, bounds: baseBounds };
+        const baseOverlap = placedBounds.reduce((sum, placed) => sum + overlapArea(basePlacement.bounds, placed), 0);
+        if (baseOverlap <= 0) {
+            placements.set(index, basePlacement);
+            placedBounds.push(basePlacement.bounds);
+            return;
+        }
+
         let best = {
-            x: item.x,
-            y: item.y,
-            bounds: baseBounds,
+            ...basePlacement,
             score: Number.POSITIVE_INFINITY,
         };
         labelCandidateOffsets(baseBounds).forEach(([dx, dy]) => {
-            const x = Number((item.x + dx).toFixed(2));
-            const y = Number((item.y + dy).toFixed(2));
-            const bounds = estimateTavernMapLabelBounds(item, x, y);
+            const candidateItem = {
+                ...item,
+                x: Number((item.x + dx).toFixed(2)),
+                y: Number((item.y + dy).toFixed(2)),
+            };
+            const x = candidateItem.x;
+            const y = candidateItem.y;
+            const bounds = estimateTavernMapLabelBounds(candidateItem);
             const overlap = placedBounds.reduce((sum, placed) => sum + overlapArea(bounds, placed), 0);
-            const overflow = overflowArea(bounds, viewBox);
-            const distance = (dx * dx) + (dy * dy);
-            const score = overlap * OVERLAP_WEIGHT + overflow * OVERFLOW_WEIGHT + distance * DISTANCE_WEIGHT;
+            const distance = ((x - item.x) * (x - item.x)) + ((y - item.y) * (y - item.y));
+            const score = overlap * OVERLAP_WEIGHT + distance * DISTANCE_WEIGHT;
             if (score < best.score) {
                 best = { x, y, bounds, score };
             }

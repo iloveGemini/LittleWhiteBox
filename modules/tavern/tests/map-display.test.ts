@@ -10,7 +10,13 @@ import {
     gameIconTranslateTransform,
     isTavernLegacyMapIcon,
 } from '../app-src/map-glyphs';
-import { getTavernMapDisplayViewBox, getTavernMapDocumentBounds } from '../app-src/map-display';
+import {
+    getTavernMapDisplayViewBox,
+    getTavernMapDocumentBounds,
+    getTavernMapPresentationTransform,
+    getTavernMapPresentationViewBox,
+    projectTavernMapPresentationPoint,
+} from '../app-src/map-display';
 import {
     getTavernMapSceneSurfaceArea,
     getTavernMapSceneSurfaceBackground,
@@ -38,6 +44,21 @@ test('map display keeps the stored viewBox as the camera frame when one is prese
     const viewBox = getTavernMapDisplayViewBox(document);
 
     assert.deepEqual(viewBox, [0, 0, 800, 600]);
+});
+
+test('map presentation viewBox backs the default UI camera away from stored map camera', () => {
+    const document: TavernMapDocument = {
+        meta: { name: '宇宙飞船内部', theme: 'blueprint', viewBox: [-180, -105, 360, 210], status: 'active' },
+        elements: [
+            { id: 'deck-floor', at: [-150, -75], cat: 'terrain', rect: [300, 150], material: 'metal' },
+        ],
+    };
+
+    assert.deepEqual(getTavernMapDisplayViewBox(document), [-180, -105, 360, 210]);
+    assert.deepEqual(getTavernMapPresentationViewBox(document), [-360, -210, 720, 420]);
+    const transform = getTavernMapPresentationTransform(document);
+    assert.deepEqual(projectTavernMapPresentationPoint([103, 0], transform), [206, 0]);
+    assert.deepEqual(projectTavernMapPresentationPoint([-105, 0], transform), [-210, 0]);
 });
 
 test('map display viewBox keeps negative coordinates and tiny maps visible with a stable minimum frame', () => {
@@ -184,6 +205,14 @@ test('map renderer gives secondary same-material terrain visible foreground cont
     assert.match(tavernMapElementFill(deepWoods, context), /rgba\(236, 218, 126, 0\.17\)/);
     assert.equal(tavernMapElementColor(deepWoods, context), '#e5cf7a');
     assert.equal(tavernMapElementStrokeWidth(deepWoods) >= 2.4, true);
+
+    const sandSurface: TavernMapElement = { id: 'sand-floor', at: [0, 0], rect: [400, 240], cat: 'terrain', material: 'sand' };
+    const dune: TavernMapElement = { id: 'dune', at: [40, 30], rect: [120, 80], cat: 'terrain', material: 'sand' };
+    assert.equal(tavernMapElementColor(dune, { surfaceElementId: sandSurface.id, surfaceMaterial: sandSurface.material }), '#8c6d3c');
+
+    const marbleSurface: TavernMapElement = { id: 'marble-floor', at: [0, 0], rect: [400, 240], cat: 'terrain', material: 'marble' };
+    const dais: TavernMapElement = { id: 'dais', at: [40, 30], rect: [120, 80], cat: 'terrain', material: 'marble' };
+    assert.equal(tavernMapElementColor(dais, { surfaceElementId: marbleSurface.id, surfaceMaterial: marbleSurface.material }), '#67707d');
 });
 
 test('map renderer gives roads and water open lines casing and readable width', () => {
