@@ -5440,8 +5440,8 @@ test('tavern manager cleans image markers from prompt without using content for 
     const session = await createTavernSession({ title: 'Image marker freshness' });
     const userMessage = await appendTavernMessage(session.id, { role: 'user', content: '原句。\n<status>旧状态栏</status>' });
     const assistantMessage = await appendTavernMessage(session.id, { role: 'assistant', content: '原回复。\n<state>旧内心状态</state>' });
-    await updateTavernMessage(session.id, userMessage.order, { content: '原句。\n<status>状态栏：莉娜站在门边。</status>\n[tavern-image : user-slot]' });
-    await updateTavernMessage(session.id, assistantMessage.order, { content: '[img : assistant-slot]\n原回复。\n<state>她仍在观察银钥匙。</state>\n[图片 : 完成图]' });
+    await updateTavernMessage(session.id, userMessage.order, { content: '原句。\n```状态栏\n床头柜上有银钥匙。\n```\n<status>状态栏：莉娜站在门边。</status>\n[tavern-image : user-slot]' });
+    await updateTavernMessage(session.id, assistantMessage.order, { content: '[img : assistant-slot]\n原回复。\n```state\n她记住了钥匙在床头柜。\n```\n<state>她仍在观察银钥匙。</state>\n[图片 : 完成图]' });
     let promptText = '';
 
     try {
@@ -5462,6 +5462,8 @@ test('tavern manager cleans image markers from prompt without using content for 
         assert.equal(result.error, undefined);
         assert.equal(run?.status, 'completed');
         assert.doesNotMatch(promptText, /tavern-image|\[img\s*:|\[图片\s*:/);
+        assert.match(promptText, /床头柜上有银钥匙/);
+        assert.match(promptText, /她记住了钥匙在床头柜/);
         assert.match(promptText, /状态栏：莉娜站在门边/);
         assert.match(promptText, /她仍在观察银钥匙/);
     } finally {
