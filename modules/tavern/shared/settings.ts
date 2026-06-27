@@ -32,7 +32,7 @@ function normalizeLoadBatchSize(value: unknown, fallback = 20) {
 }
 
 function normalizeChatFontSize(value: unknown): TavernChatFontSize {
-    return value === 'medium' || value === 'large' ? value : 'small';
+    return value === 'small' || value === 'medium' || value === 'large' ? value : 'large';
 }
 
 export function normalizeTavernDisplaySettings(value: unknown = {}): TavernDisplaySettings {

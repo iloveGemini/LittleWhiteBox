@@ -55,6 +55,7 @@ interface MapRenderItem {
     patternY?: number;
     patternSize?: number;
 }
+type MapAvatarPatternItem = MapRenderItem & Required<Pick<MapRenderItem, 'avatarHref' | 'patternId' | 'patternX' | 'patternY' | 'patternSize'>>;
 
 interface MapReplayFrame {
     revision: number;
@@ -692,7 +693,7 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
         items.push({
             element,
             id: `${element.id}-player-outline`,
-            layer: 'line',
+            layer: 'avatar',
             path: circleToPath({ ...element, circle: outlineRadius }),
             color: '#18120f',
             fill: 'none',
@@ -803,7 +804,7 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
         items.push({
             element,
             id: `${element.id}-player-outline`,
-            layer: 'line',
+            layer: 'avatar',
             path: circleToPath({ ...element, circle: ringRadius }),
             color: '#18120f',
             fill: 'none',
@@ -838,6 +839,7 @@ const fillItems = computed(() => renderItems.value
 const avatarItems = computed(() => renderItems.value
     .filter((item) => item.layer === 'avatar')
     .sort((left, right) => left.z - right.z || compareMapStableText(left.element.id, right.element.id) || compareMapStableText(left.id, right.id)));
+const avatarPatternItems = computed<MapAvatarPatternItem[]>(() => avatarItems.value.filter((item): item is MapAvatarPatternItem => !!item.patternId && !!item.avatarHref));
 const lineItems = computed(() => renderItems.value.filter((item) => item.layer === 'line'));
 const regularLineItems = computed(() => lineItems.value.filter((item) => !item.gameIcon));
 const gameIconLineItems = computed(() => lineItems.value.filter((item) => item.gameIcon));
@@ -1510,7 +1512,7 @@ function handleMapWheel(event: WheelEvent) {
             />
           </radialGradient>
           <pattern
-            v-for="item in avatarItems"
+            v-for="item in avatarPatternItems"
             :id="item.patternId"
             :key="item.patternId"
             :x="item.patternX"
@@ -1532,18 +1534,6 @@ function handleMapWheel(event: WheelEvent) {
         <g class="map-fill-layer">
           <path
             v-for="item in fillItems"
-            :key="item.id"
-            :d="item.path"
-            :fill="item.fill"
-            :transform="item.transform"
-            :fill-rule="item.fillRule"
-            :class="itemClass(item)"
-            :style="itemStyle(item)"
-          />
-        </g>
-        <g class="map-avatar-layer">
-          <path
-            v-for="item in avatarItems"
             :key="item.id"
             :d="item.path"
             :fill="item.fill"
@@ -1701,6 +1691,23 @@ function handleMapWheel(event: WheelEvent) {
           >
             {{ item.text }}
           </text>
+        </g>
+        <g class="map-avatar-layer">
+          <path
+            v-for="item in avatarItems"
+            :key="item.id"
+            :d="item.path"
+            :fill="item.fill"
+            :stroke="item.strokeWidth > 0 ? item.color : undefined"
+            :stroke-width="item.strokeWidth || undefined"
+            :stroke-dasharray="item.dash || undefined"
+            :transform="item.transform"
+            :fill-rule="item.fillRule"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            :class="itemClass(item)"
+            :style="itemStyle(item)"
+          />
         </g>
       </svg>
       <div

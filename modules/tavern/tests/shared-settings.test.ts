@@ -27,17 +27,17 @@ test('tavern settings normalize display limits in tavern layer', () => {
     });
 });
 
-test('tavern display settings default chat font size to small for missing or illegal values', () => {
+test('tavern display settings default chat font size to large for missing or illegal values', () => {
     assert.deepEqual(normalizeTavernDisplaySettings({}), {
         hiddenOutsideCount: 5,
         loadBatchSize: 20,
-        chatFontSize: 'small',
+        chatFontSize: 'large',
     });
 
-    assert.equal(normalizeTavernDisplaySettings().chatFontSize, 'small');
-    assert.equal(normalizeTavernDisplaySettings({ chatFontSize: 'huge' }).chatFontSize, 'small');
-    assert.equal(normalizeTavernDisplaySettings({ chatFontSize: 2 }).chatFontSize, 'small');
-    assert.equal(normalizeTavernDisplaySettings({ chatFontSize: null }).chatFontSize, 'small');
-    assert.equal(normalizeTavernDisplaySettings({ chatFontSize: undefined }).chatFontSize, 'small');
-    assert.equal(normalizeTavernDisplaySettings({ chatFontSize: 'SMALL' }).chatFontSize, 'small');
+    assert.equal(normalizeTavernDisplaySettings().chatFontSize, 'large');
+    assert.equal(normalizeTavernDisplaySettings({ chatFontSize: 'huge' }).chatFontSize, 'large');
+    assert.equal(normalizeTavernDisplaySettings({ chatFontSize: 2 }).chatFontSize, 'large');
+    assert.equal(normalizeTavernDisplaySettings({ chatFontSize: null }).chatFontSize, 'large');
+    assert.equal(normalizeTavernDisplaySettings({ chatFontSize: undefined }).chatFontSize, 'large');
+    assert.equal(normalizeTavernDisplaySettings({ chatFontSize: 'SMALL' }).chatFontSize, 'large');
 });

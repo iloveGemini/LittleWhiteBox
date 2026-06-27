@@ -15,7 +15,7 @@ function normalizeLoadBatchSize(value, fallback = 20) {
   return Math.min(50, Math.max(5, Math.round(clamped / 5) * 5));
 }
 function normalizeChatFontSize(value) {
-  return value === "medium" || value === "large" ? value : "small";
+  return value === "small" || value === "medium" || value === "large" ? value : "large";
 }
 function normalizeTavernDisplaySettings(value = {}) {
   const settings = asRecord(value);

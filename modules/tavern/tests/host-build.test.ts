@@ -9,6 +9,16 @@ function readRepoFile(path: string): string {
     return readFileSync(resolve(root, path), 'utf8');
 }
 
+function cssRuleBlock(source: string, selector: string): string {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return [...source.matchAll(new RegExp(`${escaped}\\s*\\{[^}]*\\}`, 'g'))].at(-1)?.[0] || '';
+}
+
+function cssDeclarationValues(rule: string, property: string): string[] {
+    const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return [...rule.matchAll(new RegExp(`${escaped}:\\s*([^;]+);`, 'g'))].map((match) => String(match[1] || '').trim());
+}
+
 test('tavern host build script compiles every host module imported by tavern.ts', () => {
     const tavernSource = readRepoFile('modules/tavern/tavern.ts');
     const buildSource = readRepoFile('scripts/build-tavern-host.mjs');
@@ -93,6 +103,8 @@ test('tavern chat typography follows host SillyTavern font metrics inside the if
     const managerCss = readRepoFile('modules/tavern/app-src/styles/chat/manager.css');
     const messagesCss = readRepoFile('modules/tavern/app-src/styles/chat/messages.css');
     const memoryCss = readRepoFile('modules/tavern/app-src/styles/chat/memory-editor.css');
+    const tavernPreRule = cssRuleBlock(markdownCss, '.xb-tavern-markdown pre');
+    const tavernPreCodeRule = cssRuleBlock(markdownCss, '.xb-tavern-markdown pre code');
 
     assert.match(hostSource, /function getHostTypographyMetrics/);
     assert.match(hostSource, /hostMainFontSizePx/);
@@ -103,11 +115,25 @@ test('tavern chat typography follows host SillyTavern font metrics inside the if
     assert.match(appSource, /--xb-host-prose-line-height/);
     assert.match(markdownCss, /font-size: var\(--xb-tavern-reading-font-size, 15px\);/);
     assert.match(markdownCss, /\.xb-tavern-markdown pre \{[\s\S]*background: rgba\(26, 26, 26, 0\.035\);/);
-    assert.match(markdownCss, /\.xb-tavern-markdown pre \{[\s\S]*overflow: visible;[\s\S]*box-shadow: none;[\s\S]*padding: 8px 34px 8px 10px;[\s\S]*white-space: pre-wrap;[\s\S]*overflow-wrap: anywhere;/);
-    assert.match(markdownCss, /\.xb-tavern-markdown pre code \{[\s\S]*display: contents;[\s\S]*border: 0;[\s\S]*border-radius: 0;[\s\S]*padding: 0;[\s\S]*background: transparent;[\s\S]*font: inherit;/);
-    assert.doesNotMatch(markdownCss, /\.xb-tavern-markdown pre \{[^}]*overflow-x: auto;[^}]*white-space: pre;/);
-    assert.doesNotMatch(markdownCss, /\.xb-tavern-markdown pre code \{[^}]*overflow-x: auto;/);
+    assert.match(tavernPreRule, /display: block;/);
+    assert.match(tavernPreRule, /width: 100%;/);
+    assert.match(tavernPreRule, /height: auto;/);
+    assert.match(tavernPreRule, /max-height: none;/);
+    assert.match(tavernPreRule, /overflow: visible;/);
+    assert.match(tavernPreRule, /white-space: pre-wrap;/);
+    assert.match(tavernPreRule, /overflow-wrap: anywhere;/);
+    assert.match(tavernPreRule, /word-break: break-all;/);
+    assert.match(tavernPreCodeRule, /display: inline;/);
+    assert.match(tavernPreCodeRule, /max-height: none;/);
+    assert.match(tavernPreCodeRule, /overflow: visible;/);
+    assert.match(tavernPreCodeRule, /font: inherit;/);
+    assert.doesNotMatch(tavernPreRule, /overflow-x: auto;/);
+    assert.doesNotMatch(tavernPreRule, /white-space: pre;/);
+    assert.deepEqual(cssDeclarationValues(tavernPreRule, 'max-height'), ['none']);
+    assert.doesNotMatch(tavernPreCodeRule, /overflow-x: auto;/);
+    assert.doesNotMatch(tavernPreCodeRule, /display: contents;/);
     assert.doesNotMatch(markdownCss, /\.xb-tavern-markdown pre \{[\s\S]*background: rgba\(10, 12, 18, 0\.28\);/);
+    assert.match(baseCss, /\.xb-tavern-codeblock \{[\s\S]*max-height: none;[\s\S]*overflow: visible;/);
     assert.doesNotMatch(baseCss, /\.xb-tavern-codeblock pre \{[\s\S]*padding-top: 34px;/);
     assert.match(baseCss, /\.xb-tavern-code-copy \{[\s\S]*z-index: 2;[\s\S]*width: 24px;[\s\S]*height: 24px;[\s\S]*min-height: 24px;[\s\S]*border-radius: 7px;[\s\S]*touch-action: manipulation;/);
     assert.match(baseCss, /\.xb-tavern-code-copy\.is-copied \{[\s\S]*color: var\(--xb-ok\);/);
@@ -161,6 +187,7 @@ test('tavern chat font size preference scales reading typography relative to hos
     assert.match(markdownCss, /\.xb-tavern-markdown \{[\s\S]*font-size: var\(--xb-tavern-reading-font-size, 15px\);[\s\S]*line-height: var\(--xb-tavern-reading-line-height, 23px\);/);
     assert.match(markdownCss, /\.xb-tavern-markdown p \{[\s\S]*font-size: inherit;[\s\S]*line-height: inherit;[\s\S]*white-space: pre-wrap;/);
     assert.match(markdownCss, /\.xb-tavern-markdown li \{[\s\S]*font-size: inherit;[\s\S]*line-height: inherit;[\s\S]*white-space: normal;/);
+    assert.match(markdownCss, /\.xb-tavern-markdown strong,[\s\S]*\.xb-tavern-markdown b \{[\s\S]*font-size: inherit;[\s\S]*line-height: inherit;/);
     assert.match(composeCss, /\.chat-compose textarea \{[\s\S]*font-size: var\(--xb-tavern-reading-font-size, 15px\);[\s\S]*line-height: var\(--xb-tavern-reading-line-height, 23px\);/);
     assert.match(messagesCss, /\.action-check-card-copy \{[\s\S]*font-size: var\(--xb-tavern-reading-font-size, 15px\);[\s\S]*line-height: var\(--xb-tavern-reading-line-height, 23px\);/);
     assert.match(messagesCss, /\.action-check-card-stakes \{[\s\S]*font-size: calc\(var\(--xb-tavern-reading-font-size, 15px\) - 1px\);[\s\S]*line-height: var\(--xb-tavern-reading-line-height, 23px\);[\s\S]*overflow-wrap: anywhere;/);

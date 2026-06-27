@@ -49,6 +49,8 @@ textarea:disabled {
     position: relative;
     min-width: 0;
     max-width: 100%;
+    max-height: none;
+    overflow: visible;
 }
 
 .xb-tavern-code-copy {

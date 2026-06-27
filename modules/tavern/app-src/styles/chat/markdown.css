@@ -151,9 +151,13 @@
 
 .xb-tavern-markdown h4 { font-size: 1em; }
 
-.xb-tavern-markdown strong {
+.xb-tavern-markdown strong,
+.xb-tavern-markdown b {
     color: var(--xb-text-main);
+    font-family: inherit;
+    font-size: inherit;
     font-weight: 700;
+    line-height: inherit;
 }
 
 .xb-tavern-markdown em,
@@ -819,8 +823,12 @@
 }
 
 .xb-tavern-markdown pre {
+    display: block;
+    width: 100%;
+    height: auto;
     min-width: 0;
     max-width: 100%;
+    max-height: none;
     overflow: visible;
     border: 1px solid rgba(120, 112, 98, 0.22);
     border-radius: 8px;
@@ -829,12 +837,12 @@
     padding: 8px 34px 8px 10px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    word-break: break-word;
+    word-break: break-all;
 }
 
 .xb-tavern-markdown pre code {
-    position: relative;
-    display: contents;
+    display: inline;
+    max-height: none;
     overflow: visible;
     border: 0;
     border-radius: 0;

@@ -790,6 +790,14 @@ test('tavern scene map player marker uses current user identity instead of gener
     assert.match(mapPanelSource, /if \(isPlayer && normalizedPlayerAvatarUrl\.value && forcedOpKind !== 'remove'\) \{/);
     assert.match(mapPanelSource, /layer: 'avatar'/);
     assert.match(mapPanelSource, /dash: '3 2'/);
+    assert.match(mapPanelSource, /id: `\$\{element\.id\}-avatar`,[\s\S]*layer: 'avatar',[\s\S]*fill: `url\(#\$\{patternId\}\)`/);
+    assert.match(mapPanelSource, /id: `\$\{element\.id\}-player-outline`,[\s\S]*layer: 'avatar',[\s\S]*dash: '3 2'/);
+    assert.match(mapPanelSource, /id: `\$\{element\.id\}-glyph`,[\s\S]*layer: 'line',[\s\S]*gameIcon: true/);
+    assert.match(mapPanelSource, /const avatarPatternItems = computed<MapAvatarPatternItem\[\]>/);
+    assert.ok(
+        mapPanelSource.indexOf('class="map-avatar-layer"') > mapPanelSource.indexOf('class="map-removed-layer"'),
+        'player avatar layer must render after every map content layer',
+    );
     assert.doesNotMatch(mapPanelSource, /#4ea1ff/);
 });
 
@@ -1042,6 +1050,7 @@ test('tavern base settings panel exposes a three-segment chat font size control 
 
     assert.match(settingsSource, /export type TavernChatFontSize = 'small' \| 'medium' \| 'large';/);
     assert.match(settingsSource, /export const TAVERN_CHAT_FONT_SIZES/);
+    assert.match(settingsSource, /value === 'small' \|\| value === 'medium' \|\| value === 'large' \? value : 'large'/);
 
     assert.match(panelSource, /<h3>字体<\/h3>/);
     assert.match(panelSource, /class="xb-workspace-controller chat-font-size-controller"/);
