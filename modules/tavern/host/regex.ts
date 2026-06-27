@@ -183,12 +183,41 @@ function currentCharacter(nativeCharacterId: unknown): Record<string, unknown> {
     return asRecord(characters?.[Number(normalizedId)]);
 }
 
+function hasCharacterExtensionContainer(character: Record<string, unknown>): boolean {
+    const data = asRecord(character.data);
+    return Object.prototype.hasOwnProperty.call(data, 'extensions');
+}
+
+function characterJsonData(character: Record<string, unknown>): Record<string, unknown> {
+    const raw = text(character.json_data);
+    if (!raw) {return {};}
+    try {
+        return asRecord(JSON.parse(raw));
+    } catch {
+        return {};
+    }
+}
+
+function hasScopedRegexScripts(value: Record<string, unknown>): boolean {
+    const data = asRecord(value.data);
+    const extensions = asRecord(data.extensions);
+    const rootExtensions = asRecord(value.extensions);
+    return Array.isArray(extensions.regex_scripts) || Array.isArray(rootExtensions.regex_scripts);
+}
+
+function shouldHydrateCharacterForRegex(character: Record<string, unknown>): boolean {
+    return character.shallow === true
+        || !text(character.json_data)
+        || !hasCharacterExtensionContainer(character)
+        || (hasScopedRegexScripts(characterJsonData(character)) && !hasScopedRegexScripts(character));
+}
+
 async function hydrateCharacter(nativeCharacterId: unknown): Promise<Record<string, unknown>> {
     const normalizedId = normalizedNativeCharacterId(nativeCharacterId);
     if (!normalizedId) {return {};}
     const character = currentCharacter(normalizedId);
     const avatar = text(character.avatar);
-    if (avatar && avatar !== 'none' && (character.shallow === true || !text(character.json_data))) {
+    if (avatar && avatar !== 'none' && shouldHydrateCharacterForRegex(character)) {
         if (character.shallow === true) {
             await unshallowCharacter(String(normalizedId));
         } else {

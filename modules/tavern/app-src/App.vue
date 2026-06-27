@@ -712,6 +712,13 @@ const currentNativeCharacterId = computed(() => {
         || String(selectedSession.value?.contextSnapshot?.character?.nativeCharacterId || '').trim()
         || String(effectiveContext.value.character?.nativeCharacterId || '').trim();
 });
+const regexNativeCharacterId = computed(() => {
+    const previewKey = activeView.value === 'settings' && activeSettingsWorkspace.value === 'regex'
+        ? String(selectedCharacterPreviewKey.value || '').trim()
+        : '';
+    const previewNativeCharacterId = previewKey ? resolveCurrentNativeCharacterId(previewKey, { optional: true }) : '';
+    return previewNativeCharacterId || currentNativeCharacterId.value;
+});
 const {
     activeAssistantPreset,
     applyHostChatPreset,
@@ -736,6 +743,7 @@ const {
     tavernDisplaySettings,
     effectiveContext,
     currentNativeCharacterId,
+    regexNativeCharacterId,
     homeThemeDark,
     isRunning,
     confirmDialog: confirmTavernDialog,

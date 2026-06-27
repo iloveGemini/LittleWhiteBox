@@ -59,6 +59,7 @@ interface TavernSettingsControllerOptions {
     tavernDisplaySettings: Ref<TavernDisplaySettings>;
     effectiveContext: ComputedRef<XbTavernContext>;
     currentNativeCharacterId: ComputedRef<string>;
+    regexNativeCharacterId: ComputedRef<string>;
     homeThemeDark: Ref<boolean>;
     isRunning: Ref<boolean>;
     confirmDialog: (options: { title?: string; message?: string; confirmText?: string; cancelText?: string; tone?: 'default' | 'danger' | 'warning' } | string) => Promise<boolean>;
@@ -448,6 +449,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
     const regexSearchText = ref('');
     const regexGroupVisibleLimits = ref<Record<string, number>>({});
     const regexList = ref<Record<string, unknown>>({});
+    const regexLoadedNativeCharacterId = ref('');
     const selectedRegexKey = ref('');
     const regexDraft = ref<TavernRegexScriptDraft>({});
     const activeRegexScriptJson = ref(snapshotNativeDraft(regexDraft.value));
@@ -463,11 +465,17 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
     let baseSettingsSaveSerial = 0;
     let presetSaveResetTimer: ReturnType<typeof setTimeout> | null = null;
     let assistantPresetSaveResetTimer: ReturnType<typeof setTimeout> | null = null;
+    let chatPresetSaveRequestSerial = 0;
+    let chatPresetSelectRequestSerial = 0;
+    let assistantPresetSaveRequestSerial = 0;
+    let assistantPresetSelectRequestSerial = 0;
     let worldbookEntryLoadRequestSerial = 0;
     let worldbookEntryLoadRequestKey = '';
     let worldbookSyncRequestSerial = 0;
     let globalWorldbookRequestSerial = 0;
     let globalWorldbookSavingRequestSerial = 0;
+    let regexRefreshRequestSerial = 0;
+    let regexMutationRequestSerial = 0;
 
     const apiSettingsPanelState: Record<string, unknown> = {
         config: {},
@@ -859,6 +867,27 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         activeRegexScriptJson.value = snapshotNativeDraft(normalized);
         selectedRegexKey.value = row.key;
     }
+    function currentRegexNativeCharacterId(): string {
+        return String(options.regexNativeCharacterId.value || '').trim();
+    }
+    function regexDraftNativeCharacterId(): string {
+        return String(regexLoadedNativeCharacterId.value || currentRegexNativeCharacterId() || '').trim();
+    }
+    async function refreshRegexAfterStaleMutation(targetNativeCharacterId: string) {
+        if (targetNativeCharacterId === currentRegexNativeCharacterId()) {return false;}
+        if (String(regexLoadedNativeCharacterId.value || '').trim() !== targetNativeCharacterId) {
+            regexStatus.value = '';
+            return true;
+        }
+        regexLoadedNativeCharacterId.value = '';
+        regexList.value = {};
+        applyActiveRegexScript(null);
+        regexStatus.value = '';
+        if (options.activeView.value === 'settings' && options.activeSettingsWorkspace.value === 'regex') {
+            await refreshRegexFromHost();
+        }
+        return true;
+    }
     function applyActiveAssistantPreset(next: Partial<TavernAssistantPreset> = {}, applyOptions: { replaceDraft?: boolean } = {}) {
         const normalized = normalizeTavernAssistantPreset(next);
         activeAssistantPreset.value = normalized;
@@ -923,7 +952,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         }, PRESET_SAVE_FEEDBACK_RESET_MS);
         (assistantPresetSaveResetTimer as { unref?: () => void }).unref?.();
     }
-    async function requestChatPresetSaveFromHost() {
+    async function requestChatPresetSaveFromHost(presetPayload: TavernChatPromptPresetBundle) {
         const controller = typeof AbortController === 'function' ? new AbortController() : null;
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
         const timeout = new Promise<never>((_resolve, reject) => {
@@ -936,7 +965,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         try {
             return await Promise.race([
                 options.requestHost('xb-tavern:save-chat-preset', {
-                    payload: preset.value as unknown as Record<string, unknown>,
+                    payload: presetPayload as unknown as Record<string, unknown>,
                 }, controller ? { signal: controller.signal } : {}),
                 timeout,
             ]);
@@ -1005,16 +1034,20 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
             selectedPresetSourceId.value = currentName;
             return;
         }
+        chatPresetSaveRequestSerial += 1;
+        const requestSerial = ++chatPresetSelectRequestSerial;
         presetStatus.value = '正在切换';
         try {
             const result = await options.requestHost('xb-tavern:select-chat-preset', {
                 payload: { promptManagerName: presetName },
             });
+            if (requestSerial !== chatPresetSelectRequestSerial) {return;}
             const nextPreset = (result.result || result) as Partial<TavernChatPromptPresetBundle>;
             applyActiveChatPreset(nextPreset);
             presetStatus.value = '';
             refreshCurrentHostContext();
         } catch (error) {
+            if (requestSerial !== chatPresetSelectRequestSerial) {return;}
             selectedPresetSourceId.value = currentName;
             presetStatus.value = error instanceof Error ? error.message : String(error || '切换失败');
         }
@@ -1031,17 +1064,25 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
             return;
         }
         beginPresetSaveFeedback();
+        const requestSerial = ++chatPresetSaveRequestSerial;
+        chatPresetSelectRequestSerial += 1;
+        const savedDraftJsonAtRequest = snapshotPreset(preset.value);
+        const presetPayload = clonePromptJson(preset.value) as TavernChatPromptPresetBundle;
         try {
-            const result = await requestChatPresetSaveFromHost();
+            const result = await requestChatPresetSaveFromHost(presetPayload);
+            if (requestSerial !== chatPresetSaveRequestSerial) {return;}
             if (result.ok === false) {
                 completePresetSaveFeedback({ ok: false, error: String(result.error || '保存失败') });
                 return;
             }
-            applyActiveChatPreset(result.result as Partial<TavernChatPromptPresetBundle>);
+            applyActiveChatPreset(result.result as Partial<TavernChatPromptPresetBundle>, {
+                replaceDraft: snapshotPreset(preset.value) === savedDraftJsonAtRequest,
+            });
             presetStatus.value = '';
             completePresetSaveFeedback({ ok: true });
             refreshCurrentHostContext();
         } catch (error) {
+            if (requestSerial !== chatPresetSaveRequestSerial) {return;}
             completePresetSaveFeedback({
                 ok: false,
                 error: error instanceof Error ? error.message : String(error || '保存失败'),
@@ -1252,16 +1293,21 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
             regexStatus.value = '';
             return;
         }
+        const requestSerial = ++regexRefreshRequestSerial;
+        const nativeCharacterId = String(options.regexNativeCharacterId.value || '').trim();
         regexStatus.value = '正在读取';
         try {
             const result = await options.requestHost('xb-tavern:list-regex-scripts', {
-                payload: { nativeCharacterId: String(options.currentNativeCharacterId.value || '').trim() },
+                payload: { nativeCharacterId },
             });
+            if (requestSerial !== regexRefreshRequestSerial || nativeCharacterId !== String(options.regexNativeCharacterId.value || '').trim()) {return;}
+            regexLoadedNativeCharacterId.value = nativeCharacterId;
             regexList.value = (result.result || result) as Record<string, unknown>;
             const current = regexScriptRows.value.find((row) => row.key === selectedRegexKey.value);
             applyActiveRegexScript(current || regexScriptRows.value[0] || null);
             regexStatus.value = '';
         } catch (error) {
+            if (requestSerial !== regexRefreshRequestSerial || nativeCharacterId !== String(options.regexNativeCharacterId.value || '').trim()) {return;}
             regexStatus.value = error instanceof Error ? error.message : String(error || '读取失败');
         }
     }
@@ -1317,15 +1363,20 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
             return;
         }
         regexStatus.value = '正在保存';
+        const targetNativeCharacterId = regexDraftNativeCharacterId();
+        const mutationSerial = ++regexMutationRequestSerial;
         try {
             const result = await options.requestHost('xb-tavern:save-regex-script', {
                 payload: {
-                    nativeCharacterId: String(options.currentNativeCharacterId.value || '').trim(),
+                    nativeCharacterId: targetNativeCharacterId,
                     scriptType,
                     script: regexDraft.value,
                 },
             });
             const payload = (result.result || result) as Record<string, unknown>;
+            if (mutationSerial !== regexMutationRequestSerial) {return;}
+            if (await refreshRegexAfterStaleMutation(targetNativeCharacterId)) {return;}
+            regexLoadedNativeCharacterId.value = targetNativeCharacterId;
             regexList.value = payload;
             const savedId = String(payload.savedScriptId || regexDraft.value.id || '');
             const savedType = Number(payload.savedScriptType ?? scriptType);
@@ -1336,6 +1387,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
             applyActiveRegexScript(nextRow);
             regexStatus.value = '';
         } catch (error) {
+            if (mutationSerial !== regexMutationRequestSerial) {return;}
             regexStatus.value = error instanceof Error ? error.message : String(error || '保存失败');
         }
     }
@@ -1370,14 +1422,20 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
             tone: 'danger',
         })) {return;}
         regexStatus.value = '正在删除';
+        const targetNativeCharacterId = regexDraftNativeCharacterId();
+        const mutationSerial = ++regexMutationRequestSerial;
         try {
             const result = await options.requestHost('xb-tavern:delete-regex-script', {
-                payload: { nativeCharacterId: String(options.currentNativeCharacterId.value || '').trim(), scriptType, id },
+                payload: { nativeCharacterId: targetNativeCharacterId, scriptType, id },
             });
+            if (mutationSerial !== regexMutationRequestSerial) {return;}
+            if (await refreshRegexAfterStaleMutation(targetNativeCharacterId)) {return;}
+            regexLoadedNativeCharacterId.value = targetNativeCharacterId;
             regexList.value = (result.result || result) as Record<string, unknown>;
             applyActiveRegexScript(regexScriptRows.value[0] || null);
             regexStatus.value = '';
         } catch (error) {
+            if (mutationSerial !== regexMutationRequestSerial) {return;}
             regexStatus.value = error instanceof Error ? error.message : String(error || '删除失败');
         }
     }
@@ -1657,9 +1715,14 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
         if (assistantPresetDirty.value && !await confirmDiscardDraft('助手预设', '切换')) {
             return;
         }
+        assistantPresetSaveRequestSerial += 1;
+        const requestSerial = ++assistantPresetSelectRequestSerial;
         await setActiveTavernAssistantPresetId(targetId);
+        if (requestSerial !== assistantPresetSelectRequestSerial) {return;}
         activeAssistantPresetId.value = targetId;
-        applyActiveAssistantPreset(await loadActiveTavernAssistantPreset());
+        const loadedPreset = await loadActiveTavernAssistantPreset();
+        if (requestSerial !== assistantPresetSelectRequestSerial) {return;}
+        applyActiveAssistantPreset(loadedPreset);
         assistantPresetStatus.value = '';
     }
     async function saveCurrentAssistantPreset() {
@@ -1670,6 +1733,9 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
             return;
         }
         beginAssistantPresetSaveFeedback();
+        const requestSerial = ++assistantPresetSaveRequestSerial;
+        assistantPresetSelectRequestSerial += 1;
+        const savedDraftJsonAtRequest = snapshotAssistantPreset(assistantPreset.value);
         try {
             const savingBuiltIn = String(activeAssistantPresetRecord.value?.id || '') === DEFAULT_TAVERN_ASSISTANT_PRESET_ID;
             const presetForSave = savingBuiltIn
@@ -1678,15 +1744,28 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
                     id: `assistant-preset-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
                     name: `${assistantPreset.value.name || '助手预设'} 自定义`,
                 }
-                : assistantPreset.value;
+                : { ...assistantPreset.value };
             const record = await saveTavernAssistantPreset(presetForSave);
+            if (requestSerial !== assistantPresetSaveRequestSerial) {return;}
             await setActiveTavernAssistantPresetId(record.id);
+            if (requestSerial !== assistantPresetSaveRequestSerial) {return;}
             activeAssistantPresetId.value = record.id;
-            applyActiveAssistantPreset(record.preset);
+            const assistantDraftUnchanged = snapshotAssistantPreset(assistantPreset.value) === savedDraftJsonAtRequest;
+            applyActiveAssistantPreset(record.preset, {
+                replaceDraft: assistantDraftUnchanged,
+            });
+            if (!assistantDraftUnchanged && savingBuiltIn) {
+                assistantPreset.value = normalizeTavernAssistantPreset({
+                    ...assistantPreset.value,
+                    id: record.id,
+                });
+            }
             assistantPresets.value = await listTavernAssistantPresets();
+            if (requestSerial !== assistantPresetSaveRequestSerial) {return;}
             assistantPresetStatus.value = '';
             completeAssistantPresetSaveFeedback({ ok: true });
         } catch (error) {
+            if (requestSerial !== assistantPresetSaveRequestSerial) {return;}
             completeAssistantPresetSaveFeedback({
                 ok: false,
                 error: error instanceof Error ? error.message : String(error || '保存失败'),
@@ -1982,7 +2061,7 @@ export function useTavernSettingsController(options: TavernSettingsControllerOpt
     watch([
         () => options.activeSettingsWorkspace.value,
         () => options.activeView.value,
-        () => String(options.currentNativeCharacterId.value || '').trim(),
+        () => String(options.regexNativeCharacterId.value || '').trim(),
         () => apiConfigSave.value.status,
         () => options.agentConfig.value,
         () => apiSettingsRootRef.value,

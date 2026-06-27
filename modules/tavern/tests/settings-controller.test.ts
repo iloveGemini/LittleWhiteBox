@@ -14,6 +14,66 @@ function flushAsyncState() {
     });
 }
 
+function regexListPayload(scriptName: string): Record<string, unknown> {
+    return {
+        result: {
+            groups: [{
+                key: 'character',
+                label: '角色正则',
+                scriptType: 1,
+                allowed: true,
+                scripts: [{
+                    id: scriptName,
+                    scriptName,
+                    findRegex: scriptName,
+                    replaceString: '',
+                    placement: [],
+                }],
+            }],
+        },
+    };
+}
+
+function chatPresetBundle(name: string, prompt: Record<string, unknown> = {}, activeCharacterId = 'char-1'): Record<string, unknown> {
+    const promptRecord = {
+        identifier: 'main',
+        name: 'Main',
+        role: 'system',
+        content: `${name} MAIN`,
+        ...prompt,
+    };
+    const activeOrder = [{ identifier: String(promptRecord.identifier || 'main'), enabled: true }];
+    return {
+        id: name,
+        name,
+        source: 'sillytavern',
+        promptManager: {
+            name,
+            rawPreset: {
+                prompts: [promptRecord],
+                prompt_order: [{ character_id: activeCharacterId, order: activeOrder }],
+            },
+            prompts: [promptRecord],
+            promptOrder: [{ character_id: activeCharacterId, order: activeOrder }],
+            activeCharacterId,
+            activeOrder,
+        },
+        sections: [],
+    };
+}
+
+function promptManagerPrompt(bundle: unknown, identifier = 'main'): Record<string, unknown> {
+    const source = bundle && typeof bundle === 'object' ? bundle as Record<string, unknown> : {};
+    const promptManager = source.promptManager && typeof source.promptManager === 'object'
+        ? source.promptManager as Record<string, unknown>
+        : {};
+    const prompts = Array.isArray(promptManager.prompts) ? promptManager.prompts : [];
+    return prompts.find((item) => {
+        const prompt = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+        return String(prompt.identifier || prompt.id || '') === identifier;
+    }) as Record<string, unknown> || {};
+}
+
 test('display settings revert to the last committed values when host save fails', async () => {
     const activeView = ref('home');
     const activeSettingsWorkspace = ref<TavernSettingsWorkspaceKey>('base');
@@ -30,6 +90,7 @@ test('display settings revert to the last committed values when host save fails'
         tavernDisplaySettings,
         effectiveContext: computed(() => ({})),
         currentNativeCharacterId: computed(() => ''),
+        regexNativeCharacterId: computed(() => ''),
         homeThemeDark: ref(false),
         isRunning: ref(false),
         confirmDialog: async () => true,
@@ -71,6 +132,7 @@ test('runtime chat preset follows the LittleWhiteBox selected preset state', asy
         tavernDisplaySettings,
         effectiveContext: computed(() => ({})),
         currentNativeCharacterId: computed(() => ''),
+        regexNativeCharacterId: computed(() => ''),
         homeThemeDark: ref(false),
         isRunning: ref(false),
         confirmDialog: async () => true,
@@ -123,6 +185,7 @@ test('runtime chat preset ignores unsaved editor draft and tracks synced ST acti
         tavernDisplaySettings,
         effectiveContext: computed(() => ({})),
         currentNativeCharacterId: computed(() => ''),
+        regexNativeCharacterId: computed(() => ''),
         homeThemeDark: ref(false),
         isRunning: ref(false),
         confirmDialog: async () => true,
@@ -201,6 +264,7 @@ test('chat preset save feedback stays on the save button instead of the status b
         tavernDisplaySettings,
         effectiveContext: computed(() => ({})),
         currentNativeCharacterId: computed(() => ''),
+        regexNativeCharacterId: computed(() => ''),
         homeThemeDark: ref(false),
         isRunning: ref(false),
         confirmDialog: async () => true,
@@ -273,6 +337,7 @@ test('chat preset server save reports timeout through the save button', async ()
             tavernDisplaySettings,
             effectiveContext: computed(() => ({})),
             currentNativeCharacterId: computed(() => ''),
+            regexNativeCharacterId: computed(() => ''),
             homeThemeDark: ref(false),
             isRunning: ref(false),
             confirmDialog: async () => true,
@@ -325,4 +390,286 @@ test('chat preset server save reports timeout through the save button', async ()
         globalThis.setTimeout = originalSetTimeout;
         globalThis.clearTimeout = originalClearTimeout;
     }
+});
+
+test('chat preset save response does not replace edits made while saving', async () => {
+    const activeView = ref('settings');
+    const activeSettingsWorkspace = ref<TavernSettingsWorkspaceKey>('chatPreset');
+    const agentConfig = ref<Record<string, unknown>>({});
+    const tavernDisplaySettings = ref(normalizeTavernDisplaySettings({}));
+    let savePayload: Record<string, unknown> | null = null;
+    let resolveSave: ((value: Record<string, unknown>) => void) | null = null;
+    const controller = useTavernSettingsController({
+        activeView,
+        activeSettingsWorkspace,
+        agentConfig,
+        tavernDisplaySettings,
+        effectiveContext: computed(() => ({})),
+        currentNativeCharacterId: computed(() => ''),
+        regexNativeCharacterId: computed(() => ''),
+        homeThemeDark: ref(false),
+        isRunning: ref(false),
+        confirmDialog: async () => true,
+        describeError: (error) => error instanceof Error ? error.message : String(error || ''),
+        postToHost: () => {},
+        requestHost: async (type, payload = {}) => {
+            if (type !== 'xb-tavern:save-chat-preset') {
+                return {};
+            }
+            savePayload = payload.payload as Record<string, unknown>;
+            return await new Promise<Record<string, unknown>>((resolve) => {
+                resolveSave = resolve;
+            });
+        },
+        shortText: (value = '') => String(value || ''),
+    });
+
+    controller.applyHostChatPreset({ chatPreset: chatPresetBundle('Preset A') });
+    controller.settingsContext.updatePromptByIdentifier('main', { name: 'First name', content: 'First content' });
+
+    const savePromise = controller.settingsContext.saveCurrentPreset();
+    controller.settingsContext.updatePromptByIdentifier('main', { name: 'Second name', content: 'Second content' });
+
+    assert.equal(promptManagerPrompt(savePayload).name, 'First name');
+    assert.equal(promptManagerPrompt(savePayload).content, 'First content');
+
+    resolveSave?.({ result: savePayload || chatPresetBundle('Preset A', { name: 'First name', content: 'First content' }) });
+    await savePromise;
+    await flushAsyncState();
+
+    const draftPrompt = promptManagerPrompt(controller.settingsContext.preset.value);
+    assert.equal(draftPrompt.name, 'Second name');
+    assert.equal(draftPrompt.content, 'Second content');
+    assert.equal(controller.settingsContext.presetDirty.value, true);
+});
+
+test('chat preset selection ignores stale out-of-order responses', async () => {
+    const activeView = ref('settings');
+    const activeSettingsWorkspace = ref<TavernSettingsWorkspaceKey>('chatPreset');
+    const agentConfig = ref<Record<string, unknown>>({});
+    const tavernDisplaySettings = ref(normalizeTavernDisplaySettings({}));
+    const pendingSelections: Record<string, (value: Record<string, unknown>) => void> = {};
+    const controller = useTavernSettingsController({
+        activeView,
+        activeSettingsWorkspace,
+        agentConfig,
+        tavernDisplaySettings,
+        effectiveContext: computed(() => ({})),
+        currentNativeCharacterId: computed(() => ''),
+        regexNativeCharacterId: computed(() => ''),
+        homeThemeDark: ref(false),
+        isRunning: ref(false),
+        confirmDialog: async () => true,
+        describeError: (error) => error instanceof Error ? error.message : String(error || ''),
+        postToHost: () => {},
+        requestHost: async (type, payload = {}) => {
+            if (type !== 'xb-tavern:select-chat-preset') {
+                return {};
+            }
+            const source = payload.payload as Record<string, unknown>;
+            const name = String(source.promptManagerName || '');
+            return await new Promise<Record<string, unknown>>((resolve) => {
+                pendingSelections[name] = resolve;
+            });
+        },
+        shortText: (value = '') => String(value || ''),
+    });
+
+    controller.applyHostChatPreset({ chatPreset: chatPresetBundle('Base') });
+
+    const selectA = controller.settingsContext.selectChatPresetFromHost('Preset A');
+    const selectB = controller.settingsContext.selectChatPresetFromHost('Preset B');
+
+    pendingSelections['Preset B']?.({ result: chatPresetBundle('Preset B', { name: 'B name', content: 'B content' }) });
+    await selectB;
+    await flushAsyncState();
+
+    assert.equal(controller.settingsContext.preset.value.name, 'Preset B');
+    assert.equal(promptManagerPrompt(controller.settingsContext.preset.value).content, 'B content');
+
+    pendingSelections['Preset A']?.({ result: chatPresetBundle('Preset A', { name: 'A name', content: 'A content' }) });
+    await selectA;
+    await flushAsyncState();
+
+    assert.equal(controller.settingsContext.preset.value.name, 'Preset B');
+    assert.equal(promptManagerPrompt(controller.settingsContext.preset.value).content, 'B content');
+    assert.equal(controller.settingsContext.presetStatus.value, '');
+});
+
+test('regex refresh ignores stale character responses', async () => {
+    const activeView = ref('home');
+    const activeSettingsWorkspace = ref<TavernSettingsWorkspaceKey>('base');
+    const agentConfig = ref<Record<string, unknown>>({});
+    const tavernDisplaySettings = ref(normalizeTavernDisplaySettings({}));
+    const regexNativeCharacterId = ref('char-old');
+    const pendingRequests: Record<string, {
+        resolve: (value: Record<string, unknown>) => void;
+        promise: Promise<Record<string, unknown>>;
+    }> = {};
+    const requestedCharacterIds: string[] = [];
+
+    const controller = useTavernSettingsController({
+        activeView,
+        activeSettingsWorkspace,
+        agentConfig,
+        tavernDisplaySettings,
+        effectiveContext: computed(() => ({})),
+        currentNativeCharacterId: computed(() => ''),
+        regexNativeCharacterId: computed(() => regexNativeCharacterId.value),
+        homeThemeDark: ref(false),
+        isRunning: ref(false),
+        confirmDialog: async () => true,
+        describeError: (error) => error instanceof Error ? error.message : String(error || ''),
+        postToHost: () => {},
+        requestHost: (type, payload = {}) => {
+            if (type !== 'xb-tavern:list-regex-scripts') {
+                return Promise.resolve({});
+            }
+            const nativeCharacterId = String((payload.payload as Record<string, unknown> | undefined)?.nativeCharacterId || '');
+            requestedCharacterIds.push(nativeCharacterId);
+            let resolveRequest: (value: Record<string, unknown>) => void = () => {};
+            const promise = new Promise<Record<string, unknown>>((resolve) => {
+                resolveRequest = resolve;
+            });
+            pendingRequests[nativeCharacterId] = { resolve: resolveRequest, promise };
+            return promise;
+        },
+        shortText: (value = '') => String(value || ''),
+    });
+
+    const oldRefresh = controller.refreshRegexFromHost();
+    assert.deepEqual(requestedCharacterIds, ['char-old']);
+
+    regexNativeCharacterId.value = 'char-new';
+    const newRefresh = controller.refreshRegexFromHost();
+    assert.deepEqual(requestedCharacterIds, ['char-old', 'char-new']);
+
+    pendingRequests['char-new']?.resolve(regexListPayload('NEW SCRIPT'));
+    await newRefresh;
+    await flushAsyncState();
+
+    assert.equal(controller.settingsContext.regexScriptRows.value[0]?.script.scriptName, 'NEW SCRIPT');
+    assert.equal(controller.settingsContext.regexStatus.value, '');
+
+    pendingRequests['char-old']?.resolve(regexListPayload('OLD SCRIPT'));
+    await oldRefresh;
+    await flushAsyncState();
+
+    assert.equal(controller.settingsContext.regexScriptRows.value[0]?.script.scriptName, 'NEW SCRIPT');
+    assert.equal(controller.settingsContext.regexStatus.value, '');
+});
+
+test('dirty regex draft saves to the character it was loaded from after target changes', async () => {
+    const activeView = ref('settings');
+    const activeSettingsWorkspace = ref<TavernSettingsWorkspaceKey>('regex');
+    const agentConfig = ref<Record<string, unknown>>({});
+    const tavernDisplaySettings = ref(normalizeTavernDisplaySettings({}));
+    const regexNativeCharacterId = ref('char-a');
+    const savePayloads: Record<string, unknown>[] = [];
+    const listPayloads: string[] = [];
+
+    const controller = useTavernSettingsController({
+        activeView,
+        activeSettingsWorkspace,
+        agentConfig,
+        tavernDisplaySettings,
+        effectiveContext: computed(() => ({})),
+        currentNativeCharacterId: computed(() => ''),
+        regexNativeCharacterId: computed(() => regexNativeCharacterId.value),
+        homeThemeDark: ref(false),
+        isRunning: ref(false),
+        confirmDialog: async () => false,
+        describeError: (error) => error instanceof Error ? error.message : String(error || ''),
+        postToHost: () => {},
+        requestHost: async (type, payload = {}) => {
+            const source = payload.payload as Record<string, unknown> | undefined;
+            if (type === 'xb-tavern:list-regex-scripts') {
+                const nativeCharacterId = String(source?.nativeCharacterId || '');
+                listPayloads.push(nativeCharacterId);
+                return regexListPayload(`SCRIPT ${nativeCharacterId}`);
+            }
+            if (type === 'xb-tavern:save-regex-script') {
+                savePayloads.push(source || {});
+                return regexListPayload('SAVED SCRIPT');
+            }
+            return {};
+        },
+        shortText: (value = '') => String(value || ''),
+    });
+
+    await controller.refreshRegexFromHost();
+    assert.equal(controller.settingsContext.regexScriptRows.value[0]?.script.scriptName, 'SCRIPT char-a');
+
+    controller.settingsContext.updateRegexPatch({ replaceString: 'edited while viewing A' });
+    regexNativeCharacterId.value = 'char-b';
+
+    await controller.refreshRegexFromHost();
+    assert.deepEqual(listPayloads, ['char-a']);
+
+    await controller.settingsContext.saveCurrentRegexScript();
+
+    assert.equal(String(savePayloads[0]?.nativeCharacterId || ''), 'char-a');
+    assert.equal(String((savePayloads[0]?.script as Record<string, unknown> | undefined)?.replaceString || ''), 'edited while viewing A');
+});
+
+test('stale regex save response does not restore the previous character list', async () => {
+    const activeView = ref('settings');
+    const activeSettingsWorkspace = ref<TavernSettingsWorkspaceKey>('regex');
+    const agentConfig = ref<Record<string, unknown>>({});
+    const tavernDisplaySettings = ref(normalizeTavernDisplaySettings({}));
+    const regexNativeCharacterId = ref('char-a');
+    const savePayloads: Record<string, unknown>[] = [];
+    const pendingSaves: Array<(value: Record<string, unknown>) => void> = [];
+
+    const controller = useTavernSettingsController({
+        activeView,
+        activeSettingsWorkspace,
+        agentConfig,
+        tavernDisplaySettings,
+        effectiveContext: computed(() => ({})),
+        currentNativeCharacterId: computed(() => ''),
+        regexNativeCharacterId: computed(() => regexNativeCharacterId.value),
+        homeThemeDark: ref(false),
+        isRunning: ref(false),
+        confirmDialog: async () => true,
+        describeError: (error) => error instanceof Error ? error.message : String(error || ''),
+        postToHost: () => {},
+        requestHost: (type, payload = {}) => {
+            const source = payload.payload as Record<string, unknown> | undefined;
+            if (type === 'xb-tavern:list-regex-scripts') {
+                return Promise.resolve(regexListPayload(`SCRIPT ${String(source?.nativeCharacterId || '')}`));
+            }
+            if (type === 'xb-tavern:save-regex-script') {
+                savePayloads.push(source || {});
+                return new Promise<Record<string, unknown>>((resolve) => {
+                    pendingSaves.push(resolve);
+                });
+            }
+            return Promise.resolve({});
+        },
+        shortText: (value = '') => String(value || ''),
+    });
+
+    await controller.refreshRegexFromHost();
+    assert.equal(controller.settingsContext.regexScriptRows.value[0]?.script.scriptName, 'SCRIPT char-a');
+
+    controller.settingsContext.updateRegexPatch({ replaceString: 'edited while viewing A' });
+    const saveA = controller.settingsContext.saveCurrentRegexScript();
+    assert.equal(String(savePayloads[0]?.nativeCharacterId || ''), 'char-a');
+
+    regexNativeCharacterId.value = 'char-b';
+    await controller.refreshRegexFromHost();
+    assert.equal(controller.settingsContext.regexScriptRows.value[0]?.script.scriptName, 'SCRIPT char-b');
+
+    pendingSaves[0]?.(regexListPayload('SAVED SCRIPT char-a'));
+    await saveA;
+    await flushAsyncState();
+
+    assert.equal(controller.settingsContext.regexScriptRows.value[0]?.script.scriptName, 'SCRIPT char-b');
+
+    controller.settingsContext.updateRegexPatch({ replaceString: 'edited while viewing B' });
+    const saveB = controller.settingsContext.saveCurrentRegexScript();
+    assert.equal(String(savePayloads[1]?.nativeCharacterId || ''), 'char-b');
+    pendingSaves[1]?.(regexListPayload('SAVED SCRIPT char-b'));
+    await saveB;
 });

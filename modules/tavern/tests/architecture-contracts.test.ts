@@ -376,7 +376,8 @@ test('tavern character and global worldbook actions stay on native ST boundaries
     assert.match(appSource, /openWorldbookWorkspace\(String\(payload\.name \|\| ''\)\)/);
     assert.match(appSource, /openWorldbookWorkspace\(targetName\)/);
     assert.match(appSource, /const currentNativeCharacterId = computed\(\(\) => \{[\s\S]*const characterKey = String\(selectedSession\.value\?\.characterKey \|\| effectiveContext\.value\.character\?\.characterKey \|\| ''\)\.trim\(\);[\s\S]*resolveCurrentNativeCharacterId\(characterKey, \{ optional: true \}\)/);
-    assert.match(appSource, /useTavernSettingsController\(\{[\s\S]*effectiveContext,[\s\S]*currentNativeCharacterId,/);
+    assert.match(appSource, /const regexNativeCharacterId = computed\(\(\) => \{[\s\S]*selectedCharacterPreviewKey\.value[\s\S]*resolveCurrentNativeCharacterId\(previewKey, \{ optional: true \}\)[\s\S]*return previewNativeCharacterId \|\| currentNativeCharacterId\.value;/);
+    assert.match(appSource, /useTavernSettingsController\(\{[\s\S]*effectiveContext,[\s\S]*currentNativeCharacterId,[\s\S]*regexNativeCharacterId,/);
     assert.match(settingsControllerSource, /async function syncWorldbooksForCurrentCharacter\(\)[\s\S]*const requestSerial = \+\+worldbookSyncRequestSerial;[\s\S]*options\.currentNativeCharacterId\.value[\s\S]*requestHost\('xb-tavern:get-character-worldbook-state'[\s\S]*requestSerial !== worldbookSyncRequestSerial[\s\S]*boundName && payload\.boundExists === true[\s\S]*syncWorldbooksFromHost\(\{ preferredName: boundName, requestSerial \}\)/);
     assert.match(settingsControllerSource, /async function syncWorldbooksFromHost\(syncOptions: TavernWorldbookSyncOptions = \{\}\)[\s\S]*const requestSerial = syncOptions\.requestSerial \|\| \+\+worldbookSyncRequestSerial;[\s\S]*if \(requestSerial !== worldbookSyncRequestSerial\) \{return;\}/);
     assert.match(settingsControllerSource, /const fallbackName = syncOptions\.selectFirst[\s\S]*: '';/);
@@ -2427,6 +2428,11 @@ test('tavern character identity uses stable keys and explicit native ids', () =>
     assert.doesNotMatch(worldbookSource, /payload\.characterId|isCurrentCharacter|currentCharacterId/);
     assert.match(nativePromptSource, /context\.character\?\.nativeCharacterId/);
     assert.match(regexSource, /function currentCharacter\(nativeCharacterId: unknown\)/);
+    assert.match(regexSource, /function hasCharacterExtensionContainer\(character: Record<string, unknown>\)[\s\S]*hasOwnProperty\.call\(data, 'extensions'\)/);
+    assert.match(regexSource, /function characterJsonData\(character: Record<string, unknown>\)[\s\S]*JSON\.parse\(raw\)/);
+    assert.match(regexSource, /function hasScopedRegexScripts\(value: Record<string, unknown>\)[\s\S]*extensions\.regex_scripts[\s\S]*rootExtensions\.regex_scripts/);
+    assert.match(regexSource, /function shouldHydrateCharacterForRegex\(character: Record<string, unknown>\)[\s\S]*hasScopedRegexScripts\(characterJsonData\(character\)\) && !hasScopedRegexScripts\(character\)/);
+    assert.match(regexSource, /avatar && avatar !== 'none' && shouldHydrateCharacterForRegex\(character\)/);
     assert.match(regexSource, /function readScopedScripts\(character: Record<string, unknown>\): TavernRegexScript\[\][\s\S]*extensions\.regex_scripts/);
     assert.match(regexSource, /await writeExtensionField\(nativeCharacterId, 'regex_scripts', scripts\)/);
     assert.match(regexSource, /runRegexScript\(script, current, \{ characterOverride: text\(options\.characterOverride\) \}\)/);
@@ -2442,5 +2448,15 @@ test('tavern character identity uses stable keys and explicit native ids', () =>
     assert.match(appSource, /function applyTavernRegexForNativeCharacter\(nativeCharacterId = ''\)/);
     assert.match(appSource, /const runtimeApplyRegex = applyTavernRegexForNativeCharacter\(runtimeContext\.character\?\.nativeCharacterId\)/);
     assert.match(appSource, /message\.sessionId,[\s\S]*String\(currentNativeCharacterId\.value \|\| ''\),[\s\S]*String\(message\.order\)/);
-    assert.match(settingsControllerSource, /options\.currentNativeCharacterId\.value[\s\S]*const regexCharacterChanged = regexWorkspaceActive && nativeCharacterId !== previousNativeCharacterId;[\s\S]*enteredRegexWorkspace \|\| regexCharacterChanged \|\| !regexGroups\.value\.length/);
+    assert.match(settingsControllerSource, /let regexRefreshRequestSerial = 0;/);
+    assert.match(settingsControllerSource, /let regexMutationRequestSerial = 0;/);
+    assert.match(settingsControllerSource, /const requestSerial = \+\+regexRefreshRequestSerial;[\s\S]*options\.regexNativeCharacterId\.value[\s\S]*requestHost\('xb-tavern:list-regex-scripts'[\s\S]*requestSerial !== regexRefreshRequestSerial/);
+    assert.match(settingsControllerSource, /const regexLoadedNativeCharacterId = ref\(''\);/);
+    assert.match(settingsControllerSource, /function currentRegexNativeCharacterId\(\): string \{[\s\S]*options\.regexNativeCharacterId\.value/);
+    assert.match(settingsControllerSource, /function regexDraftNativeCharacterId\(\): string \{[\s\S]*regexLoadedNativeCharacterId\.value \|\| currentRegexNativeCharacterId\(\)/);
+    assert.match(settingsControllerSource, /async function refreshRegexAfterStaleMutation\(targetNativeCharacterId: string\)[\s\S]*targetNativeCharacterId === currentRegexNativeCharacterId\(\)[\s\S]*regexLoadedNativeCharacterId\.value = '';[\s\S]*regexList\.value = \{\};[\s\S]*refreshRegexFromHost\(\)/);
+    assert.match(settingsControllerSource, /regexLoadedNativeCharacterId\.value = nativeCharacterId;[\s\S]*regexList\.value = \(result\.result \|\| result\)/);
+    assert.match(settingsControllerSource, /const targetNativeCharacterId = regexDraftNativeCharacterId\(\);[\s\S]*const mutationSerial = \+\+regexMutationRequestSerial;[\s\S]*nativeCharacterId: targetNativeCharacterId,[\s\S]*scriptType,[\s\S]*script: regexDraft\.value[\s\S]*refreshRegexAfterStaleMutation\(targetNativeCharacterId\)/);
+    assert.match(settingsControllerSource, /payload: \{ nativeCharacterId: targetNativeCharacterId, scriptType, id \}[\s\S]*refreshRegexAfterStaleMutation\(targetNativeCharacterId\)/);
+    assert.match(settingsControllerSource, /options\.regexNativeCharacterId\.value[\s\S]*const regexCharacterChanged = regexWorkspaceActive && nativeCharacterId !== previousNativeCharacterId;[\s\S]*enteredRegexWorkspace \|\| regexCharacterChanged \|\| !regexGroups\.value\.length/);
 });
