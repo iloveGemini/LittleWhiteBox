@@ -186,6 +186,7 @@ export interface TavernStateToolResult {
     appliedCount?: number;
     satisfiedCount?: number;
     failedCount?: number;
+    failed?: Array<{ index: number; error: string; hint?: string }>;
     count?: number;
     truncated?: boolean;
     nextOffset?: number;
@@ -655,6 +656,32 @@ function validateShapeConflict(id: string, shapeKeys: MapShapeKey[]) {
     throw new Error(`map_element_shape_conflict:${id}`);
 }
 
+function isEmptyShapeArray(value: unknown): boolean {
+    return Array.isArray(value) && value.length === 0;
+}
+
+function suppliedEmptyShapeKeys(value: Record<string, unknown>, keys: string[]): string[] {
+    return keys.filter((key) => Object.prototype.hasOwnProperty.call(value, key) && isEmptyShapeArray(value[key]));
+}
+
+function firstNonEmptyPathLikeSource(value: Record<string, unknown>): unknown {
+    for (const key of ['path', 'points', 'line']) {
+        if (!Object.prototype.hasOwnProperty.call(value, key)) {continue;}
+        const candidate = value[key];
+        if (isEmptyShapeArray(candidate)) {continue;}
+        return candidate;
+    }
+    if (value.x1 !== undefined || value.y1 !== undefined || value.x2 !== undefined || value.y2 !== undefined) {
+        return [[value.x1, value.y1], [value.x2, value.y2]];
+    }
+    return null;
+}
+
+function warnIgnoredEmptyShapeFields(id: string, keys: string[], warnings?: string[]): void {
+    if (!keys.length) {return;}
+    warnings?.push(`Ignored empty shape field(s) for ${id}: ${[...new Set(keys)].join(', ')}. Omit unused shape fields instead of sending empty arrays.`);
+}
+
 function finalizeElement(
     element: Partial<TavernMapElement>,
     id: string,
@@ -753,11 +780,12 @@ function normalizeMapElementInput(
     const circle = legacyType === 'arc' ? null : positiveNumber(value.circle ?? value.r ?? value.radius);
     if (circle !== null) {shapeParts.circle = circle;}
 
-    const pathSource = value.path ?? value.points ?? value.line
-        ?? ((value.x1 !== undefined || value.y1 !== undefined || value.x2 !== undefined || value.y2 !== undefined)
-            ? [[value.x1, value.y1], [value.x2, value.y2]]
-            : null);
-    const curveSource = value.curve;
+    const emptyPathLikeKeys = suppliedEmptyShapeKeys(value, ['path', 'points', 'line']);
+    const emptyCurveKeys = suppliedEmptyShapeKeys(value, ['curve']);
+    const pathSource = firstNonEmptyPathLikeSource(value);
+    const curveSource = Object.prototype.hasOwnProperty.call(value, 'curve') && !isEmptyShapeArray(value.curve)
+        ? value.curve
+        : null;
 
     const textValue = normalizeText(value.text ?? value.content ?? value.label ?? value.value, 240);
     if (textValue) {shapeParts.text = textValue;}
@@ -806,6 +834,12 @@ function normalizeMapElementInput(
         if (key === 'text') {return typeof shapeParts.text === 'string' && !!shapeParts.text.trim();}
         return key in shapeParts;
     });
+    if (!shapeKeys.length && (emptyPathLikeKeys.length || emptyCurveKeys.length)) {
+        throw new Error(`map_element_points_required:${id}`);
+    }
+    if (shapeKeys.length) {
+        warnIgnoredEmptyShapeFields(id, [...emptyPathLikeKeys, ...emptyCurveKeys], options.warnings);
+    }
     validateShapeConflict(id, shapeKeys);
 
     const cat = normalizeCategory(value.cat, defaultCategoryForShape(shapeKeys.find((key) => key !== 'text') || shapeKeys[0] || null));
@@ -1260,7 +1294,7 @@ function describeMapPatchError(error = ''): string {
     case 'map_element_radius_required':
         return `${id} is missing a valid radius. \`circle\` must be a number greater than 0.`;
     case 'map_element_points_required':
-        return `${id} is missing a valid point array. \`path\` and \`curve\` need at least two points. With \`at\`, points are relative offsets; without \`at\`, the first point becomes the anchor.`;
+        return `${id} is missing a valid point array. \`path\` and \`curve\` need at least two points. If this element is not a line/curve, omit empty path/curve fields and use rect/circle/icon/text instead. With \`at\`, points are relative offsets; without \`at\`, the first point becomes the anchor.`;
     case 'map_element_text_required':
         return `${id} is missing text content. \`text\` must be a short non-empty label.`;
     case 'map_element_icon_invalid':
@@ -1722,16 +1756,27 @@ function normalizePartialSet(value: unknown, id: string, warnings: string[] = []
         set.circle = circle;
     }
     if ('path' in value || 'points' in value || 'line' in value) {
-        const baseAt = set.at || null;
-        const normalized = normalizePathLikePoints(value.path ?? value.points ?? value.line, id, baseAt);
-        if (!set.at) {set.at = normalized.at;}
-        set.path = normalized.points;
+        const emptyKeys = suppliedEmptyShapeKeys(value, ['path', 'points', 'line']);
+        const pathSource = firstNonEmptyPathLikeSource(value);
+        if (pathSource) {
+            const baseAt = set.at || null;
+            const normalized = normalizePathLikePoints(pathSource, id, baseAt);
+            if (!set.at) {set.at = normalized.at;}
+            set.path = normalized.points;
+            warnIgnoredEmptyShapeFields(id, emptyKeys, warnings);
+        } else {
+            warnIgnoredEmptyShapeFields(id, emptyKeys, warnings);
+        }
     }
     if ('curve' in value) {
-        const baseAt = set.at || null;
-        const normalized = normalizePathLikePoints(value.curve, id, baseAt);
-        if (!set.at) {set.at = normalized.at;}
-        set.curve = normalized.points;
+        if (isEmptyShapeArray(value.curve)) {
+            warnIgnoredEmptyShapeFields(id, ['curve'], warnings);
+        } else {
+            const baseAt = set.at || null;
+            const normalized = normalizePathLikePoints(value.curve, id, baseAt);
+            if (!set.at) {set.at = normalized.at;}
+            set.curve = normalized.points;
+        }
     }
     if ('icon' in value) {
         const icon = normalizeIcon(value.icon);
@@ -1759,10 +1804,15 @@ function normalizePartialSet(value: unknown, id: string, warnings: string[] = []
     }
     const legacyType = String(value.type || '').trim();
     if (legacyType === 'fill' && !set.path) {
-        const normalized = normalizePathLikePoints(value.points, id, set.at || null);
-        set.at = normalized.at;
-        set.path = normalized.points;
-        set.closed = true;
+        const pathSource = firstNonEmptyPathLikeSource(value);
+        if (pathSource) {
+            const normalized = normalizePathLikePoints(pathSource, id, set.at || null);
+            set.at = normalized.at;
+            set.path = normalized.points;
+            set.closed = true;
+        } else if (suppliedEmptyShapeKeys(value, ['path', 'points', 'line']).length) {
+            warnIgnoredEmptyShapeFields(id, suppliedEmptyShapeKeys(value, ['path', 'points', 'line']), warnings);
+        }
     }
     if (legacyType === 'arc' && !set.curve) {
         const normalized = normalizePathLikePoints(arcToCurvePoints(value, id), id, set.at || null);
@@ -2229,7 +2279,7 @@ function applyMapOps(source: TavernMapDocument, rawOps: unknown[]): {
 function buildMapElementSchema() {
     return {
         type: 'object',
-        description: 'One map element. It must have `id` and `cat`, plus exactly one shape field: `rect`, `circle`, `path`, `curve`, `icon`, or `text`. Most elements use `at:[x,y]`; `path` and `curve` may omit `at` and let the first point become the anchor.',
+        description: 'One map element. It must have `id` and `cat`, plus exactly one shape field: `rect`, `circle`, `path`, `curve`, `icon`, or `text`. Omit unused shape keys entirely; never send empty `path:[]`, `curve:[]`, `points:[]`, or `line:[]`. Most elements use `at:[x,y]`; `path` and `curve` may omit `at` and let the first point become the anchor.',
         properties: {
             id: {
                 type: 'string',
@@ -2271,12 +2321,12 @@ function buildMapElementSchema() {
             path: {
                 type: 'array',
                 items: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
-                description: 'Polyline point array. With `at`, points are relative offsets. Without `at`, points are absolute coordinates and the first point becomes the anchor.',
+                description: 'Polyline point array with at least two points. Omit this key for non-line elements; do not send an empty array. With `at`, points are relative offsets. Without `at`, points are absolute coordinates and the first point becomes the anchor.',
             },
             curve: {
                 type: 'array',
                 items: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
-                description: 'Smooth curve point array. The anchor and relative/absolute rules are the same as `path`.',
+                description: 'Smooth curve point array with at least two points. Omit this key for non-curve elements; do not send an empty array. The anchor and relative/absolute rules are the same as `path`.',
             },
             icon: {
                 type: 'string',
@@ -2325,8 +2375,8 @@ function buildPatchSetSchema() {
             certainty: { type: 'string', enum: [...TAVERN_MAP_CERTAINTIES], description: 'Map element certainty enum. Use confirmed to clear stored uncertainty.' },
             rect: { ...pointPair, description: 'Map element rectangle size `[width,height]`.' },
             circle: { type: 'number', description: 'Map element circle radius.' },
-            path: { ...pointList, description: 'Map element polyline points.' },
-            curve: { ...pointList, description: 'Map element curve points.' },
+            path: { ...pointList, description: 'Map element polyline points. Omit this key unless changing the element into a real path with at least two points; do not send an empty array.' },
+            curve: { ...pointList, description: 'Map element curve points. Omit this key unless changing the element into a real curve with at least two points; do not send an empty array.' },
             icon: { type: 'string', enum: [...MAP_ICON_NAMES], description: 'Map element icon.' },
             text: { type: 'string', description: 'Map label text. Empty string clears source/derived label text.' },
             actorKey: { type: 'string', description: 'Map actor identity key for cat:"actor".' },
@@ -2411,6 +2461,8 @@ export function getTavernStateToolDefinitions(): Array<{ type: 'function'; funct
                     'For `tavern.map`, canonical ops are `meta`, `add`, `modify`, and `remove`. One MapPatch call is one atomic transaction and becomes exactly one revision when it saves.',
                     'Use `meta` to update document fields such as name, viewBox, theme, status, mood, or hint. Mood enum is neutral/warm/cold/dark/mystic/danger/calm; write it only when the scene facts support it.',
                     'Each element has `id` and `cat`, plus exactly one shape field: `rect`, `circle`, `path`, `curve`, `icon`, or `text`. Most elements use `at:[x,y]`; `path` and `curve` may omit `at` and use the first point as the anchor.',
+                    'Omit unused shape keys entirely. Never send empty `path:[]`, `curve:[]`, `points:[]`, or `line:[]`; for a rectangular room use only `rect`, for the player marker use only `circle`.',
+                    'Minimal first scene-map example: `{"docType":"tavern.map","docId":"main","activate":true,"ops":[{"op":"meta","set":{"name":"测试房间","viewBox":[0,0,320,220],"status":"active"}},{"op":"add","element":{"id":"room","cat":"wall","at":[30,30],"rect":[240,140],"text":"房间"}},{"op":"add","element":{"id":"player","cat":"actor","actorKey":"player","at":[150,110],"circle":8,"text":"玩家"}}]}`.',
                     'Use semantic material/certainty instead of renderer styling. Material enum is unknown/wood/stone/tile/carpet/blood/water/grass/dirt/snow/metal/rune/warm-light/cold-light/shadow. Certainty enum is confirmed/inferred/unknown; omit confirmed fields.',
                     'Use cat:"terrain" for ground/floor, cat:"light" for light/glow/shadow areas, and material for appearance. Do not use floor, ground, region, subtype, opacity, zIndex, rotation, visual scale, blur, or custom fill colors in new map patches.',
                     'For `cat:"actor"`, optional `actorKey` is the full-session identity key. If omitted, the element id is used. The runtime keeps only the latest actor with the same final key across all map documents.',
@@ -2420,7 +2472,7 @@ export function getTavernStateToolDefinitions(): Array<{ type: 'function'; funct
                     'For `tavern.atlas/main`, use only `upsert-location`, `remove-location`, `upsert-link`, `remove-link`, and `move-actor`. There is no set-active-location op.',
                     'Atlas links may omit `id`. The default link id is `link:${sorted(from,to).join(":")}:${kind}` for bidirectional links and `link:${from}:${to}:${kind}` for `bidirectional:false`. Use an explicit id only when two locations need multiple same-kind links.',
                     'Move the player between places with `move-actor` and `actorKey:"player"`. That updates atlas.activeLocationKey, marks the location visited, and syncs activeMapDocId when the location has mapDocId. Non-player actors do not change the current location.',
-                    'Pass `activate:true` only for `tavern.map` to make that map document active for map tools. Do not use map activate to represent player movement.',
+                    'Pass `activate:true` only for `tavern.map` to make that map document active for map tools. Activate-only calls may omit `ops` or pass `ops:[]`. Do not use map activate to represent player movement.',
                     '`meta.viewBox` is the camera. Changing it does not move elements. Move actors by changing their `at`, then adjust `viewBox` only if the camera should follow.',
                     'The `ops` argument must be a real JSON array, not a quoted JSON string. With `dryRun:true`, validate without saving or incrementing revision.',
                     'Legacy `init`, `reset`, and `replace` input is still absorbed at runtime, but do not rely on it in new calls.',
@@ -2436,7 +2488,7 @@ export function getTavernStateToolDefinitions(): Array<{ type: 'function'; funct
                         desc: { type: 'string', description: 'Short one-line summary of this turn’s spatial update.' },
                         ops: {
                             type: 'array',
-                            description: 'Patch ops as one atomic transaction. For maps use `meta/add/modify/remove`. For atlas use `upsert-location/remove-location/upsert-link/remove-link/move-actor`.',
+                            description: 'Patch ops as one atomic transaction. Required unless `activate:true` is only switching an existing scene map. For maps use `meta/add/modify/remove`. For atlas use `upsert-location/remove-location/upsert-link/remove-link/move-actor`.',
                             items: {
                                 type: 'object',
                                 properties: {
@@ -2452,14 +2504,13 @@ export function getTavernStateToolDefinitions(): Array<{ type: 'function'; funct
                                     bidirectional: { type: 'boolean', description: 'Atlas link direction flag. Defaults true.' },
                                     unset: { type: 'array', items: { type: 'string', enum: ['parent', 'mapDocId', 'aliases', 'brief'] }, description: 'Atlas upsert-location optional fields to remove.' },
                                     set: patchSetSchema,
-                                    element: { ...mapElementSchema, description: 'Full element object for `add`.' },
+                                    element: { ...mapElementSchema, description: 'Full element object for `add`. Use exactly one shape key and omit unused shape keys; never send empty `path:[]`, `curve:[]`, `points:[]`, or `line:[]`.' },
                                 },
                                 required: ['op'],
                                 additionalProperties: false,
                             },
                         },
                     },
-                    required: ['ops'],
                     additionalProperties: false,
                 },
             },
@@ -2738,10 +2789,10 @@ export async function executeTavernStateTool(
         }
 
         if (normalizedToolName === TAVERN_STATE_TOOL_NAMES.PATCH) {
-            if (!Array.isArray(args.ops)) {
+            if (!Array.isArray(args.ops) && args.activate !== true) {
                 return { ok: false, summary: 'MapPatch ops must be a real array.', docType, docId, error: 'state_patch_ops_must_be_array' };
             }
-            const ops = args.ops as unknown[];
+            const ops = Array.isArray(args.ops) ? args.ops as unknown[] : [];
             const activate = args.activate === true;
             if (!ops.length && !activate) {
                 return { ok: false, summary: 'MapPatch ops are required unless activate:true is used to switch active map.', docType, docId, error: 'state_patch_ops_required' };
@@ -2784,6 +2835,7 @@ export async function executeTavernStateTool(
                                 appliedCount: 0,
                                 satisfiedCount: patch.satisfiedCount,
                                 failedCount: patch.failed.length,
+                                failed: patch.failed,
                                 warnings: patch.warnings,
                                 error: 'state_patch_failed',
                                 details: patch.failed,
@@ -2934,6 +2986,7 @@ export async function executeTavernStateTool(
                             appliedCount: 0,
                             satisfiedCount: patch.satisfiedCount,
                             failedCount: patch.failed.length,
+                            failed: patch.failed,
                             warnings: patch.warnings,
                             error: 'state_patch_failed',
                             details: patch.failed,

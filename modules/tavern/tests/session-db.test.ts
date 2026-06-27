@@ -1414,6 +1414,9 @@ test('MapPatch tool schema documents canonical ops and camera semantics', () => 
     assert.match(patchTool?.function.description || '', /Move the player between places with `move-actor`/);
     assert.match(patchTool?.function.description || '', /one atomic transaction/i);
     assert.match(patchTool?.function.description || '', /`meta\.viewBox` is the camera/i);
+    assert.match(patchTool?.function.description || '', /Activate-only calls may omit `ops` or pass `ops:\[\]`/i);
+    assert.match(patchTool?.function.description || '', /Never send empty `path:\[\]`, `curve:\[\]`, `points:\[\]`, or `line:\[\]`/i);
+    assert.match(patchTool?.function.description || '', /Minimal first scene-map example/i);
     assert.match(patchTool?.function.description || '', /Mood enum is neutral\/warm\/cold\/dark\/mystic\/danger\/calm/i);
     assert.match(patchTool?.function.description || '', /Material enum is unknown\/wood\/stone\/tile\/carpet\/blood\/water\/grass\/dirt\/snow\/metal\/rune\/warm-light\/cold-light\/shadow/i);
     assert.match(patchTool?.function.description || '', /Use cat:"terrain" for ground\/floor, cat:"light"/i);
@@ -1423,10 +1426,15 @@ test('MapPatch tool schema documents canonical ops and camera semantics', () => 
     assert.match(patchTool?.function.description || '', /Do not put house\/castle\/village\/forest\/temple\/shop icons inside a scene map/i);
     assert.match(parameters.properties?.docId?.description || '', /atlas always uses `main`/i);
     assert.match(parameters.properties?.activate?.description || '', /With `ops:\[\]`, this only switches the active map/i);
+    assert.equal(Array.isArray((parameters as { required?: string[] }).required) && (parameters as { required?: string[] }).required.includes('ops'), false);
+    assert.match(parameters.properties?.ops?.description || '', /Required unless `activate:true`/i);
     assert.match(opsProperties.op?.description || '', /Map ops and atlas ops are selected by docType/i);
     assert.match(opsProperties.set?.description || '', /For map `meta`\/`modify`/i);
     assert.match(opsProperties.element?.description || '', /Full element object for `add`/i);
+    assert.match(opsProperties.element?.description || '', /never send empty `path:\[\]`/i);
     assert.match(elementProperties.icon?.description || '', /Do not put place icons/i);
+    assert.match(elementProperties.path?.description || '', /do not send an empty array/i);
+    assert.match(elementProperties.curve?.description || '', /do not send an empty array/i);
     assert.deepEqual(elementProperties.material?.enum, [
         'unknown',
         'wood',
@@ -2740,6 +2748,135 @@ test('map active resolution falls back to main consistently across workspace, to
     const digests = await listTavernStructuredStateDigests(session.id);
     assert.deepEqual(digests.map((digest) => digest.docId), ['main']);
     assert.match(digests[0]?.digest || '', /主地图|广场/);
+});
+
+test('MapPatch activate-only calls may omit ops', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Activate without ops' });
+    await executeTavernStateTool(session.id, 'MapPatch', {
+        docId: 'office',
+        ops: [
+            { op: 'meta', set: { name: 'Office', viewBox: [0, 0, 320, 220], status: 'active' } },
+            { op: 'add', element: { id: 'office-floor', at: [20, 20], rect: [220, 150], cat: 'terrain' } },
+        ],
+    });
+    await executeTavernStateTool(session.id, 'MapPatch', {
+        docId: 'main',
+        ops: [
+            { op: 'meta', set: { name: 'Main', viewBox: [0, 0, 320, 220], status: 'active' } },
+            { op: 'add', element: { id: 'main-floor', at: [20, 20], rect: [220, 150], cat: 'terrain' } },
+        ],
+    });
+
+    const activate = await executeTavernStateTool(session.id, 'MapPatch', {
+        docId: 'office',
+        activate: true,
+    });
+    const summary = await executeTavernStateTool(session.id, 'MapInspect', { mode: 'summary' });
+
+    assert.equal(activate.ok, true);
+    assert.match(activate.summary, /Activated tavern\.map\/office/);
+    assert.equal(summary.docId, 'office');
+});
+
+test('MapPatch ignores empty path and curve pollution when a real shape is present', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Map empty shape repair' });
+    const result = await executeTavernStateTool(session.id, 'MapPatch', {
+        docId: 'main',
+        activate: true,
+        ops: [{
+            op: 'add',
+            element: {
+                id: 'outer-wall',
+                cat: 'wall',
+                at: [20, 20],
+                rect: [260, 180],
+                path: [],
+                curve: [],
+                text: '房间',
+            },
+        }],
+    });
+    const document = await executeTavernStateTool(session.id, 'MapInspect', { mode: 'document' });
+    const element = (document.document as TavernMapDocument).elements.find((item) => item.id === 'outer-wall');
+    const patches = await listTavernStructuredStatePatches({ sessionId: session.id });
+    const add = (patches[0]?.ops as Array<{ op?: string; element?: Record<string, unknown> }> | undefined)
+        ?.find((op) => op.op === 'add' && op.element?.id === 'outer-wall');
+
+    assert.equal(result.ok, true);
+    assert.match((result.warnings || []).join('\n'), /Ignored empty shape field\(s\).*path/i);
+    assert.match((result.warnings || []).join('\n'), /Ignored empty shape field\(s\).*curve/i);
+    assert.deepEqual(element?.rect, [260, 180]);
+    assert.equal(Array.isArray(element?.path), false);
+    assert.equal(Array.isArray(element?.curve), false);
+    assert.equal(Array.isArray(add?.element?.path), false);
+    assert.equal(Array.isArray(add?.element?.curve), false);
+});
+
+test('MapPatch rejects empty path-only elements with actionable guidance', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Map empty path failure' });
+    const result = await executeTavernStateTool(session.id, 'MapPatch', {
+        ops: [{
+            op: 'add',
+            element: {
+                id: 'bad-line',
+                cat: 'road',
+                path: [],
+            },
+        }],
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.error, 'state_patch_failed');
+    assert.equal(result.failed?.[0]?.error, 'map_element_points_required:bad-line');
+    assert.match(result.failed?.[0]?.hint || '', /omit empty path\/curve fields/i);
+    assert.match(result.failed?.[0]?.hint || '', /rect\/circle\/icon\/text/i);
+});
+
+test('MapPatch modify ignores empty path pollution when replacing shape', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Map modify empty path repair' });
+    await executeTavernStateTool(session.id, 'MapPatch', {
+        ops: [{
+            op: 'add',
+            element: { id: 'table', cat: 'furniture', at: [40, 40], rect: [80, 30] },
+        }],
+    });
+    const result = await executeTavernStateTool(session.id, 'MapPatch', {
+        ops: [{
+            op: 'modify',
+            id: 'table',
+            set: {
+                rect: [90, 36],
+                path: [],
+                curve: [],
+            },
+        }],
+    });
+    const document = await executeTavernStateTool(session.id, 'MapInspect', { mode: 'document' });
+    const element = (document.document as TavernMapDocument).elements.find((item) => item.id === 'table');
+    const patches = await listTavernStructuredStatePatches({ sessionId: session.id });
+    const modify = (patches.at(-1)?.ops as Array<{ op?: string; id?: string; set?: Record<string, unknown> }> | undefined)
+        ?.find((op) => op.op === 'modify' && op.id === 'table');
+
+    assert.equal(result.ok, true);
+    assert.match((result.warnings || []).join('\n'), /Ignored empty shape field\(s\).*path/i);
+    assert.match((result.warnings || []).join('\n'), /Ignored empty shape field\(s\).*curve/i);
+    assert.deepEqual(element?.rect, [90, 36]);
+    assert.equal(Array.isArray(element?.path), false);
+    assert.equal(Array.isArray(element?.curve), false);
+    assert.equal(Array.isArray(modify?.set?.path), false);
+    assert.equal(Array.isArray(modify?.set?.curve), false);
 });
 
 test('StatePatch dedupes actors by actorKey across map documents', async () => {
@@ -5474,6 +5611,172 @@ test('tavern manager chat treats local tool failures as recoverable trace items'
     assert.match(run?.outputText || '', /不能直接写/);
     assert.equal((run?.toolTrace as Array<{ ok?: boolean; error?: string }>)?.[0]?.ok, false);
     assert.equal((run?.toolTrace as Array<{ ok?: boolean; error?: string }>)?.[0]?.error, 'memory_path_invalid');
+});
+
+test('tavern manager chat returns invalid tool arguments without executing the tool', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Manager invalid tool args' });
+    let calls = 0;
+    let secondRoundToolResult = '';
+    const result = await runXbTavernManagerChat({
+        sessionId: session.id,
+        agentConfig: {},
+        question: '尝试坏参数。',
+        executeManagerOnce: async (options) => {
+            calls += 1;
+            if (calls === 1) {
+                return {
+                    text: '',
+                    toolCalls: [{
+                        id: 'bad-map-args',
+                        name: 'MapPatch',
+                        arguments: '[]',
+                    }],
+                };
+            }
+            secondRoundToolResult = String(options.messages?.find((message) => message.role === 'tool')?.content || '');
+            return { text: 'MapPatch 参数不是对象，我已停止执行。' };
+        },
+    });
+    const toolResult = JSON.parse(result.protocolMessages.find((message) => message.role === 'tool')?.content || '{}');
+    const storedArgs = JSON.parse(result.protocolMessages.find((message) => message.role === 'assistant')?.toolCalls?.[0]?.arguments || '{}');
+
+    assert.equal(result.ok, true);
+    assert.equal(calls, 2);
+    assert.equal(toolResult.ok, false);
+    assert.equal(toolResult.error, 'invalid_tool_arguments');
+    assert.match(toolResult.schemaHint, /Expected MapPatch arguments/i);
+    assert.equal(storedArgs.invalidToolArguments, true);
+    assert.match(secondRoundToolResult, /invalid_tool_arguments/);
+    assert.equal((await listTavernStructuredStatePatches({ sessionId: session.id })).length, 0);
+});
+
+test('tavern manager chat keeps protocol messages when aborted after a tool result', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Manager abort protocol' });
+    const controller = new AbortController();
+    let calls = 0;
+    const result = await runXbTavernManagerChat({
+        sessionId: session.id,
+        agentConfig: {},
+        question: '读地图后停止。',
+        signal: controller.signal,
+        executeManagerOnce: async () => {
+            calls += 1;
+            return {
+                text: '先读地图。',
+                toolCalls: [{
+                    id: 'read-map-before-abort',
+                    name: 'MapInspect',
+                    arguments: { docType: 'tavern.map', docId: 'main', mode: 'summary' },
+                }],
+            };
+        },
+        onProtocolEvent: (event) => {
+            if (event.type === 'tool_result') {
+                controller.abort();
+            }
+        },
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.error, 'manager_aborted');
+    assert.equal(calls, 1);
+    assert.deepEqual(result.protocolMessages.map((message) => message.role), ['assistant', 'tool']);
+    assert.equal(result.protocolMessages[0]?.toolCalls?.[0]?.name, 'MapInspect');
+    assert.match(result.protocolMessages[1]?.content || '', /"ok": true/);
+    assert.equal(result.managerRun.status, 'cancelled');
+});
+
+test('tavern manager chat injects a light brake after repeated MapPatch failures', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Manager light brake' });
+    let calls = 0;
+    let brakePrompt = '';
+    const badPatchCall = {
+        id: 'bad-map-patch',
+        name: 'MapPatch',
+        arguments: {
+            ops: [{
+                op: 'add',
+                element: { id: 'bad-line', cat: 'road', path: [] as Array<[number, number]> },
+            }],
+        },
+    };
+    const result = await runXbTavernManagerChat({
+        sessionId: session.id,
+        agentConfig: {},
+        question: '画个地图。',
+        executeManagerOnce: async (options) => {
+            calls += 1;
+            if (calls <= 3) {
+                return {
+                    text: '尝试写地图。',
+                    toolCalls: [badPatchCall],
+                };
+            }
+            brakePrompt = JSON.stringify(options.messages || []);
+            return { text: 'MapPatch 连续失败，我已停止重复。' };
+        },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(calls, 4);
+    assert.match(brakePrompt, /工具失败提示/);
+    assert.match(brakePrompt, /省略空 path\/curve 字段/);
+});
+
+test('tavern manager chat keeps session tool responses when light brake triggers', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Manager session light brake' });
+    let calls = 0;
+    let hintedToolResponse = '';
+    const badPatchCall = {
+        id: 'bad-map-patch-session',
+        name: 'MapPatch',
+        arguments: {
+            ops: [{
+                op: 'add',
+                element: { id: 'bad-session-line', cat: 'road', path: [] as Array<[number, number]> },
+            }],
+        },
+    };
+    const executeManagerOnce = Object.assign(async (
+        options: Parameters<NonNullable<Parameters<typeof runXbTavernManagerChat>[0]['executeManagerOnce']>>[0],
+    ) => {
+        calls += 1;
+        if (calls > 1) {
+            assert.equal(options.toolResponses?.[0]?.name, 'MapPatch');
+        }
+        if (calls <= 3) {
+            return {
+                text: '尝试写地图。',
+                toolCalls: [badPatchCall],
+            };
+        }
+        hintedToolResponse = JSON.stringify(options.toolResponses?.[0]?.response || {});
+        return { text: 'MapPatch 连续失败，我已停止重复。' };
+    }, { supportsSessionToolLoop: true }) as Parameters<typeof runXbTavernManagerChat>[0]['executeManagerOnce'];
+
+    const result = await runXbTavernManagerChat({
+        sessionId: session.id,
+        agentConfig: {},
+        question: '画个地图。',
+        executeManagerOnce,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(calls, 4);
+    assert.match(hintedToolResponse, /lightBrakeHint/);
+    assert.match(hintedToolResponse, /省略空 path\/curve 字段/);
 });
 
 test('tavern manager messages are session-scoped', async () => {

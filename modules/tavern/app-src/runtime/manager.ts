@@ -1,5 +1,6 @@
 import { createAgentAdapter, resolveActiveProviderConfig } from '../../../agent-core/provider-config.js';
 import * as contextTokens from '../../../agent-core/runtime/context-tokens.js';
+import { createLightBrakeController } from '../../../agent-core/runtime/light-brake.js';
 import {
     buildProviderAssistantToolCallMessage,
     buildProviderToolResultMessage,
@@ -207,17 +208,62 @@ function safeJson(value: unknown): string {
     }
 }
 
-function safeJsonParse(value: unknown, fallback: Record<string, unknown> = {}): Record<string, unknown> {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-        return value as Record<string, unknown>;
+function getManagerToolArgumentSchemaHint(toolName = ''): string {
+    if (toolName === TAVERN_STATE_TOOL_NAMES.PATCH) {
+        return 'Expected MapPatch arguments: {"docType":"tavern.map","docId":"main","activate":true,"ops":[{"op":"meta","set":{"name":"...","viewBox":[0,0,320,220],"status":"active"}},{"op":"add","element":{"id":"room","cat":"wall","at":[30,30],"rect":[240,140]}},{"op":"add","element":{"id":"player","cat":"actor","actorKey":"player","at":[150,110],"circle":8}}]}. Use one shape key per element and omit empty path/curve fields.';
+    }
+    if (toolName === 'Edit') {
+        return 'Expected Edit arguments: {"filePath":"memory/state.md","edits":[{"oldString":"...","newString":"..."}]} or line-range edits with startLine/endLine/newString.';
+    }
+    if (toolName === 'Write') {
+        return 'Expected Write arguments: {"filePath":"memory/state.md","content":"..."}';
+    }
+    return 'Expected tool arguments must be a valid JSON object matching the tool schema.';
+}
+
+function extractPathFromRawToolArguments(rawArguments = ''): string {
+    const text = String(rawArguments || '');
+    const match = text.match(/"(?:filePath|path|docId|fromPath)"\s*:\s*"([^"]*)"/);
+    return match ? match[1] : '';
+}
+
+function buildInvalidManagerToolArgumentsResult(toolCall: { name?: string; arguments?: unknown }, error: unknown): TavernMemoryToolResult {
+    const rawArguments = typeof toolCall.arguments === 'string' ? toolCall.arguments : safeJson(toolCall.arguments);
+    return {
+        ok: false,
+        toolName: String(toolCall.name || ''),
+        path: extractPathFromRawToolArguments(rawArguments),
+        changed: false,
+        error: 'invalid_tool_arguments',
+        summary: 'Tool arguments are not valid JSON. The tool was not executed. Rebuild the call with valid JSON arguments.',
+        message: 'Tool arguments are not valid JSON. The tool was not executed. Rebuild the call with valid JSON arguments.',
+        raw: error instanceof Error ? error.message : String(error || 'invalid_tool_arguments'),
+        argumentLength: rawArguments.length,
+        argumentPreview: rawArguments.slice(0, 500),
+        schemaHint: getManagerToolArgumentSchemaHint(toolCall.name),
+    } as TavernMemoryToolResult;
+}
+
+function parseManagerToolArguments(toolCall: { name?: string; arguments?: unknown }): {
+    ok: boolean;
+    args: Record<string, unknown>;
+    result?: TavernMemoryToolResult;
+} {
+    if (toolCall.arguments && typeof toolCall.arguments === 'object' && !Array.isArray(toolCall.arguments)) {
+        return { ok: true, args: toolCall.arguments as Record<string, unknown> };
     }
     try {
-        const parsed = JSON.parse(String(value || '{}'));
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-            ? parsed as Record<string, unknown>
-            : fallback;
-    } catch {
-        return fallback;
+        const parsed = JSON.parse(String(toolCall.arguments || '{}').trim() || '{}');
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new Error('tool_arguments_must_be_json_object');
+        }
+        return { ok: true, args: parsed as Record<string, unknown> };
+    } catch (error) {
+        return {
+            ok: false,
+            args: {},
+            result: buildInvalidManagerToolArgumentsResult(toolCall, error),
+        };
     }
 }
 
@@ -603,6 +649,14 @@ async function runManagerAgentWithTools(input: {
     let lastFailedToolSignature = '';
     let failedToolRepeatCount = 0;
     let toolCircuitBreakerTripped = false;
+    let lightBrakeInjected = false;
+    const lightBrake = createLightBrakeController({
+        threshold: 3,
+        getMessageText: (name: string, code: string, count: number) => [
+            `[工具失败提示] ${name} 已连续 ${count} 次因为 ${code} 失败。`,
+            '不要继续原样重复同一个工具调用。先按工具错误改参数；MapPatch 首图优先用 meta + rect 房间 + player circle，并省略空 path/curve 字段。若仍无法修复，直接向用户汇报阻塞点。',
+        ].join('\n'),
+    });
     const emitProtocolEvent = (event: TavernManagerProtocolEvent) => {
         input.onProtocolEvent?.(event);
     };
@@ -697,14 +751,31 @@ async function runManagerAgentWithTools(input: {
             };
         }
 
+        const parsedToolCalls = toolCalls.map((toolCall) => ({
+            toolCall,
+            parsedArguments: parseManagerToolArguments(toolCall),
+        }));
+        const storedToolCalls = parsedToolCalls.map(({ toolCall, parsedArguments }) => {
+            if (parsedArguments.ok) {return toolCall;}
+            const rawArguments = String(toolCall.arguments || '');
+            return {
+                ...toolCall,
+                arguments: safeJson({
+                    invalidToolArguments: true,
+                    argumentLength: rawArguments.length,
+                    argumentPreview: rawArguments.slice(0, 500),
+                }),
+            };
+        });
+
         const assistantToolMessage = buildProviderAssistantToolCallMessage({
             ...resultRecord,
             text: roundVisibleText,
-        }, toolCalls, {
+        }, storedToolCalls, {
             fallbackPrefix: 'tavern-manager-tool',
         }) as unknown as XbTavernMessage;
         assistantToolMessage.thoughts = resultThoughts;
-        assistantToolMessage.toolCalls = toolCalls.map((toolCall) => ({
+        assistantToolMessage.toolCalls = storedToolCalls.map((toolCall) => ({
             id: String(toolCall.id || ''),
             name: String(toolCall.name || ''),
             arguments: String(toolCall.arguments || '{}'),
@@ -715,8 +786,9 @@ async function runManagerAgentWithTools(input: {
         emitProtocolEvent({ type: 'assistant_tool_round', message: assistantToolMessage });
 
         const toolResponses: TavernToolLoopResponse[] = [];
-        for (const [toolIndex, toolCall] of toolCalls.entries()) {
-            const args = safeJsonParse(toolCall.arguments, {});
+        for (const [toolIndex, parsed] of parsedToolCalls.entries()) {
+            const { toolCall, parsedArguments } = parsed;
+            const args = parsedArguments.args;
             throwIfManagerAborted(input.signal);
             const traceEntry: Record<string, unknown> = {
                 id: String(toolCall.id || ''),
@@ -733,40 +805,45 @@ async function runManagerAgentWithTools(input: {
             };
             toolTrace.push(traceEntry);
             await persistRunningManagerToolTrace(input.managerRunId, toolTrace);
-            const toolResult = input.caller === 'auto' && !isAutoManagerToolAllowed(toolCall.name, input.sessionContract)
-                ? buildDeniedAutoManagerToolResult(toolCall.name, input.sessionContract)
-                : isSourceFileToolName(toolCall.name)
-                    ? await executeTavernSourceFileTool(input.sessionId, toolCall.name, args, {
-                        caller: input.caller,
-                        managerRunId: input.managerRunId,
-                        turn: input.turn,
-                        sourceUserOrder: input.userOrder,
-                        sourceAssistantOrder: input.assistantOrder,
-                        beforeWriteGuard: input.beforeWriteGuard,
-                        contextSnapshot: input.contextSnapshot,
-                    })
-                    : isStateToolName(toolCall.name)
-                        ? await executeTavernStateTool(input.sessionId, toolCall.name, args, {
-                            caller: input.caller,
-                            managerRunId: input.managerRunId,
-                            sourceUserOrder: input.userOrder,
-                            sourceAssistantOrder: input.assistantOrder,
-                            beforeWriteGuard: input.beforeWriteGuard,
-                        })
-                        : isTaskToolName(toolCall.name)
-                            ? await executeTavernTaskTool(input.sessionId, toolCall.name, args, {
-                                caller: input.caller,
-                                managerRunId: input.managerRunId,
-                                sourceUserOrder: input.userOrder,
-                                sourceAssistantOrder: input.assistantOrder,
-                                beforeWriteGuard: input.beforeWriteGuard,
-                            })
-                            : {
-                                ok: false,
-                                summary: `${toolCall.name || 'tool'} 不可用。`,
-                                changed: false,
-                                error: 'manager_tool_not_available',
-                            } as TavernMemoryToolResult;
+            let toolResult: TavernMemoryToolResult | TavernStateToolResult | TavernTaskToolResult;
+            if (!parsedArguments.ok) {
+                toolResult = parsedArguments.result!;
+            } else if (input.caller === 'auto' && !isAutoManagerToolAllowed(toolCall.name, input.sessionContract)) {
+                toolResult = buildDeniedAutoManagerToolResult(toolCall.name, input.sessionContract);
+            } else if (isSourceFileToolName(toolCall.name)) {
+                toolResult = await executeTavernSourceFileTool(input.sessionId, toolCall.name, args, {
+                    caller: input.caller,
+                    managerRunId: input.managerRunId,
+                    turn: input.turn,
+                    sourceUserOrder: input.userOrder,
+                    sourceAssistantOrder: input.assistantOrder,
+                    beforeWriteGuard: input.beforeWriteGuard,
+                    contextSnapshot: input.contextSnapshot,
+                });
+            } else if (isStateToolName(toolCall.name)) {
+                toolResult = await executeTavernStateTool(input.sessionId, toolCall.name, args, {
+                    caller: input.caller,
+                    managerRunId: input.managerRunId,
+                    sourceUserOrder: input.userOrder,
+                    sourceAssistantOrder: input.assistantOrder,
+                    beforeWriteGuard: input.beforeWriteGuard,
+                });
+            } else if (isTaskToolName(toolCall.name)) {
+                toolResult = await executeTavernTaskTool(input.sessionId, toolCall.name, args, {
+                    caller: input.caller,
+                    managerRunId: input.managerRunId,
+                    sourceUserOrder: input.userOrder,
+                    sourceAssistantOrder: input.assistantOrder,
+                    beforeWriteGuard: input.beforeWriteGuard,
+                });
+            } else {
+                toolResult = {
+                    ok: false,
+                    summary: `${toolCall.name || 'tool'} 不可用。`,
+                    changed: false,
+                    error: 'manager_tool_not_available',
+                } as TavernMemoryToolResult;
+            }
             const resultPath = 'path' in toolResult ? toolResult.path : '';
             const resultStateKey = 'docType' in toolResult && toolResult.docType ? `${toolResult.docType}/${toolResult.docId || ''}` : '';
             const resultTaskKey = 'eventId' in toolResult && toolResult.eventId ? `event/${toolResult.eventId}` : '';
@@ -808,6 +885,7 @@ async function runManagerAgentWithTools(input: {
                 response: toolResult,
             });
             if (!toolResult.ok) {
+                lightBrake.record(String(toolCall.name || ''), String(toolResult.error || toolResult.summary || 'tool_failed'));
                 const signature = buildToolFailureSignature(String(toolCall.name || ''), args, String(toolResult.error || ''));
                 if (signature === lastFailedToolSignature) {
                     failedToolRepeatCount += 1;
@@ -816,8 +894,29 @@ async function runManagerAgentWithTools(input: {
                     failedToolRepeatCount = 1;
                 }
             } else {
+                lightBrake.reset();
+                lightBrakeInjected = false;
                 lastFailedToolSignature = '';
                 failedToolRepeatCount = 0;
+            }
+        }
+        const lightBrakeMessage = lightBrake.getMessage();
+        if (lightBrakeMessage && !lightBrakeInjected) {
+            lightBrakeInjected = true;
+            input.messages.push({
+                role: 'system',
+                content: lightBrakeMessage,
+            });
+            const lastToolResponseIndex = toolResponses.length - 1;
+            const lastToolResponse = lastToolResponseIndex >= 0 ? toolResponses[lastToolResponseIndex] : null;
+            if (lastToolResponse?.response && typeof lastToolResponse.response === 'object' && !Array.isArray(lastToolResponse.response)) {
+                toolResponses[lastToolResponseIndex] = {
+                    ...lastToolResponse,
+                    response: {
+                        ...lastToolResponse.response as Record<string, unknown>,
+                        lightBrakeHint: lightBrakeMessage,
+                    },
+                };
             }
         }
         if (failedToolRepeatCount >= 3) {
@@ -1070,6 +1169,12 @@ async function runManagerTask(input: {
     let changedTasks: string[] = [];
     let protocolMessages: XbTavernMessage[] = [];
     const stopHeartbeat = startManagerRunHeartbeat(managerRun.id, input.signal);
+    const relayProtocolEvent = (event: TavernManagerProtocolEvent) => {
+        if (event.type !== 'clear_stream_draft') {
+            protocolMessages.push(event.message);
+        }
+        input.onProtocolEvent?.(event);
+    };
     try {
         const result = await runManagerAgentWithTools({
             sessionId: input.sessionId,
@@ -1086,7 +1191,7 @@ async function runManagerTask(input: {
             signal: input.signal,
             executeManagerOnce: input.executeManagerOnce,
             onStreamProgress: input.onStreamProgress,
-            onProtocolEvent: input.onProtocolEvent,
+            onProtocolEvent: relayProtocolEvent,
         });
         resultText = result.text;
         resultProvider = result.provider || resultProvider;
@@ -1095,7 +1200,7 @@ async function runManagerTask(input: {
         changedFiles = result.changedFiles;
         changedStates = result.changedStates;
         changedTasks = result.changedTasks;
-        protocolMessages = result.protocolMessages;
+        protocolMessages = result.protocolMessages.length ? result.protocolMessages : protocolMessages;
         if (input.requireChangedFiles && !changedFiles.length) {
             throw new Error('manager_memory_tool_required');
         }

@@ -3547,10 +3547,11 @@ async function appendManagerProtocolMessages(
     messages: XbTavernMessage[],
     fallbackText: string,
     patch: Pick<TavernManagerMessageRecord, 'provider' | 'model' | 'finishReason' | 'error'>,
+    options: { skip?: number } = {},
 ) {
     const protocolMessages = (Array.isArray(messages) ? messages : []).filter((message) => (
         message && ['assistant', 'tool'].includes(message.role)
-    ));
+    )).slice(Math.max(0, Number(options.skip) || 0));
     const finalMessages: XbTavernMessage[] = protocolMessages.length
         ? protocolMessages
         : [{ role: 'assistant' as const, content: fallbackText }];
@@ -3576,27 +3577,45 @@ async function appendManagerProtocolMessages(
         const hasToolCalls = (Array.isArray(message.toolCalls) && message.toolCalls.length)
             || (Array.isArray(message.tool_calls) && message.tool_calls.length);
         const isFinalAssistant = message.role === 'assistant' && !hasToolCalls && index === finalMessages.length - 1;
-        const appendedMessage = await appendTavernManagerMessage(sessionId, {
-            role: message.role,
-            content: isFinalAssistant
-                ? (String(message.content || '').trim() || fallbackText)
-                : String(message.content || ''),
-            name: message.name,
-            thoughts: message.thoughts,
-            providerPayload: message.providerPayload,
-            toolCalls: message.toolCalls,
-            tool_calls: message.tool_calls,
-            toolCallId: message.toolCallId || message.tool_call_id,
-            toolName: message.toolName,
-            toolDisplay: message.toolDisplay,
-            provider: message.role === 'assistant' ? patch.provider : undefined,
-            model: message.role === 'assistant' ? patch.model : undefined,
-            finishReason: message.role === 'assistant' && !hasToolCalls ? patch.finishReason : undefined,
-            error: message.role === 'assistant' && !hasToolCalls ? patch.error : false,
+        const appendedMessage = await appendManagerProtocolMessage(sessionId, message, {
+            ...patch,
+            contentFallback: isFinalAssistant ? fallbackText : '',
+            finalAssistant: isFinalAssistant,
         });
         appended.push(appendedMessage);
     }
     return appended;
+}
+
+async function appendManagerProtocolMessage(
+    sessionId: string,
+    message: XbTavernMessage,
+    patch: Pick<TavernManagerMessageRecord, 'provider' | 'model' | 'finishReason' | 'error'> & {
+        contentFallback?: string;
+        finalAssistant?: boolean;
+    },
+) {
+    const hasToolCalls = (Array.isArray(message.toolCalls) && message.toolCalls.length)
+        || (Array.isArray(message.tool_calls) && message.tool_calls.length);
+    const isFinalAssistant = message.role === 'assistant' && !hasToolCalls && patch.finalAssistant === true;
+    return await appendTavernManagerMessage(sessionId, {
+        role: message.role,
+        content: isFinalAssistant
+            ? (String(message.content || '').trim() || String(patch.contentFallback || ''))
+            : String(message.content || ''),
+        name: message.name,
+        thoughts: message.thoughts,
+        providerPayload: message.providerPayload,
+        toolCalls: message.toolCalls,
+        tool_calls: message.tool_calls,
+        toolCallId: message.toolCallId || message.tool_call_id,
+        toolName: message.toolName,
+        toolDisplay: message.toolDisplay,
+        provider: message.role === 'assistant' ? patch.provider : undefined,
+        model: message.role === 'assistant' ? patch.model : undefined,
+        finishReason: isFinalAssistant ? patch.finishReason : undefined,
+        error: isFinalAssistant ? patch.error : false,
+    });
 }
 
 async function sendManagerQuestion(
@@ -3689,6 +3708,27 @@ async function sendManagerQuestion(
                 managerChatMessages.value = await listTavernManagerMessages(managerSessionId);
             }
         }
+        let persistedProtocolMessages = 0;
+        let protocolPersistFailed = false;
+        let protocolPersistQueue = Promise.resolve();
+        const queueProtocolMessagePersist = (event: TavernManagerProtocolEvent) => {
+            if (event.type !== 'assistant_tool_round' && event.type !== 'tool_result') {return;}
+            protocolPersistQueue = protocolPersistQueue.then(async () => {
+                if (protocolPersistFailed) {return;}
+                try {
+                    await appendManagerProtocolMessage(managerSessionId, event.message, {
+                        provider: '',
+                        model: '',
+                        finishReason: '',
+                        error: false,
+                    });
+                    persistedProtocolMessages += 1;
+                } catch (error) {
+                    protocolPersistFailed = true;
+                    console.warn('[小白酒馆] 管理员工具轮次实时保存失败', error);
+                }
+            });
+        };
         const result = await runXbTavernManagerChat({
             sessionId: managerSessionId,
             agentConfig: agentConfig.value,
@@ -3700,6 +3740,7 @@ async function sendManagerQuestion(
             onProtocolEvent: (event) => {
                 managerStreamToolDraftState.reset();
                 applyManagerProtocolEvent(managerSessionId, event);
+                queueProtocolMessagePersist(event);
             },
             onStreamProgress: (snapshot) => {
                 const streamPatch = managerStreamToolDraftState.update(snapshot);
@@ -3710,13 +3751,14 @@ async function sendManagerQuestion(
                 });
             },
         });
-        const finalText = String(result.text || '').trim() || '没有返回内容。';
+        await protocolPersistQueue;
+        const finalText = String(result.text || '').trim() || (controller.signal.aborted ? '已停止。' : '没有返回内容。');
         await appendManagerProtocolMessages(managerSessionId, result.protocolMessages, finalText, {
             provider: result.provider,
             model: result.model,
-            finishReason: result.ok ? 'stop' : 'error',
+            finishReason: result.ok ? 'stop' : controller.signal.aborted ? 'aborted' : 'error',
             error: result.ok ? false : true,
-        });
+        }, { skip: persistedProtocolMessages });
         clearManagerLiveProtocolState(managerSessionId);
         if (selectedSessionId.value === managerSessionId) {
             managerChatMessages.value = await listTavernManagerMessages(managerSessionId);

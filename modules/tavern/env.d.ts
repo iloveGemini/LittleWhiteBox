@@ -165,6 +165,14 @@ declare module '*.js' {
     export function loadFirstPartyIframeCacheKey(path: string): Promise<string>;
     export function isTrustedMessage(event: MessageEvent, iframe: HTMLIFrameElement | null, source: string): boolean;
     export function postToIframe(iframe: HTMLIFrameElement, message: unknown, source: string): boolean;
+    export function createLightBrakeController(options?: {
+        threshold?: number;
+        getMessageText?: (toolName: string, errorCode: string, count: number) => string;
+    }): {
+        record(toolName: string, errorCode: string): void;
+        reset(): void;
+        getMessage(): string;
+    };
     export function createAgentAdapter(
         config: Record<string, unknown>,
         options?: Record<string, unknown>,

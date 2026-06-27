@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
-import { useTavernCharacterContext, useTavernSessionContext } from './tavern-app-context';
-import { useTavernEphemeralDisclosureScope } from './useTavernEphemeralDisclosureScope';
+import { useTavernCharacterContext, useTavernSessionContext, useTavernShellContext } from './tavern-app-context';
 import type { TavernSessionRecord } from '../../shared/session-db';
 
 const {
@@ -39,11 +38,12 @@ const {
     selectSession: openSessionById,
     sessionFloorLabel,
 } = useTavernSessionContext();
+const shell = useTavernShellContext();
 
 const listRef = ref<HTMLElement | null>(null);
 const sessionArchiveOpen = ref(false);
 const characterDefinitionOpen = ref(false);
-const advancedDefinitionDisclosure = useTavernEphemeralDisclosureScope();
+const greetingPickerOpen = ref(false);
 
 const greetingOptions = computed(() => {
     const selected = selectedCharacter.value;
@@ -59,6 +59,12 @@ const selectedGreetingText = computed(() => {
     return greetingOptions.value[index] || '';
 });
 const hasMultipleGreetings = computed(() => greetingOptions.value.length > 1);
+const greetingHeaderLabel = computed(() => {
+    const total = greetingOptions.value.length;
+    if (!total) {return '开场白';}
+    const index = Math.min(Math.max(0, Number(selectedGreetingIndex.value) || 0), total - 1);
+    return `开场白 ${index + 1} / ${total} - ${greetingLabel(index)}`;
+});
 const selectedCharacterSessionCount = computed(() => selectedCharacterSessions.value.length);
 const characterDefinitionFields = computed(() => {
     const character = selectedCharacter.value;
@@ -121,10 +127,6 @@ function handleArchiveKeydown(event: KeyboardEvent) {
     }
 }
 
-function characterDataDisclosureId(key: string) {
-    return `character-data:${selectedCharacter.value?.characterKey || 'none'}:${key}`;
-}
-
 function greetingLabel(index: number) {
     return index === 0 ? '主开场白' : `备用 ${index}`;
 }
@@ -166,6 +168,29 @@ function closeCharacterDefinition() {
     characterDefinitionOpen.value = false;
 }
 
+async function openGreetingPicker() {
+    if (!selectedCharacter.value) {return;}
+    if (!hasMultipleGreetings.value) {
+        await shell.alertTavernDialog({
+            title: '其他开场',
+            message: '暂无备用开场白。',
+            confirmText: '知道了',
+        });
+        return;
+    }
+    greetingPickerOpen.value = true;
+}
+
+function closeGreetingPicker() {
+    greetingPickerOpen.value = false;
+}
+
+function chooseGreeting(index: number) {
+    if (pendingCharacterSessionKey.value) {return;}
+    selectGreeting(index);
+    closeGreetingPicker();
+}
+
 function openSession(sessionId: string) {
     const id = String(sessionId || '').trim();
     if (!id) {return;}
@@ -180,8 +205,8 @@ async function deleteArchivedSession(sessionId: string, event: Event) {
 watch(
     () => selectedCharacter.value?.characterKey,
     (characterKey) => {
-        advancedDefinitionDisclosure.reset();
         closeCharacterDefinition();
+        closeGreetingPicker();
         closeSessionArchive();
         scrollSelectedIntoView();
         const targetKey = String(characterKey || '').trim();
@@ -384,46 +409,24 @@ watch(
         <div class="dossier-details">
           <dl class="data-group">
             <div class="data-row">
-              <dt>开场白 <span v-if="greetingOptions.length > 1">{{ selectedGreetingIndex + 1 }} / {{ greetingOptions.length }}</span></dt>
+              <dt class="greeting-current-head">
+                <strong>{{ greetingHeaderLabel }}</strong>
+                <button
+                  type="button"
+                  class="greeting-other-button"
+                  @click="openGreetingPicker"
+                >
+                  其他开场
+                </button>
+              </dt>
               <dd>
                 <div
                   v-if="greetingOptions.length"
                   class="greeting-current-card"
                 >
-                  <div class="greeting-current-head">
-                    <strong>{{ greetingLabel(selectedGreetingIndex) }}</strong>
-                    <span v-if="greetingOptions.length > 1">{{ greetingOptions.length }} 个可选</span>
-                  </div>
                   <div class="data-block greeting-current-text">
                     {{ selectedGreetingText }}
                   </div>
-                  <details
-                    :open="advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('greetings'))"
-                    class="data-section greeting-picker"
-                    :class="{ 'is-empty': !hasMultipleGreetings }"
-                    @toggle="advancedDefinitionDisclosure.setOpenFromEvent(characterDataDisclosureId('greetings'), $event)"
-                  >
-                    <summary class="greeting-section-title">
-                      切换开场白
-                    </summary>
-                    <div
-                      v-if="hasMultipleGreetings && advancedDefinitionDisclosure.isOpen(characterDataDisclosureId('greetings'))"
-                      class="greeting-choice-list"
-                    >
-                      <button
-                        v-for="(greeting, index) in greetingOptions"
-                        :key="`${selectedCharacter.characterKey}-greeting-${index}`"
-                        type="button"
-                        class="greeting-choice"
-                        :class="{ selected: index === selectedGreetingIndex }"
-                        :disabled="!!pendingCharacterSessionKey"
-                        @click="selectGreeting(index)"
-                      >
-                        <span class="greeting-choice-name">{{ greetingLabel(index) }}</span>
-                        <span class="greeting-choice-text">{{ shortText(greeting, 120) }}</span>
-                      </button>
-                    </div>
-                  </details>
                 </div>
                 <div
                   v-else-if="selectedCharacterPreviewLoading"
@@ -475,6 +478,44 @@ watch(
               </dd>
             </div>
           </dl>
+        </section>
+      </div>
+
+      <div
+        v-if="greetingPickerOpen && selectedCharacter"
+        class="character-greeting-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-label="其他开场"
+        @click.self="closeGreetingPicker"
+      >
+        <section class="character-greeting-dialog">
+          <header>
+            <div>
+              <strong>其他开场</strong>
+              <span>{{ selectedCharacter.name }} · {{ selectedGreetingIndex + 1 }} / {{ greetingOptions.length }}</span>
+            </div>
+            <button
+              type="button"
+              class="session-archive-close character-greeting-close"
+              aria-label="关闭其他开场"
+              @click="closeGreetingPicker"
+            />
+          </header>
+          <div class="character-greeting-list">
+            <button
+              v-for="(greeting, index) in greetingOptions"
+              :key="`${selectedCharacter.characterKey}-greeting-dialog-${index}`"
+              type="button"
+              class="greeting-choice"
+              :class="{ selected: index === selectedGreetingIndex }"
+              :disabled="!!pendingCharacterSessionKey"
+              @click="chooseGreeting(index)"
+            >
+              <span class="greeting-choice-name">{{ greetingLabel(index) }}</span>
+              <span class="greeting-choice-text">{{ greeting }}</span>
+            </button>
+          </div>
         </section>
       </div>
 

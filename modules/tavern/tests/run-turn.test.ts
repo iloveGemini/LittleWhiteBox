@@ -1970,6 +1970,10 @@ test('xb tavern run turn starts accepted-turn manager work on the next user send
     assert.match(managerPrompt, /Before scene switches, use MapDocs/i);
     assert.match(managerPrompt, /for atlas use locations\/location\/links\/actors/i);
     assert.match(managerPrompt, /Read MapInspect summary first for the candidate doc, inspect `meta\.status` and `meta\.hint`/i);
+    assert.match(managerPrompt, /initialize it directly with one MapPatch containing `meta` plus drawable `add` ops/i);
+    assert.match(managerPrompt, /Do not make an activate-only call before initialization/i);
+    assert.match(managerPrompt, /For the first map of a clear scene, prefer a small usable map/i);
+    assert.match(managerPrompt, /never include empty `path:\[\]`, `curve:\[\]`, `points:\[\]`, or `line:\[\]`/i);
     assert.match(managerPrompt, /If the chosen scene-map doc is still `uninitialized`/i);
     assert.match(managerPrompt, /one `meta \+ add` transaction/i);
     assert.match(managerPrompt, /Only update atlas when a place is confirmed/i);
@@ -1987,6 +1991,7 @@ test('xb tavern run turn starts accepted-turn manager work on the next user send
     assert.match(managerPrompt, /at least one drawable spatial geometry element/i);
     assert.match(managerPrompt, /Place text labels 15-25 units beside what they describe/i);
     assert.match(managerPrompt, /enough geometry to carry the map body/i);
+    assert.match(managerPrompt, /If the map panel is empty after a clear place was established/i);
     assert.match(managerPrompt, /Reply with a short, clear, user-facing operation summary/i);
     assert.doesNotMatch(managerPrompt, /电纸书|ebook file-operation/i);
     assert.match(managerPrompt, /Use Grep with `path:.*memory\/.*` to ask whether a fact is already in memory/i);

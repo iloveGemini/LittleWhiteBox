@@ -212,7 +212,7 @@ test('tavern character workspace keeps a dense index and selected-card preview',
     assert.match(panelSource, /class="os-search-bar"/);
     assert.match(panelSource, /class="card-focus-indicator"/);
     assert.match(panelSource, /class="dossier-header"/);
-    assert.match(panelSource, /class="greeting-choice-list"/);
+    assert.match(panelSource, /class="character-greeting-list"/);
     assert.match(panelSource, /备用 \$\{index\}/);
     assert.match(cardsCss, /content-visibility: auto/);
     assert.match(layoutCss, /width: 360px/);

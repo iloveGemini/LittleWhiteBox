@@ -124,46 +124,6 @@
     padding-top: 18px;
 }
 
-.greeting-section-title {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    cursor: pointer;
-    list-style: none;
-    color: var(--xb-ink);
-    font-family: var(--xb-font-serif);
-    font-size: 18px;
-    font-weight: 600;
-    user-select: none;
-}
-
-.greeting-section-title span {
-    color: var(--xb-ink-faint);
-    font-family: var(--xb-font-mono);
-    font-size: 11px;
-    font-weight: 400;
-}
-
-.greeting-section-title::-webkit-details-marker {
-    display: none;
-}
-
-.greeting-section-title::after {
-    content: "+";
-    color: var(--xb-ink-faint);
-    font-family: var(--xb-font-mono);
-    font-size: 16px;
-}
-
-.data-section[open] .greeting-section-title {
-    margin-bottom: 18px;
-}
-
-.data-section[open] .greeting-section-title::after {
-    content: "-";
-}
-
 .data-section .data-row + .data-row {
     margin-top: 18px;
 }
@@ -210,36 +170,54 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    min-width: 0;
     color: var(--xb-ink);
     font-family: var(--xb-font-mono);
     font-size: 11px;
 }
 
 .greeting-current-head strong {
+    min-width: 0;
+    overflow: hidden;
     font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.greeting-current-head span {
-    color: var(--xb-ink-faint);
+.greeting-other-button {
+    min-height: 28px;
+    flex: 0 0 auto;
+    border: 1px solid var(--xb-rule);
+    border-radius: 4px;
+    background: var(--xb-paper-plain);
+    color: var(--xb-ink-soft);
+    font-family: var(--xb-font-mono);
+    font-size: 11px;
+    letter-spacing: 0;
+    padding: 5px 9px;
+    transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.greeting-other-button:hover,
+.greeting-other-button:focus-visible {
+    border-color: var(--xb-rule-strong);
+    background: var(--xb-paper);
+    color: var(--xb-ink);
 }
 
 .greeting-current-text {
     max-height: min(560px, 48vh);
 }
 
-.greeting-picker {
-    border-top: 1px solid var(--xb-rule);
-    padding-top: 12px;
-}
-
-.greeting-picker.is-empty {
-    display: none;
-}
-
-.greeting-choice-list {
+.character-greeting-list {
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 8px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 12px;
+    -webkit-overflow-scrolling: touch;
 }
 
 .greeting-choice {
@@ -251,7 +229,7 @@
     border-radius: 4px;
     background: var(--xb-paper-plain);
     color: var(--xb-ink-soft);
-    min-height: 84px;
+    min-height: 132px;
     padding: 14px;
     text-align: left;
     transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
@@ -277,11 +255,13 @@
 
 .greeting-choice-text {
     display: block;
-    overflow: hidden;
+    max-height: 104px;
+    overflow: auto;
     font-size: 13px;
     line-height: 1.55;
-    max-height: 4.7em;
+    overscroll-behavior: contain;
     white-space: pre-wrap;
+    -webkit-overflow-scrolling: touch;
 }
 
 .os-system-act-btn {
@@ -395,6 +375,7 @@
 }
 
 .character-definition-overlay,
+.character-greeting-overlay,
 .character-session-archive-overlay {
     position: fixed;
     z-index: 22;
@@ -406,6 +387,7 @@
 }
 
 .character-definition-dialog,
+.character-greeting-dialog,
 .character-session-archive {
     width: min(520px, 100%);
     max-height: min(620px, 82vh);
@@ -423,7 +405,13 @@
     width: min(560px, 100%);
 }
 
+.character-greeting-dialog {
+    width: min(620px, 100%);
+    max-height: min(720px, 84vh);
+}
+
 .character-definition-dialog header,
+.character-greeting-dialog header,
 .character-session-archive header {
     display: flex;
     align-items: center;
@@ -434,6 +422,7 @@
 }
 
 .character-definition-dialog header div,
+.character-greeting-dialog header div,
 .character-session-archive header div {
     min-width: 0;
     display: grid;
@@ -441,12 +430,14 @@
 }
 
 .character-definition-dialog header strong,
+.character-greeting-dialog header strong,
 .character-session-archive header strong {
     color: var(--xb-ink);
     font-size: 15px;
 }
 
 .character-definition-dialog header span,
+.character-greeting-dialog header span,
 .character-session-archive header span {
     overflow: hidden;
     color: var(--xb-ink-faint);
@@ -776,12 +767,13 @@
     .greeting-choice {
         grid-template-columns: 1fr;
         gap: 6px;
-        min-height: 0;
+        min-height: 132px;
     }
 }
 
 @media (max-width: 640px) {
     .character-definition-overlay,
+    .character-greeting-overlay,
     .character-session-archive-overlay,
     .character-worldbook-picker-overlay {
         place-items: stretch;
@@ -789,6 +781,7 @@
     }
 
     .character-definition-dialog,
+    .character-greeting-dialog,
     .character-session-archive,
     .character-worldbook-picker {
         width: 100%;
@@ -800,6 +793,7 @@
     }
 
     .character-definition-list,
+    .character-greeting-list,
     .session-archive-list,
     .worldbook-picker-list {
         padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));

@@ -2081,6 +2081,12 @@ test('tavern character archive separates new chat from existing session selectio
     assert.doesNotMatch(characterSource, /class="data-section-title"/);
     assert.doesNotMatch(characterSource, /class="character-data-list"/);
     assert.match(characterSource, /class="os-system-act-btn character-definition-button"[\s\S]*aria-label="角色卡详情"[\s\S]*class="os-system-act-btn character-worldbook-button"/);
+    assert.match(characterSource, /const greetingHeaderLabel = computed[\s\S]*`开场白 \$\{index \+ 1\} \/ \$\{total\} - \$\{greetingLabel\(index\)\}`/);
+    assert.match(characterSource, /class="greeting-current-head"[\s\S]*class="greeting-other-button"[\s\S]*>\s*其他开场\s*<\/button>/);
+    assert.match(characterSource, /if \(!hasMultipleGreetings\.value\) \{[\s\S]*alertTavernDialog[\s\S]*暂无备用开场白/);
+    assert.doesNotMatch(characterSource, /<dt>开场白|v-if="greetingOptions\.length > 1"[\s\S]{0,180}class="greeting-other-button"/);
+    assert.match(characterSource, /class="character-greeting-overlay"[\s\S]*aria-label="其他开场"[\s\S]*class="character-greeting-dialog"[\s\S]*class="character-greeting-list"/);
+    assert.doesNotMatch(characterSource, /class="greeting-section-title"|class="data-section greeting-picker"|advancedDefinitionDisclosure/);
     assert.match(characterSource, /const characterDefinitionFields = computed[\s\S]*label: '性格摘要'[\s\S]*personality/);
     assert.match(characterSource, /const characterDefinitionFields = computed[\s\S]*label: '情景'[\s\S]*scenario/);
     assert.match(characterSource, /const characterDefinitionFields = computed[\s\S]*label: '角色备注'[\s\S]*characterDepthPrompt/);
@@ -2110,7 +2116,7 @@ test('tavern character archive separates new chat from existing session selectio
     assert.match(previewCss, /\.character-definition-dialog \{[\s\S]*width: min\(560px, 100%\);/);
     assert.match(previewCss, /\.character-definition-section dd \{[\s\S]*white-space: pre-wrap;/);
     assert.match(previewCss, /\.character-session-archive \{[\s\S]*width: min\(520px, 100%\);/);
-    assert.match(previewCss, /@media \(max-width: 640px\) \{[\s\S]*\.character-definition-overlay,[\s\S]*\.character-session-archive-overlay,[\s\S]*\.character-worldbook-picker-overlay \{[\s\S]*place-items: stretch;[\s\S]*padding: 0;[\s\S]*\.character-definition-dialog,[\s\S]*\.character-session-archive,[\s\S]*\.character-worldbook-picker \{[\s\S]*width: 100%;[\s\S]*height: 100%;[\s\S]*max-height: none;[\s\S]*border-radius: 0;/);
+    assert.match(previewCss, /@media \(max-width: 640px\) \{[\s\S]*\.character-definition-overlay,[\s\S]*\.character-greeting-overlay,[\s\S]*\.character-session-archive-overlay,[\s\S]*\.character-worldbook-picker-overlay \{[\s\S]*place-items: stretch;[\s\S]*padding: 0;[\s\S]*\.character-definition-dialog,[\s\S]*\.character-greeting-dialog,[\s\S]*\.character-session-archive,[\s\S]*\.character-worldbook-picker \{[\s\S]*width: 100%;[\s\S]*height: 100%;[\s\S]*max-height: none;[\s\S]*border-radius: 0;/);
     assert.match(previewCss, /grid-template-columns: 40px 40px max-content max-content;/);
 });
 
@@ -2145,9 +2151,11 @@ test('tavern heavy disclosure details bind to ephemeral state instead of keeping
     const managerSource = readRepoFile('modules/tavern/app-src/components/chat/TavernManagerPanel.vue');
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const markdownToolsSource = readRepoFile('modules/tavern/app-src/components/chat/useTavernMarkdownTools.ts');
-    assert.match(characterSource, /useTavernEphemeralDisclosureScope/);
-    assert.match(characterSource, /:open="advancedDefinitionDisclosure\.isOpen[\s\S]*class="data-section greeting-picker"/);
-    assert.match(characterSource, /v-if="hasMultipleGreetings && advancedDefinitionDisclosure\.isOpen/);
+    assert.doesNotMatch(characterSource, /useTavernEphemeralDisclosureScope|advancedDefinitionDisclosure|class="data-section greeting-picker"/);
+    assert.match(characterSource, /const greetingHeaderLabel = computed[\s\S]*`开场白 \$\{index \+ 1\} \/ \$\{total\} - \$\{greetingLabel\(index\)\}`/);
+    assert.match(characterSource, /class="greeting-current-head"[\s\S]*class="greeting-other-button"[\s\S]*>\s*其他开场\s*<\/button>/);
+    assert.match(characterSource, /if \(!hasMultipleGreetings\.value\) \{[\s\S]*alertTavernDialog[\s\S]*暂无备用开场白/);
+    assert.match(characterSource, /class="character-greeting-overlay"[\s\S]*class="character-greeting-list"/);
     assert.match(conversationSource, /useTavernEphemeralDisclosureScope/);
     assert.match(conversationSource, /class="tavern-thought-details"[\s\S]*:open="thoughtDisclosure\.isOpen/);
     assert.match(conversationSource, /v-if="thoughtDisclosure\.isOpen\(messageThoughtDisclosureId\(message\)\)"/);

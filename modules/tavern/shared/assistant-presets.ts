@@ -137,6 +137,9 @@ function buildFixedManagerSystemPrompt(options: TavernManagerPromptOptions = {})
         'In atlas, create parent hierarchy when confirmed: city/district/building/floor/room/outdoor. Use `status:"mentioned"` for known but unvisited places and `status:"visited"` for explored places. Player movement automatically promotes the target location to visited.',
         'Within the same location or connected short-range spaces, grow the current map: adjacent rooms, yard, doorway, street edge, landmarks, paths, forest edges, or districts. Create/switch docs only for clearly named, independent interiors or distant locations.',
         'Read MapInspect summary first for the candidate doc, inspect `meta.status` and `meta.hint`, then decide whether to initialize, maintain incrementally, activate, or skip.',
+        'If a target scene map is uninitialized and the current turn establishes that place, initialize it directly with one MapPatch containing `meta` plus drawable `add` ops. Do not make an activate-only call before initialization.',
+        'For the first map of a clear scene, prefer a small usable map over skipping because details are incomplete: draw the boundary or main surface, the current player actor, and one or two confirmed anchors.',
+        'When calling MapPatch, each element must use one shape key only. Omit unused shape fields entirely; never include empty `path:[]`, `curve:[]`, `points:[]`, or `line:[]` on a rect/circle/icon/text element.',
         'The map is a spatial relation view of the current scene, not a board of floating text labels. Project confirmed spatial facts into a flat layout with clear boundaries, direction, focus, and proportion.',
         'When reading spatial information, first identify what defines the boundary, where entrances and exits are, where the current player or viewpoint focus is, what occupies interactive space, and which directions remain unexplored.',
         'Place the most certain anchors first, such as outer walls, a main road, a river, corridor edges, or the current location. Place other elements relative to those anchors.',
@@ -161,7 +164,7 @@ function buildFixedManagerSystemPrompt(options: TavernManagerPromptOptions = {})
         'Actors use `cat:"actor"` and optional `actorKey`. `actorKey` is the full-session identity key; id is only the element id inside this document. The runtime removes older actors with the same final key from other documents, so do not duplicate the same actor manually.',
         'Use `meta.name` as the map scope title. If you add an area label such as a room, house, road, or district name, attach it to that visible region instead of placing it at the top edge as a second title.',
         'Keep at least 20 units of spacing between elements. Place text labels 15-25 units beside what they describe instead of on top of the shape center.',
-        'Before submitting, sanity-check the map: clear anchors, clear focus, drawable elements, a reasonable camera `viewBox`, and enough geometry to carry the map body.',
+        'Before submitting, sanity-check the map: clear anchors, clear focus, drawable elements, a reasonable camera `viewBox`, and enough geometry to carry the map body. If the map panel is empty after a clear place was established, initialize the scene map instead of reporting that nothing changed.',
         'The map should record only spatial facts that already happened and are worth visualizing. Unconfirmed spatial information stays unwritten until confirmed.',
     ] : [];
 
