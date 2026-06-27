@@ -1644,7 +1644,8 @@ test('Map activate does not move atlas and spatial digest uses atlas active map'
             { op: 'meta', set: { name: '办公室', viewBox: [0, 0, 400, 300], status: 'active', mood: 'cold' } },
             { op: 'add', element: { id: 'desk', cat: 'furniture', at: [90, 90], rect: [120, 60], text: '办公桌', material: 'metal' } },
             { op: 'add', element: { id: 'door', cat: 'door', at: [200, 260], icon: 'o', text: '门' } },
-            { op: 'add', element: { id: 'player-office', cat: 'actor', actorKey: 'player', at: [200, 180], icon: 'o', text: '玩家' } },
+            { op: 'add', element: { id: 'player-office', cat: 'actor', actorKey: 'player', at: [200, 180], icon: 'o', text: '玛雅' } },
+            { op: 'add', element: { id: 'generic-user', cat: 'actor', actorKey: 'user', at: [240, 180], icon: 'o', text: '玩家' } },
         ],
     });
     await executeTavernStateTool(session.id, 'MapPatch', {
@@ -1677,14 +1678,14 @@ test('Map activate does not move atlas and spatial digest uses atlas active map'
     const spatial = await buildTavernSpatialStateDigest(session.id);
     assert.match(spatial, /当前地点：办公室/);
     assert.match(spatial, /当前场景：办公室/);
-    assert.match(spatial, /场景人物：玩家/);
+    assert.match(spatial, /场景人物：玛雅/);
     assert.match(spatial, /出入口：门/);
     assert.match(spatial, /可互动：办公桌/);
     assert.match(spatial, /当前场景标注：/);
     assert.match(spatial, /办公桌/);
     assert.match(spatial, /门/);
-    assert.match(spatial, /玩家/);
-    assert.doesNotMatch(spatial, /氛围：|材质：|cold|metal/);
+    assert.match(spatial, /玛雅/);
+    assert.doesNotMatch(spatial, /氛围：|材质：|cold|metal|玩家|user/);
 
     const memoryContext = await retrieveXbTavernMemoryContext({
         sessionId: session.id,

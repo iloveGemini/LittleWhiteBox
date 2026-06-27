@@ -69,6 +69,7 @@ const mapTitleById = computed(() => {
 });
 const mapDocIds = computed(() => new Set(props.mapDocuments.map((document) => document.docId)));
 const selectedActors = computed(() => actorsForLocation(selectedLocation.value?.key || ''));
+const selectedActorLabels = computed(() => selectedActors.value.map(actorLabel).filter(Boolean));
 const selectedLinks = computed(() => {
     const key = selectedLocation.value?.key || '';
     return atlas.value.links.filter((link) => link.from === key || link.to === key);
@@ -123,14 +124,32 @@ function actorsForLocation(locationKey: string) {
 }
 
 function actorLabel(actor: TavernAtlasActorPosition): string {
-    return actor.actorKey === 'player' ? '玩家' : actor.actorKey;
+    if (isGenericActorKey(actor.actorKey)) {return '';}
+    return actor.actorKey;
 }
 
 function nodeActors(locationKey: string): string {
     const actors = actorsForLocation(locationKey);
     if (!actors.length) {return '';}
-    const labels = actors.slice(0, 2).map(actorLabel);
-    return actors.length > 2 ? `${labels.join('、')} +${actors.length - 2}` : labels.join('、');
+    const actorLabels = actors.map(actorLabel).filter(Boolean);
+    const labels = actorLabels.slice(0, 2);
+    if (!labels.length) {return '';}
+    return actorLabels.length > 2 ? `${labels.join('、')} +${actorLabels.length - 2}` : labels.join('、');
+}
+
+function isGenericActorKey(value: unknown): boolean {
+    const text = String(value || '').trim();
+    const lower = text.toLowerCase();
+    return lower === 'player'
+        || lower === 'user'
+        || lower.startsWith('player ')
+        || lower.startsWith('user ')
+        || text === '玩家'
+        || text.startsWith('玩家')
+        || text === '用户'
+        || text.startsWith('用户')
+        || text === '你'
+        || text === '您';
 }
 
 function locationClass(location: TavernAtlasLocation) {
@@ -448,7 +467,7 @@ function handleAtlasWheel(event: WheelEvent) {
           </div>
           <div>
             <dt>人物</dt>
-            <dd>{{ selectedActors.length ? selectedActors.map(actorLabel).join('、') : '无' }}</dd>
+            <dd>{{ selectedActorLabels.length ? selectedActorLabels.join('、') : '无' }}</dd>
           </div>
         </dl>
         <div

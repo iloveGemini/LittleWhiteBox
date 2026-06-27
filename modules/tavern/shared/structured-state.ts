@@ -1035,12 +1035,31 @@ function fallbackMapElementName(element: TavernMapElement): string {
     return normalizeText(String(element.id || '').replace(/^__label__/, '').replace(/[-_]+/g, ' '), 40);
 }
 
-function actorMapElementName(element: TavernMapElement): string {
-    const actorKey = normalizeActorKey(element.actorKey || element.id);
-    if (actorKey === 'player') {return '玩家';}
-    return normalizeText(element.text, 40)
-        || normalizeText(element.actorKey, 40)
-        || fallbackMapElementName(element);
+function isGenericActorLabel(value: unknown): boolean {
+    const text = normalizeText(value, 40);
+    const lower = text.toLowerCase();
+    return lower === 'player'
+        || lower === 'user'
+        || lower.startsWith('player ')
+        || lower.startsWith('user ')
+        || text === '玩家'
+        || text.startsWith('玩家')
+        || text === '用户'
+        || text.startsWith('用户')
+        || text === '你'
+        || text === '您';
+}
+
+function actorMapElementName(element: TavernMapElement, labelsByBaseId: Map<string, string>): string {
+    const text = normalizeText(element.text, 40);
+    if (text && !isGenericActorLabel(text)) {return text;}
+    const label = normalizeText(labelsByBaseId.get(element.id), 40);
+    if (label && !isGenericActorLabel(label)) {return label;}
+    const actorKey = normalizeText(element.actorKey, 40);
+    if (actorKey && !isGenericActorLabel(actorKey)) {return actorKey;}
+    if (actorKey && isGenericActorLabel(actorKey)) {return '';}
+    const fallback = fallbackMapElementName(element);
+    return fallback && !isGenericActorLabel(fallback) ? fallback : '';
 }
 
 function labeledMapElementName(element: TavernMapElement, labelsByBaseId: Map<string, string>): string {
@@ -1054,23 +1073,28 @@ function createMapDigest(document: TavernMapDocument, revision = 0): string {
     if (document.meta.status !== 'active' || !hasSpatialMapContent(document.elements)) {return '';}
     const title = normalizeText(document.meta.name || 'Map', 80) || 'Map';
     const labelsByBaseId = new Map<string, string>();
-    const labels = uniqueShortList(document.elements
-        .filter((element) => element.cat === 'label' && typeof element.text === 'string' && element.text.trim())
-        .map((element) => {
-            if (isSeedLabelId(element.id)) {
-                const baseId = element.id.slice(buildSeedLabelId('').length);
-                const text = normalizeText(element.text, 40);
-                if (baseId && text) {labelsByBaseId.set(baseId, text);}
-            }
-            return normalizeText(element.text, 40);
-        }), 8);
+    const labelElements = document.elements.filter((element) => element.cat === 'label' && typeof element.text === 'string' && element.text.trim());
+    labelElements.forEach((element) => {
+        if (!isSeedLabelId(element.id)) {return;}
+        const baseId = element.id.slice(buildSeedLabelId('').length);
+        const text = normalizeText(element.text, 40);
+        if (baseId && text) {labelsByBaseId.set(baseId, text);}
+    });
     const sceneElements = document.elements.filter((element) => element.cat !== 'label' && !isSeedLabelId(element.id));
+    const sceneElementById = new Map(sceneElements.map((element) => [element.id, element]));
+    const labels = uniqueShortList(labelElements.map((element) => {
+        const text = normalizeText(element.text, 40);
+        if (!isSeedLabelId(element.id)) {return text;}
+        const baseId = element.id.slice(buildSeedLabelId('').length);
+        const baseElement = sceneElementById.get(baseId);
+        return baseElement?.cat === 'actor' && isGenericActorLabel(text) ? '' : text;
+    }), 8);
     const namesFor = (cats: TavernMapElementCategory[]) => uniqueShortList(sceneElements
         .filter((element) => cats.includes(element.cat))
         .map((element) => labeledMapElementName(element, labelsByBaseId)), 8);
     const actors = uniqueShortList(sceneElements
         .filter((element) => element.cat === 'actor')
-        .map(actorMapElementName), 8);
+        .map((element) => actorMapElementName(element, labelsByBaseId)), 8);
     const exits = uniqueShortList(sceneElements
         .filter((element) => element.cat === 'door' || ['stairs', 'portal', 'arrow-n', 'arrow-s', 'arrow-e', 'arrow-w'].includes(String(element.icon || '')))
         .map((element) => labeledMapElementName(element, labelsByBaseId)), 8);
@@ -4256,8 +4280,9 @@ export async function buildTavernSpatialStateDigest(sessionId = ''): Promise<str
         .filter(Boolean);
     const actorLines = atlas.actors
         .map((actor) => {
+            if (isGenericActorLabel(actor.actorKey)) {return '';}
             const location = locations.get(actor.locationKey);
-            return location ? `${actor.actorKey === 'player' ? '玩家' : actor.actorKey}=${location.name}` : '';
+            return location ? `${actor.actorKey}=${location.name}` : '';
         })
         .filter(Boolean);
     const mapRecord = active.mapDocId
