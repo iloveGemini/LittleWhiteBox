@@ -2126,6 +2126,7 @@ test('tavern worldbook preview keeps summary lean and expanded content ephemeral
 });
 
 test('tavern character archive separates new chat from existing session selection', () => {
+    const contextSource = readRepoFile('modules/tavern/app-src/components/tavern-app-context.ts');
     const characterSource = readRepoFile('modules/tavern/app-src/components/TavernCharacterWorkspacePanel.vue');
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const sessionSource = readRepoFile('modules/tavern/app-src/features/session/useTavernSessionController.ts');
@@ -2151,6 +2152,13 @@ test('tavern character archive separates new chat from existing session selectio
     assert.match(characterSource, /sessionFloorLabel,/);
     assert.match(characterSource, /function sessionArchiveMeta\(session: TavernSessionRecord\)[\s\S]*sessionFloorLabel\(session\)/);
     assert.doesNotMatch(characterSource, /sessionArchiveMeta[\s\S]*chatPresetName|sessionArchiveMeta[\s\S]*presetName/);
+    assert.match(appSource, /function clearCharacterArchiveSyncState\(\)[\s\S]*if \(characterArchiveSyncState\.value\.busy\) \{return;\}[\s\S]*createIdleCharacterArchiveSyncState\(\)/);
+    assert.match(appSource, /const restoreSummary = await restoreTavernCharacterArchiveFromRecords[\s\S]*await refreshSessions\(\);[\s\S]*updateCharacterArchiveSyncState\(\{\s*busy: false,\s*phase: '完成'/);
+    assert.doesNotMatch(appSource, /restoreSummary\.selectedSessionId[\s\S]{0,120}selectSession/);
+    assert.match(contextSource, /clearCharacterArchiveSyncState: TavernCommand/);
+    assert.match(characterContextObject, /clearCharacterArchiveSyncState,/);
+    assert.match(characterSource, /function closeCharacterCloudSync\(\)[\s\S]*characterCloudSyncOpen\.value = false;[\s\S]*clearCharacterArchiveSyncState\(\);/);
+    assert.match(characterSource, /function openCharacterCloudSync\(\)[\s\S]*state\.phase \|\| state\.percent \|\| state\.message \|\| state\.error \|\| state\.result[\s\S]*clearCharacterArchiveSyncState\(\);/);
     assert.match(characterSource, /class="dossier-summary"[\s\S]*selectedCharacter\.description[\s\S]*selectedCharacter\.personality[\s\S]*selectedCharacter\.scenario/);
     assert.doesNotMatch(characterSource, /class="data-section-title"/);
     assert.doesNotMatch(characterSource, /class="character-data-list"/);

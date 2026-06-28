@@ -41,6 +41,7 @@ import {
 import {
     buildTavernCharacterArchivePartFilename,
     downloadTavernCharacterArchiveFile,
+    downloadTavernCharacterArchiveManifest,
 } from '../shared/character-archive-server-storage';
 import type {
     TavernCharacterArchiveManifest,
@@ -521,6 +522,82 @@ test('tavern character archive downloads bypass the user file cache', async () =
         assert.equal(requests[0]?.headers['Cache-Control'], 'no-cache');
         assert.equal(requests[0]?.headers.Pragma, 'no-cache');
         assert.equal(requests[0]?.headers['X-CSRF-Token'], 'test');
+    } finally {
+        globalThis.XMLHttpRequest = previousXhr;
+    }
+});
+
+test('tavern character archive manifest treats missing user file body as no backup', async () => {
+    const previousXhr = globalThis.XMLHttpRequest;
+    class FakeMissingManifestDownloadXhr {
+        responseType = '';
+        response: ArrayBuffer = new Uint8Array(textToBytes('Not Found')).buffer;
+        status = 200;
+        responseText = '';
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        onabort: (() => void) | null = null;
+        onprogress: ((event: { loaded: number; total: number; lengthComputable: boolean }) => void) | null = null;
+
+        open() {
+            // no-op
+        }
+
+        setRequestHeader() {
+            // no-op
+        }
+
+        send() {
+            this.onprogress?.({ loaded: 9, total: 9, lengthComputable: true });
+            this.onload?.();
+        }
+    }
+    globalThis.XMLHttpRequest = FakeMissingManifestDownloadXhr as unknown as typeof XMLHttpRequest;
+    try {
+        await assert.rejects(
+            downloadTavernCharacterArchiveManifest('character-hash-test'),
+            /archive_manifest_missing/,
+        );
+    } finally {
+        globalThis.XMLHttpRequest = previousXhr;
+    }
+});
+
+test('tavern character archive manifest handles arraybuffer 404 without hanging', async () => {
+    const previousXhr = globalThis.XMLHttpRequest;
+    class FakeMissingManifest404Xhr {
+        responseType = '';
+        response: ArrayBuffer = new Uint8Array(textToBytes('Not Found')).buffer;
+        status = 404;
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        onabort: (() => void) | null = null;
+        onprogress: ((event: { loaded: number; total: number; lengthComputable: boolean }) => void) | null = null;
+
+        get responseText(): string {
+            throw new Error('InvalidStateError: responseText is not accessible for arraybuffer');
+        }
+
+        open() {
+            // no-op
+        }
+
+        setRequestHeader() {
+            // no-op
+        }
+
+        send() {
+            this.responseType = 'arraybuffer';
+            this.onprogress?.({ loaded: 9, total: 9, lengthComputable: true });
+            this.onload?.();
+        }
+    }
+    globalThis.XMLHttpRequest = FakeMissingManifest404Xhr as unknown as typeof XMLHttpRequest;
+    try {
+        await assert.rejects(
+            downloadTavernCharacterArchiveManifest('character-hash-test'),
+            /archive_manifest_missing/,
+        );
     } finally {
         globalThis.XMLHttpRequest = previousXhr;
     }

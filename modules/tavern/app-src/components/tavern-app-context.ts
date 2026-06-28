@@ -191,6 +191,7 @@ export interface TavernCharacterContext {
     backupSelectedCharacterArchive: TavernCommand<[], Promise<void>>;
     batchSize: number;
     characterArchiveSyncState: Ref<TavernCharacterArchiveProgress>;
+    clearCharacterArchiveSyncState: TavernCommand;
     characterWorldbookBusy: Ref<boolean>;
     characterWorldbookState: Ref<TavernCharacterWorldbookState | null>;
     characters: TavernReadable<TavernCharacterOption[]>;

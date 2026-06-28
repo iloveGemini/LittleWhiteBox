@@ -2306,13 +2306,46 @@ function startCharacterArchiveSync(mode: 'backup' | 'restore') {
     };
 }
 
+function clearCharacterArchiveSyncState() {
+    if (characterArchiveSyncState.value.busy) {return;}
+    characterArchiveSyncState.value = createIdleCharacterArchiveSyncState();
+}
+
+function isMissingCharacterArchiveBackupError(error: unknown): boolean {
+    const message = describeError(error);
+    return message === 'archive_manifest_missing'
+        || /^archive_download_failed_http_404\b/.test(message);
+}
+
+function describeCharacterArchiveSyncError(error: unknown): string {
+    const message = describeError(error);
+    if (message === 'archive_manifest_missing' || /^archive_download_failed_http_404\b/.test(message)) {
+        return '这张角色卡还没有酒馆服务器备份。请先备份后再恢复。';
+    }
+    if (message === 'archive_manifest_invalid') {
+        return '酒馆服务器上的备份清单不是有效 JSON，无法恢复。';
+    }
+    if (message === 'archive_manifest_mismatch' || message === 'archive_character_mismatch') {
+        return '酒馆服务器上的备份清单不属于当前角色卡，已停止恢复。';
+    }
+    return message;
+}
+
 function failCharacterArchiveSync(error: unknown) {
-    updateCharacterArchiveSyncState({
+    const missingBackup = isMissingCharacterArchiveBackupError(error);
+    const current = characterArchiveSyncState.value;
+    characterArchiveSyncState.value = {
+        ...current,
         busy: false,
-        phase: '失败',
-        error: describeError(error),
-        message: '操作失败。',
-    });
+        phase: missingBackup ? '未找到备份' : '失败',
+        percent: missingBackup ? 0 : current.percent,
+        partIndex: missingBackup ? 0 : current.partIndex,
+        partCount: missingBackup ? 0 : current.partCount,
+        loadedBytes: missingBackup ? 0 : current.loadedBytes,
+        totalBytes: missingBackup ? 0 : current.totalBytes,
+        error: describeCharacterArchiveSyncError(error),
+        message: missingBackup ? '当前角色卡暂无服务器备份。' : '操作失败。',
+    };
 }
 
 async function getTavernArchiveRequestHeaders(): Promise<Record<string, unknown>> {
@@ -2560,12 +2593,9 @@ async function restoreSelectedCharacterArchive() {
         updateCharacterArchiveSyncState({
             phase: '刷新界面',
             percent: 98,
-            message: '正在刷新会话列表和消息窗口。',
+            message: '正在刷新角色卡会话列表。',
         });
         await refreshSessions();
-        if (restoreSummary.selectedSessionId) {
-            await selectSession(restoreSummary.selectedSessionId);
-        }
         updateCharacterArchiveSyncState({
             busy: false,
             phase: '完成',
@@ -4347,6 +4377,7 @@ const characterContext = {
     backupSelectedCharacterArchive,
     batchSize: CHARACTER_ARCHIVE_BATCH_SIZE,
     characterArchiveSyncState,
+    clearCharacterArchiveSyncState,
     characterWorldbookBusy,
     characterWorldbookState,
     characters: characterCards,

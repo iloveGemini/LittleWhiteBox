@@ -56,6 +56,35 @@ function createArchiveStorageError(action: string, status: number, responseText 
     return new Error(detail ? `${action}_http_${status}: ${detail}` : `${action}_http_${status}`);
 }
 
+function readArchiveXhrErrorText(xhr: XMLHttpRequest): string {
+    try {
+        return xhr.responseText || '';
+    } catch {
+        const response = xhr.response;
+        if (response instanceof ArrayBuffer) {
+            try {
+                return bytesToText(new Uint8Array(response));
+            } catch {
+                return '';
+            }
+        }
+        return '';
+    }
+}
+
+function isArchiveNotFoundText(text = ''): boolean {
+    const normalized = String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    return !normalized
+        || normalized === 'not found'
+        || normalized === 'not found.'
+        || normalized.startsWith('cannot get ')
+        || normalized.includes('file not found');
+}
+
+function isArchiveNotFoundError(error: unknown): boolean {
+    return error instanceof Error && /^archive_download_failed_http_404\b/.test(error.message);
+}
+
 export async function buildTavernCharacterArchiveCharacterHash(characterKey = ''): Promise<string> {
     const key = String(characterKey || '').trim();
     if (!key) {throw new Error('character_key_required');}
@@ -157,7 +186,7 @@ export async function downloadTavernCharacterArchiveFile(
                 resolve(new Uint8Array(xhr.response || new ArrayBuffer(0)));
                 return;
             }
-            reject(createArchiveStorageError('archive_download_failed', xhr.status, xhr.responseText));
+            reject(createArchiveStorageError('archive_download_failed', xhr.status, readArchiveXhrErrorText(xhr)));
         };
         xhr.onerror = () => reject(new Error('archive_download_network_error'));
         xhr.onabort = () => reject(new Error('archive_download_aborted'));
@@ -169,12 +198,29 @@ export async function downloadTavernCharacterArchiveManifest(
     characterHash: string,
     options: TavernCharacterArchiveTransferOptions = {},
 ): Promise<TavernCharacterArchiveManifest> {
-    const bytes = await downloadTavernCharacterArchiveFile(
-        buildTavernCharacterArchiveManifestFilename(characterHash),
-        options,
-    );
-    const manifest = JSON.parse(bytesToText(bytes)) as TavernCharacterArchiveManifest;
-    if (!manifest || typeof manifest !== 'object') {
+    let bytes: Uint8Array;
+    try {
+        bytes = await downloadTavernCharacterArchiveFile(
+            buildTavernCharacterArchiveManifestFilename(characterHash),
+            options,
+        );
+    } catch (error) {
+        if (isArchiveNotFoundError(error)) {
+            throw new Error('archive_manifest_missing');
+        }
+        throw error;
+    }
+    const text = bytesToText(bytes).trim();
+    let manifest: TavernCharacterArchiveManifest;
+    try {
+        manifest = JSON.parse(text) as TavernCharacterArchiveManifest;
+    } catch {
+        if (isArchiveNotFoundText(text)) {
+            throw new Error('archive_manifest_missing');
+        }
+        throw new Error('archive_manifest_invalid');
+    }
+    if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
         throw new Error('archive_manifest_invalid');
     }
     return manifest;

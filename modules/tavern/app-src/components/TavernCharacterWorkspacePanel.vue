@@ -8,6 +8,7 @@ const {
     backupSelectedCharacterArchive,
     batchSize,
     characterArchiveSyncState,
+    clearCharacterArchiveSyncState,
     characterWorldbookBusy,
     characterWorldbookState,
     characters,
@@ -187,12 +188,17 @@ function closeSessionArchive() {
 
 function openCharacterCloudSync() {
     if (!selectedCharacter.value) {return;}
+    const state = characterArchiveSyncState.value;
+    if (!characterArchiveBusy.value && (state.phase || state.percent || state.message || state.error || state.result)) {
+        clearCharacterArchiveSyncState();
+    }
     characterCloudSyncOpen.value = true;
 }
 
 function closeCharacterCloudSync() {
     if (characterArchiveBusy.value) {return;}
     characterCloudSyncOpen.value = false;
+    clearCharacterArchiveSyncState();
 }
 
 async function backupCharacterArchive() {
