@@ -2137,6 +2137,7 @@ test('tavern character archive separates new chat from existing session selectio
     const appSource = readRepoFile('modules/tavern/app-src/App.vue');
     const sessionSource = readRepoFile('modules/tavern/app-src/features/session/useTavernSessionController.ts');
     const previewCss = readRepoFile('modules/tavern/app-src/styles/characters/preview.css');
+    const shellOverridesCss = readRepoFile('modules/tavern/app-src/styles/shell-overrides.css');
     const sessionDbSource = readRepoFile('modules/tavern/shared/session-db.ts');
     const characterContextObject = extractSourceBetween(appSource, 'const characterContext = {', 'const chatContext = {');
 
@@ -2204,6 +2205,8 @@ test('tavern character archive separates new chat from existing session selectio
     assert.match(previewCss, /\.character-definition-dialog \{[\s\S]*width: min\(560px, 100%\);/);
     assert.match(previewCss, /\.character-definition-section dd \{[\s\S]*white-space: pre-wrap;/);
     assert.match(previewCss, /\.character-session-archive \{[\s\S]*width: min\(520px, 100%\);/);
+    assert.match(shellOverridesCss, /\.home-corner-actions,[\s\S]*\.page-corner-actions \{[\s\S]*z-index: 90;/);
+    assert.match(previewCss, /\.character-definition-overlay,[\s\S]*\.character-cloud-sync-overlay,[\s\S]*\.character-greeting-overlay,[\s\S]*\.character-session-archive-overlay \{[\s\S]*position: fixed;[\s\S]*z-index: 100100;/);
     assert.match(previewCss, /@media \(max-width: 640px\) \{[\s\S]*\.character-definition-overlay,[\s\S]*\.character-greeting-overlay,[\s\S]*\.character-session-archive-overlay,[\s\S]*\.character-worldbook-picker-overlay \{[\s\S]*place-items: stretch;[\s\S]*padding: 0;[\s\S]*\.character-definition-dialog,[\s\S]*\.character-greeting-dialog,[\s\S]*\.character-session-archive,[\s\S]*\.character-worldbook-picker \{[\s\S]*width: 100%;[\s\S]*height: 100%;[\s\S]*max-height: none;[\s\S]*border-radius: 0;/);
     assert.match(previewCss, /grid-template-columns: 40px 40px 40px max-content max-content;/);
 });
