@@ -7770,7 +7770,7 @@ function rl(e = {}) {
       description: [
         "Edit one existing current-book file by replacing original text fragments, replacing inclusive line ranges, inserting text at line positions, or removing text with empty replacements.",
         "One call edits one file.",
-        "Use oldString/newString for in-sentence, small-paragraph, or multi-spot local revisions. Use startLine/endLine/newString for contiguous medium-sized passage replacement where copying oldString would be fragile. Use insertAtLine/newString to add new text before a line or at the end without replacing existing text. Use Write instead for creating files, complete file rewrites, whole sections, whole chapters, or rewrites where most content is new.",
+        "Use oldString/newString for local text replacement. Use startLine/endLine/newString for contiguous passage replacement where copying oldString would be fragile. Use insertAtLine/newString to add new text before a line or at the end without replacing existing text. Use Write instead for creating files, complete rewrites, or rewrites where most content is new.",
         "Read the target file first unless the exact current text is already available in the conversation or a recent tool result. Line-range and insertion edits must use line numbers from the latest Read result.",
         "Put multiple edits in the edits array. Line-range and insertion items may share one call when they use line numbers from the same Read result. Keep oldString edits separate from line-number edits unless the whole change can be expressed with line numbers.",
         'The `edits` argument must be a non-empty array value, not a JSON-stringified string. Correct: `"edits":[{"startLine":10,"endLine":50,"newString":"..."}]`. Wrong: `"edits":"[{\\"startLine\\":10,\\"endLine\\":50,\\"newString\\":\\"...\\"}]"`.',
@@ -7795,7 +7795,7 @@ function rl(e = {}) {
         "## Notes",
         "oldString edits execute in order. Line-range and insertion edits execute bottom-to-top by original line numbers. Do not let a later oldString match text just inserted by an earlier newString.",
         "If two changes overlap, merge them into one replacement for the larger fragment instead of splitting them into separate edits.",
-        "Use Write for complete file rewrites, whole sections, whole chapters, complete new files, or when most of the file should be replaced."
+        "Use Write for complete rewrites, complete new files, or when most of the file should be replaced."
       ].join(`
 `),
       parameters: {
@@ -8502,15 +8502,6 @@ var zE = [
   " - Discover book structure: LS inspects directory entries only; it does not read file bodies.",
   " - Inspect book content: Grep / Read search and read chapters, settings, sources, and review notes.",
   " - Modify the current book: Edit / Write / Move / Delete save, revise, and organize files. Edit changes text inside existing files; Write creates files or rewrites complete files/sections/chapters, or rewrites where most content is new; Move and Delete organize files or directories.",
-  " - Edit is same-file sequential: for several changes in one file, use one Edit call with multiple edits. Do not send several Edit calls for the same file in the same turn; if edits overlap, merge them into one larger replacement.",
-  ' - Edit `edits` must be a real, non-empty JSON array, not a quoted JSON string. Correct: `"edits":[{"startLine":10,"endLine":50,"newString":"..."}]`. Wrong: `"edits":"[{\\"startLine\\":10,\\"endLine\\":50,\\"newString\\":\\"...\\"}]"`. Do not send `edits: []`.',
-  " - Each Edit item should choose exactly one mode. Omit unused fields when you can. If the provider/tool channel adds stray optional fields, Edit normalizes by priority: complete `startLine`/`endLine` wins, then `insertAtLine`, then `oldString`.",
-  " - Before Edit, use the current file content as the source of truth: Read the target file unless the exact current text is already available in the conversation or a recent tool result.",
-  " - Edit can tolerate common punctuation and whitespace-only differences in long fragments, but it is not semantic fuzzy search. If a long block still fails, Read the current file and anchor the replacement with exact surrounding text.",
-  ' - Use Edit `oldString` for small in-sentence, small-paragraph, or multi-spot local revisions. Set `newString` to `""` to remove the matched word, sentence, or fragment. Keep `oldString` edits separate from line-number edits unless you can express the whole change with line numbers.',
-  ' - For line-range revisions, Edit may use `startLine`/`endLine` from the latest Read result instead of `oldString`. A line range replaces the whole inclusive range with any length of `newString`; use `newString:""` to remove the range. Replacement line count does not need to match the original range.',
-  " - For insertions, Edit may use `insertAtLine` from the latest Read result. `insertAtLine` inserts before that line; use totalLines + 1 to append to the end of the file.",
-  " - Line-range and insertion items may share one Edit call when they use line numbers from the same Read result. They are applied by original line numbers from bottom to top automatically; keep the Read line numbers and do not recalculate them.",
   " - Rename the current book: RenameBook changes only the book title. It does not move chapters, sources, or setting files.",
   " - Manage writing plans: PlanCreate / PlanUpdate / PlanList / PlanGet only track plans for the current book. They do not draft prose automatically. Plan ids are internal handles for later tool calls; do not explain or show them to the user unless the user asks for debugging details.",
   " - Independent review: DelegateRun asks the read-only reviewer delegate to inspect the book and return findings. The delegate reviews and reports only; you perform any actual writes.",

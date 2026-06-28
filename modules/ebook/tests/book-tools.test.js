@@ -8372,26 +8372,14 @@ test('Book prompt keeps assistant-style tool layers and recovery rules', () => {
     assert.match(EBOOK_SYSTEM_PROMPT, /## 关于复盘/);
     assert.match(EBOOK_SYSTEM_PROMPT, /If a tool returns an error/);
     assert.match(EBOOK_SYSTEM_PROMPT, /Edit changes text inside existing files/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /Use Edit `oldString` for small in-sentence, small-paragraph, or multi-spot local revisions/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /Set `newString` to `""` to remove the matched word, sentence, or fragment/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /use `newString:""` to remove the range/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /`insertAtLine` inserts before that line/);
     assert.match(EBOOK_SYSTEM_PROMPT, /Write creates files or rewrites complete files\/sections\/chapters/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /Do not send several Edit calls for the same file in the same turn/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /Edit `edits` must be a real, non-empty JSON array/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /Wrong: `"edits":"\[/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /Each Edit item should choose exactly one mode/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /complete `startLine`\/`endLine` wins/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /Read the target file unless the exact current text is already available/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /if edits overlap, merge them into one larger replacement/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /startLine`\/`endLine` from the latest Read result/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /Replacement line count does not need to match the original range/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /Line-range and insertion items may share one Edit call/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /applied by original line numbers from bottom to top automatically/);
-    assert.match(EBOOK_SYSTEM_PROMPT, /insertAtLine` inserts before that line/);
+    assert.match(EBOOK_SYSTEM_PROMPT, /读章节与对应审稿意见/);
     assert.match(EBOOK_SYSTEM_PROMPT, /连续中段替换用 Edit startLine\/endLine/);
     assert.match(EBOOK_SYSTEM_PROMPT, /新增插入用 Edit insertAtLine/);
     assert.match(EBOOK_SYSTEM_PROMPT, /rewrites where most content is new/);
+    assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /Edit `edits` must be a real, non-empty JSON array/);
+    assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /Wrong: `"edits":"\[/);
+    assert.doesNotMatch(EBOOK_SYSTEM_PROMPT, /Line-range and insertion items may share one Edit call/);
     assert.match(EBOOK_SYSTEM_PROMPT, /RenameBook/);
     assert.match(EBOOK_SYSTEM_PROMPT, /DelegateRun/);
     assert.match(EBOOK_SYSTEM_PROMPT, /写作伙伴/);
@@ -8422,7 +8410,7 @@ test('Book prompt keeps assistant-style tool layers and recovery rules', () => {
 
     const definitions = getEbookToolDefinitions();
     const edit = definitions.find((definition) => definition.function?.name === EBOOK_TOOL_NAMES.EDIT);
-    assert.match(String(edit.function.description), /in-sentence, small-paragraph, or multi-spot local revisions/);
+    assert.match(String(edit.function.description), /oldString\/newString for local text replacement/);
     assert.match(String(edit.function.description), /replaceAll/);
     assert.match(String(edit.function.description), /Do not issue multiple Edit tool calls for the same file/);
     assert.match(String(edit.function.description), /must be a non-empty array value, not a JSON-stringified string/);
@@ -8435,7 +8423,7 @@ test('Book prompt keeps assistant-style tool layers and recovery rules', () => {
     assert.match(String(edit.function.description), /If two changes overlap, merge them into one replacement/);
     assert.match(String(edit.function.description), /startLine\/endLine\/newString/);
     assert.match(String(edit.function.description), /insertAtLine\/newString/);
-    assert.match(String(edit.function.description), /contiguous medium-sized passage replacement/);
+    assert.match(String(edit.function.description), /contiguous passage replacement/);
     assert.match(String(edit.function.description), /Read the target file first unless the exact current text is already available/);
     assert.match(String(edit.function.description), /bottom to top automatically to avoid line-number shifts/);
     assert.match(String(edit.function.description), /insertion falls inside a line range being replaced/);

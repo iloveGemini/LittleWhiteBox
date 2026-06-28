@@ -239,28 +239,11 @@ export function buildDefaultTavernMemoryStateContent(characterName = ''): string
     return [
         '# 会话记忆',
         '',
-        '## 剧情脉络',
-        '',
-        '### 当前主线',
-        '- 未开始。',
-        '',
-        '### 长期压力',
+        '## 事件时间线',
         '- 暂无。',
         '',
-        '### 未解伏笔',
-        '- 暂无。',
-        '',
-        '### 关系态势',
-        '- 只保留影响主线或当前局面的关系摘要；人物细节放入对应人物记忆。',
-        '',
-        '## 当前状态',
-        '- 时间：未明确',
-        '- 地点：未明确',
-        `- 在场人物：${name}`,
-        '- 关键物品：暂无',
-        '- 身体/情绪/约束状态：暂无',
-        '## 近期连续事件',
-        '- 暂无。',
+        '## 世界状态',
+        `- ${name}会话｜在场主体｜未明确（初始模板）`,
     ].join('\n');
 }
 
@@ -270,25 +253,22 @@ export function buildDefaultTavernCharacterMemoryContent(characterName = ''): st
         `# ${name}`,
         '',
         '## 当前状态',
-        '- 位置/是否在场：未明确',
-        '- 身体/情绪/约束：暂无',
-        '- 公开目标：未明确',
-        '- 隐藏动机/秘密：未明确',
+        '- 一句话：未明确。',
         '',
-        '## 关系',
-        '- 对玩家：未明确',
-        '- 对其他人物：未明确',
+        '## 弧光',
+        '- 阶段：未建立',
+        '- 节点：暂无。',
         '',
-        '## 人物弧光',
-        '- 已发生的长期变化：暂无',
-        '- 尚未解决的内在矛盾：暂无',
+        '## 关系趋势',
+        '- 暂无。',
         '',
-        '## 承诺、债务与风险',
-        '- 承诺：暂无',
-        '- 欠债：暂无',
-        '- 风险：暂无',
+        '## 硬事实',
+        '- 身份：未明确',
+        '- 位置：未明确',
+        '- 身体/限制：暂无',
+        '- 持有物：暂无',
         '',
-        '## 近期相关事件',
+        '## 秘密与未了之事',
         '- 暂无。',
     ].join('\n');
 }
@@ -988,18 +968,20 @@ export function getTavernSourceFileToolDefinitions(): Array<{ type: 'function'; 
                     'Search text inside Tavern text sources.',
                     'Uses literal text search by default and returns matching files plus line-level snippets.',
                     'Use before reading many files to locate facts, names, dialogue, places, worldbook lore, memory notes, or source evidence.',
-                    '`path` can be a directory like `chat/`, `worldbooks/`, `memory/characters/`, or one exact file. `include` limits the file glob/name. For regex search, explicitly pass `useRegex: true`.',
+                    '`path` can be a directory like `chat/`, `worldbooks/`, `memory/characters/`, or one exact file. `filePath` is an alias for exact-file scope. `include` limits the file glob/name. For regex search, explicitly pass `regex: true` or `useRegex: true`.',
                 ].join('\n'),
                 parameters: {
                     type: 'object',
                     properties: {
                         pattern: { type: 'string', description: 'Search pattern. Treated as literal text by default; use `useRegex: true` only when intentionally using regex.' },
                         path: { type: 'string', description: 'Optional search scope, directory or exact file.' },
+                        filePath: { type: 'string', description: 'Optional exact file scope. Alias for path when targeting one source file.' },
                         include: { type: 'string', description: 'Optional file glob/name filter, for example `*.md`, `memory/characters/*.md`, or `12.md`.' },
                         outputMode: { type: 'string', enum: ['content', 'files_with_matches', 'count'], description: '`content` returns matched lines, `files_with_matches` returns files only, and `count` returns match counts. Default content.' },
                         limit: { type: 'number', description: 'Maximum results to return. Default 100, max 100.' },
                         offset: { type: 'number', description: 'Skip this many results before returning matches. Default 0.' },
                         contextLines: { type: 'number', description: 'Context lines before and after each match. Default 0, max 5.' },
+                        regex: { type: 'boolean', description: 'Whether to treat pattern as a regex. Default false; omit it for literal text search.' },
                         useRegex: { type: 'boolean', description: 'Whether to treat pattern as a regex. Default false; omit it for literal text search.' },
                     },
                     required: ['pattern'],
@@ -1036,10 +1018,14 @@ export function getTavernSourceFileToolDefinitions(): Array<{ type: 'function'; 
                 name: TAVERN_SOURCE_FILE_TOOL_NAMES.WRITE,
                 description: [
                     'Write a complete Tavern memory Markdown file.',
-                    'Only `memory/state.md` and `memory/characters/<角色名>.md` are writable. `chat/` and `worldbooks/` are read-only evidence sources.',
-                    'Use for creating files, complete rewrites, or rewrites where most content is new.',
-                    'Read the target file first. Write overwrites the entire file, so include all original content you want to keep.',
-                    'The argument names are `filePath` and `content`.',
+                    'Use `memory/state.md` for global state and `memory/characters/<角色名>.md` for one character/entity. `chat/` and `worldbooks/` are read-only evidence sources.',
+                    'Character filenames are entity names. Do not create index files, turn files, session files, or any other memory path.',
+                    'Do not create or maintain a character file for the message author or generic user/player labels such as User, Player, 用户, or 玩家; put player-side durable state in `memory/state.md` when needed.',
+                    'Use for creating a real character memory file, complete file rewrites, or rewrites where most of the target memory file is new.',
+                    'Read the target file first when it already exists. Write overwrites the entire file, so include all original content you want to keep.',
+                    'The argument names are `filePath` and `content`. Write replaces the complete target file content.',
+                    'Use Edit instead for small corrections inside an existing file.',
+                    'Writable paths are exactly `memory/state.md` and `memory/characters/<角色名>.md`.',
                 ].join('\n'),
                 parameters: {
                     type: 'object',
@@ -1059,20 +1045,34 @@ export function getTavernSourceFileToolDefinitions(): Array<{ type: 'function'; 
                 description: [
                     'Edit one existing Tavern memory Markdown file by replacing original text fragments, replacing inclusive line ranges, inserting text at line positions, or removing text with empty replacements.',
                     'One call edits one file. Only `memory/state.md` and `memory/characters/<角色名>.md` are writable.',
-                    'Use oldString/newString for local revisions. Use startLine/endLine/newString for contiguous passage replacement where copying oldString would be fragile. Use insertAtLine/newString to add text before a line or at the end. Use Write for complete rewrites.',
+                    'Use oldString/newString for in-sentence, small-paragraph, or multi-spot local revisions. Use startLine/endLine/newString for contiguous section replacement where copying oldString would be fragile. Use insertAtLine/newString to add new text before a line or at the end without replacing existing text. Use Write instead for creating files or whole-file rewrites where most content is new.',
                     'Read the target file first unless the exact current text is already available in the conversation or a recent tool result. Line-range and insertion edits must use line numbers from the latest Read result.',
                     'Put multiple edits in the edits array. Line-range and insertion items may share one call when they use line numbers from the same Read result. Keep oldString edits separate from line-number edits unless the whole change can be expressed with line numbers.',
-                    'The `edits` argument must be a non-empty JSON array, not a JSON-stringified string. Correct: `"edits":[{"startLine":10,"endLine":50,"newString":"..."}]`.',
-                    'Each edit item should choose exactly one mode. If stray optional fields appear, Edit normalizes by priority: complete startLine/endLine wins, then insertAtLine, then oldString.',
-                    'Do not issue multiple Edit tool calls for the same file in one assistant turn. Combine same-file changes into one call.',
+                    'The `edits` argument must be a non-empty array value, not a JSON-stringified string. Correct: `"edits":[{"startLine":10,"endLine":50,"newString":"..."}]`. Wrong: `"edits":"[{\\"startLine\\":10,\\"endLine\\":50,\\"newString\\":\\"...\\"}]"`.',
+                    'Each edit item should choose exactly one mode. Omit unused mode fields when possible. If the provider/tool channel adds stray optional fields, Edit normalizes by priority: complete startLine/endLine wins, then insertAtLine, then oldString.',
+                    'Correct line-range item: `{"startLine":10,"endLine":50,"newString":"..."}`. If a polluted item also contains oldString or insertAtLine, the complete startLine/endLine range is used and stray fields are ignored.',
+                    'Do not issue multiple Edit tool calls for the same file in one assistant turn. Combine same-file changes into one call, or wait for the first result before editing that file again.',
                     '',
                     '## Matching Rules',
-                    'oldString must be an exact fragment present in the file, including spaces and newlines. To remove a matched fragment, set newString to an empty string.',
-                    'Common punctuation equivalence is supported, such as straight/curly quotes and ASCII/full-width punctuation. Replacements preserve the file punctuation style when possible.',
+                    'oldString must be an exact fragment present in the file, including spaces and newlines. To remove the matched word, sentence, or fragment, set newString to an empty string.',
+                    'Common punctuation equivalence is supported, such as straight/curly quotes and ASCII/full-width comma or period. Replacements preserve the file punctuation style when possible.',
                     'For long oldString fragments, Edit can tolerate whitespace-only differences such as indentation, line wrapping, or extra/missing blank lines.',
                     'Each oldString must be unique by default. Multiple matches return line numbers and context.',
-                    'Line-range edits use 1-based inclusive startLine/endLine from Read output. Insertion uses 1-based insertAtLine; use totalLines + 1 to append.',
-                    'Line-range and insertion edits are applied by original Read line numbers from bottom to top automatically; do not adjust later line numbers yourself.',
+                    'Line-range edits use 1-based inclusive startLine/endLine from Read output. A line range replaces the entire inclusive range with any length of newString; use an empty newString to remove the range. Replacement line count does not need to match the original range.',
+                    'Insertion edits use 1-based insertAtLine from Read output. insertAtLine inserts before that line; use totalLines + 1 to append to the end of the file.',
+                    'Line-range and insertion items in one call are applied by original Read line numbers from bottom to top automatically to avoid line-number shifts; do not adjust later line numbers yourself. If an insertion falls inside a line range being replaced, merge it into that line-range replacement.',
+                    'Do not intentionally mix oldString edits with line-number edits in one Edit call. If one item is polluted by stray optional fields, the tool will still choose one mode by priority instead of failing.',
+                    '',
+                    '## Failure Handling',
+                    'Not found: check whether oldString exactly matches the file content.',
+                    'Multiple matches: expand oldString with more context to make it unique, or set `replaceAll: true` only if every match should change.',
+                    '',
+                    '## Notes',
+                    'oldString edits execute in order. Line-range and insertion edits execute bottom-to-top by original line numbers. Do not let a later oldString match text just inserted by an earlier newString.',
+                    'If two changes overlap, merge them into one replacement for the larger fragment instead of splitting them into separate edits.',
+                    'Use Write for complete file rewrites, or when most of the file should be replaced.',
+                    'Editable paths are exactly `memory/state.md` and `memory/characters/<角色名>.md`.',
+                    'Do not edit character files for the message author or generic user/player labels such as User, Player, 用户, or 玩家; keep player-side durable state in `memory/state.md`.',
                 ].join('\n'),
                 parameters: {
                     type: 'object',
@@ -1080,14 +1080,14 @@ export function getTavernSourceFileToolDefinitions(): Array<{ type: 'function'; 
                         filePath: { type: 'string', description: 'Writable memory file path: `memory/state.md` or `memory/characters/<角色名>.md`.' },
                         edits: {
                             type: 'array',
-                                description: 'Real, non-empty JSON array, not a quoted JSON string. Each item should use exactly one mode: oldString/newString, startLine/endLine/newString, or insertAtLine/newString. Stray optional fields are ignored by mode priority.',
+                            description: 'List of edits as a real, non-empty JSON array, not a quoted JSON string. Each item should use exactly one mode: oldString/newString, startLine/endLine/newString, or insertAtLine/newString. Stray optional fields are ignored by mode priority when possible.',
                             items: {
                                 type: 'object',
                                 properties: {
-                                    oldString: { type: 'string', description: 'Original text fragment to replace. Must match exactly, with punctuation/long-whitespace tolerance.' },
-                                    startLine: { type: 'number', description: '1-based inclusive start line from the latest Read result.' },
-                                    endLine: { type: 'number', description: '1-based inclusive end line from the latest Read result.' },
-                                    insertAtLine: { type: 'number', description: '1-based insertion point from the latest Read result. Use totalLines + 1 to append.' },
+                                    oldString: { type: 'string', description: 'Original text fragment to replace. Must match exactly, with common punctuation/long-whitespace tolerance. Do not use an empty oldString; use Write for full rewrites.' },
+                                    startLine: { type: 'number', description: '1-based inclusive start line from the latest Read result. Use with endLine instead of oldString.' },
+                                    endLine: { type: 'number', description: '1-based inclusive end line from the latest Read result. Use with startLine instead of oldString.' },
+                                    insertAtLine: { type: 'number', description: '1-based insertion point from the latest Read result. Inserts before this line. Use totalLines + 1 to append to the end of the file.' },
                                     newString: { type: 'string', description: 'Replacement, inserted text, or an empty string to delete the matched fragment or line range.' },
                                     replaceAll: { type: 'boolean', description: 'Whether to replace all matches. Default false.' },
                                 },
@@ -1297,12 +1297,12 @@ export async function executeTavernSourceFileTool(
         if (toolName === TAVERN_SOURCE_FILE_TOOL_NAMES.GREP) {
             const pattern = String(args.pattern ?? args.query ?? '').trim();
             if (!pattern) {return { ok: false, summary: '缺少搜索词。', error: 'grep_pattern_required' };}
-            const regexp = buildSourceSearchRegExp(pattern, args.useRegex === true);
+            const regexp = buildSourceSearchRegExp(pattern, args.regex === true || args.useRegex === true);
             const outputMode = normalizeGrepOutputMode(args.outputMode);
             const limit = Math.min(MAX_MEMORY_GREP_LIMIT, Math.max(1, Math.floor(Number(args.limit) || MAX_MEMORY_GREP_LIMIT)));
             const offset = toNonNegativeInteger(args.offset, 0);
             const contextLines = Math.min(5, toNonNegativeInteger(args.contextLines, 0));
-            const scope = normalizeTavernSourcePath(args.path || args.scope || '');
+            const scope = normalizeTavernSourcePath(args.filePath || args.path || args.scope || '');
             const include = String(args.include || '').trim();
             const rows: Array<{ path: string; lineNumber?: number; line?: string; context?: string; count?: number }> = [];
             let searchedFileCount = 0;
@@ -1387,167 +1387,6 @@ export async function executeTavernSourceFileTool(
             error: error instanceof Error ? error.message : String(error || 'source_tool_failed'),
         };
     }
-}
-
-export function getTavernMemoryToolDefinitions(): Array<{ type: 'function'; function: { name: string; description: string; parameters: unknown } }> {
-    return [
-        {
-            type: 'function',
-            function: {
-                name: TAVERN_MEMORY_TOOL_NAMES.LIST,
-                description: [
-                    'List memory Markdown files in the current RP session.',
-                    'Returns paths, status, and timestamps only; it does not read file bodies.',
-                    'Best for discovering which memory files exist before choosing MemoryRead, MemoryGrep, MemoryWrite, or MemoryEdit.',
-                    'Scope is fixed to the current session and `memory/...`; it cannot inspect RP chat history, character cards, world books, settings, or plugin source code.',
-                ].join('\n'),
-                parameters: { type: 'object', properties: {}, additionalProperties: false },
-            },
-        },
-        {
-            type: 'function',
-            function: {
-                name: TAVERN_MEMORY_TOOL_NAMES.READ,
-                description: [
-                    'Read a memory Markdown file in the current RP session.',
-                    'Returns raw `content` plus line-numbered `numberedContent`. Large files include continuation hints.',
-                    'Use `tail` by itself when you need the end of a file. Do not combine `tail` with `offset` or `limit`.',
-                    'The argument name is `filePath`, not `path`. Use `memory/state.md` for global state and `memory/characters/<角色名>.md` for entity memory.',
-                    'This reads memory files only. Use ChatHistory for original RP chat messages.',
-                ].join('\n'),
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        filePath: { type: 'string', description: 'Memory file path. Use `memory/state.md` or `memory/characters/<角色名>.md`.' },
-                        offset: { type: 'number', description: '1-based line offset. Default 1.' },
-                        limit: { type: 'number', description: 'Maximum lines to return. Default 1200, max 2000.' },
-                        tail: { type: 'number', description: 'Return the final N lines. Use by itself when you need the end of a file; do not combine it with offset or limit.' },
-                    },
-                    required: ['filePath'],
-                    additionalProperties: false,
-                },
-            },
-        },
-        {
-            type: 'function',
-            function: {
-                name: TAVERN_MEMORY_TOOL_NAMES.WRITE,
-                description: [
-                    'Write a complete memory Markdown file in the current RP session.',
-                    'Use `memory/state.md` for global state and `memory/characters/<角色名>.md` for one character/entity.',
-                    'Character filenames are entity names. Do not create index files or turn/session files.',
-                    'Do not create or maintain a character file for the message author or generic user/player labels such as User, Player, 用户, or 玩家; put player-side durable state in `memory/state.md` when needed.',
-                    'Use for creating a real character memory file, complete file rewrites, or rewrites where most of the target memory file is new.',
-                    'Read the target file first when it already exists. Write overwrites the entire file, so include all original content you want to keep.',
-                    'The argument names are `filePath` and `content`. Write replaces the complete target file content.',
-                    'Use MemoryEdit instead for small corrections inside an existing file.',
-                    'Writable paths are exactly `memory/state.md` and `memory/characters/<角色名>.md`.',
-                ].join('\n'),
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        filePath: { type: 'string', description: 'Target memory file path. Must be `memory/state.md` or `memory/characters/<角色名>.md`.' },
-                        content: { type: 'string', description: 'Complete Markdown file content to save.' },
-                    },
-                    required: ['filePath', 'content'],
-                    additionalProperties: false,
-                },
-            },
-        },
-        {
-            type: 'function',
-            function: {
-                name: TAVERN_MEMORY_TOOL_NAMES.EDIT,
-                description: [
-                    'Edit one existing memory Markdown file in the current RP session by replacing original text fragments, replacing inclusive line ranges, inserting text at line positions, or removing text with empty replacements.',
-                    'One call edits one file.',
-                    'Use oldString/newString for in-sentence, small-paragraph, or multi-spot local revisions. Use startLine/endLine/newString for contiguous section replacement where copying oldString would be fragile. Use insertAtLine/newString to add new text before a line or at the end without replacing existing text. Use MemoryWrite instead for creating files or whole-file rewrites where most content is new.',
-                    'Read the target file first unless the exact current text is already available in the conversation or a recent tool result. Line-range and insertion edits must use line numbers from the latest MemoryRead result.',
-                    'Put multiple edits in the edits array. Line-range and insertion items may share one call when they use line numbers from the same MemoryRead result. Keep oldString edits separate from line-number edits unless the whole change can be expressed with line numbers.',
-                    'The `edits` argument must be a non-empty array value, not a JSON-stringified string. Correct: `"edits":[{"startLine":10,"endLine":50,"newString":"..."}]`. Wrong: `"edits":"[{\\"startLine\\":10,\\"endLine\\":50,\\"newString\\":\\"...\\"}]"`.',
-                    'Each edit item should choose exactly one mode. Omit unused mode fields when possible. If the provider/tool channel adds stray optional fields, MemoryEdit normalizes by priority: complete startLine/endLine wins, then insertAtLine, then oldString.',
-                    'Correct line-range item: `{"startLine":10,"endLine":50,"newString":"..."}`. If a polluted item also contains oldString or insertAtLine, the complete startLine/endLine range is used and stray fields are ignored.',
-                    'Do not issue multiple MemoryEdit tool calls for the same file in one assistant turn. Combine same-file changes into one call, or wait for the first result before editing that file again.',
-                    '',
-                    '## Matching Rules',
-                    'oldString must be an exact fragment present in the file, including spaces and newlines. To remove the matched word, sentence, or fragment, set newString to an empty string.',
-                    'Common punctuation equivalence is supported, such as straight/curly quotes and ASCII/full-width comma or period. Replacements preserve the file punctuation style when possible.',
-                    'For long oldString fragments, MemoryEdit can also tolerate whitespace-only differences such as indentation, line wrapping, or extra/missing blank lines.',
-                    'Each oldString must be unique by default. Multiple matches return line numbers and context.',
-                    'Line-range edits use 1-based inclusive startLine/endLine from MemoryRead output. A line range replaces the entire inclusive range with any length of newString; use an empty newString to remove the range. Replacement line count does not need to match the original range.',
-                    'Insertion edits use 1-based insertAtLine from MemoryRead output. insertAtLine inserts before that line; use totalLines + 1 to append to the end of the file.',
-                    'Line-range and insertion items in one call are applied by original MemoryRead line numbers from bottom to top automatically to avoid line-number shifts; do not adjust later line numbers yourself. If an insertion falls inside a line range being replaced, merge it into that line-range replacement.',
-                    'Do not intentionally mix oldString edits with line-number edits in one MemoryEdit call. If one item is polluted by stray optional fields, the tool will still choose one mode by priority instead of failing.',
-                    '',
-                    '## Failure Handling',
-                    'Not found: check whether oldString exactly matches the file content.',
-                    'Multiple matches: expand oldString with more context to make it unique, or set `replaceAll: true` only if every match should change.',
-                    '',
-                    '## Notes',
-                    'oldString edits execute in order. Line-range and insertion edits execute bottom-to-top by original line numbers. Do not let a later oldString match text just inserted by an earlier newString.',
-                    'If two changes overlap, merge them into one replacement for the larger fragment instead of splitting them into separate edits.',
-                    'Use MemoryWrite for complete file rewrites, or when most of the file should be replaced.',
-                    'Editable paths are exactly `memory/state.md` and `memory/characters/<角色名>.md`.',
-                    'Do not edit character files for the message author or generic user/player labels such as User, Player, 用户, or 玩家; keep player-side durable state in `memory/state.md`.',
-                ].join('\n'),
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        filePath: { type: 'string', description: 'Canonical path. Must be `memory/state.md` or `memory/characters/<角色名>.md`.' },
-                        edits: {
-                            type: 'array',
-                            description: 'List of edits as a real, non-empty JSON array, not a quoted JSON string. Each item should use exactly one mode: oldString/newString, startLine/endLine/newString, or insertAtLine/newString. Stray optional fields are ignored by mode priority when possible.',
-                            items: {
-                                type: 'object',
-                                properties: {
-                                    oldString: { type: 'string', description: 'Original text fragment to replace. Must match exactly, with common punctuation/long-whitespace tolerance. Do not use an empty oldString; use MemoryWrite for full rewrites.' },
-                                    startLine: { type: 'number', description: '1-based inclusive start line from the latest MemoryRead result. Use with endLine instead of oldString.' },
-                                    endLine: { type: 'number', description: '1-based inclusive end line from the latest MemoryRead result. Use with startLine instead of oldString.' },
-                                    insertAtLine: { type: 'number', description: '1-based insertion point from the latest MemoryRead result. Inserts before this line. Use totalLines + 1 to append to the end of the file.' },
-                                    newString: { type: 'string', description: 'Replacement, inserted text, or an empty string to delete the matched fragment or line range.' },
-                                    replaceAll: { type: 'boolean', description: 'Whether to replace all matches. Default false.' },
-                                },
-                                required: ['newString'],
-                                additionalProperties: false,
-                            },
-                        },
-                    },
-                    required: ['filePath', 'edits'],
-                    additionalProperties: false,
-                },
-            },
-        },
-        {
-            type: 'function',
-            function: {
-                name: TAVERN_MEMORY_TOOL_NAMES.GREP,
-                description: [
-                    'Search text inside memory Markdown files for the current RP session.',
-                    'Uses literal text search by default and returns matching files plus line-level snippets.',
-                    'Use before reading many files to locate facts, hooks, character state, unresolved items, or summaries.',
-                    '`path` can be a search directory or one exact file like `memory/state.md` or `memory/characters/<角色名>.md`; `filePath` is an alias for exact-file scope. For regex search, explicitly pass `regex: true` or `useRegex: true`.',
-                    'Supports path/filePath scope, outputMode, offset/limit pagination, and context lines.',
-                    'This searches memory files only. Use ChatHistory grep to search original RP chat history.',
-                ].join('\n'),
-                parameters: {
-                    type: 'object',
-                    properties: {
-                        pattern: { type: 'string', description: 'Search pattern. Treated as literal text by default; use regex/useRegex only when you intentionally need regex.' },
-                        path: { type: 'string', description: 'Optional search scope. Use `memory/state.md`, `memory/characters/<角色名>.md`, or `memory/characters/`.' },
-                        filePath: { type: 'string', description: 'Optional exact file scope. Alias for path when targeting one memory file.' },
-                        outputMode: { type: 'string', enum: ['content', 'files_with_matches', 'count'], description: '`content` returns matched lines, `files_with_matches` returns files only, and `count` returns match counts. Default content.' },
-                        limit: { type: 'number', description: 'Maximum results to return. Default 100, max 100.' },
-                        offset: { type: 'number', description: 'Skip this many ascending results before returning matches. Default 0.' },
-                        contextLines: { type: 'number', description: 'How many context lines to include before and after each match. Default 0, max 5.' },
-                        regex: { type: 'boolean', description: 'Whether to treat pattern as a regex. Default false; omit it for literal text search.' },
-                        useRegex: { type: 'boolean', description: 'Alias for regex; kept for JSON compatibility with ebook-style calls.' },
-                    },
-                    required: ['pattern'],
-                    additionalProperties: false,
-                },
-            },
-        },
-    ];
 }
 
 export function getTavernManagerToolDefinitions(): Array<{ type: 'function'; function: { name: string; description: string; parameters: unknown } }> {

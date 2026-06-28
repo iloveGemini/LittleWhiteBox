@@ -291,6 +291,21 @@ function buildResidentMemoryBlock(memoryFiles: Array<{ path: string; status: str
     return ['[Resident Memory Files]', ...blocks].join('\n\n');
 }
 
+function normalizeManagerPlayerName(context?: XbTavernContext): string {
+    return normalizeText(context?.user?.name, 80).replace(/[\r\n`]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function buildManagerPlayerIdentityBlock(playerName = ''): string {
+    const name = normalizeText(playerName, 80);
+    return [
+        '[玩家身份]',
+        name ? `当前玩家用户名：${name}` : '当前玩家用户名：未提供',
+        name
+            ? `用户档案不由后台 manager 维护；不要创建或维护 \`memory/characters/${name}.md\`，也不要把消息作者写成角色档案。`
+            : '用户档案不由后台 manager 维护；不要把消息作者写成角色档案。',
+    ].join('\n');
+}
+
 function buildAutoManagerUserPrompt(input: {
     turn: number;
     userMessage: TavernMessageRecord;
@@ -298,16 +313,18 @@ function buildAutoManagerUserPrompt(input: {
     memoryFiles: Array<{ path: string; status: string; updatedAt: number; content: string }>;
     taskPoolBlock?: string;
     runtime: TavernSessionContractRuntime;
+    playerName?: string;
 }): string {
     const allowMemory = input.runtime.managerPromptOptions.includeMemory;
     const allowMap = input.runtime.managerPromptOptions.includeCartography;
     const allowQuest = input.runtime.managerPromptOptions.includeQuestOrchestration;
+    const playerName = normalizeText(input.playerName, 80);
     const requirements: string[] = [];
     let step = 1;
     if (allowMemory) {
         requirements.push(`${step}. Read \`memory/state.md\` and relevant \`memory/characters/<角色名>.md\` files as needed, then update memory only if this accepted assistant reply changed durable memory.`);
         step += 1;
-        requirements.push(`${step}. Do not create or maintain user/player character files such as \`memory/characters/User.md\`, \`Player.md\`, \`用户.md\`, or \`玩家.md\`. Treat user messages as source evidence, not as a user persona sheet; ignore status-bar/UI/meta text unless the assistant reply establishes it inside RP.`);
+        requirements.push(`${step}. Do not create or maintain user/player character files such as \`memory/characters/User.md\`, \`Player.md\`, \`用户.md\`, or \`玩家.md\`${playerName ? `, and do not create or maintain \`memory/characters/${playerName}.md\` for the current player username 「${playerName}」` : ''}. The user profile is not maintained by the backstage manager; keep player-side durable state in \`memory/state.md\` only when it matters to RP continuity. Treat user messages as source evidence, not as a user persona sheet; ignore status-bar/UI/meta text unless the assistant reply establishes it inside RP.`);
         step += 1;
     }
     if (allowMap) {
@@ -336,6 +353,7 @@ function buildAutoManagerUserPrompt(input: {
     const blocks = [
         ...(allowMemory ? [buildResidentMemoryBlock(input.memoryFiles), ''] : []),
         ...(allowQuest ? [String(input.taskPoolBlock || '[Current Event Pool]\nActive directions: unknown.').trim(), ''] : []),
+        ...(allowMemory ? [buildManagerPlayerIdentityBlock(playerName), ''] : []),
         '[本轮 RP 原文]',
         '[用户消息]',
         cleanSourceTextForManager(input.userMessage.content),
@@ -1054,6 +1072,7 @@ async function buildAutoManagerMessages(input: XbTavernManagerRunInput, sourceMe
     const taskPoolBlock = contractRuntime.includeQuestOrchestration
         ? await buildTavernTaskPoolPromptBlock(input.sessionId)
         : '';
+    const contextSnapshot = input.contextSnapshot || sourceMessages.assistantMessage.contextSnapshot || sourceMessages.userMessage.contextSnapshot;
     return [
         {
             role: 'system',
@@ -1068,6 +1087,7 @@ async function buildAutoManagerMessages(input: XbTavernManagerRunInput, sourceMe
                 memoryFiles,
                 taskPoolBlock,
                 runtime: contractRuntime,
+                playerName: normalizeManagerPlayerName(contextSnapshot),
             }),
         },
     ];

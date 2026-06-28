@@ -1954,12 +1954,12 @@ test('xb tavern run turn starts accepted-turn manager work on the next user send
     assert.match(managerPrompt, /小白酒馆后台管理员/);
     assert.match(managerPrompt, /running inside the user's SillyTavern instance/i);
     assert.match(managerPrompt, /main chat handles immersive roleplay/i);
+    assert.match(managerPrompt, /## Scope & Truth/);
     assert.match(managerPrompt, /## Work Loop/);
-    assert.match(managerPrompt, /## Selection Strategy/);
     assert.match(managerPrompt, /## Tool Use Guide/);
     assert.match(managerPrompt, /## Map Records/);
     assert.match(managerPrompt, /memory\/state\.md/);
-    assert.match(managerPrompt, /assistant reply makes a fact or state actually established/i);
+    assert.match(managerPrompt, /that reply actually establishes a fact or state/i);
     assert.doesNotMatch(managerPrompt, /建议流水路径/);
     assert.doesNotMatch(managerPrompt, /suggested turn note/i);
     assert.match(managerPrompt, /Spatial records are files/i);

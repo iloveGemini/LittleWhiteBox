@@ -502,11 +502,6 @@ test('tavern built-in assistant preset upgrades stale local defaults', async () 
     assert.doesNotMatch(active.statePrompt, /memory\/session\.md|memory\/turns/i);
     assert.doesNotMatch(active.statePrompt, /memory\/state\.md/);
     assert.doesNotMatch(active.characterPrompt, /memory\/characters\/<角色名>\.md/);
-    assert.match(active.statePrompt, /推荐结构：/);
-    assert.match(active.statePrompt, /写入准入：/);
-    assert.match(active.statePrompt, /当前局面/);
-    assert.match(active.characterPrompt, /关系变化/);
-    assert.match(active.characterPrompt, /不要按回合追加/);
     assert.doesNotMatch(active.characterPrompt, /Recent Related Events|最近发生了什么/);
 });
 
@@ -527,7 +522,8 @@ test('tavern assistant preset editable sections hide fixed memory paths', () => 
     });
 
     assert.doesNotMatch(normalized.statePrompt, /memory\/state\.md|facts and states that are still true/i);
-    assert.match(normalized.statePrompt, /推荐结构：/);
+    assert.match(normalized.statePrompt, /## 事件时间线/);
+    assert.match(normalized.statePrompt, /## 世界状态/);
     assert.doesNotMatch(normalized.characterPrompt, /memory\/characters\/<角色名>\.md/);
     assert.match(normalized.characterPrompt, /## Relationships/);
 });
@@ -1222,6 +1218,13 @@ test('source file tools read chat, worldbooks, and memory while keeping evidence
     }, { contextSnapshot });
     assert.deepEqual(regex.matches?.map((match) => match.path), ['chat/messages/0.md', 'chat/messages/1.md']);
 
+    const exactFileRegex = await executeTavernSourceFileTool(session.id, 'Grep', {
+        pattern: 'a.b',
+        filePath: 'chat/messages/1.md',
+        regex: true,
+    }, { contextSnapshot });
+    assert.deepEqual(exactFileRegex.matches?.map((match) => match.path), ['chat/messages/1.md']);
+
     const worldbookList = await executeTavernSourceFileTool(session.id, 'LS', {
         path: 'worldbooks/global/钟楼传说/',
     }, { contextSnapshot });
@@ -1365,7 +1368,22 @@ test('Grep tool schema documents literal default and source scopes', () => {
 
     assert.match(grepTool?.function.description || '', /literal text search by default/i);
     assert.match(grepTool?.function.description || '', /chat\/.*worldbooks\/.*memory\//s);
+    assert.match(grepTool?.function.description || '', /filePath.*alias/i);
+    assert.match(grepTool?.function.description || '', /regex: true.*useRegex: true/i);
+    assert.match(parameters.properties?.filePath?.description || '', /Alias for path/i);
+    assert.match(parameters.properties?.regex?.description || '', /Default false/i);
     assert.match(parameters.properties?.useRegex?.description || '', /Default false/i);
+});
+
+test('Write tool schema documents memory path discipline and whole-file semantics', () => {
+    const writeTool = getTavernManagerToolDefinitions()
+        .find((tool) => tool.function.name === 'Write');
+
+    assert.match(writeTool?.function.description || '', /chat\/.*worldbooks\/.*read-only evidence sources/s);
+    assert.match(writeTool?.function.description || '', /Do not create index files, turn files, session files/i);
+    assert.match(writeTool?.function.description || '', /User, Player, 用户, or 玩家/);
+    assert.match(writeTool?.function.description || '', /Use Edit instead for small corrections/i);
+    assert.match(writeTool?.function.description || '', /Writable paths are exactly `memory\/state\.md` and `memory\/characters\/<角色名>\.md`/);
 });
 
 test('Edit tool schema documents edit modes and array discipline', () => {
@@ -1380,6 +1398,12 @@ test('Edit tool schema documents edit modes and array discipline', () => {
     assert.match(editTool?.function.description || '', /normalizes by priority/i);
     assert.match(editTool?.function.description || '', /Do not issue multiple Edit tool calls for the same file in one assistant turn/i);
     assert.match(editTool?.function.description || '', /Keep oldString edits separate from line-number edits/i);
+    assert.match(editTool?.function.description || '', /Wrong: `"edits":/);
+    assert.match(editTool?.function.description || '', /Correct line-range item/i);
+    assert.match(editTool?.function.description || '', /insertion falls inside a line range/i);
+    assert.match(editTool?.function.description || '', /Failure Handling/i);
+    assert.match(editTool?.function.description || '', /If two changes overlap, merge them/i);
+    assert.match(editTool?.function.description || '', /User, Player, 用户, or 玩家/);
     assert.match(editTool?.function.description || '', /bottom to top/);
     assert.match(editTool?.function.description || '', /Common punctuation equivalence is supported/i);
     assert.match(parameters.properties?.edits?.description || '', /real, non-empty JSON array/i);
@@ -4379,12 +4403,15 @@ test('tavern auto manager prompt omits unauthorized module instructions from bot
             memoryArchiving: true,
             cartographyEngine: false,
         }),
+        contextSnapshot: {
+            user: { name: 'Mira' },
+        },
         executeManagerOnce: async (options) => {
             memoryPrompt = JSON.stringify(options.messages);
             return { provider: 'fake-manager', model: 'memory-only', text: '已检查。' };
         },
     });
-    assert.match(memoryPrompt, /Edit and Write/);
+    assert.match(memoryPrompt, /Edit\/Write/);
     assert.doesNotMatch(memoryPrompt, /MapAtlasRead|MapSceneEdit|MapInspect summary/);
     assert.doesNotMatch(memoryPrompt, /## Structured State/);
     assert.doesNotMatch(memoryPrompt, /The map does not replace this turn's written memory/i);

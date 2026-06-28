@@ -150,7 +150,7 @@ export function getEbookToolDefinitions(options = {}) {
                     description: [
                         'Edit one existing current-book file by replacing original text fragments, replacing inclusive line ranges, inserting text at line positions, or removing text with empty replacements.',
                         'One call edits one file.',
-                        'Use oldString/newString for in-sentence, small-paragraph, or multi-spot local revisions. Use startLine/endLine/newString for contiguous medium-sized passage replacement where copying oldString would be fragile. Use insertAtLine/newString to add new text before a line or at the end without replacing existing text. Use Write instead for creating files, complete file rewrites, whole sections, whole chapters, or rewrites where most content is new.',
+                        'Use oldString/newString for local text replacement. Use startLine/endLine/newString for contiguous passage replacement where copying oldString would be fragile. Use insertAtLine/newString to add new text before a line or at the end without replacing existing text. Use Write instead for creating files, complete rewrites, or rewrites where most content is new.',
                         'Read the target file first unless the exact current text is already available in the conversation or a recent tool result. Line-range and insertion edits must use line numbers from the latest Read result.',
                         'Put multiple edits in the edits array. Line-range and insertion items may share one call when they use line numbers from the same Read result. Keep oldString edits separate from line-number edits unless the whole change can be expressed with line numbers.',
                         'The `edits` argument must be a non-empty array value, not a JSON-stringified string. Correct: `"edits":[{"startLine":10,"endLine":50,"newString":"..."}]`. Wrong: `"edits":"[{\\"startLine\\":10,\\"endLine\\":50,\\"newString\\":\\"...\\"}]"`.',
@@ -175,7 +175,7 @@ export function getEbookToolDefinitions(options = {}) {
                         '## Notes',
                         'oldString edits execute in order. Line-range and insertion edits execute bottom-to-top by original line numbers. Do not let a later oldString match text just inserted by an earlier newString.',
                         'If two changes overlap, merge them into one replacement for the larger fragment instead of splitting them into separate edits.',
-                        'Use Write for complete file rewrites, whole sections, whole chapters, complete new files, or when most of the file should be replaced.',
+                        'Use Write for complete rewrites, complete new files, or when most of the file should be replaced.',
                     ].join('\n'),
                     parameters: {
                         type: 'object',
