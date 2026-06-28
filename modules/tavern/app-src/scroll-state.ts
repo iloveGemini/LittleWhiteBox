@@ -1,5 +1,6 @@
 export interface ElementScrollSnapshot {
     scrollTop: number;
+    scrollHeight: number;
     nearBottom: boolean;
     anchorKey: string;
     anchorTopOffset: number;
@@ -47,6 +48,7 @@ export function captureElementScrollState(
     const anchor = anchors[0] || null;
     return {
         scrollTop: Number(node.scrollTop || 0),
+        scrollHeight: Number(node.scrollHeight || 0),
         nearBottom: distanceToBottom < 80,
         anchorKey: anchor?.key || '',
         anchorTopOffset: anchor?.topOffset || 0,
@@ -62,6 +64,7 @@ export function restoreElementScrollState(
         forceBottom?: boolean;
         defaultToBottom?: boolean;
         preserveScrollTop?: boolean;
+        preserveScrollHeightDelta?: boolean;
     } = {},
 ) {
     if (!node) {return;}
@@ -76,7 +79,10 @@ export function restoreElementScrollState(
         return;
     }
     if (options.preserveScrollTop) {
-        node.scrollTop = Math.min(Math.max(0, snapshot.scrollTop), node.scrollHeight);
+        const scrollHeightDelta = options.preserveScrollHeightDelta
+            ? Number(node.scrollHeight || 0) - Number(snapshot.scrollHeight || 0)
+            : 0;
+        node.scrollTop = Math.min(Math.max(0, snapshot.scrollTop + scrollHeightDelta), node.scrollHeight);
         const anchors = snapshot.anchors?.length
             ? snapshot.anchors
             : snapshot.anchorKey

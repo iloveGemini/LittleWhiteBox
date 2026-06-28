@@ -104,21 +104,23 @@ export function useTavernScrollPane(options: TavernScrollPaneOptions) {
         if (!force && !autoScroll.value) {return;}
         if (force) {autoScroll.value = true;}
         void nextTick(() => {
-            const node = scrollRef.value;
-            if (!node) {return;}
             const apply = () => {
+                if (!force && autoScroll.value === false) {return false;}
+                const node = scrollRef.value;
+                if (!node) {return false;}
                 node.scrollTop = node.scrollHeight;
+                return true;
             };
-            apply();
+            if (!apply()) {return;}
             requestAnimationFrame(() => {
-                apply();
+                if (!apply()) {return;}
                 requestAnimationFrame(() => {
-                    apply();
+                    if (!apply()) {return;}
                     const changed = notifyReturnToBottom(!!scrollOptions.collapseWindow, force);
                     if (scrollOptions.collapseWindow || changed) {
                         collapseMessageWindowIfBottom(true);
                         void nextTick(() => {
-                            apply();
+                            if (!apply()) {return;}
                             requestAnimationFrame(apply);
                         });
                     }

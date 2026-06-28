@@ -52,8 +52,12 @@ const {
     chatLayout,
     chatScrollRef,
     currentAuthorNote,
+    isRunning,
     saveCurrentAuthorNote,
     messageKey,
+    runtimeActionCheckEvents,
+    runtimeText,
+    runtimeThoughts,
     updateChatScrollButtons,
 } = chat;
 const {
@@ -98,6 +102,7 @@ type ChatQuickWorkspace =
 
 let pendingChatScrollSnapshot: ElementScrollSnapshot | null = null;
 let pendingManagerScrollSnapshot: ElementScrollSnapshot | null = null;
+let pendingStreamingChatScrollSnapshot: ElementScrollSnapshot | null = null;
 let chatScrollAnchorDirty = true;
 let managerScrollAnchorDirty = true;
 const contractModalOpen = ref(false);
@@ -129,6 +134,27 @@ const managerScrollAnchorSignature = computed(() => [
     managerMessageWindow.value.startIndex,
     managerMessageWindow.value.visibleCount,
     ...visibleManagerChatItems.value.map((item) => `${item.kind}:${item.key}`),
+].join('|'));
+const runtimeThoughtsScrollSignature = computed(() => runtimeThoughts.value
+    .map((thought, index) => `${index}:${String(thought.label || '').length}:${String(thought.text || '').length}`)
+    .join('|'));
+const runtimeActionCheckScrollSignature = computed(() => runtimeActionCheckEvents.value
+    .map((event, index) => [
+        index,
+        event.toolCallId || '',
+        event.stat,
+        event.action,
+        event.roll,
+        event.difficulty,
+        event.outcome || '',
+        event.insertAfterChars,
+        event.success ? 1 : 0,
+    ].join(':'))
+    .join('|'));
+const streamingReadingLockSignature = computed(() => [
+    runtimeText.value,
+    runtimeThoughtsScrollSignature.value,
+    runtimeActionCheckScrollSignature.value,
 ].join('|'));
 
 const authorNotePositionOptions = [
@@ -292,6 +318,33 @@ function handleChatAppMenuKeydown(event: KeyboardEvent) {
     closeChatAppMenu();
 }
 
+function captureChatScrollSnapshot() {
+    return captureElementScrollState(chatScrollRef.value, {
+        itemSelector: '.chat-bubble[data-chat-anchor-key], .chat-history-gate[data-chat-anchor-key]',
+        datasetKey: 'chatAnchorKey',
+    });
+}
+
+function restoreChatScrollSnapshot(snapshot: ElementScrollSnapshot | null, options: {
+    forceBottom?: boolean;
+    defaultToBottom?: boolean;
+    preserveScrollTop?: boolean;
+    preserveScrollHeightDelta?: boolean;
+} = {}) {
+    restoreElementScrollState(chatScrollRef.value, snapshot, {
+        itemSelector: '.chat-bubble[data-chat-anchor-key], .chat-history-gate[data-chat-anchor-key]',
+        datasetKey: 'chatAnchorKey',
+    }, options);
+}
+
+function shouldLockStreamingChatScroll() {
+    return (
+        isRunning.value === true
+        && chatAutoScroll.value === false
+        && chatPaneVisible.value
+    );
+}
+
 function toggleContractDraft(key: TavernContractPermissionKey) {
     contractDraft.value = {
         ...contractDraft.value,
@@ -357,6 +410,23 @@ watch(managerScrollAnchorSignature, () => {
     managerScrollAnchorDirty = true;
 }, { flush: 'sync' });
 
+watch(streamingReadingLockSignature, () => {
+    if (!shouldLockStreamingChatScroll()) {return;}
+    pendingStreamingChatScrollSnapshot = captureChatScrollSnapshot();
+}, { flush: 'sync' });
+
+watch(streamingReadingLockSignature, () => {
+    if (!pendingStreamingChatScrollSnapshot) {return;}
+    if (shouldLockStreamingChatScroll()) {
+        restoreChatScrollSnapshot(pendingStreamingChatScrollSnapshot, {
+            preserveScrollTop: true,
+            preserveScrollHeightDelta: true,
+        });
+        updateChatScrollButtons();
+    }
+    pendingStreamingChatScrollSnapshot = null;
+}, { flush: 'post' });
+
 onMounted(() => {
     document.addEventListener('pointerdown', handleChatAppMenuOutsidePointer);
     document.addEventListener('keydown', handleChatAppMenuKeydown);
@@ -371,10 +441,7 @@ onBeforeUpdate(() => {
     pendingChatScrollSnapshot = null;
     pendingManagerScrollSnapshot = null;
     if (chatPaneVisible.value && chatScrollAnchorDirty) {
-        pendingChatScrollSnapshot = captureElementScrollState(chatScrollRef.value, {
-            itemSelector: '.chat-bubble[data-chat-anchor-key], .chat-history-gate[data-chat-anchor-key]',
-            datasetKey: 'chatAnchorKey',
-        });
+        pendingChatScrollSnapshot = captureChatScrollSnapshot();
         return;
     }
     if (managerPaneVisible.value && managerScrollAnchorDirty) {
@@ -389,10 +456,7 @@ onUpdated(() => {
     const shouldAutoScrollChat = chatPaneVisible.value && chatAutoScroll.value !== false;
     const shouldAutoScrollManager = managerPaneVisible.value && managerAutoScroll.value !== false;
     if (pendingChatScrollSnapshot) {
-        restoreElementScrollState(chatScrollRef.value, pendingChatScrollSnapshot, {
-            itemSelector: '.chat-bubble[data-chat-anchor-key], .chat-history-gate[data-chat-anchor-key]',
-            datasetKey: 'chatAnchorKey',
-        }, {
+        restoreChatScrollSnapshot(pendingChatScrollSnapshot, {
             forceBottom: shouldAutoScrollChat,
             defaultToBottom: shouldAutoScrollChat,
             preserveScrollTop: !shouldAutoScrollChat,

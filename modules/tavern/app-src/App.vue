@@ -634,6 +634,7 @@ function restoreDetachedChatScrollAfterMarkdown(snapshot: ElementScrollSnapshot 
     if (!snapshot || chatAutoScroll.value !== false) {return;}
     restoreElementScrollState(chatScrollRef.value, snapshot, chatScrollAnchorConfig, {
         preserveScrollTop: true,
+        preserveScrollHeightDelta: true,
     });
     chatScrollPane.updateScrollButtons();
 }
