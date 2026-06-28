@@ -109,6 +109,7 @@ export function useTavernScrollPane(options: TavernScrollPaneOptions) {
                 const node = scrollRef.value;
                 if (!node) {return false;}
                 node.scrollTop = node.scrollHeight;
+                lastScrollTop = Number(node.scrollTop || 0);
                 return true;
             };
             if (!apply()) {return;}
@@ -159,7 +160,7 @@ export function useTavernScrollPane(options: TavernScrollPaneOptions) {
                 notifyReturnToBottom(false, false);
                 collapseMessageWindowIfBottom();
             }
-        } else if (currentScrollTop < previousScrollTop) {
+        } else {
             autoScroll.value = false;
         }
         if (scrollTicking) {return;}

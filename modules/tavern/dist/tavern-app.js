@@ -7854,7 +7854,7 @@ function AT(e) {
       const J = () => {
         if (!W && n.value === !1) return !1;
         const ae = t.value;
-        return ae ? (ae.scrollTop = ae.scrollHeight, !0) : !1;
+        return ae ? (ae.scrollTop = ae.scrollHeight, d = Number(ae.scrollTop || 0), !0) : !1;
       };
       J() && requestAnimationFrame(() => {
         J() && requestAnimationFrame(() => {
@@ -7878,7 +7878,7 @@ function AT(e) {
     const W = t.value;
     if (!W || p()) return;
     const N = d, J = Number(W.scrollTop || 0), ae = J > N;
-    d = J, _() ? (n.value !== !1 || ae) && (n.value = !0, C(!1, !1), x()) : J < N && (n.value = !1), !i && (i = !0, requestAnimationFrame(() => {
+    d = J, _() ? (n.value !== !1 || ae) && (n.value = !0, C(!1, !1), x()) : n.value = !1, !i && (i = !0, requestAnimationFrame(() => {
       v(), y(), i = !1;
     }));
   }

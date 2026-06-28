@@ -58,8 +58,9 @@ test('tavern scroll handlers collapse expanded message windows when returning to
     assert.doesNotMatch(appSource, /function handleManagerScroll\(\)/);
     assert.match(scrollPaneSource, /function handleScroll\(\)[\s\S]*collapseMessageWindowIfBottom\(\);/);
     assert.match(scrollPaneSource, /const previousScrollTop = lastScrollTop;[\s\S]*const scrollingTowardBottom = currentScrollTop > previousScrollTop;[\s\S]*lastScrollTop = currentScrollTop;/);
-    assert.match(scrollPaneSource, /else if \(currentScrollTop < previousScrollTop\) \{[\s\S]*autoScroll\.value = false;/);
-    assert.doesNotMatch(scrollPaneSource, /else \{\s*autoScroll\.value = false;\s*\}/);
+    assert.match(scrollPaneSource, /const nearBottom = isNearBottom\(\);[\s\S]*if \(nearBottom\) \{[\s\S]*autoScroll\.value = true;[\s\S]*\} else \{[\s\S]*autoScroll\.value = false;/);
+    assert.match(scrollPaneSource, /node\.scrollTop = node\.scrollHeight;\s*lastScrollTop = Number\(node\.scrollTop \|\| 0\);/);
+    assert.doesNotMatch(scrollPaneSource, /else if \(currentScrollTop < previousScrollTop\) \{[\s\S]*autoScroll\.value = false;/);
     assert.match(scrollPaneSource, /function findWheelScrollTarget\(event: WheelEvent, root: HTMLElement, deltaY: number\)/);
     assert.match(scrollPaneSource, /requestAnimationFrame\(\(\) => \{[\s\S]*applyWheelFallback\(target, deltaY\);[\s\S]*if \(target === root\) \{[\s\S]*handleScroll\(\);/);
     assert.match(scrollPaneSource, /onReturnToBottom\?: \(options: \{ collapseWindow: boolean; force: boolean \}\) => void \| boolean;/);
