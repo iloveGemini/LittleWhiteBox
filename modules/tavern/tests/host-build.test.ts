@@ -332,6 +332,8 @@ test('tavern worldbook sync uses native source overview with current context', (
     assert.doesNotMatch(settingsControllerSource, /async function openSelectedWorldbookEditor/);
     assert.doesNotMatch(settingsControllerSource, /requestHost\('xb-tavern:open-worldbook-editor'/);
     assert.match(contextSource, /const worldbookSources = collectWorldbookSources\(ctx, options\);/);
+    assert.match(contextSource, /addUnique\(globalNames, selected_world_info\);/);
+    assert.doesNotMatch(contextSource, /addUnique\(globalNames, worldInfo\.globalSelect\)/);
     assert.doesNotMatch(contextSource, /METADATA_KEY/);
     assert.doesNotMatch(contextSource, /chat_metadata\?\.\[METADATA_KEY\]/);
     assert.doesNotMatch(contextSource, /metadata_keys/);
@@ -416,6 +418,7 @@ test('tavern worldbook host bridge exposes named entry edit endpoints and native
     assert.match(hostSource, /await prepareCharacterEditorForWorldbookBinding\(nativeCharacterId\);[\s\S]*await charUpdatePrimaryWorld\(name\);/);
     assert.match(hostSource, /return bindCharacterWorldbookThroughEditor\(nativeCharacterId, name\);/);
     assert.match(hostSource, /applyGlobalWorldbookSelection\(selected\);[\s\S]*await updateWorldInfoList\(\);/);
+    assert.match(hostSource, /nativeWorldInfo\.updateWorldInfoSettings\(settings, selected\);[\s\S]*worldInfo\.globalSelect = \[\.\.\.selected\];[\s\S]*stScript\.saveSettingsDebounced\?\.\(\);[\s\S]*return;/);
     assert.doesNotMatch(hostSource, /importEmbeddedWorldInfo/);
     assert.doesNotMatch(hostSource, /createWorldInfoEntry/);
     assert.match(hostSource, /export async function getTavernWorldbookRuntime/);
@@ -425,7 +428,16 @@ test('tavern worldbook host bridge exposes named entry edit endpoints and native
     assert.doesNotMatch(hostSource, /function isNativeRuntimeSource/);
     assert.doesNotMatch(hostSource, /sourceType\) !== 'embedded'/);
     assert.match(hostSource, /function isLittleWhiteBoxRuntimeWorldbookSource[\s\S]*sourceType === 'character' \|\| sourceType === 'global'/);
-    assert.match(hostSource, /dedupeSources\(\[\.{3}metaSources, \.{3}legacyMetaSources, \.{3}bookSources\]\)[\s\S]*\.filter\(isLittleWhiteBoxRuntimeWorldbookSource\)/);
+    assert.match(hostSource, /function liveSelectedGlobalWorldbookNames\(\): string\[\][\s\S]*selected_world_info\.map/);
+    assert.match(hostSource, /function liveCharacterWorldbookNames\(context: XbTavernContext = \{\}\): Set<string> \| null[\s\S]*character\.shallow === true \|\| !normalizeText\(character\.json_data\)[\s\S]*nativeWorldInfo\.world_info[\s\S]*entry\.extraBooks/);
+    assert.match(hostSource, /const liveGlobalNames = new Set\(liveSelectedGlobalWorldbookNames\(\)\);/);
+    assert.match(hostSource, /const liveCharacterNames = liveCharacterWorldbookNames\(context\);/);
+    assert.match(hostSource, /const liveGlobalSources = Array\.from\(liveGlobalNames\)\.map/);
+    assert.match(hostSource, /const liveCharacterSources = liveCharacterNames === null[\s\S]*Array\.from\(liveCharacterNames\)[\s\S]*!liveGlobalNames\.has\(name\)/);
+    assert.match(hostSource, /const keepLiveRuntimeSource = \(source: XbTavernNativeWorldInfoSource\): boolean => \([\s\S]*source\.sourceType !== 'global' \|\| liveGlobalNames\.has\(source\.name\)[\s\S]*source\.sourceType !== 'character' \|\| liveCharacterNames === null \|\| liveCharacterNames\.has\(source\.name\)[\s\S]*\);/);
+    assert.match(hostSource, /return dedupeSources\(\s*\[\.{3}liveGlobalSources, \.{3}liveCharacterSources, \.{3}metaSources, \.{3}legacyMetaSources, \.{3}bookSources\][\s\S]*\.filter\(isLittleWhiteBoxRuntimeWorldbookSource\)[\s\S]*\.filter\(keepLiveRuntimeSource\),\s*\);/);
+    assert.doesNotMatch(hostSource, /return dedupeSources\(\s*\[\.{3}metaSources, \.{3}legacyMetaSources, \.{3}bookSources\]\s*\)\s*\.filter/);
+    assert.match(hostSource, /const globalNameSet = new Set\(liveSelectedGlobalWorldbookNames\(\)\);[\s\S]*globalActive: globalNameSet\.has\(name\)/);
     assert.match(hostSource, /runTavernWorldbookStateExclusive\(async \(\) => \{[\s\S]*await checkWorldInfo\(chatLines, maxContext, false, globalScanData\)/);
     assert.match(hostSource, /tavernWorldbookStateQueue = new Promise<void>/);
     assert.match(hostSource, /worldInfoBefore:/);

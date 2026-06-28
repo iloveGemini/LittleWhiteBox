@@ -17,6 +17,7 @@ import * as stScript from '../../../../../../../script.js';
 import { NOTE_MODULE_NAME } from '../../../../../../authors-note.js';
 import { getContext } from '../../../../../../extensions.js';
 import { power_user } from '../../../../../../power-user.js';
+import { getCharaFilename } from '../../../../../../utils.js';
 import * as nativeWorldInfo from '../../../../../../world-info.js';
 import {
     charUpdatePrimaryWorld,
@@ -211,6 +212,9 @@ function applyGlobalWorldbookSelection(selected: string[]): void {
 
     if (typeof nativeWorldInfo.updateWorldInfoSettings === 'function') {
         nativeWorldInfo.updateWorldInfoSettings(settings, selected);
+        const worldInfo = asRecord(nativeWorldInfo.world_info);
+        worldInfo.globalSelect = [...selected];
+        stScript.saveSettingsDebounced?.();
         return;
     }
 
@@ -254,6 +258,20 @@ function normalizeStringList(value: unknown): string[] {
     }
     const text = normalizeText(value);
     return text ? [text] : [];
+}
+
+function asRecordList(value: unknown): Record<string, unknown>[] {
+    return Array.isArray(value)
+        ? value.map((item) => asRecord(item)).filter((item) => Object.keys(item).length > 0)
+        : [];
+}
+
+function addUniqueWorldbookName(names: string[], value: unknown): void {
+    normalizeStringList(value).forEach((name) => {
+        if (!names.includes(name)) {
+            names.push(name);
+        }
+    });
 }
 
 function normalizeFiniteNumber(value: unknown, fallback: number): number {
@@ -607,13 +625,42 @@ function replaceSelectedWorldInfo(names: string[] = []): void {
     selected_world_info.splice(0, selected_world_info.length, ...names);
 }
 
-function collectGlobalWorldbookNames(context: XbTavernContext = {}): string[] {
-    const sessionMeta = asRecord(context.sessionMeta);
-    const worldbookSources = Array.isArray(sessionMeta.worldbookSources) ? sessionMeta.worldbookSources : [];
-    return worldbookSources
-        .filter((source) => normalizeText(asRecord(source).sourceType) === 'global')
-        .map((source) => normalizeText(asRecord(source).name))
-        .filter(Boolean);
+function liveSelectedGlobalWorldbookNames(): string[] {
+    return Array.isArray(selected_world_info)
+        ? selected_world_info.map((name) => normalizeText(name)).filter(Boolean)
+        : [];
+}
+
+function liveCharacterWorldbookNames(context: XbTavernContext = {}): Set<string> | null {
+    const nativeCharacterId = normalizeIdText(context.character?.nativeCharacterId);
+    const character = nativeCharacterId ? getCharacterRecordById(nativeCharacterId) : {};
+    if (!Object.keys(character).length) {return null;}
+    if (character.shallow === true || !normalizeText(character.json_data)) {return null;}
+
+    const data = readCharacterData(character);
+    const extensions = asRecord(data.extensions);
+    const characterBook = readCharacterBook(character);
+    const names: string[] = [];
+    addUniqueWorldbookName(names, extensions.world);
+    addUniqueWorldbookName(names, character.world);
+    if (!hasCharacterBookEntries(characterBook)) {
+        addUniqueWorldbookName(names, characterBook.name);
+    }
+
+    const characterLoreIds: string[] = [];
+    addUniqueWorldbookName(characterLoreIds, character.avatar);
+    addUniqueWorldbookName(characterLoreIds, data.avatar);
+    try {
+        addUniqueWorldbookName(characterLoreIds, getCharaFilename(nativeCharacterId));
+    } catch {}
+    const characterLoreIdSet = new Set(characterLoreIds);
+    asRecordList(asRecord(nativeWorldInfo.world_info).charLore).forEach((entry) => {
+        if (characterLoreIdSet.has(normalizeText(entry.name))) {
+            addUniqueWorldbookName(names, entry.extraBooks);
+        }
+    });
+
+    return new Set(names);
 }
 
 function dedupeSources(sources: XbTavernNativeWorldInfoSource[] = []): XbTavernNativeWorldInfoSource[] {
@@ -639,6 +686,26 @@ function isLittleWhiteBoxRuntimeWorldbookSource(source?: XbTavernNativeWorldInfo
 
 function collectRuntimeSources(context: XbTavernContext = {}): XbTavernNativeWorldInfoSource[] {
     const sessionMeta = asRecord(context.sessionMeta);
+    const liveGlobalNames = new Set(liveSelectedGlobalWorldbookNames());
+    const liveCharacterNames = liveCharacterWorldbookNames(context);
+    const liveGlobalSources = Array.from(liveGlobalNames).map((name, index) => ({
+        name,
+        sourceType: 'global',
+        sourceIndex: index,
+    } as XbTavernNativeWorldInfoSource));
+    const liveCharacterSources = liveCharacterNames === null
+        ? []
+        : Array.from(liveCharacterNames)
+            .filter((name) => !liveGlobalNames.has(name))
+            .map((name, index) => ({
+                name,
+                sourceType: 'character',
+                sourceIndex: index,
+            } as XbTavernNativeWorldInfoSource));
+    const keepLiveRuntimeSource = (source: XbTavernNativeWorldInfoSource): boolean => (
+        (source.sourceType !== 'global' || liveGlobalNames.has(source.name))
+        && (source.sourceType !== 'character' || liveCharacterNames === null || liveCharacterNames.has(source.name))
+    );
     const metaSources = Array.isArray(sessionMeta.worldbookSources)
         ? sessionMeta.worldbookSources.map((source, index) => {
             const record = asRecord(source);
@@ -663,8 +730,11 @@ function collectRuntimeSources(context: XbTavernContext = {}): XbTavernNativeWor
             sourceIndex: Number.isFinite(Number(book.worldSourceIndex)) ? Number(book.worldSourceIndex) : index,
         }))
         : [];
-    return dedupeSources([...metaSources, ...legacyMetaSources, ...bookSources])
-        .filter(isLittleWhiteBoxRuntimeWorldbookSource);
+    return dedupeSources(
+        [...liveGlobalSources, ...liveCharacterSources, ...metaSources, ...legacyMetaSources, ...bookSources]
+            .filter(isLittleWhiteBoxRuntimeWorldbookSource)
+            .filter(keepLiveRuntimeSource),
+    );
 }
 
 function buildHistoryScanLines(context: XbTavernContext = {}, currentUserMessage = '', includeNames = false): string[] {
@@ -1129,9 +1199,7 @@ async function readCharacterWorldbookState(nativeCharacterId: string): Promise<T
 
 async function readGlobalWorldbooksState(): Promise<TavernGlobalWorldbooksState> {
     const options = await ensureWorldbookNames();
-    const selected = Array.isArray(selected_world_info)
-        ? selected_world_info.map((name) => normalizeText(name)).filter((name) => options.includes(name))
-        : [];
+    const selected = liveSelectedGlobalWorldbookNames().filter((name) => options.includes(name));
     return { options, selected };
 }
 
@@ -1142,14 +1210,10 @@ async function ensureWorldbookNames(): Promise<string[]> {
     return Array.isArray(world_names) ? [...world_names] : [];
 }
 
-export async function listTavernWorldbookSources(input: unknown = {}): Promise<TavernWorldbookSourceListResult> {
+export async function listTavernWorldbookSources(_input: unknown = {}): Promise<TavernWorldbookSourceListResult> {
     return runTavernWorldbookStateExclusive(async () => {
-        const payload = asRecord(input);
-        const context = asRecord(payload.context);
-        const requestedContext = (Object.keys(context).length ? context : undefined) as XbTavernContext | undefined;
         const names = await ensureWorldbookNames();
-        const sourceContext = requestedContext || {};
-        const globalNameSet = new Set(collectGlobalWorldbookNames(sourceContext));
+        const globalNameSet = new Set(liveSelectedGlobalWorldbookNames());
         return {
             books: names.map((name) => ({
                 name,
@@ -1357,8 +1421,16 @@ export async function getTavernWorldbookRuntime(input: unknown = {}): Promise<Xb
         Number(payload.maxContext)
             || getNativeMaxPromptTokens(),
     );
-    const sources = collectRuntimeSources(context);
     return runTavernWorldbookStateExclusive(async () => {
+        const nativeCharacterId = normalizeIdText(context.character?.nativeCharacterId);
+        if (nativeCharacterId) {
+            try {
+                await hydrateCharacterRecordById(nativeCharacterId);
+            } catch (error) {
+                console.warn('[LittleWhiteBox/tavern] Failed to hydrate character before worldbook runtime', nativeCharacterId, error);
+            }
+        }
+        const sources = collectRuntimeSources(context);
         const snapshot = captureRuntimeState();
         applyRuntimeState({
             context,

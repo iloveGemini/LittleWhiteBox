@@ -219,7 +219,6 @@ export function collectSillyTavernWorldbookSources(source: SillyTavernContextSou
     addUnique(globalNames, source.selectedWorldInfo);
     addUnique(globalNames, source.selected_world_info);
     addUnique(globalNames, source.globalWorldNames);
-    addUnique(globalNames, source.globalSelect);
     const globalSet = new Set(globalNames);
     const characterNames: string[] = [];
     addUnique(characterNames, options.worldbookNames);

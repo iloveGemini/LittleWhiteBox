@@ -366,8 +366,12 @@ export function createChatUi(deps) {
 
         const panel = document.createElement('div');
         panel.className = 'xb-assistant-approval';
+        panel.setAttribute('role', 'alertdialog');
+        panel.setAttribute('aria-modal', 'true');
+        panel.setAttribute('aria-labelledby', 'xb-assistant-approval-title');
 
         const title = document.createElement('div');
+        title.id = 'xb-assistant-approval-title';
         title.className = 'xb-assistant-approval-title';
         title.textContent = approvalRequest.kind === 'generate-skill'
             ? '待确认的技能沉淀'

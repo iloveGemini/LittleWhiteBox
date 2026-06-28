@@ -160,6 +160,12 @@
     line-height: inherit;
 }
 
+.xb-os-shell.theme-dark .xb-tavern-markdown strong,
+.xb-os-shell.theme-dark .xb-tavern-markdown b {
+    color: var(--xb-text-body);
+    font-weight: 600;
+}
+
 .xb-tavern-markdown em,
 .xb-tavern-markdown i {
     color: #756b5f;

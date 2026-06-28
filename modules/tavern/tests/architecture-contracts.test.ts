@@ -249,7 +249,16 @@ test('tavern worldbook bridge edits named entries through native save boundary',
     assert.match(hostSource, /let tavernWorldbookStateQueue: Promise<void> = Promise\.resolve\(\);/);
     assert.match(hostSource, /function runTavernWorldbookStateExclusive/);
     assert.match(hostSource, /function isLittleWhiteBoxRuntimeWorldbookSource[\s\S]*sourceType === 'character' \|\| sourceType === 'global'/);
-    assert.match(hostSource, /dedupeSources\(\[\.{3}metaSources, \.{3}legacyMetaSources, \.{3}bookSources\]\)[\s\S]*\.filter\(isLittleWhiteBoxRuntimeWorldbookSource\)/);
+    assert.match(hostSource, /function liveSelectedGlobalWorldbookNames\(\): string\[\][\s\S]*selected_world_info\.map/);
+    assert.match(hostSource, /function liveCharacterWorldbookNames\(context: XbTavernContext = \{\}\): Set<string> \| null[\s\S]*character\.shallow === true \|\| !normalizeText\(character\.json_data\)[\s\S]*nativeWorldInfo\.world_info[\s\S]*entry\.extraBooks/);
+    assert.match(hostSource, /const liveGlobalNames = new Set\(liveSelectedGlobalWorldbookNames\(\)\);/);
+    assert.match(hostSource, /const liveCharacterNames = liveCharacterWorldbookNames\(context\);/);
+    assert.match(hostSource, /const liveGlobalSources = Array\.from\(liveGlobalNames\)\.map/);
+    assert.match(hostSource, /const liveCharacterSources = liveCharacterNames === null[\s\S]*Array\.from\(liveCharacterNames\)[\s\S]*!liveGlobalNames\.has\(name\)/);
+    assert.match(hostSource, /const keepLiveRuntimeSource = \(source: XbTavernNativeWorldInfoSource\): boolean => \([\s\S]*source\.sourceType !== 'global' \|\| liveGlobalNames\.has\(source\.name\)[\s\S]*source\.sourceType !== 'character' \|\| liveCharacterNames === null \|\| liveCharacterNames\.has\(source\.name\)[\s\S]*\);/);
+    assert.match(hostSource, /return dedupeSources\(\s*\[\.{3}liveGlobalSources, \.{3}liveCharacterSources, \.{3}metaSources, \.{3}legacyMetaSources, \.{3}bookSources\][\s\S]*\.filter\(isLittleWhiteBoxRuntimeWorldbookSource\)[\s\S]*\.filter\(keepLiveRuntimeSource\),\s*\);/);
+    assert.doesNotMatch(hostSource, /return dedupeSources\(\s*\[\.{3}metaSources, \.{3}legacyMetaSources, \.{3}bookSources\]\s*\)\s*\.filter/);
+    assert.match(hostSource, /return runTavernWorldbookStateExclusive\(async \(\) => \{[\s\S]*try \{[\s\S]*await hydrateCharacterRecordById\(nativeCharacterId\);[\s\S]*catch \(error\) \{[\s\S]*console\.warn[\s\S]*const sources = collectRuntimeSources\(context\);[\s\S]*const snapshot = captureRuntimeState\(\);/);
     assert.match(hostSource, /return runTavernWorldbookStateExclusive\(async \(\) => \{[\s\S]*await checkWorldInfo\(chatLines, maxContext, false, globalScanData\)[\s\S]*restoreRuntimeState\(snapshot\);/);
     assert.match(hostSource, /export async function saveTavernWorldbookEntry[\s\S]*return runTavernWorldbookStateExclusive\(async \(\) => \{/);
     assert.match(hostSource, /export async function getTavernGlobalWorldbooks[\s\S]*return runTavernWorldbookStateExclusive\(\(\) => readGlobalWorldbooksState\(\)\);/);
@@ -258,9 +267,122 @@ test('tavern worldbook bridge edits named entries through native save boundary',
     assert.doesNotMatch(hostSource, /createWorldInfoEntry/);
     assert.match(hostSource, /export async function setTavernGlobalWorldbooks/);
     assert.match(hostSource, /function applyGlobalWorldbookSelection\(selected: string\[\]\): void/);
-    assert.match(hostSource, /nativeWorldInfo\.updateWorldInfoSettings\(settings, selected\)/);
+    assert.match(hostSource, /nativeWorldInfo\.updateWorldInfoSettings\(settings, selected\);[\s\S]*worldInfo\.globalSelect = \[\.\.\.selected\];[\s\S]*stScript\.saveSettingsDebounced\?\.\(\);[\s\S]*return;/);
     assert.match(hostSource, /replaceSelectedWorldInfo\(selected\);[\s\S]*worldInfo\.globalSelect = \[\.\.\.selected\];[\s\S]*stScript\.saveSettingsDebounced\?\.\(\)/);
     assert.doesNotMatch(hostSource, /setWorldInfoSettings\(settings,/);
+});
+
+test('tavern worldbook runtime filters stale sources before same-name dedupe', () => {
+    const worldbookBuildSource = readRepoFile('modules/tavern/host/worldbooks.js');
+    const sandbox = {} as {
+        runCollect?: (context: Record<string, unknown>, selected: string[], liveCharacter: Record<string, unknown>, charLore?: unknown[]) => unknown;
+    };
+    const snippets = [
+        extractFunctionSource(worldbookBuildSource, 'function normalizeStringList'),
+        extractFunctionSource(worldbookBuildSource, 'function asRecordList'),
+        extractFunctionSource(worldbookBuildSource, 'function addUniqueWorldbookName'),
+        extractFunctionSource(worldbookBuildSource, 'function liveSelectedGlobalWorldbookNames'),
+        extractFunctionSource(worldbookBuildSource, 'function liveCharacterWorldbookNames'),
+        extractFunctionSource(worldbookBuildSource, 'function dedupeSources'),
+        extractFunctionSource(worldbookBuildSource, 'function isLittleWhiteBoxRuntimeWorldbookSource'),
+        extractFunctionSource(worldbookBuildSource, 'function collectRuntimeSources'),
+        extractFunctionSource(worldbookBuildSource, 'function getCharacterRecordById'),
+        extractFunctionSource(worldbookBuildSource, 'function readCharacterData'),
+        extractFunctionSource(worldbookBuildSource, 'function readCharacterBook'),
+        extractFunctionSource(worldbookBuildSource, 'function hasCharacterBookEntries'),
+    ].join('\n\n');
+
+    const vmContext = createContext(sandbox);
+    new Script(`
+        const normalizeText = (value) => String(value ?? '').trim();
+        const normalizeIdText = (value) => value === null || value === undefined ? '' : String(value).trim();
+        const asRecord = (value) => value && typeof value === 'object' ? value : {};
+        const getCharaFilename = (value) => value === '0' ? 'aster.png' : '';
+        const nativeWorldInfo = { world_info: { charLore: [] } };
+        let characters = [];
+        let selected_world_info = [];
+        ${snippets}
+        globalThis.runCollect = (context, selected, liveCharacter, charLore = []) => {
+            characters = [liveCharacter];
+            nativeWorldInfo.world_info.charLore = charLore;
+            selected_world_info = selected;
+            return collectRuntimeSources(context);
+        };
+    `).runInContext(vmContext);
+
+    assert.equal(typeof sandbox.runCollect, 'function');
+    const actual = JSON.parse(JSON.stringify(sandbox.runCollect?.({
+        character: { nativeCharacterId: '0' },
+        sessionMeta: {
+            worldbookSources: [
+                { name: 'A', sourceType: 'global', sourceIndex: 0 },
+                { name: 'StaleCharacter', sourceType: 'character', sourceIndex: 1 },
+            ],
+        },
+        worldBooks: [
+            { name: 'A', worldSourceType: 'character', worldSourceIndex: 7 },
+            { name: 'LiveCharacter', worldSourceType: 'character', worldSourceIndex: 8 },
+        ],
+    }, [], {
+        avatar: 'aster.png',
+        json_data: '{}',
+        data: { extensions: { world: ['A', 'LiveCharacter'] } },
+    })));
+    assert.deepEqual(
+        actual,
+        [
+            { name: 'A', sourceType: 'character', sourceIndex: 0 },
+            { name: 'LiveCharacter', sourceType: 'character', sourceIndex: 1 },
+        ],
+    );
+
+    const shallowFallback = JSON.parse(JSON.stringify(sandbox.runCollect?.({
+        character: { nativeCharacterId: '0' },
+        worldBooks: [
+            { name: 'MaybeLiveCharacter', worldSourceType: 'character', worldSourceIndex: 2 },
+        ],
+    }, [], {
+        avatar: 'aster.png',
+        shallow: true,
+    })));
+    assert.deepEqual(
+        shallowFallback,
+        [
+            { name: 'MaybeLiveCharacter', sourceType: 'character', sourceIndex: 2 },
+        ],
+    );
+
+    const halfHydratedFallback = JSON.parse(JSON.stringify(sandbox.runCollect?.({
+        character: { nativeCharacterId: '0' },
+        worldBooks: [
+            { name: 'MaybeLiveCharacter', worldSourceType: 'character', worldSourceIndex: 2 },
+        ],
+    }, [], {
+        avatar: 'aster.png',
+        shallow: false,
+        json_data: '',
+    })));
+    assert.deepEqual(
+        halfHydratedFallback,
+        [
+            { name: 'MaybeLiveCharacter', sourceType: 'character', sourceIndex: 2 },
+        ],
+    );
+
+    const liveOnly = JSON.parse(JSON.stringify(sandbox.runCollect?.({
+        character: { nativeCharacterId: '0' },
+    }, ['LiveGlobal'], {
+        avatar: 'aster.png',
+        json_data: '{}',
+        data: { extensions: { world: 'LiveCharacter' } },
+    })));
+    assert.deepEqual(
+        liveOnly,
+        [
+            { name: 'LiveGlobal', sourceType: 'global', sourceIndex: 0 },
+            { name: 'LiveCharacter', sourceType: 'character', sourceIndex: 0 },
+        ],
+    );
 });
 
 test('tavern mobile worldbook entry rows stay compact', () => {
@@ -2413,6 +2535,7 @@ test('tavern host imports preserve SillyTavern 1.14 and 1.18 API parity', () => 
     assert.match(worldbookSource, /function applyGlobalWorldbookSelection\(selected: string\[\]\): void/);
     assert.match(envSource, /export const updateWorldInfoSettings: \(\(settings: Record<string, unknown>, activeWorldInfo\?: string\[\]\) => void\) \| undefined;/);
     assert.match(worldbookSource, /typeof nativeWorldInfo\.updateWorldInfoSettings === 'function'/);
+    assert.match(worldbookSource, /nativeWorldInfo\.updateWorldInfoSettings\(settings, selected\);[\s\S]*worldInfo\.globalSelect = \[\.\.\.selected\];[\s\S]*stScript\.saveSettingsDebounced\?\.\(\);[\s\S]*return;/);
     assert.match(worldbookSource, /replaceSelectedWorldInfo\(selected\);[\s\S]*worldInfo\.globalSelect = \[\.\.\.selected\];[\s\S]*stScript\.saveSettingsDebounced\?\.\(\)/);
     assert.doesNotMatch(worldbookSource, /setWorldInfoSettings\(settings,/);
 });

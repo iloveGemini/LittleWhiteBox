@@ -420,7 +420,6 @@ function collectWorldbookSources(ctx = getContext?.() || {}, options = {}) {
   const seen = /* @__PURE__ */ new Set();
   const globalNames = [];
   addUnique(globalNames, selected_world_info);
-  addUnique(globalNames, worldInfo.globalSelect);
   const globalSet = new Set(globalNames);
   const characterNames = [];
   addUnique(characterNames, dataExtensions.world);

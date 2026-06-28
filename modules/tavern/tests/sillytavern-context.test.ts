@@ -121,6 +121,24 @@ test('sillytavern context adapter only uses character-bound and global worldbook
     ]);
 });
 
+test('sillytavern context adapter ignores stale globalSelect shadow worldbooks', () => {
+    const source = {
+        nativeCharacterId: 0,
+        characters: [{
+            name: 'Aster',
+            avatar: 'aster.png',
+            data: { description: 'Pilot.', extensions: { world: 'AsterWorld' } },
+        }],
+        selected_world_info: [] as string[],
+        globalSelect: ['StaleGlobalWorld'],
+    };
+
+    assert.deepEqual(collectSillyTavernWorldbookSources(source).map((item) => `${item.sourceType}:${item.name}`), [
+        'character:AsterWorld',
+    ]);
+    assert.deepEqual(collectSillyTavernWorldbookNames(source), ['AsterWorld']);
+});
+
 test('sillytavern context adapter ignores character-card lore until it is imported', () => {
     const source = {
         nativeCharacterId: 0,

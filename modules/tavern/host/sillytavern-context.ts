@@ -463,7 +463,6 @@ function collectWorldbookSources(ctx: Record<string, unknown> = getContext?.() |
     const seen = new Set<string>();
     const globalNames: string[] = [];
     addUnique(globalNames, selected_world_info);
-    addUnique(globalNames, worldInfo.globalSelect);
     const globalSet = new Set(globalNames);
 
     const characterNames: string[] = [];

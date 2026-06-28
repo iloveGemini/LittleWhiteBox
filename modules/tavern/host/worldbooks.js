@@ -18,6 +18,7 @@ import * as stScript from "../../../../../../../script.js";
 import { NOTE_MODULE_NAME } from "../../../../../../authors-note.js";
 import { getContext } from "../../../../../../extensions.js";
 import { power_user } from "../../../../../../power-user.js";
+import { getCharaFilename } from "../../../../../../utils.js";
 import * as nativeWorldInfo from "../../../../../../world-info.js";
 import {
   charUpdatePrimaryWorld,
@@ -44,6 +45,9 @@ function applyGlobalWorldbookSelection(selected) {
   const settings = nativeWorldInfo.getWorldInfoSettings();
   if (typeof nativeWorldInfo.updateWorldInfoSettings === "function") {
     nativeWorldInfo.updateWorldInfoSettings(settings, selected);
+    const worldInfo2 = asRecord(nativeWorldInfo.world_info);
+    worldInfo2.globalSelect = [...selected];
+    stScript.saveSettingsDebounced?.();
     return;
   }
   replaceSelectedWorldInfo(selected);
@@ -81,6 +85,16 @@ function normalizeStringList(value) {
   }
   const text = normalizeText(value);
   return text ? [text] : [];
+}
+function asRecordList(value) {
+  return Array.isArray(value) ? value.map((item) => asRecord(item)).filter((item) => Object.keys(item).length > 0) : [];
+}
+function addUniqueWorldbookName(names, value) {
+  normalizeStringList(value).forEach((name) => {
+    if (!names.includes(name)) {
+      names.push(name);
+    }
+  });
 }
 function normalizeFiniteNumber(value, fallback) {
   const numberValue = Number(value);
@@ -505,10 +519,41 @@ function replaceSelectedWorldInfo(names = []) {
   }
   selected_world_info.splice(0, selected_world_info.length, ...names);
 }
-function collectGlobalWorldbookNames(context = {}) {
-  const sessionMeta = asRecord(context.sessionMeta);
-  const worldbookSources = Array.isArray(sessionMeta.worldbookSources) ? sessionMeta.worldbookSources : [];
-  return worldbookSources.filter((source) => normalizeText(asRecord(source).sourceType) === "global").map((source) => normalizeText(asRecord(source).name)).filter(Boolean);
+function liveSelectedGlobalWorldbookNames() {
+  return Array.isArray(selected_world_info) ? selected_world_info.map((name) => normalizeText(name)).filter(Boolean) : [];
+}
+function liveCharacterWorldbookNames(context = {}) {
+  const nativeCharacterId = normalizeIdText(context.character?.nativeCharacterId);
+  const character = nativeCharacterId ? getCharacterRecordById(nativeCharacterId) : {};
+  if (!Object.keys(character).length) {
+    return null;
+  }
+  if (character.shallow === true || !normalizeText(character.json_data)) {
+    return null;
+  }
+  const data = readCharacterData(character);
+  const extensions = asRecord(data.extensions);
+  const characterBook = readCharacterBook(character);
+  const names = [];
+  addUniqueWorldbookName(names, extensions.world);
+  addUniqueWorldbookName(names, character.world);
+  if (!hasCharacterBookEntries(characterBook)) {
+    addUniqueWorldbookName(names, characterBook.name);
+  }
+  const characterLoreIds = [];
+  addUniqueWorldbookName(characterLoreIds, character.avatar);
+  addUniqueWorldbookName(characterLoreIds, data.avatar);
+  try {
+    addUniqueWorldbookName(characterLoreIds, getCharaFilename(nativeCharacterId));
+  } catch {
+  }
+  const characterLoreIdSet = new Set(characterLoreIds);
+  asRecordList(asRecord(nativeWorldInfo.world_info).charLore).forEach((entry) => {
+    if (characterLoreIdSet.has(normalizeText(entry.name))) {
+      addUniqueWorldbookName(names, entry.extraBooks);
+    }
+  });
+  return new Set(names);
 }
 function dedupeSources(sources = []) {
   const seen = /* @__PURE__ */ new Set();
@@ -533,6 +578,19 @@ function isLittleWhiteBoxRuntimeWorldbookSource(source) {
 }
 function collectRuntimeSources(context = {}) {
   const sessionMeta = asRecord(context.sessionMeta);
+  const liveGlobalNames = new Set(liveSelectedGlobalWorldbookNames());
+  const liveCharacterNames = liveCharacterWorldbookNames(context);
+  const liveGlobalSources = Array.from(liveGlobalNames).map((name, index) => ({
+    name,
+    sourceType: "global",
+    sourceIndex: index
+  }));
+  const liveCharacterSources = liveCharacterNames === null ? [] : Array.from(liveCharacterNames).filter((name) => !liveGlobalNames.has(name)).map((name, index) => ({
+    name,
+    sourceType: "character",
+    sourceIndex: index
+  }));
+  const keepLiveRuntimeSource = (source) => (source.sourceType !== "global" || liveGlobalNames.has(source.name)) && (source.sourceType !== "character" || liveCharacterNames === null || liveCharacterNames.has(source.name));
   const metaSources = Array.isArray(sessionMeta.worldbookSources) ? sessionMeta.worldbookSources.map((source, index) => {
     const record = asRecord(source);
     return {
@@ -551,7 +609,9 @@ function collectRuntimeSources(context = {}) {
     sourceType: normalizeText(book.worldSourceType),
     sourceIndex: Number.isFinite(Number(book.worldSourceIndex)) ? Number(book.worldSourceIndex) : index
   })) : [];
-  return dedupeSources([...metaSources, ...legacyMetaSources, ...bookSources]).filter(isLittleWhiteBoxRuntimeWorldbookSource);
+  return dedupeSources(
+    [...liveGlobalSources, ...liveCharacterSources, ...metaSources, ...legacyMetaSources, ...bookSources].filter(isLittleWhiteBoxRuntimeWorldbookSource).filter(keepLiveRuntimeSource)
+  );
 }
 function buildHistoryScanLines(context = {}, currentUserMessage = "", includeNames = false) {
   const userName = normalizeText(context.user?.name) || "User";
@@ -956,7 +1016,7 @@ async function readCharacterWorldbookState(nativeCharacterId) {
 }
 async function readGlobalWorldbooksState() {
   const options = await ensureWorldbookNames();
-  const selected = Array.isArray(selected_world_info) ? selected_world_info.map((name) => normalizeText(name)).filter((name) => options.includes(name)) : [];
+  const selected = liveSelectedGlobalWorldbookNames().filter((name) => options.includes(name));
   return { options, selected };
 }
 async function ensureWorldbookNames() {
@@ -965,14 +1025,10 @@ async function ensureWorldbookNames() {
   }
   return Array.isArray(world_names) ? [...world_names] : [];
 }
-async function listTavernWorldbookSources(input = {}) {
+async function listTavernWorldbookSources(_input = {}) {
   return runTavernWorldbookStateExclusive(async () => {
-    const payload = asRecord(input);
-    const context = asRecord(payload.context);
-    const requestedContext = Object.keys(context).length ? context : void 0;
     const names = await ensureWorldbookNames();
-    const sourceContext = requestedContext || {};
-    const globalNameSet = new Set(collectGlobalWorldbookNames(sourceContext));
+    const globalNameSet = new Set(liveSelectedGlobalWorldbookNames());
     return {
       books: names.map((name) => ({
         name,
@@ -1161,8 +1217,16 @@ async function getTavernWorldbookRuntime(input = {}) {
     1,
     Number(payload.maxContext) || getNativeMaxPromptTokens()
   );
-  const sources = collectRuntimeSources(context);
   return runTavernWorldbookStateExclusive(async () => {
+    const nativeCharacterId = normalizeIdText(context.character?.nativeCharacterId);
+    if (nativeCharacterId) {
+      try {
+        await hydrateCharacterRecordById(nativeCharacterId);
+      } catch (error) {
+        console.warn("[LittleWhiteBox/tavern] Failed to hydrate character before worldbook runtime", nativeCharacterId, error);
+      }
+    }
+    const sources = collectRuntimeSources(context);
     const snapshot = captureRuntimeState();
     applyRuntimeState({
       context,
