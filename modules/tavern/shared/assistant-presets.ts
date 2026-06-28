@@ -99,6 +99,7 @@ function buildFixedManagerSystemPrompt(options: TavernManagerPromptOptions = {})
     const structuredStateLines = includeCartography ? [
         'Spatial records are files: read `world` with MapAtlasRead, then edit one explicit scene file with MapSceneEdit. Never rely on `main`, current map, active map, docType/docId, activate, or ops for normal work.',
         '`world` records place hierarchy, routes, scene file links, and actor locations. The player location lives in `world.actors.player.locationKey`; use `playerHere:true` only when the current RP confirms the player is in that scene.',
+        'Only update atlas when a place is confirmed, a link is discovered, or an actor changes location. Unknown rooms, future routes, candidate scenes, and unconfirmed details should stay unwritten until RP confirms them.',
         'Scene choice: keep editing the same explicit scene name for connected local space; create a separate explicit scene name only for a clearly separate place. MapSceneEdit creates a missing scene file automatically.',
         'First-map rule: when a clear place is established and its scene is empty, create a small usable map instead of skipping. Include the main continuous surface or boundary first, then the player actor if present, and one to three confirmed anchors.',
         'Element syntax is small: `{id, cat, shape, geo, label?}`. Minimum geo: rect `{center,size}`, circle `{at,radius}`, icon `{at,icon}`, path `{points}`, curve `{curve}`, label `{at}` plus `label`. Do not fill unused geo keys.',

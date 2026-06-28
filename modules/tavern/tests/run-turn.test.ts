@@ -1989,7 +1989,7 @@ test('xb tavern run turn starts accepted-turn manager work on the next user send
     assert.match(managerPrompt, /Place text labels 15-25 units beside what they describe/i);
     assert.match(managerPrompt, /Reply with a short, clear, user-facing operation summary/i);
     assert.doesNotMatch(managerPrompt, /电纸书|ebook file-operation/i);
-    assert.match(managerPrompt, /Use Grep with `path:.*memory\/.*` to ask whether a fact is already in memory/i);
+    assert.match(managerPrompt, /Evidence routing: Grep with .*memory\/.*asks whether a fact is already stored/is);
     assert.doesNotMatch(managerPrompt, /可派生格式/);
     assert.doesNotMatch(managerPrompt, /messages userOrder\/assistantOrder/);
     assert.doesNotMatch(managerPrompt, /ChatHistory recent 读取最新消息/);
@@ -2010,7 +2010,7 @@ test('tavern manager prompt strips unauthorized module rules cleanly', () => {
         includeMemory: true,
         includeCartography: false,
     });
-    assert.match(memoryOnly, /Edit and Write save memory changes/);
+    assert.match(memoryOnly, /Edit\/Write save memory only/);
     assert.match(memoryOnly, /Maintain the current session's global long-term memory in `memory\/state\.md`/);
     assert.match(memoryOnly, /Maintain current-session character long-term memory in `memory\/characters\/<角色名>\.md`/);
     assert.match(memoryOnly, /user-editable preset only defines the file's internal format, content scope, and selection rules/);
