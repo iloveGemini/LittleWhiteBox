@@ -437,7 +437,14 @@ test('tavern desktop worldbook editor keeps dense readable rows', () => {
     assert.match(worldbookCss, /\.worldbook-entry-editor input\[type="text"\],[\s\S]*\.worldbook-entry-editor input\[type="number"\],[\s\S]*\.worldbook-entry-editor select \{[\s\S]*height: var\(--worldbook-entry-control-height\);[\s\S]*min-height: var\(--worldbook-entry-control-height\);/);
     assert.match(worldbookCss, /\.worldbook-entry-editor input\[type="text"\],[\s\S]*\.worldbook-entry-editor input\[type="number"\],[\s\S]*\.worldbook-entry-editor select \{[\s\S]*appearance: none;[\s\S]*height: var\(--worldbook-entry-control-height\);/);
     assert.match(worldbookCss, /\.worldbook-entry-editor select \{[\s\S]*padding-right: 24px;[\s\S]*background-image:[\s\S]*linear-gradient\(45deg, transparent 50%, var\(--xb-text-muted\) 50%\)/);
-    assert.match(worldbookSource, /class="worldbook-entry-editor-lines worldbook-entry-keywords-field"[\s\S]*<input[\s\S]*type="text"[\s\S]*listFromCommaText\(\(\$event\.target as HTMLInputElement\)\.value\)/);
+    assert.match(worldbookSource, /const worldbookEntryKeywordText = ref\(''\);/);
+    assert.match(worldbookSource, /const worldbookEntrySecondaryKeywordText = ref\(''\);/);
+    assert.match(worldbookSource, /function updateWorldbookEntryKeywordText\(event: Event\)[\s\S]*worldbookEntryKeywordText\.value = text;[\s\S]*updateWorldbookEntryDraftPatch\(\{ key: listFromCommaText\(text\) \}\);/);
+    assert.match(worldbookSource, /function updateWorldbookEntrySecondaryKeywordText\(event: Event\)[\s\S]*keysecondary: values,[\s\S]*secondary_keys: values,/);
+    assert.match(worldbookSource, /<input[\s\S]*:value="worldbookEntryKeywordText"[\s\S]*@input="updateWorldbookEntryKeywordText"/);
+    assert.match(worldbookSource, /<input[\s\S]*:value="worldbookEntrySecondaryKeywordText"[\s\S]*@input="updateWorldbookEntrySecondaryKeywordText"/);
+    assert.doesNotMatch(worldbookSource, /:value="commaTextFromList\(worldbookEntryDraft\.key\)"/);
+    assert.doesNotMatch(worldbookSource, /@input="updateWorldbookEntryDraftPatch\(\{ key: listFromCommaText\(\(\$event\.target as HTMLInputElement\)\.value\) \}\)"/);
     assert.match(worldbookSource, /class="worldbook-entry-editor-lines worldbook-entry-triggers-field"[\s\S]*<input[\s\S]*type="text"[\s\S]*listFromCommaText\(\(\$event\.target as HTMLInputElement\)\.value\)/);
     assert.match(worldbookCss, /@media \(max-width: 560px\) \{[\s\S]*\.worldbook-entry-editor \{[\s\S]*--worldbook-entry-control-height: 34px;/);
     assert.match(worldbookCss, /\.worldbook-entry-preview\[open\] \{[\s\S]*border-left: 3px solid var\(--xb-cyan\);[\s\S]*background:[\s\S]*box-shadow:/);
@@ -1993,6 +2000,10 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.match(conversationPanelSource, /const liveAssistantCanRender = computed\(\(\) => \([\s\S]*isRunning\.value && runtimeUserMessageVisible\.value[\s\S]*\|\| !!runtimeFinalizedAssistantMessage\.value/);
     assert.match(conversationPanelSource, /v-if="liveAssistantCanRender && liveAssistantVisible"[\s\S]*data-chat-anchor-key="streaming:content"/);
     assert.match(conversationPanelSource, /v-if="liveAssistantCanRender && !liveAssistantVisible"[\s\S]*data-chat-anchor-key="streaming:empty"/);
+    assert.match(chatPageSource, /watch\(streamingReadingLockSignature[\s\S]*restoreChatScrollSnapshot\(pendingStreamingChatScrollSnapshot,\s*\{[\s\S]*preserveScrollTop: true,[\s\S]*\}\);/);
+    assert.doesNotMatch(chatPageSource, /watch\(streamingReadingLockSignature[\s\S]*restoreChatScrollSnapshot\(pendingStreamingChatScrollSnapshot,\s*\{[\s\S]*preserveScrollHeightDelta: true,/);
+    assert.match(appSource, /function restoreDetachedChatScrollAfterMarkdown[\s\S]*restoreElementScrollState\(chatScrollRef\.value, snapshot, chatScrollAnchorConfig,\s*\{[\s\S]*preserveScrollTop: true,[\s\S]*\}\);/);
+    assert.doesNotMatch(appSource, /function restoreDetachedChatScrollAfterMarkdown[\s\S]*preserveScrollHeightDelta: true,/);
     assert.doesNotMatch(conversationPanelSource, /v-if="isRunning && (?:!?)liveAssistantVisible"/);
     assert.match(conversationPanelSource, /useTavernMediaQuery\('\(max-width: 760px\)'\)/);
     assert.match(conversationPanelSource, /@click="handleChatMainClick"/);
@@ -2226,7 +2237,7 @@ test('tavern worldbook preview keeps summary lean and expanded content ephemeral
     assert.match(worldbookSource, /depth: nextPosition === 4 \? worldbookEntryDraft\.value\?\.depth \?\? 4 : null/);
     assert.match(worldbookSource, /function listFromCommaText/);
     assert.match(worldbookSource, /key: listFromCommaText/);
-    assert.match(worldbookSource, /keysecondary: listFromCommaText/);
+    assert.match(worldbookSource, /keysecondary: values,[\s\S]*secondary_keys: values,/);
     assert.match(worldbookSource, /triggers', listFromCommaText/);
     assert.doesNotMatch(worldbookSource, /key: listFromLines/);
     assert.doesNotMatch(worldbookSource, /keysecondary: listFromLines/);

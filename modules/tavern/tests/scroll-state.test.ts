@@ -96,3 +96,28 @@ test('scroll state can preserve detached reading position by scroll height delta
 
     assert.equal(after.scrollTop, 600);
 });
+
+test('scroll state preserves manual position without following lower streaming growth', () => {
+    const before = fakeScrollNode({
+        scrollTop: 420,
+        scrollHeight: 1200,
+        clientHeight: 360,
+        rect: { top: 0, bottom: 360 },
+        items: [],
+    });
+    const snapshot = captureElementScrollState(before);
+
+    const after = fakeScrollNode({
+        scrollTop: 420,
+        scrollHeight: 1380,
+        clientHeight: 360,
+        rect: { top: 0, bottom: 360 },
+        items: [],
+    });
+
+    restoreElementScrollState(after, snapshot, null, {
+        preserveScrollTop: true,
+    });
+
+    assert.equal(after.scrollTop, 420);
+});

@@ -425,7 +425,6 @@ watch(streamingReadingLockSignature, () => {
     if (shouldLockStreamingChatScroll()) {
         restoreChatScrollSnapshot(pendingStreamingChatScrollSnapshot, {
             preserveScrollTop: true,
-            preserveScrollHeightDelta: true,
         });
         updateChatScrollButtons();
     }

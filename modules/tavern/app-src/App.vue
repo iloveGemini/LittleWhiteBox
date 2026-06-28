@@ -33,6 +33,7 @@ import {
     deleteTavernMessages,
     getLatestTavernUserMessageAtOrBefore,
     getTavernMessage,
+    getTavernSession,
     listTavernManagerMessages,
     listTavernManagerRuns,
     listTavernMessageOrdersFrom,
@@ -82,6 +83,7 @@ import {
     type TavernCharacterArchiveProgress,
     type TavernCharacterArchiveRecord,
 } from '../shared/character-archive-types';
+import { resetTavernWorldbookCache } from '../shared/worldbook-cache-reset';
 import {
     normalizeTavernSessionContract,
     type TavernSessionContract,
@@ -673,7 +675,6 @@ function restoreDetachedChatScrollAfterMarkdown(snapshot: ElementScrollSnapshot 
     if (!snapshot || chatAutoScroll.value !== false) {return;}
     restoreElementScrollState(chatScrollRef.value, snapshot, chatScrollAnchorConfig, {
         preserveScrollTop: true,
-        preserveScrollHeightDelta: true,
     });
     chatScrollPane.updateScrollButtons();
 }
@@ -3715,6 +3716,46 @@ function shouldRunTavernSlashCommand(text: string, options: { reuseUserMessageOr
     return !Number.isFinite(Number(options.reuseUserMessageOrder)) && text.trim().startsWith('/');
 }
 
+function isTavernWorldbookCacheResetCommand(text: string): boolean {
+    return /^\/xbwireset(?:\s|$)/i.test(String(text || '').trim());
+}
+
+async function runManualTavernWorldbookCacheReset(): Promise<void> {
+    const sessionId = String(selectedSessionId.value || '').trim();
+    if (!sessionId) {
+        throw new Error('当前没有可清理的会话。');
+    }
+    const result = await resetTavernWorldbookCache({
+        sessionId,
+        mode: 'manual',
+    });
+    const cleanedSession = await getTavernSession(sessionId);
+    if (cleanedSession) {
+        sessionController.updateSessionRecord(cleanedSession);
+        applySessionSnapshotContext(cleanedSession);
+    }
+    await loadSelectedSessionMessageWindow({ reset: true, sessionId });
+    let syncError: unknown = null;
+    if (result.sessions) {
+        try {
+            await syncSessionCharacterContext({ sessionId, force: true });
+        } catch (error) {
+            syncError = error;
+            setSelectedSessionCharacterError(error, sessionId);
+        }
+    }
+    currentUserMessage.value = '';
+    await nextTick(() => resetTextareaHeight(chatComposeTextareaRef.value));
+    showTavernToast(
+        !result.sessions
+            ? '未找到当前会话，未清理任何内容。'
+            : syncError
+                ? `已清理当前会话的世界书运行缓存；重新读取 ST 当前状态失败：${describeError(syncError)}`
+                : '已清理当前会话的世界书运行缓存，并重新读取 ST 当前状态。',
+        { tone: syncError ? 'warning' : 'info', durationMs: syncError ? 4200 : 2600 },
+    );
+}
+
 function normalizeSlashPipeForMessage(value: unknown): string {
     if (value === undefined || value === null) {return '';}
     if (typeof value === 'string') {return value.trim();}
@@ -3731,6 +3772,10 @@ function normalizeSlashPipeForMessage(value: unknown): string {
 async function resolveSlashCommandMessageText(messageText: string, options: { reuseUserMessageOrder?: number } = {}): Promise<string> {
     if (!shouldRunTavernSlashCommand(messageText, options)) {
         return messageText;
+    }
+    if (isTavernWorldbookCacheResetCommand(messageText)) {
+        await runManualTavernWorldbookCacheReset();
+        return '';
     }
     const response = await requestHost('xb-tavern:run-slash-command', {
         payload: { command: messageText },
@@ -4610,6 +4655,13 @@ const appUiContext = {
 provide(TAVERN_APP_UI_CONTEXT, appUiContext);
 
 async function runPostReadyStartupTasks() {
+    reportStartupProgress(91, 'worldbookCacheReset');
+    try {
+        await resetTavernWorldbookCache({ mode: 'migration' });
+    } catch (error) {
+        console.warn('[LittleWhiteBox/tavern] Failed to reset stale worldbook cache', error);
+        statusText.value = describeError(error);
+    }
     reportStartupProgress(92, 'refreshPresets');
     const startupResults = await Promise.allSettled([
         refreshPresets(),
