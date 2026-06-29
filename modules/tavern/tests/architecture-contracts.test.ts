@@ -2026,7 +2026,7 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.match(cssSource, /@media \(max-width: 760px\) \{[\s\S]*\.chat-bubble>\.message-actions \{[\s\S]*opacity: 0;[\s\S]*pointer-events: none;[\s\S]*\.chat-bubble\.is-action-tray-open>\.message-actions[\s\S]*opacity: 1;[\s\S]*pointer-events: auto;/);
     assert.doesNotMatch(cssSource, /\.message-actions \{[\s\S]*border-top: 1px solid rgba\(120, 112, 98, 0\.16\);/);
     assert.doesNotMatch(cssSource, /\.message-actions \{[\s\S]*border-bottom: 1px solid rgba\(120, 112, 98, 0\.14\);/);
-    assert.match(cssSource, /\.tavern-chat\.xb-page \.chat-scroll \{[\s\S]*scrollbar-width: none;[\s\S]*-ms-overflow-style: none;/);
+    assert.match(cssSource, /\.tavern-chat\.xb-page \.chat-scroll \{[\s\S]*overflow: auto;[\s\S]*overflow-anchor: none;[\s\S]*scrollbar-width: none;[\s\S]*-ms-overflow-style: none;/);
     assert.match(cssSource, /\.tavern-chat\.xb-page \.chat-scroll \{[\s\S]*background: var\(--xb-chat-scroll-bg\);/);
     assert.doesNotMatch(cssSource, /\.tavern-chat\.xb-page \.chat-scroll \{[\s\S]*repeating-linear-gradient/);
     assert.match(cssSource, /\.tavern-chat\.xb-page \.chat-scroll::-webkit-scrollbar \{[\s\S]*width: 0;[\s\S]*height: 0;/);

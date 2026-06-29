@@ -46,6 +46,7 @@
     flex-direction: column;
     gap: 34px;
     overflow: auto;
+    overflow-anchor: none;
     background: var(--xb-chat-scroll-bg);
     padding: var(--xb-chat-scroll-padding);
     scroll-padding: 44px 0 38px;
