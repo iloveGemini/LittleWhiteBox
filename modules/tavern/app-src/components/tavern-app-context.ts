@@ -430,6 +430,7 @@ export interface TavernManagerContext {
     managerInputDraft: Ref<string>;
     managerInputStatus: Ref<string>;
     managerMessageWindow: TavernReadable<TavernMessageWindowState>;
+    managerPendingUserMessage: TavernReadable<TavernManagerMessageRecord | null>;
     managerRuns: Ref<TavernManagerRunRecord[]>;
     managerRunTone: TavernCommand<[runOrStatus: TavernManagerRunRecord | string], string>;
     managerScrollControlsActive: Ref<boolean>;

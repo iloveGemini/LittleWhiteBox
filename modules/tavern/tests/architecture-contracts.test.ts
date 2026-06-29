@@ -1938,7 +1938,7 @@ test('tavern memory editor actions live outside the app controller', () => {
     assert.match(appSource, /async function commitUserAcceptedState\(sessionId = selectedSessionId\.value, userOrder\?: number\) \{[\s\S]*const explicitOrder = Number\(userOrder\);[\s\S]*getLatestTavernUserMessageAtOrBefore\(id, Number\.POSITIVE_INFINITY\)[\s\S]*await saveAcceptedStateSnapshot\(id, latestUserOrder \?\? -1\);[\s\S]*\}/);
     assert.match(appSource, /commitAcceptedState,/);
     assert.match(appSource, /commitUserAcceptedState,/);
-    assert.match(appSource, /const userAcceptedAnchorOrder = \(await getLatestTavernUserMessageAtOrBefore\(managerSessionId, Number\.POSITIVE_INFINITY\)\)\?\.order \?\? -1;/);
+    assert.match(appSource, /let userAcceptedAnchorOrder = -1;[\s\S]*try \{[\s\S]*userAcceptedAnchorOrder = \(await getLatestTavernUserMessageAtOrBefore\(managerSessionId, Number\.POSITIVE_INFINITY\)\)\?\.order \?\? -1;[\s\S]*const budget = await ensureTavernManagerChatBudget/);
     assert.match(appSource, /if \(\(result\.changedFiles \|\| \[\]\)\.length \|\| \(result\.changedTasks \|\| \[\]\)\.length\) \{[\s\S]*await commitUserAcceptedState\(managerSessionId, userAcceptedAnchorOrder\);[\s\S]*\}[\s\S]*await refreshManagerRecords\(managerSessionId\);/);
     assert.doesNotMatch(appSource, /changedStates[\s\S]{0,120}commitUserAcceptedState/);
 });
@@ -2399,7 +2399,9 @@ test('tavern heavy disclosure details bind to ephemeral state instead of keeping
     assert.match(managerSource, /class="manager-work-band"[\s\S]*class="chat-scroll-shell manager-scroll-shell"/);
     assert.match(managerSource, /v-for="item in managerChatMessageItems"/);
     assert.match(managerSource, /class="manager-work-section manager-work-live-draft"/);
-    assert.match(managerSource, /isManagerAssistantRunning && !liveManagerChatMessageItems\.length/);
+    assert.match(managerSource, /v-if="managerPendingUserMessage"[\s\S]*data-manager-anchor-key="pending:user"/);
+    assert.match(managerSource, /isManagerAssistantRunning && !managerPendingUserMessage && !liveManagerChatMessageItems\.length/);
+    assert.match(appSource, /managerPendingUserMessage: visibleManagerPendingUserMessage/);
     assert.match(managerSource, /function handleManagerWorkBandToggle[\s\S]*enhanceManagerMarkdown\(\)[\s\S]*updateManagerScrollButtons\(\)/);
     assert.match(appSource, /totalItems:\s*\(\) => managerChatMessageDisplayItems\.value\.length/);
     assert.match(appSource, /getMessageWindow\(\{[\s\S]*\}, managerChatMessageDisplayItems\.value\.length/);

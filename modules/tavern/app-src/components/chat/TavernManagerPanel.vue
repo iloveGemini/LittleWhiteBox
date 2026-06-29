@@ -68,6 +68,7 @@ const {
     managerComposeTextareaRef,
     managerInputDraft,
     managerMessageWindow,
+    managerPendingUserMessage,
     managerRuns,
     managerRunTone,
     managerScrollControlsActive,
@@ -146,6 +147,13 @@ function isManagerToolTurnDisplayItem(item: ManagerChatDisplayItem): item is Man
 const managerChatMessageItems = computed(() => visibleManagerChatItems.value.filter(isManagerMessageDisplayItem));
 const liveManagerChatMessageItems = computed(() => liveManagerChatDisplayItems.value.filter(isManagerMessageDisplayItem));
 const liveManagerToolTurnItems = computed(() => liveManagerChatDisplayItems.value.filter(isManagerToolTurnDisplayItem));
+const pendingManagerUserRenderState = computed(() => {
+    const text = String(managerPendingUserMessage.value?.content || '').trim();
+    return {
+        text,
+        signature: managerMarkdownSignature(`${text}\u0000pending-user`),
+    };
+});
 const currentLiveManagerToolTurn = computed(() => liveManagerToolTurnItems.value[0] || null);
 const currentManagerTraceItems = computed(() => (
     currentManagerWorkRun.value ? managerToolTraceItems(currentManagerWorkRun.value.toolTrace) : []
@@ -585,6 +593,23 @@ watch(
           </article>
         </template>
 
+        <article
+          v-if="managerPendingUserMessage"
+          data-manager-anchor-key="pending:user"
+          class="manager-card manager-message manager-message-user manager-message-live pending-user"
+        >
+          <div class="manager-run-title">
+            <strong>{{ roleLabel('user') }}</strong>
+            <small>发送中</small>
+          </div>
+          <div
+            :key="`pending-user:${pendingManagerUserRenderState.signature}`"
+            class="xb-tavern-markdown"
+            :data-markdown-signature="pendingManagerUserRenderState.signature"
+            v-html="renderChatMarkdown(pendingManagerUserRenderState.text)"
+          />
+        </article>
+
         <template
           v-for="item in liveManagerChatMessageItems"
           :key="`live:${item.key}`"
@@ -609,7 +634,7 @@ watch(
         </template>
 
         <article
-          v-if="isManagerAssistantRunning && !liveManagerChatMessageItems.length"
+          v-if="isManagerAssistantRunning && !managerPendingUserMessage && !liveManagerChatMessageItems.length"
           class="manager-card manager-message manager-message-assistant manager-message-live"
           data-manager-anchor-key="live:manager-thinking"
         >
@@ -621,7 +646,7 @@ watch(
         </article>
 
         <p
-          v-if="!managerChatMessageItems.length"
+          v-if="!managerChatMessageItems.length && !managerPendingUserMessage"
           data-manager-anchor-key="empty"
           class="chat-empty"
         >
