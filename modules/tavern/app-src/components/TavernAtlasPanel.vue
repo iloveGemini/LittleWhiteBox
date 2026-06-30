@@ -2,14 +2,11 @@
 import { computed, ref, watch } from 'vue';
 import type { TavernStructuredStateDocumentRecord, TavernStructuredStatePatchRecord } from '../../shared/session-db';
 import type { TavernAtlasActorPosition, TavernAtlasDocument, TavernAtlasLink, TavernAtlasLocation, TavernMapStateDocumentItem } from '../../shared/structured-state';
-import { layoutTavernAtlasDocument, type AtlasLayoutNode } from '../atlas-display';
+import { layoutTavernAtlasDocument } from '../atlas-display';
 import {
-    atlasGlyphForScale,
-    gameIconScaleTransform,
-    gameIconTranslateTransform,
-    getTavernGameIconGlyph,
-    TAVERN_MAP_ICON_ATTRIBUTION,
-} from '../map-glyphs';
+    resolveAtlasScaleIconName,
+    TAVERN_MAP_MATERIAL_SYMBOL_SIZE,
+} from '../../shared/map-material-symbols';
 
 const props = withDefaults(defineProps<{
     document: TavernStructuredStateDocumentRecord | null;
@@ -19,6 +16,8 @@ const props = withDefaults(defineProps<{
     previewMapDocId?: string;
     mapDocuments?: TavernMapStateDocumentItem[];
     displayMode?: 'full' | 'graph' | 'detail';
+    materialSymbolsReady?: boolean;
+    materialSymbolsStatus?: 'idle' | 'loading' | 'ready' | 'failed';
 }>(), {
     patches: () => [],
     activeLocationKey: '',
@@ -26,6 +25,8 @@ const props = withDefaults(defineProps<{
     previewMapDocId: '',
     mapDocuments: () => [],
     displayMode: 'full',
+    materialSymbolsReady: false,
+    materialSymbolsStatus: 'idle',
 });
 
 const selectedLocationKey = ref('');
@@ -173,16 +174,13 @@ function mapDocumentLabel(location: TavernAtlasLocation | null | undefined): str
     return mapTitleById.value.get(docId) || `已关联 ${docId}，地图未创建`;
 }
 
-function atlasNodeGlyph(location: TavernAtlasLocation | null | undefined) {
-    return getTavernGameIconGlyph(atlasGlyphForScale(location?.scale));
+function atlasNodeIcon(location: TavernAtlasLocation | null | undefined) {
+    return resolveAtlasScaleIconName(location?.scale);
 }
 
-function atlasNodeGlyphTransform(node: AtlasLayoutNode): string {
-    return gameIconTranslateTransform(node.x + 18, node.y + 23);
-}
-
-function atlasNodeGlyphScaleTransform(): string {
-    return gameIconScaleTransform(18);
+function atlasNodeIconText(location: TavernAtlasLocation | null | undefined): string {
+    if (props.materialSymbolsReady) {return atlasNodeIcon(location);}
+    return props.materialSymbolsStatus === 'failed' ? '!' : '';
 }
 
 function atlasLinkForLayout(linkId: string): TavernAtlasLink | undefined {
@@ -283,7 +281,7 @@ function handleAtlasWheel(event: WheelEvent) {
 <template>
   <section
     class="tavern-atlas-panel"
-    :class="`is-${displayMode}`"
+    :class="[`is-${displayMode}`, { 'is-symbol-font-failed': materialSymbolsStatus === 'failed' }]"
   >
     <div
       v-if="!atlas.locations.length"
@@ -406,19 +404,16 @@ function handleAtlasWheel(event: WheelEvent) {
               rx="8"
               filter="url(#tavern-atlas-sketch)"
             />
-            <g
-              v-if="atlasNodeGlyph(locationMap.get(node.key))"
-              :transform="atlasNodeGlyphTransform(node)"
+            <text
+              class="tavern-atlas-node-symbol"
+              :x="node.x + 18"
+              :y="node.y + 23"
+              :font-size="TAVERN_MAP_MATERIAL_SYMBOL_SIZE - 2"
+              text-anchor="middle"
+              dominant-baseline="central"
             >
-              <g :transform="atlasNodeGlyphScaleTransform()">
-                <path
-                  class="tavern-atlas-node-glyph"
-                  :d="atlasNodeGlyph(locationMap.get(node.key))?.path"
-                  transform="translate(-256, -256)"
-                  :fill-rule="atlasNodeGlyph(locationMap.get(node.key))?.fillRule"
-                />
-              </g>
-            </g>
+              {{ atlasNodeIconText(locationMap.get(node.key)) }}
+            </text>
             <text
               :x="node.x + 36"
               :y="node.y + 22"
@@ -436,7 +431,6 @@ function handleAtlasWheel(event: WheelEvent) {
             </text>
           </g>
         </svg>
-        <span class="tavern-atlas-icon-credit">{{ TAVERN_MAP_ICON_ATTRIBUTION }}</span>
       </div>
       <aside
         v-if="showDetail"
@@ -667,16 +661,39 @@ function handleAtlasWheel(event: WheelEvent) {
     stroke-width: 1.4;
 }
 
-.tavern-atlas-node-glyph {
+.tavern-atlas-node-symbol {
     fill: #6f4b31;
+    font-family: "Material Symbols Rounded", sans-serif;
+    font-feature-settings: "liga";
+    font-style: normal;
+    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+    font-weight: 300;
+    letter-spacing: 0;
     opacity: 0.86;
     pointer-events: none;
+    text-transform: none;
+    -webkit-font-feature-settings: "liga";
+    -webkit-font-smoothing: antialiased;
 }
 
 .tavern-atlas-node text {
     fill: #2d2118;
     font: 13px/1 var(--xb-font-ui);
     pointer-events: none;
+}
+
+.tavern-atlas-node .tavern-atlas-node-symbol {
+    fill: #6f4b31;
+    font-family: "Material Symbols Rounded", sans-serif;
+    font-size: 22px;
+    font-style: normal;
+    font-weight: 300;
+}
+
+.tavern-atlas-panel.is-symbol-font-failed .tavern-atlas-node-symbol {
+    font-family: var(--xb-font-ui), sans-serif;
+    font-size: 18px;
+    font-weight: 800;
 }
 
 .tavern-atlas-node .tavern-atlas-node-meta {
@@ -690,7 +707,7 @@ function handleAtlasWheel(event: WheelEvent) {
     stroke-dasharray: 4 4;
 }
 
-.tavern-atlas-node.is-mentioned .tavern-atlas-node-glyph {
+.tavern-atlas-node.is-mentioned .tavern-atlas-node-symbol {
     opacity: 0.46;
 }
 
@@ -704,7 +721,7 @@ function handleAtlasWheel(event: WheelEvent) {
     stroke-width: 2.2;
 }
 
-.tavern-atlas-node.is-current .tavern-atlas-node-glyph {
+.tavern-atlas-node.is-current .tavern-atlas-node-symbol {
     fill: #9c3d29;
     opacity: 0.94;
 }
@@ -712,20 +729,6 @@ function handleAtlasWheel(event: WheelEvent) {
 .tavern-atlas-node.is-preview rect,
 .tavern-atlas-node.is-selected rect {
     filter: url(#tavern-atlas-sketch) drop-shadow(0 5px 14px rgba(95, 54, 24, 0.18));
-}
-
-.tavern-atlas-icon-credit {
-    position: absolute;
-    right: 12px;
-    bottom: 9px;
-    z-index: 5;
-    max-width: min(360px, calc(100% - 24px));
-    overflow: hidden;
-    color: rgba(58, 45, 30, 0.46);
-    font: 10px/1.25 var(--xb-font-ui);
-    pointer-events: none;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .tavern-atlas-detail {

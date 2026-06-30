@@ -12,6 +12,9 @@ test('default assistant preset carries an editable status panel section', () => 
     const preset = createDefaultTavernAssistantPreset();
     assert.match(preset.statusPrompt, /# 状态栏设定/);
     assert.match(preset.statusPrompt, /没写的项不智能补全/);
+    assert.match(preset.statusPrompt, /Material Symbols 官方名/);
+    assert.match(preset.statusPrompt, /swords（剑）而非 sword/);
+    assert.match(preset.statusPrompt, /science（显微镜\/实验）、biotech/);
     assert.match(buildDefaultStatusPanelPrompt(), /新NPC在已有关系 block 内增加字段/);
 
     const normalized = normalizeTavernAssistantPreset({

@@ -6,6 +6,7 @@ export function hasSpatialMapContent(elements: TavernMapElement[] = []): boolean
         || typeof element.circle === 'number'
         || Array.isArray(element.path)
         || Array.isArray(element.curve)
+        || element.shape === 'icon'
         || !!element.icon
     ));
 }

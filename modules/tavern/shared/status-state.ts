@@ -12,6 +12,7 @@ import db, {
     type TavernStructuredStatePatchRecord,
 } from './session-db';
 import { resolveAcceptedSnapshotFloor } from './tasks';
+import { canonicalMaterialSymbolName, normalizeMaterialSymbolName } from './status-material-symbols';
 
 export const TAVERN_STATUS_DOC_TYPE = 'tavern.status' as const;
 export const TAVERN_STATUS_DOC_ID = 'main' as const;
@@ -145,6 +146,28 @@ function normalizeText(value: unknown = '', limit = 120): string {
     return text.length > limit ? text.slice(0, limit) : text;
 }
 
+function normalizeStatusIcon(value: unknown, owner: string, warnings: string[]): string | undefined {
+    const normalized = normalizeMaterialSymbolName(value);
+    if (!normalized) {return undefined;}
+    const icon = canonicalMaterialSymbolName(value);
+    if (icon) {return icon;}
+    warnings.push(`${owner}: icon非法(${normalizeText(value, 80)})，已忽略`);
+    return undefined;
+}
+
+function applyStatusItemIconSet(item: TavernStatusItemField, value: unknown, warnings: string[]): boolean {
+    const normalized = normalizeMaterialSymbolName(value);
+    if (!normalized) {return false;}
+    const icon = canonicalMaterialSymbolName(value);
+    if (!icon) {
+        warnings.push(`${item.id}: icon非法(${normalizeText(value, 80)})，保留原图标`);
+        return false;
+    }
+    if (item.icon === icon) {return false;}
+    item.icon = icon;
+    return true;
+}
+
 function normalizeId(value: unknown = '', fallback = ''): string {
     const text = normalizeText(value, 80)
         .replace(/\s+/g, '-')
@@ -251,7 +274,7 @@ function normalizeItemField(value: unknown, fallbackId: string, warnings: string
         id: normalizeId(source.id, normalizeId(name, fallbackId)),
         name,
     };
-    const icon = normalizeText(source.icon, 50);
+    const icon = normalizeStatusIcon(source.icon, `${field.id}: item`, warnings);
     const lore = normalizeText(source.lore, 500);
     const slot = normalizeText(source.slot, 60);
     const qty = numberOrUndefined(source.qty);
@@ -335,7 +358,7 @@ export function normalizeStatusDocument(value: unknown): { document: TavernStatu
         });
         const subject: TavernStatusSubject = { id: subjectId, name, tabs };
         const subtitle = normalizeText(subjectSource.subtitle, 120);
-        const icon = normalizeText(subjectSource.icon, 50);
+        const icon = normalizeStatusIcon(subjectSource.icon, `${subjectId}: subject`, warnings);
         if (subtitle) {subject.subtitle = subtitle;}
         if (icon) {subject.icon = icon;}
         subjects.push(subject);
@@ -678,8 +701,9 @@ function applySetToField(field: TavernStatusField, block: TavernStatusBlock, op:
     }
     if (block.form === 'item') {
         const item = field as TavernStatusItemField;
+        let changed = false;
         if ('name' in set) {item.name = normalizeText(set.name, 100) || item.name;}
-        if ('icon' in set) {item.icon = normalizeText(set.icon, 50) || undefined;}
+        if ('icon' in set) {changed = applyStatusItemIconSet(item, set.icon, warnings) || changed;}
         if ('lore' in set) {item.lore = normalizeText(set.lore, 500) || undefined;}
         if ('slot' in set) {item.slot = normalizeText(set.slot, 60) || undefined;}
         if ('qty' in set) {
@@ -688,7 +712,7 @@ function applySetToField(field: TavernStatusField, block: TavernStatusBlock, op:
         }
         if ('key' in set) {item.key = set.key === true;}
         if ('empty' in set) {item.empty = set.empty === true;}
-        return true;
+        return changed || Object.keys(set).some((key) => key !== 'icon');
     }
     warnings.push(`${field.id}: unsupported_set`);
     return false;

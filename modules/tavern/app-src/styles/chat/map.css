@@ -410,20 +410,33 @@
         tavern-map-op-glow 1.4s ease-out calc(var(--map-delay) + 160ms) both;
 }
 
-.tavern-chat.xb-page .map-game-icon {
+.tavern-chat.xb-page .map-material-symbol {
+    font-family: "Material Symbols Rounded", sans-serif;
+    font-feature-settings: "liga";
+    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
+    font-style: normal;
+    font-weight: 300;
+    letter-spacing: 0;
+    line-height: 1;
     opacity: 0.9;
+    pointer-events: none;
+    text-transform: none;
+    user-select: none;
+    -webkit-font-feature-settings: "liga";
+    -webkit-font-smoothing: antialiased;
 }
 
-.tavern-chat.xb-page .map-game-icon.is-animated {
+.tavern-chat.xb-page .map-material-symbol.is-animated {
     opacity: 0;
     animation:
         tavern-map-fill-in 1s ease-out calc(var(--map-delay) + 120ms) forwards,
         tavern-map-op-glow 1.4s ease-out calc(var(--map-delay) + 160ms) both;
 }
 
-.tavern-chat.xb-page .map-game-icon-path {
-    transform-box: fill-box;
-    transform-origin: center;
+.tavern-chat.xb-page .tavern-map-panel.is-symbol-font-failed .map-material-symbol {
+    font-family: var(--xb-font-ui), sans-serif;
+    font-size: 18px;
+    font-weight: 800;
 }
 
 .tavern-chat.xb-page .map-fill.is-animated {
@@ -460,15 +473,6 @@
 .tavern-chat.xb-page .map-removed-layer .map-element {
     --map-accent: rgba(190, 62, 54, 0.86);
     filter: drop-shadow(0 0 8px rgba(190, 62, 54, 0.42));
-}
-
-.tavern-chat.xb-page .tavern-map-icon-credit {
-    margin-left: auto;
-    max-width: 260px;
-    overflow: hidden;
-    color: var(--xb-ink-faint);
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .tavern-chat.xb-page .is-latest {

@@ -1,6 +1,7 @@
 /* eslint-disable -- generated from TypeScript source; run npm run build:tavern */
 import { getRequestHeaders } from "../../../../../../../script.js";
 import { AssistantStorage } from "../../../core/server-storage.js";
+import { extensionFolderPath } from "../../../core/constants.js";
 import {
   AGENT_SETTINGS_CONFIG_VERSION,
   normalizeAgentSettings,
@@ -69,6 +70,7 @@ async function buildTavernFrameConfig(contextPayload = {}, options = {}) {
   return {
     agentConfig,
     tavernDisplaySettings,
+    extensionBasePath: `/${extensionFolderPath}`,
     chatPreset: chatPresetList.active,
     chatPresetList,
     hostRequestHeaders,

@@ -510,6 +510,8 @@ export interface TavernWorkspaceContext {
     mapStateDocuments: Ref<TavernMapStateDocumentItem[]>;
     mapStateDocument: Ref<TavernStructuredStateDocumentRecord | null>;
     mapStatePatches: Ref<TavernStructuredStatePatchRecord[]>;
+    materialSymbolFontReady: TavernReadable<boolean>;
+    materialSymbolFontStatus: TavernReadable<'idle' | 'loading' | 'ready' | 'failed'>;
     statusFieldDeltas: Ref<TavernStatusFieldDeltaMap>;
     statusStateDocument: Ref<TavernStructuredStateDocumentRecord | null>;
     statusStatePatches: Ref<TavernStructuredStatePatchRecord[]>;

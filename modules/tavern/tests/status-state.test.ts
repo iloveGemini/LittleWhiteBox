@@ -206,6 +206,72 @@ test('StatusPatch only mutates existing blocks and skips semantic no-op writes',
     assert.equal(afterNoopPatches.length, beforeNoopPatches.length);
 });
 
+test('status item icons canonicalize before fingerprinting and ignore invalid set icons', async () => {
+    const session = await createTavernSession({ title: 'Status icon canonical' });
+    const document = createStatusDoc();
+    document.subjects[0].icon = 'Face 3';
+    const items = document.subjects[0].tabs[0].blocks.find((block) => block.id === 'items');
+    items?.fields.push({ id: 'brass-key', name: '黄铜钥匙', icon: 'Key', qty: 1 });
+
+    const init = await executeTavernStatusTool(session.id, TAVERN_STATUS_TOOL_NAMES.INIT, { document });
+    assert.equal(init.ok, true);
+    assert.equal(init.document?.subjects[0].icon, 'face_3');
+    const initItem = init.document?.subjects[0].tabs[0].blocks.find((block) => block.id === 'items')?.fields[0] as { icon?: string };
+    assert.equal(initItem.icon, 'key');
+
+    const beforeNoopPatches = await listTavernStructuredStatePatches({
+        sessionId: session.id,
+        docType: TAVERN_STATUS_DOC_TYPE,
+        docId: TAVERN_STATUS_DOC_ID,
+    });
+    const noOp = await executeTavernStatusTool(session.id, TAVERN_STATUS_TOOL_NAMES.PATCH, {
+        ops: [
+            { op: 'set', subjectId: 'user', tabId: 'overview', blockId: 'items', fieldId: 'brass-key', set: { icon: 'Key' } },
+        ],
+    });
+    const afterNoopPatches = await listTavernStructuredStatePatches({
+        sessionId: session.id,
+        docType: TAVERN_STATUS_DOC_TYPE,
+        docId: TAVERN_STATUS_DOC_ID,
+    });
+    assert.equal(noOp.ok, true);
+    assert.equal(noOp.changed, false);
+    assert.equal(noOp.revision, 1);
+    assert.equal(afterNoopPatches.length, beforeNoopPatches.length);
+
+    const emptyIconSet = await executeTavernStatusTool(session.id, TAVERN_STATUS_TOOL_NAMES.PATCH, {
+        ops: [
+            { op: 'set', subjectId: 'user', tabId: 'overview', blockId: 'items', fieldId: 'brass-key', set: { icon: '' } },
+        ],
+    });
+    assert.equal(emptyIconSet.ok, true);
+    assert.equal(emptyIconSet.changed, false);
+    assert.equal(emptyIconSet.document, undefined);
+
+    const invalidSet = await executeTavernStatusTool(session.id, TAVERN_STATUS_TOOL_NAMES.PATCH, {
+        ops: [
+            { op: 'set', subjectId: 'user', tabId: 'overview', blockId: 'items', fieldId: 'brass-key', set: { icon: 'sword_icon' } },
+        ],
+    });
+    assert.equal(invalidSet.ok, true);
+    assert.equal(invalidSet.changed, false);
+    assert.match(invalidSet.warnings?.join('\n') || '', /icon非法\(sword_icon\).*保留原图标/);
+    const stateAfterIgnoredSet = await getTavernStatusStateForSession(session.id);
+    const retainedItem = stateAfterIgnoredSet.status.subjects[0].tabs[0].blocks.find((block) => block.id === 'items')?.fields[0] as { icon?: string };
+    assert.equal(retainedItem.icon, 'key');
+
+    const push = await executeTavernStatusTool(session.id, TAVERN_STATUS_TOOL_NAMES.PATCH, {
+        ops: [
+            { op: 'push', subjectId: 'user', tabId: 'overview', blockId: 'items', id: 'fake-sword', name: '旧剑', icon: 'sword_icon' },
+        ],
+    });
+    assert.equal(push.ok, true);
+    assert.equal(push.changed, true);
+    assert.match(push.warnings?.join('\n') || '', /icon非法\(sword_icon\).*已忽略/);
+    const pushedItem = push.document?.subjects[0].tabs[0].blocks.find((block) => block.id === 'items')?.fields.find((field) => field.id === 'fake-sword') as { icon?: string };
+    assert.equal(pushedItem.icon, undefined);
+});
+
 test('status rollback restores accepted snapshots by message range', async () => {
     const session = await createTavernSession({ title: 'Status rollback' });
     await executeTavernStatusTool(session.id, TAVERN_STATUS_TOOL_NAMES.INIT, { document: createStatusDoc(50) }, {

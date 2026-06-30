@@ -8,6 +8,8 @@ const outputPath = path.join(pluginRoot, 'modules/assistant/assistant-file-manif
 
 const TEXT_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.vue', '.html', '.css', '.json', '.md', '.txt']);
 const INCLUDED_BINARY_TEXT_RESOURCES = new Set([
+    'libs/material-symbols/LICENSE',
+    'libs/material-symbols/codepoints',
     'modules/draw/shared/data/danbooru-chars.dat',
 ]);
 const EXCLUDED_DIR_NAMES = new Set(['.git', 'node_modules', 'dist', 'coverage']);

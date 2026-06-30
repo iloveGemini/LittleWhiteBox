@@ -103,6 +103,7 @@ import {
     type TavernAtlasDocument,
     type TavernMapDocument,
 } from '../shared/structured-state';
+import { resolveMapElementIconName } from '../shared/map-material-symbols';
 import {
     TAVERN_STATUS_TOOL_NAMES,
     executeTavernStatusTool,
@@ -1462,7 +1463,7 @@ test('MapPatch tool schema documents canonical ops and camera semantics', () => 
     assert.match(patchTool?.function.description || '', /Do not use floor, ground, surface, deck, platform, base, area, region, subtype, opacity/i);
     assert.match(patchTool?.function.description || '', /visual scale/i);
     assert.match(patchTool?.function.description || '', /splits the text into a system label element automatically/i);
-    assert.match(patchTool?.function.description || '', /Do not put house\/castle\/village\/forest\/temple\/shop icons inside a scene map/i);
+    assert.match(patchTool?.function.description || '', /`kind` drives map logic such as exits/i);
     assert.match(parameters.properties?.docId?.description || '', /atlas always uses `main`/i);
     assert.match(parameters.properties?.activate?.description || '', /With `ops:\[\]`, this only switches the active map/i);
     assert.equal(Array.isArray((parameters as { required?: string[] }).required) && (parameters as { required?: string[] }).required.includes('ops'), false);
@@ -1471,7 +1472,10 @@ test('MapPatch tool schema documents canonical ops and camera semantics', () => 
     assert.match(opsProperties.set?.description || '', /For map `meta`\/`modify`/i);
     assert.match(opsProperties.element?.description || '', /Full element object for `add`/i);
     assert.match(opsProperties.element?.description || '', /never send empty `path:\[\]`/i);
-    assert.match(elementProperties.icon?.description || '', /Do not put place icons/i);
+    assert.match(elementProperties.kind?.description || '', /closed system semantic/i);
+    assert.deepEqual(elementProperties.shape?.enum, ['icon']);
+    assert.match(elementProperties.shape?.description || '', /Explicit icon geometry/i);
+    assert.match(elementProperties.icon?.description || '', /Material Symbols official/i);
     assert.match(elementProperties.path?.description || '', /do not send an empty array/i);
     assert.match(elementProperties.curve?.description || '', /do not send an empty array/i);
     assert.deepEqual(elementProperties.material?.enum, [
@@ -1503,6 +1507,8 @@ test('MapPatch tool schema documents canonical ops and camera semantics', () => 
     assert.equal(setProperties.style, undefined);
     assert.equal(setProperties.opacity, undefined);
     assert.equal(setProperties.zIndex, undefined);
+    assert.deepEqual(setProperties.shape?.enum, ['icon']);
+    assert.match(setProperties.icon?.description || '', /does not change geometry/i);
     assert.deepEqual(setProperties.scale?.enum, ['city', 'district', 'building', 'floor', 'room', 'outdoor']);
     assert.deepEqual(setProperties.material?.enum, [
         'unknown',
@@ -1678,9 +1684,9 @@ test('Map activate does not move atlas and spatial digest uses atlas active map'
         ops: [
             { op: 'meta', set: { name: '办公室', viewBox: [0, 0, 400, 300], status: 'active', mood: 'cold' } },
             { op: 'add', element: { id: 'desk', cat: 'furniture', at: [90, 90], rect: [120, 60], text: '办公桌', material: 'metal' } },
-            { op: 'add', element: { id: 'door', cat: 'door', at: [200, 260], icon: 'o', text: '门' } },
-            { op: 'add', element: { id: 'player-office', cat: 'actor', actorKey: 'player', at: [200, 180], icon: 'o', text: '玛雅' } },
-            { op: 'add', element: { id: 'generic-user', cat: 'actor', actorKey: 'user', at: [240, 180], icon: 'o', text: '玩家' } },
+            { op: 'add', element: { id: 'door', cat: 'door', kind: 'door', at: [200, 260], shape: 'icon', icon: 'door_open', text: '门' } },
+            { op: 'add', element: { id: 'player-office', cat: 'actor', kind: 'player', actorKey: 'player', at: [200, 180], shape: 'icon', icon: 'person_pin_circle', text: '玛雅' } },
+            { op: 'add', element: { id: 'generic-user', cat: 'actor', actorKey: 'user', at: [240, 180], shape: 'icon', icon: 'person', text: '玩家' } },
         ],
     });
     await executeTavernStateTool(session.id, 'MapPatch', {
@@ -1875,28 +1881,49 @@ test('MapPatch rejects map elements without drawable geometry', async () => {
     assert.equal(seed?.revision, 0);
     assert.equal((seed?.data as { meta?: { status?: string } })?.meta?.status, 'uninitialized');
 
-    const placeScaleIcon = await executeTavernStateTool(session.id, 'MapPatch', {
+    const iconOnly = await executeTavernStateTool(session.id, 'MapPatch', {
         ops: [
-            { op: 'add', element: { id: 'wrong-house-icon', type: 'icon', cat: 'marker', pos: [80, 40], icon: 'house' } },
+            { op: 'add', element: { id: 'bare-visual-icon', cat: 'marker', at: [80, 40], icon: 'location_on' } },
         ],
     });
-    assert.equal(placeScaleIcon.ok, false);
-    assert.equal(placeScaleIcon.changed, false);
-    assert.match(JSON.stringify(placeScaleIcon.details), /map_element_icon_place_scale:wrong-house-icon:house/);
+    assert.equal(iconOnly.ok, false);
+    assert.equal(iconOnly.changed, false);
+    assert.match(JSON.stringify(iconOnly.details), /map_element_shape_required:bare-visual-icon/);
+    const afterIconOnly = await getTavernStructuredStateDocument(session.id, 'tavern.map', 'main');
+    assert.equal(afterIconOnly?.revision, 0);
+
+    const fallbackIcon = await executeTavernStateTool(session.id, 'MapPatch', {
+        ops: [
+            { op: 'add', element: { id: 'invalid-visual-icon', type: 'icon', cat: 'marker', pos: [80, 40], icon: 'sword_icon' } },
+        ],
+    });
+    assert.equal(fallbackIcon.ok, true);
+    assert.equal(fallbackIcon.changed, true);
+    assert.match(JSON.stringify(fallbackIcon.warnings), /invalid Material Symbols icon/i);
+    let document = await getTavernStructuredStateDocument(session.id, 'tavern.map', 'main');
+    let elements = (document?.data as { elements?: Array<Record<string, unknown>> })?.elements || [];
+    const invalidVisualIcon = elements.find((element) => element.id === 'invalid-visual-icon');
+    assert.equal(invalidVisualIcon?.shape, 'icon');
+    assert.equal(invalidVisualIcon?.icon, undefined);
+    assert.equal(resolveMapElementIconName(invalidVisualIcon?.icon, {
+        kind: invalidVisualIcon?.kind,
+        cat: invalidVisualIcon?.cat,
+        actorKey: invalidVisualIcon?.actorKey,
+    }), 'location_on');
 
     const valid = await executeTavernStateTool(session.id, 'MapPatch', {
         ops: [
-            { op: 'add', element: { id: 'current-position', type: 'icon', cat: 'marker', pos: [60, 35], icon: 'o' } },
-            { op: 'add', element: { id: 'private-note', type: 'icon', cat: 'marker', pos: [72, 35], icon: 'heart' } },
+            { op: 'add', element: { id: 'current-position', type: 'icon', cat: 'marker', pos: [60, 35], icon: 'location_on' } },
+            { op: 'add', element: { id: 'private-note', type: 'icon', cat: 'marker', pos: [72, 35], icon: 'favorite' } },
             { op: 'add', element: { id: 'room-label', type: 'text', cat: 'label', pos: [60, 65], content: 'Forest clearing' } },
         ],
     });
 
     assert.equal(valid.ok, true);
     assert.equal(valid.appliedCount, 3);
-    const document = await getTavernStructuredStateDocument(session.id, 'tavern.map', 'main');
-    const elements = (document?.data as { elements?: Array<Record<string, unknown>> })?.elements || [];
-    assert.equal(elements.find((element) => element.id === 'private-note')?.icon, 'heart');
+    document = await getTavernStructuredStateDocument(session.id, 'tavern.map', 'main');
+    elements = (document?.data as { elements?: Array<Record<string, unknown>> })?.elements || [];
+    assert.equal(elements.find((element) => element.id === 'private-note')?.icon, 'favorite');
 });
 
 test('MapPatch accepts common map geometry aliases and explains failures', async () => {
@@ -2008,7 +2035,7 @@ test('MapPatch repairs stored geometry text collisions with derived labels', asy
     assert.equal(atlas.ok, true);
     await putTavernStructuredStateDocument(createStoredMapRecord(session.id, [
         { id: '__label__player_actor', at: [1, 1], text: '玛雅', cat: 'label' },
-        { id: 'player_actor', at: [80, 90], icon: 'o', cat: 'actor', actorKey: 'player', text: '玛雅（压制）' },
+        { id: 'player_actor', at: [80, 90], icon: 'person_pin_circle', kind: 'player', cat: 'actor', actorKey: 'player', text: '玛雅（压制）' },
     ]));
 
     const spatial = await buildTavernSpatialStateDigest(session.id);
@@ -2020,7 +2047,7 @@ test('MapPatch repairs stored geometry text collisions with derived labels', asy
     const actor = elements.find((element) => element.id === 'player_actor');
     const labels = elements.filter((element) => element.id === '__label__player_actor');
     assert.equal(actor?.text, undefined);
-    assert.equal(actor?.icon, 'o');
+    assert.equal(actor?.icon, 'person_pin_circle');
     assert.equal(labels.length, 1);
     assert.equal(labels[0]?.text, '玛雅（压制）');
 });
@@ -2093,7 +2120,7 @@ test('MapPatch stores map material mood certainty and treats repeated semantic p
             { op: 'meta', set: { name: 'Old Hound Inn', viewBox: [0, 0, 400, 300], status: 'active', mood: 'warm' } },
             { op: 'add', element: { id: 'floor', at: [20, 20], rect: [360, 260], cat: 'terrain', material: 'wood' } },
             { op: 'add', element: { id: 'firelight', at: [60, 60], circle: 90, cat: 'light', material: 'warm-light' } },
-            { op: 'add', element: { id: 'uncertain-door', at: [190, 270], icon: 'o', cat: 'door', certainty: 'inferred' } },
+            { op: 'add', element: { id: 'uncertain-door', at: [190, 270], shape: 'icon', icon: 'door_open', kind: 'door', cat: 'door', certainty: 'inferred' } },
         ],
     });
     assert.equal(write.ok, true);
@@ -2126,7 +2153,7 @@ test('MapPatch rejects material styling escape hatches and invalid enum churn', 
     const write = await executeTavernStateTool(session.id, 'MapPatch', {
         ops: [
             { op: 'add', element: { id: 'rug', at: [40, 40], rect: [80, 50], cat: 'furniture', material: 'carpet', fill: '#ff0000' } },
-            { op: 'add', element: { id: 'ghost', at: [120, 80], icon: 'o', cat: 'actor', actorKey: 'ghost', material: 'shadow' } },
+            { op: 'add', element: { id: 'ghost', at: [120, 80], shape: 'icon', icon: 'person', cat: 'actor', actorKey: 'ghost', material: 'shadow' } },
             { op: 'add', element: { id: 'old-fill', at: [12, 12], rect: [24, 24], cat: 'terrain', fill: '#00ff00' } },
         ],
     });
@@ -2181,7 +2208,7 @@ test('MapPatch replay preserves canonical field deletions', async () => {
     const session = await createTavernSession({ title: 'Map replay canonical deletions' });
     const write = await executeTavernStateTool(session.id, 'MapPatch', {
         ops: [
-            { op: 'add', element: { id: 'door', at: [20, 20], icon: 'o', cat: 'door', certainty: 'inferred' } },
+            { op: 'add', element: { id: 'door', at: [20, 20], shape: 'icon', icon: 'door_open', kind: 'door', cat: 'door', certainty: 'inferred' } },
             { op: 'add', element: { id: 'floor', at: [0, 0], rect: [80, 60], cat: 'terrain', material: 'wood' } },
         ],
     });
@@ -2263,7 +2290,7 @@ test('MapPatch canonicalizes modify text on geometry into a derived label upsert
     const add = await executeTavernStateTool(session.id, 'MapPatch', {
         ops: [{
             op: 'add',
-            element: { id: 'player_actor', at: [80, 90], icon: 'o', cat: 'actor', actorKey: 'player' },
+            element: { id: 'player_actor', at: [80, 90], shape: 'icon', icon: 'person_pin_circle', kind: 'player', cat: 'actor', actorKey: 'player' },
         }],
     });
     assert.equal(add.ok, true);
@@ -2284,7 +2311,7 @@ test('MapPatch canonicalizes modify text on geometry into a derived label upsert
     const actor = storedElements.find((element) => element.id === 'player_actor');
     const labelElement = storedElements.find((element) => element.id === '__label__player_actor');
     assert.equal(actor?.text, undefined);
-    assert.equal(actor?.icon, 'o');
+    assert.equal(actor?.icon, 'person_pin_circle');
     assert.equal(actor?.actorKey, 'player');
     assert.equal(labelElement?.text, '玛雅（压制）');
 
@@ -2327,13 +2354,57 @@ test('MapPatch canonicalizes modify shape plus text after candidate merge', asyn
     assert.equal(label?.text, '储物间');
 });
 
+test('MapPatch modify visual icon does not replace non-icon geometry', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Map visual icon boundary' });
+    const add = await executeTavernStateTool(session.id, 'MapPatch', {
+        ops: [
+            { op: 'add', element: { id: 'room', at: [20, 20], rect: [100, 100], cat: 'wall' } },
+            { op: 'add', element: { id: 'exit', at: [140, 20], shape: 'icon', icon: 'door_open', kind: 'door', cat: 'door' } },
+        ],
+    });
+    assert.equal(add.ok, true);
+
+    const clear = await executeTavernStateTool(session.id, 'MapPatch', {
+        ops: [{ op: 'modify', id: 'room', set: { icon: null } }],
+    });
+    const invalid = await executeTavernStateTool(session.id, 'MapPatch', {
+        ops: [
+            { op: 'modify', id: 'room', set: { icon: 'sword_icon' } },
+            { op: 'modify', id: 'exit', set: { icon: 'sword_icon' } },
+        ],
+    });
+    const convert = await executeTavernStateTool(session.id, 'MapPatch', {
+        ops: [{ op: 'modify', id: 'room', set: { shape: 'icon', kind: 'portal' } }],
+    });
+    const record = await getTavernStructuredStateDocument(session.id, 'tavern.map', 'main');
+    const elements = ((record?.data as { elements?: Array<Record<string, unknown>> })?.elements || []);
+    const room = elements.find((element) => element.id === 'room');
+    const exit = elements.find((element) => element.id === 'exit');
+
+    assert.equal(clear.ok, true);
+    assert.equal(clear.changed, false);
+    assert.equal(invalid.ok, true);
+    assert.equal(invalid.changed, false);
+    assert.match((invalid.warnings || []).join('\n'), /invalid Material Symbols icon/i);
+    assert.equal(exit?.shape, 'icon');
+    assert.equal(exit?.icon, 'door_open');
+    assert.equal(convert.ok, true);
+    assert.equal(room?.shape, 'icon');
+    assert.equal(room?.rect, undefined);
+    assert.equal(room?.icon, undefined);
+    assert.equal(resolveMapElementIconName(room?.icon, { kind: room?.kind, cat: room?.cat }), 'captive_portal');
+});
+
 test('MapPatch label upsert patch replays over bad derived labels canonically', async () => {
     await db.delete();
     await db.open();
 
     const session = await createTavernSession({ title: 'Map bad label replay' });
     const badDocument = createStoredMapRecord(session.id, [
-        { id: 'player_actor', at: [80, 90], icon: 'o', cat: 'actor', actorKey: 'player' },
+        { id: 'player_actor', at: [80, 90], icon: 'person_pin_circle', kind: 'player', cat: 'actor', actorKey: 'player' },
         { id: '__label__player_actor', at: [98, 72], rect: [30, 12], cat: 'marker', actorKey: 'bad-label-actor' },
     ]);
     await putTavernStructuredStateDocument(badDocument);
@@ -2372,7 +2443,7 @@ test('MapPatch keeps direct derived label modify canonical even with geometry in
     const add = await executeTavernStateTool(session.id, 'MapPatch', {
         ops: [{
             op: 'add',
-            element: { id: 'player_actor', at: [80, 90], icon: 'o', cat: 'actor', actorKey: 'player', text: '玛雅' },
+            element: { id: 'player_actor', at: [80, 90], shape: 'icon', icon: 'person_pin_circle', kind: 'player', cat: 'actor', actorKey: 'player', text: '玛雅' },
         }],
     });
     assert.equal(add.ok, true);
@@ -2412,7 +2483,7 @@ test('MapPatch direct derived label style changes replay canonically', async () 
     const add = await executeTavernStateTool(session.id, 'MapPatch', {
         ops: [{
             op: 'add',
-            element: { id: 'player_actor', at: [80, 90], icon: 'o', cat: 'actor', actorKey: 'player', text: '玛雅' },
+            element: { id: 'player_actor', at: [80, 90], shape: 'icon', icon: 'person_pin_circle', kind: 'player', cat: 'actor', actorKey: 'player', text: '玛雅' },
         }],
     });
     assert.equal(add.ok, true);
@@ -2985,17 +3056,43 @@ test('MapSceneEdit edits the same named scene without relying on active map', as
         scene: '地下走廊',
         elements: [
             { id: 'corridor', cat: 'road', shape: 'path', geo: { points: [[0, 50], [260, 50]] }, label: '地下走廊' },
-            { id: 'door-east', cat: 'door', shape: 'icon', geo: { at: [260, 50], icon: 'door' }, label: '东门' },
+            { id: 'door-east', cat: 'door', kind: 'door', shape: 'icon', geo: { at: [260, 50] }, label: '东门' },
+        ],
+    });
+    const secondScene = await executeTavernStateTool(session.id, 'MapSceneRead', { scene: '地下走廊', mode: 'document' });
+    const secondDocument = secondScene.document as TavernMapDocument;
+    const doorBeforeKindChange = secondDocument.elements.find((element) => element.id === 'door-east');
+    const third = await executeTavernStateTool(session.id, 'MapSceneEdit', {
+        scene: '地下走廊',
+        elements: [
+            { id: 'door-east', cat: 'door', kind: 'portal', shape: 'icon', geo: { at: [260, 50] }, label: '传送门' },
         ],
     });
     const scene = await executeTavernStateTool(session.id, 'MapSceneRead', { scene: '地下走廊', mode: 'document' });
     const document = scene.document as TavernMapDocument;
+    const doorAfterKindChange = document.elements.find((element) => element.id === 'door-east');
 
     assert.equal(first.ok, true);
     assert.equal(second.ok, true);
+    assert.equal(third.ok, true);
     assert.equal(first.docId, second.docId);
+    assert.equal(second.docId, third.docId);
     assert.deepEqual(document.elements.find((element) => element.id === 'corridor')?.path, [[0, 0], [260, 0]]);
-    assert.equal(document.elements.some((element) => element.id === 'door-east'), true);
+    assert.equal(doorBeforeKindChange?.shape, 'icon');
+    assert.equal(doorBeforeKindChange?.icon, undefined);
+    assert.equal(resolveMapElementIconName(doorBeforeKindChange?.icon, {
+        kind: doorBeforeKindChange?.kind,
+        cat: doorBeforeKindChange?.cat,
+        actorKey: doorBeforeKindChange?.actorKey,
+    }), 'door_open');
+    assert.equal(doorAfterKindChange?.shape, 'icon');
+    assert.equal(doorAfterKindChange?.icon, undefined);
+    assert.equal(doorAfterKindChange?.kind, 'portal');
+    assert.equal(resolveMapElementIconName(doorAfterKindChange?.icon, {
+        kind: doorAfterKindChange?.kind,
+        cat: doorAfterKindChange?.cat,
+        actorKey: doorAfterKindChange?.actorKey,
+    }), 'captive_portal');
 });
 
 test('MapSceneEdit skips one bad element while saving clean canonical ops for the rest', async () => {
@@ -3086,7 +3183,8 @@ test('MapSceneEdit honors explicit shape when geo contains unrelated empty shape
                 id: 'front-door',
                 cat: 'door',
                 shape: 'icon',
-                geo: { at: [160, 190], icon: 'door', rect: [0, 0], radius: 0, path: [], curve: [] },
+                kind: 'door',
+                geo: { at: [160, 190], icon: 'door_open', rect: [0, 0], radius: 0, path: [], curve: [] },
                 label: '正门',
             },
             {
@@ -3112,7 +3210,8 @@ test('MapSceneEdit honors explicit shape when geo contains unrelated empty shape
 
     assert.equal(result.ok, true);
     assert.equal(result.skipped?.length, 0);
-    assert.equal(document.elements.find((element) => element.id === 'front-door')?.icon, 'door');
+    assert.equal(document.elements.find((element) => element.id === 'front-door')?.icon, 'door_open');
+    assert.equal(document.elements.find((element) => element.id === 'front-door')?.kind, 'door');
     assert.equal(document.elements.find((element) => element.id === 'round-table')?.circle, 18);
     assert.equal(document.elements.find((element) => element.id === 'hearth-light')?.circle, 45);
     assert.equal(savedOpsJson.includes('"rect":[0,0]'), false);
@@ -3132,7 +3231,8 @@ test('MapSceneEdit infers drawable shapes despite zero and empty geo pollution',
             {
                 id: 'front-door',
                 cat: 'door',
-                geo: { at: [180, 210], icon: 'door', rect: [0, 0], radius: 0, path: [], curve: [] },
+                kind: 'door',
+                geo: { at: [180, 210], icon: 'door_open', rect: [0, 0], radius: 0, path: [], curve: [] },
                 label: '正门',
             },
             {
@@ -3160,7 +3260,8 @@ test('MapSceneEdit infers drawable shapes despite zero and empty geo pollution',
 
     assert.equal(result.ok, true);
     assert.equal(result.skipped?.length, 0);
-    assert.equal(document.elements.find((element) => element.id === 'front-door')?.icon, 'door');
+    assert.equal(document.elements.find((element) => element.id === 'front-door')?.icon, 'door_open');
+    assert.equal(document.elements.find((element) => element.id === 'front-door')?.kind, 'door');
     assert.equal(document.elements.find((element) => element.id === 'round-table')?.circle, 22);
     assert.equal(document.elements.find((element) => element.id === 'hearth-light')?.circle, 54);
     assert.deepEqual(document.elements.find((element) => element.id === 'main-path')?.path, [[0, 0], [150, 10], [300, 0]]);
@@ -3180,11 +3281,11 @@ test('MapSceneEdit saves a complete tavern first map from common filled-geo mode
             { id: 'hall-floor', cat: 'terrain', shape: 'rect', geo: { center: [210, 149], size: [340, 226], rect: [0, 0], path: [], curve: [] }, material: 'wood' },
             { id: 'outer-wall', cat: 'wall', shape: 'rect', geo: { center: [210, 149], size: [340, 226], radius: 0, points: [], curve: [] }, material: 'stone', label: '测试小酒馆' },
             { id: 'bar-counter', cat: 'furniture', shape: 'rect', geo: { center: [118, 75], size: [104, 34], circle: 0, path: [] }, material: 'wood', label: '吧台' },
-            { id: 'front-door', cat: 'door', shape: 'icon', geo: { at: [210, 262], icon: 'door', rect: [0, 0], radius: 0, path: [], curve: [] }, label: '正门' },
+            { id: 'front-door', cat: 'door', kind: 'door', shape: 'icon', geo: { at: [210, 262], icon: 'door_open', rect: [0, 0], radius: 0, path: [], curve: [] }, label: '正门' },
             { id: 'round-table-a', cat: 'furniture', shape: 'circle', geo: { at: [250, 125], radius: 23, rect: [0, 0], path: [], curve: [] }, label: '圆桌' },
             { id: 'round-table-b', cat: 'furniture', shape: 'circle', geo: { at: [315, 178], radius: 20, rect: [0, 0], path: [], curve: [] }, label: '圆桌' },
             { id: 'hearth-light', cat: 'light', shape: 'circle', geo: { at: [333, 62], radius: 62, rect: [0, 0], path: [], curve: [] }, material: 'warm-light' },
-            { id: 'player-view', cat: 'actor', actorKey: 'player', shape: 'icon', geo: { at: [204, 205], icon: 'o', rect: [0, 0], radius: 0, path: [], curve: [] }, label: '玩家' },
+            { id: 'player-view', cat: 'actor', kind: 'player', actorKey: 'player', shape: 'icon', geo: { at: [204, 205], icon: 'person_pin_circle', rect: [0, 0], radius: 0, path: [], curve: [] }, label: '玩家' },
         ],
     });
     const scene = await executeTavernStateTool(session.id, 'MapSceneRead', { scene: '测试小酒馆', mode: 'document' });
@@ -3199,7 +3300,8 @@ test('MapSceneEdit saves a complete tavern first map from common filled-geo mode
     assert.deepEqual(document.elements.find((element) => element.id === 'hall-floor')?.at, [40, 36]);
     assert.deepEqual(document.elements.find((element) => element.id === 'outer-wall')?.at, [40, 36]);
     assert.deepEqual(document.elements.find((element) => element.id === 'bar-counter')?.at, [66, 58]);
-    assert.equal(document.elements.find((element) => element.id === 'front-door')?.icon, 'door');
+    assert.equal(document.elements.find((element) => element.id === 'front-door')?.icon, 'door_open');
+    assert.equal(document.elements.find((element) => element.id === 'front-door')?.kind, 'door');
     assert.equal(document.elements.find((element) => element.id === 'round-table-a')?.circle, 23);
     assert.equal(document.elements.find((element) => element.id === 'round-table-b')?.circle, 20);
     assert.equal(document.elements.find((element) => element.id === 'hearth-light')?.circle, 62);
@@ -3221,10 +3323,10 @@ test('MapSceneEdit treats rect at as center so model-centered layouts stay align
         theme: 'parchment',
         elements: [
             { id: 'floor-main', cat: 'terrain', shape: 'rect', geo: { at: [0, 0], size: [220, 140] }, material: 'wood' },
-            { id: 'table-west', cat: 'furniture', shape: 'icon', geo: { at: [-70, -35], icon: 'table' }, material: 'wood', label: '西侧桌' },
-            { id: 'table-east', cat: 'furniture', shape: 'icon', geo: { at: [45, -25], icon: 'table' }, material: 'wood', label: '东侧桌' },
-            { id: 'door-south', cat: 'door', shape: 'icon', geo: { at: [0, 70], icon: 'door' }, material: 'wood', label: '南门' },
-            { id: 'actor-player', cat: 'actor', actorKey: 'player', shape: 'icon', geo: { at: [0, 25], icon: 'o' }, material: 'unknown', label: '你' },
+            { id: 'table-west', cat: 'furniture', shape: 'icon', geo: { at: [-70, -35], icon: 'table_bar' }, material: 'wood', label: '西侧桌' },
+            { id: 'table-east', cat: 'furniture', shape: 'icon', geo: { at: [45, -25], icon: 'table_bar' }, material: 'wood', label: '东侧桌' },
+            { id: 'door-south', cat: 'door', kind: 'door', shape: 'icon', geo: { at: [0, 70], icon: 'door_open' }, material: 'wood', label: '南门' },
+            { id: 'actor-player', cat: 'actor', kind: 'player', actorKey: 'player', shape: 'icon', geo: { at: [0, 25], icon: 'person_pin_circle' }, material: 'unknown', label: '你' },
         ],
     });
     const scene = await executeTavernStateTool(session.id, 'MapSceneRead', { scene: '测试酒馆', mode: 'document' });
@@ -3345,7 +3447,7 @@ test('MapPatch dedupes actors by actorKey across map documents', async () => {
         activate: true,
         ops: [
             { op: 'meta', set: { name: '办公室' } },
-            { op: 'add', element: { id: 'player-office', at: [20, 20], icon: 'o', cat: 'actor', actorKey: 'player', text: '玩家' } },
+            { op: 'add', element: { id: 'player-office', at: [20, 20], shape: 'icon', icon: 'person_pin_circle', kind: 'player', cat: 'actor', actorKey: 'player', text: '玩家' } },
         ],
     });
     await executeTavernStateTool(session.id, 'MapPatch', {
@@ -3353,7 +3455,7 @@ test('MapPatch dedupes actors by actorKey across map documents', async () => {
         activate: true,
         ops: [
             { op: 'meta', set: { name: '家' } },
-            { op: 'add', element: { id: 'player-home', at: [80, 60], icon: 'o', cat: 'actor', actorKey: 'player', text: '玩家' } },
+            { op: 'add', element: { id: 'player-home', at: [80, 60], shape: 'icon', icon: 'person_pin_circle', kind: 'player', cat: 'actor', actorKey: 'player', text: '玩家' } },
         ],
     }, {
         managerRunId: run.id,
@@ -3396,8 +3498,8 @@ test('MapPatch actor dedupe keeps same-document patch replay equivalent', async 
         docId: 'office',
         ops: [
             { op: 'meta', set: { name: '办公室' } },
-            { op: 'add', element: { id: 'player-east', at: [20, 20], icon: 'o', cat: 'actor', actorKey: 'player', text: '玩家东侧' } },
-            { op: 'add', element: { id: 'player-west', at: [80, 60], icon: 'o', cat: 'actor', actorKey: 'player', text: '玩家西侧' } },
+            { op: 'add', element: { id: 'player-east', at: [20, 20], shape: 'icon', icon: 'person_pin_circle', kind: 'player', cat: 'actor', actorKey: 'player', text: '玩家东侧' } },
+            { op: 'add', element: { id: 'player-west', at: [80, 60], shape: 'icon', icon: 'person_pin_circle', kind: 'player', cat: 'actor', actorKey: 'player', text: '玩家西侧' } },
         ],
     });
 
@@ -3430,11 +3532,11 @@ test('MapPatch actor dedupe falls back to actor id when actorKey is missing', as
     const session = await createTavernSession({ title: 'Actor id fallback' });
     await executeTavernStateTool(session.id, 'MapPatch', {
         docId: 'street',
-        ops: [{ op: 'add', element: { id: 'npc-kai', at: [10, 10], icon: 'o', cat: 'actor', text: '凯恩' } }],
+        ops: [{ op: 'add', element: { id: 'npc-kai', at: [10, 10], shape: 'icon', icon: 'person', cat: 'actor', text: '凯恩' } }],
     });
     await executeTavernStateTool(session.id, 'MapPatch', {
         docId: 'bar',
-        ops: [{ op: 'add', element: { id: 'npc-kai', at: [30, 30], icon: 'o', cat: 'actor', text: '凯恩' } }],
+        ops: [{ op: 'add', element: { id: 'npc-kai', at: [30, 30], shape: 'icon', icon: 'person', cat: 'actor', text: '凯恩' } }],
     });
 
     const street = await getTavernStructuredStateDocument(session.id, 'tavern.map', 'street');
@@ -4653,7 +4755,7 @@ test('tavern auto manager denies unauthorized MapPatch without side effects', as
                     arguments: {
                         ops: [{
                             op: 'add',
-                            element: { id: 'marker', at: [80, 60], icon: 'o', cat: 'marker' },
+                            element: { id: 'marker', at: [80, 60], shape: 'icon', icon: 'location_on', cat: 'marker' },
                         }],
                     },
                 }],

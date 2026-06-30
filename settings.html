@@ -1,6 +1,3 @@
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
 <div class="inline-drawer">
   <div class="inline-drawer-toggle inline-drawer-header">
     <b>小白X</b>
@@ -83,7 +80,7 @@
           <div class="section-divider">消息日志与拦截
             <hr class="sysHR">
           </div>
-          <div class="flex-container">
+          <div class="flex-container alignItemsCenter littlewhitebox-log-toggle-row">
             <input type="checkbox" id="xiaobaix_recorded_enabled" />
             <label for="xiaobaix_recorded_enabled" class="has-tooltip" data-tooltip="每条消息添加图标，点击可看到发送给时AI的记录">Log记录</label>
             <input type="checkbox" id="xiaobaix_preview_enabled" />
@@ -246,7 +243,7 @@
 <style>
   .littlewhitebox,
   .littlewhitebox * {
-    font-family: 'ZCOOL KuaiLe', 'ZCOOL XiaoWei', sans-serif !important
+    font-family: sans-serif !important
   }
   .littlewhitebox i,
   .littlewhitebox .fa,
@@ -348,6 +345,15 @@
   }
   .littlewhitebox input[type="checkbox"]:checked+label {
     color: #dbdbdb
+  }
+  .littlewhitebox-log-toggle-row {
+    gap: 8px;
+    flex-wrap: wrap
+  }
+  .littlewhitebox-log-toggle-row label {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 0
   }
   .section-divider {
     font-size: .75em;
@@ -709,7 +715,7 @@
     max-height: 70vh
   }
   .cloud-tasks-modal * {
-    font-family: 'ZCOOL KuaiLe', 'ZCOOL XiaoWei', sans-serif !important
+    font-family: sans-serif !important
   }
   .cloud-tasks-modal h3 {
     margin-top: 0;

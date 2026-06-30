@@ -1,5 +1,6 @@
 import { getRequestHeaders } from '../../../../../../../script.js';
 import { AssistantStorage } from '../../../core/server-storage.js';
+import { extensionFolderPath } from '../../../core/constants.js';
 import {
     AGENT_SETTINGS_CONFIG_VERSION,
     normalizeAgentSettings,
@@ -90,6 +91,7 @@ export async function buildTavernFrameConfig(
     return {
         agentConfig,
         tavernDisplaySettings,
+        extensionBasePath: `/${extensionFolderPath}`,
         chatPreset: chatPresetList.active,
         chatPresetList,
         hostRequestHeaders,

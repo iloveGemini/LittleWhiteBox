@@ -90,3 +90,20 @@ test('map semantic fingerprint treats derived label position as semantic', () =>
 
     assert.notDeepEqual(semanticFingerprint(left), semanticFingerprint(right));
 });
+
+test('map semantic fingerprint keeps icon shape even without explicit visual icon', () => {
+    const shaped: TavernMapDocument = {
+        meta: { name: 'Room', viewBox: [0, 0, 400, 300], theme: 'dark', status: 'active', mood: 'warm' },
+        elements: [
+            { id: 'exit', cat: 'door', kind: 'door', at: [100, 120], shape: 'icon' },
+        ],
+    };
+    const unshaped: TavernMapDocument = {
+        meta: { name: 'Room', viewBox: [0, 0, 400, 300], theme: 'dark', status: 'active', mood: 'warm' },
+        elements: [
+            { id: 'exit', cat: 'door', kind: 'door', at: [100, 120] },
+        ],
+    };
+
+    assert.notDeepEqual(semanticFingerprint(shaped), semanticFingerprint(unshaped));
+});

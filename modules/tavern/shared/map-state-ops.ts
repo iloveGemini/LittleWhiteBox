@@ -30,10 +30,22 @@ export function mergeMapRecord(target: Record<string, unknown>, patch: Record<st
 
 function shapeKeysFromPartial(value: TavernMapElementPatchSet): MapShapeKey[] {
     return MAP_SHAPE_KEYS.filter((key) => {
+        if (key === 'icon' && value.shape === 'icon') {return true;}
+        if (key === 'icon') {return false;}
         if (key === 'circle') {return typeof value.circle === 'number';}
         if (key === 'text') {return typeof value.text === 'string' && !!value.text.trim();}
         return Array.isArray(value[key]) || (typeof value[key] === 'string' && !!value[key]);
     });
+}
+
+function isIconShapeElement(element: Partial<TavernMapElement>): boolean {
+    if (element.shape === 'icon') {return true;}
+    if (!element.icon) {return false;}
+    return !element.rect
+        && typeof element.circle !== 'number'
+        && !element.path
+        && !element.curve
+        && !element.text;
 }
 
 function mergeStyle(base: TavernMapStyle | undefined, set: TavernMapStyle | null | undefined): TavernMapStyle | undefined {
@@ -44,15 +56,21 @@ function mergeStyle(base: TavernMapStyle | undefined, set: TavernMapStyle | null
 
 export function mergeMapElementPatch(current: TavernMapElement, set: TavernMapElementPatchSet): TavernMapElement {
     const shapeReplacement = shapeKeysFromPartial(set).length > 0;
+    const currentIconShape = isIconShapeElement(current);
     const next: Partial<TavernMapElement> = cloneJson(current);
     if (shapeReplacement) {
         MAP_SHAPE_KEYS.forEach((key) => { delete next[key]; });
+        delete next.shape;
         delete next.style;
         delete next.fill;
         delete next.closed;
     }
     Object.entries(set).forEach(([key, value]) => {
         if (key === 'style') {return;}
+        if (key === 'icon' && !shapeReplacement && !currentIconShape) {
+            delete next.icon;
+            return;
+        }
         if (value === null || value === undefined) {
             delete next[key as keyof TavernMapElement];
             return;

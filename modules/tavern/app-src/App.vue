@@ -128,6 +128,7 @@ import {
 import { createTavernChatRunState, useTavernChatRunController } from './features/chat-run/useTavernChatRunController';
 import { useTavernDrawController } from './features/draw/useTavernDrawController';
 import { useTavernHostBridge, type TavernHostMessageData } from './features/host-bridge/useTavernHostBridge';
+import { useMaterialSymbolFont } from './features/material-symbol-font';
 import { createTavernSessionState, useTavernSessionController } from './features/session/useTavernSessionController';
 import TavernAboutPage from './components/TavernAboutPage.vue';
 import TavernHomePage from './components/TavernHomePage.vue';
@@ -212,6 +213,9 @@ const htmlRenderEnabled = ref(true);
 const hiddenOutsideCount = computed(() => normalizeHiddenOutsideCount(tavernDisplaySettings.value.hiddenOutsideCount));
 const loadBatchSize = computed(() => normalizeMessageLoadBatchSize(tavernDisplaySettings.value.loadBatchSize));
 const hostRequestHeaders = ref<Record<string, unknown>>({});
+const materialSymbolFont = useMaterialSymbolFont();
+const materialSymbolFontReady = materialSymbolFont.ready;
+const materialSymbolFontStatus = materialSymbolFont.status;
 const hostMainFontSizePx = ref('15px');
 const hostProseLineHeightPx = ref('23px');
 const availableCharacters = ref<TavernCharacterOption[]>([]);
@@ -2076,6 +2080,9 @@ function applyHostPayload(payload: Record<string, unknown>) {
     }
     if ('htmlRenderEnabled' in payload) {
         htmlRenderEnabled.value = payload.htmlRenderEnabled !== false;
+    }
+    if ('extensionBasePath' in payload) {
+        void materialSymbolFont.load(payload.extensionBasePath);
     }
     applyHostChatPreset(payload);
     availableCharacters.value = payload.availableCharacters as TavernCharacterOption[] || availableCharacters.value;
@@ -4674,6 +4681,8 @@ const workspaceContext = {
     mapStateDocuments,
     mapStateDocument,
     mapStatePatches,
+    materialSymbolFontReady,
+    materialSymbolFontStatus,
     statusFieldDeltas,
     statusStateDocument,
     statusStatePatches,

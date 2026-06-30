@@ -20,6 +20,7 @@ const CATEGORY_COLORS: Record<string, string> = {
     water: '#72c3d5',
     terrain: '#d4c36e',
     furniture: '#7b5830',
+    decoration: '#7b5830',
     door: '#c77735',
     danger: '#d55344',
     marker: '#b94035',
@@ -126,6 +127,7 @@ export function tavernMapElementFill(element: TavernMapElement, context: TavernM
         terrain: 'rgba(210, 196, 112, 0.16)',
         road: 'rgba(188, 135, 70, 0.24)',
         danger: 'rgba(205, 72, 58, 0.20)',
+        decoration: 'rgba(120, 88, 45, 0.14)',
         magic: 'rgba(150, 100, 196, 0.20)',
         secret: 'rgba(236, 221, 180, 0.15)',
     };
@@ -163,6 +165,7 @@ export function tavernMapElementStrokeWidth(element: TavernMapElement): number {
         door: 3.2,
         terrain: hasArea ? 2.4 : 2.2,
         furniture: 2.1,
+        decoration: 2.1,
         danger: 2.6,
         magic: 2.5,
         secret: 2.4,

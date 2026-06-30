@@ -32,12 +32,9 @@ import {
     type TavernMapElementVisualContext,
 } from '../map-render-style';
 import {
-    gameIconScaleTransform,
-    gameIconTranslateTransform,
-    getTavernGameIconGlyph,
-    getTavernMapIconRenderSize,
-    TAVERN_MAP_ICON_ATTRIBUTION,
-} from '../map-glyphs';
+    resolveMapElementIconName,
+    TAVERN_MAP_MATERIAL_SYMBOL_SIZE,
+} from '../../shared/map-material-symbols';
 
 type MapReplayMode = 'full' | 'patch' | 'timeline';
 type MapRenderLayer = 'fill' | 'avatar' | 'line' | 'light' | 'label';
@@ -66,10 +63,8 @@ interface MapRenderItem {
     fontSize: number;
     anchor: string;
     transform: string;
-    glyphTransform?: string;
-    glyphScaleTransform?: string;
+    symbolIcon?: string;
     fillRule: 'nonzero' | 'evenodd';
-    gameIcon: boolean;
     role?: string;
     avatarHref?: string;
     avatarClipId?: string;
@@ -96,8 +91,8 @@ interface MapSceneSurface {
     style: CSSProperties;
 }
 
-function pickPenAnimationItem<T extends { gameIcon: boolean; layer: string; path: string }>(items: T[]): T | null {
-    return items.find((item) => !item.gameIcon && item.layer !== 'label' && !!item.path) || null;
+function pickPenAnimationItem<T extends { symbolIcon?: string; layer: string; path: string }>(items: T[]): T | null {
+    return items.find((item) => !item.symbolIcon && item.layer !== 'label' && !!item.path) || null;
 }
 
 function svgLocalId(value: string): string {
@@ -117,6 +112,8 @@ const props = withDefaults(defineProps<{
     compact?: boolean;
     playerDisplayName?: string;
     playerAvatarUrl?: string;
+    materialSymbolsReady?: boolean;
+    materialSymbolsStatus?: 'idle' | 'loading' | 'ready' | 'failed';
 }>(), {
     documents: () => [],
     activeDocId: 'main',
@@ -124,6 +121,8 @@ const props = withDefaults(defineProps<{
     compact: false,
     playerDisplayName: 'User',
     playerAvatarUrl: '',
+    materialSymbolsReady: false,
+    materialSymbolsStatus: 'idle',
 });
 const emit = defineEmits<{
     (event: 'update:selectedDocId', docId: string): void;
@@ -493,20 +492,7 @@ function circleToPath(element: TavernMapElement): string {
 
 function iconToPath(element: TavernMapElement): string {
     const [x, y] = projectMapPoint(element.at);
-    const s = 10;
-    const h = s / 2;
-    const icon = String(element.icon || '+');
-    const gameIcon = getTavernGameIconGlyph(icon);
-    if (gameIcon) {return gameIcon.path;}
-    if (icon === 'x') {return `M ${x - h} ${y - h} L ${x + h} ${y + h} M ${x + h} ${y - h} L ${x - h} ${y + h}`;}
-    if (icon === 'o') {return `M ${x - h} ${y} A ${h} ${h} 0 1 0 ${x + h} ${y} A ${h} ${h} 0 1 0 ${x - h} ${y}`;}
-    if (icon === 'arrow-n') {return `M ${x} ${y + s} L ${x} ${y - s} M ${x - h} ${y - h} L ${x} ${y - s} L ${x + h} ${y - h}`;}
-    if (icon === 'arrow-s') {return `M ${x} ${y - s} L ${x} ${y + s} M ${x - h} ${y + h} L ${x} ${y + s} L ${x + h} ${y + h}`;}
-    if (icon === 'arrow-e') {return `M ${x - s} ${y} L ${x + s} ${y} M ${x + h} ${y - h} L ${x + s} ${y} L ${x + h} ${y + h}`;}
-    if (icon === 'arrow-w') {return `M ${x + s} ${y} L ${x - s} ${y} M ${x - h} ${y - h} L ${x - s} ${y} L ${x - h} ${y + h}`;}
-    if (icon === 'stairs-up') {return `M ${x - 9} ${y + 7} H ${x - 3} V ${y + 1} H ${x + 3} V ${y - 5} H ${x + 9} M ${x + 3} ${y - 5} L ${x + 3} ${y - 10} M ${x + 3} ${y - 10} L ${x} ${y - 7} M ${x + 3} ${y - 10} L ${x + 6} ${y - 7}`;}
-    if (icon === 'stairs-down') {return `M ${x - 9} ${y - 7} H ${x - 3} V ${y - 1} H ${x + 3} V ${y + 5} H ${x + 9} M ${x + 3} ${y + 5} L ${x + 3} ${y + 10} M ${x + 3} ${y + 10} L ${x} ${y + 7} M ${x + 3} ${y + 10} L ${x + 6} ${y + 7}`;}
-    return `M ${x - h} ${y} L ${x + h} ${y} M ${x} ${y - h} L ${x} ${y + h}`;
+    return circlePathAt(x, y, TAVERN_MAP_MATERIAL_SYMBOL_SIZE / 2);
 }
 
 function elementPath(element: TavernMapElement): string {
@@ -514,7 +500,7 @@ function elementPath(element: TavernMapElement): string {
     if (typeof element.circle === 'number') {return circleToPath(element);}
     if (element.path) {return pointsToPath(absolutePoints(element, element.path), element.closed === true);}
     if (element.curve) {return curveToPath(absolutePoints(element, element.curve), element.closed === true);}
-    if (element.icon) {return iconToPath(element);}
+    if (isIconShapeElement(element)) {return iconToPath(element);}
     return '';
 }
 
@@ -596,8 +582,8 @@ function mapBodyBounds(): TavernMapBounds | null {
 
 function sourceIconRadiusForDerivedLabel(source: TavernMapElement): number {
     if (isPlayerActorElement(source) && normalizedPlayerAvatarUrl.value) {return 12;}
-    if (!source.icon) {return 10;}
-    return getTavernGameIconGlyph(source.icon) ? getTavernMapIconRenderSize(source.icon) / 2 : 6;
+    if (!isIconShapeElement(source)) {return 10;}
+    return TAVERN_MAP_MATERIAL_SYMBOL_SIZE / 2;
 }
 
 function sourceBoundsForDerivedLabel(source: TavernMapElement): TavernMapBounds | null {
@@ -725,6 +711,16 @@ function isPlayerActorElement(element: TavernMapElement | null | undefined): boo
         && String(element?.actorKey || element?.id || '').trim().toLowerCase() === 'player';
 }
 
+function isIconShapeElement(element: TavernMapElement | null | undefined): boolean {
+    return element?.shape === 'icon' || !!element?.icon;
+}
+
+function materialSymbolGlyphText(symbolIcon = ''): string {
+    if (props.materialSymbolsReady) {return symbolIcon;}
+    if (props.materialSymbolsStatus === 'failed') {return '!';}
+    return '';
+}
+
 function displayTextForElement(element: TavernMapElement): string {
     if (isPlayerActorElement(element)) {
         return normalizedPlayerDisplayName.value;
@@ -743,7 +739,7 @@ function labelLayoutPriority(item: MapRenderItem): number {
     const id = String(item.element.id || '').trim().toLowerCase();
     if (cat === 'actor' && actorKey === 'player') {return 0;}
     if (cat === 'actor') {return 1;}
-    if (['danger', 'door', 'marker', 'magic', 'secret'].includes(cat)) {return 2;}
+    if (['danger', 'decoration', 'door', 'marker', 'magic', 'secret'].includes(cat)) {return 2;}
     if (id.startsWith('__label__')) {return 3;}
     if (['label', 'room-label', 'scene-label', 'place-label', 'map-label'].includes(id)) {return 5;}
     return 4;
@@ -790,14 +786,17 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             anchor: 'middle',
             transform: '',
             fillRule: 'nonzero',
-            gameIcon: false,
         }];
     }
 
     const path = elementPath(element);
     if (!path) {return [];}
-    const gameIcon = element.icon ? getTavernGameIconGlyph(element.icon) : null;
-    const length = gameIcon ? 120 : estimatePathLength(element, path);
+    const symbolIcon = isIconShapeElement(element) ? resolveMapElementIconName(element.icon, {
+        kind: element.kind,
+        cat: element.cat,
+        actorKey: element.actorKey,
+    }) : '';
+    const length = symbolIcon ? 120 : estimatePathLength(element, path);
     const durationMs = forcedOpKind === 'remove' ? 1050 : Math.max(680, Math.min(2200, length * 4.2));
     const color = forcedOpKind === 'remove' ? '#b94035' : elementColor(element);
     const fill = forcedOpKind === 'remove'
@@ -828,7 +827,6 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             anchor: 'middle',
             transform: '',
             fillRule: 'nonzero',
-            gameIcon: false,
         });
         return items;
     }
@@ -863,7 +861,6 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             anchor: 'middle',
             transform: '',
             fillRule: 'nonzero',
-            gameIcon: false,
             avatarHref: normalizedPlayerAvatarUrl.value,
             avatarClipId,
             avatarX,
@@ -893,15 +890,14 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             anchor: 'middle',
             transform: '',
             fillRule: 'nonzero',
-            gameIcon: false,
         });
         return items;
     }
-    if (gameIcon) {
-        const [glyphX, glyphY] = projectMapPoint(element.at);
+    if (symbolIcon) {
+        const [symbolX, symbolY] = projectMapPoint(element.at);
         items.push({
             element,
-            id: `${element.id}-glyph`,
+            id: `${element.id}-symbol`,
             layer: 'line',
             path,
             color,
@@ -915,16 +911,14 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             durationMs,
             length,
             opKind,
-            text: '',
-            x: 0,
-            y: 0,
-            fontSize: 0,
+            text: symbolIcon,
+            x: symbolX,
+            y: symbolY,
+            fontSize: TAVERN_MAP_MATERIAL_SYMBOL_SIZE,
             anchor: 'middle',
             transform: '',
-            glyphTransform: gameIconTranslateTransform(glyphX, glyphY),
-            glyphScaleTransform: gameIconScaleTransform(),
-            fillRule: gameIcon.fillRule,
-            gameIcon: true,
+            symbolIcon,
+            fillRule: 'nonzero',
         });
         return items;
     }
@@ -952,7 +946,6 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             anchor: 'middle',
             transform: '',
             fillRule: 'nonzero',
-            gameIcon: false,
         });
     }
     const casing = forcedOpKind === 'remove' ? null : tavernMapElementLineCasing(element);
@@ -980,7 +973,6 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             anchor: 'middle',
             transform: '',
             fillRule: 'nonzero',
-            gameIcon: false,
             role: 'line-casing',
         });
     }
@@ -1007,11 +999,10 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
         anchor: 'middle',
         transform: '',
         fillRule: 'nonzero',
-        gameIcon: false,
         role: 'line-core',
     });
     if (isPlayer) {
-        const ringRadius = element.icon ? 18 : typeof element.circle === 'number' ? element.circle + 5 : 16;
+        const ringRadius = isIconShapeElement(element) ? 18 : typeof element.circle === 'number' ? element.circle + 5 : 16;
         items.push({
             element,
             id: `${element.id}-player-outline`,
@@ -1035,7 +1026,6 @@ function buildRenderItemsForElement(element: TavernMapElement, index: number, fo
             anchor: 'middle',
             transform: '',
             fillRule: 'nonzero',
-            gameIcon: false,
         });
     }
     return items;
@@ -1058,10 +1048,10 @@ const avatarItems = computed(() => renderItems.value
 const avatarImageItems = computed<MapAvatarImageItem[]>(() => avatarItems.value.filter((item): item is MapAvatarImageItem => !!item.avatarClipId && !!item.avatarHref));
 const avatarPathItems = computed(() => avatarItems.value.filter((item) => !item.avatarHref));
 const lineItems = computed(() => visibleRenderItems.value.filter((item) => item.layer === 'line'));
-const regularLineItems = computed(() => lineItems.value.filter((item) => !item.gameIcon));
+const regularLineItems = computed(() => lineItems.value.filter((item) => !item.symbolIcon));
 const regularLineCasingItems = computed(() => regularLineItems.value.filter((item) => item.role === 'line-casing'));
 const regularLineCoreItems = computed(() => regularLineItems.value.filter((item) => item.role !== 'line-casing'));
-const gameIconLineItems = computed(() => lineItems.value.filter((item) => item.gameIcon));
+const symbolLineItems = computed(() => lineItems.value.filter((item) => item.symbolIcon));
 const lightItems = computed(() => visibleRenderItems.value
     .filter((item) => item.layer === 'light')
     .sort((left, right) => left.z - right.z || compareMapStableText(left.element.id, right.element.id) || compareMapStableText(left.id, right.id)));
@@ -1073,8 +1063,8 @@ const removedRenderItems = computed(() => removedElements.value.flatMap((element
 const removedFillItems = computed(() => removedRenderItems.value.filter((item) => item.layer === 'fill'));
 const removedLightItems = computed(() => removedRenderItems.value.filter((item) => item.layer === 'light'));
 const removedLineItems = computed(() => removedRenderItems.value.filter((item) => item.layer === 'line'));
-const regularRemovedLineItems = computed(() => removedLineItems.value.filter((item) => !item.gameIcon));
-const gameIconRemovedLineItems = computed(() => removedLineItems.value.filter((item) => item.gameIcon));
+const regularRemovedLineItems = computed(() => removedLineItems.value.filter((item) => !item.symbolIcon));
+const symbolRemovedLineItems = computed(() => removedLineItems.value.filter((item) => item.symbolIcon));
 const removedLabelItems = computed(() => removedRenderItems.value.filter((item) => item.layer === 'label'));
 const animatedItems = computed(() => visibleRenderItems.value.filter((item) => replayMode.value === 'full' || item.opKind !== 'stable'));
 const totalAnimationMs = computed(() => {
@@ -1149,14 +1139,14 @@ function itemStyle(item: MapRenderItem) {
 function itemClass(item: MapRenderItem) {
     return [
         'map-element',
-        item.gameIcon ? 'map-game-icon' : `map-${item.layer}`,
+        item.symbolIcon ? 'map-material-symbol' : `map-${item.layer}`,
         item.role ? `role-${item.role}` : '',
         `cat-${item.element.cat || 'wall'}`,
         `op-${item.opKind}`,
         {
             'is-animated': replayMode.value === 'full' || item.opKind !== 'stable',
             'is-latest': latestChangedIds.value.has(item.element.id),
-            'is-game-icon': item.gameIcon,
+            'is-material-symbol': !!item.symbolIcon,
         },
     ];
 }
@@ -1266,7 +1256,7 @@ function handleMapWheel(event: WheelEvent) {
 <template>
   <aside
     class="tavern-map-panel xb-editor"
-    :class="{ 'is-compact': compact }"
+    :class="{ 'is-compact': compact, 'is-symbol-font-failed': materialSymbolsStatus === 'failed' }"
   >
     <header
       v-if="!compact"
@@ -2490,23 +2480,20 @@ function handleMapWheel(event: WheelEvent) {
           />
         </g>
         <g :filter="svgUrl('tavern-map-shadow')">
-          <g
-            v-for="item in gameIconLineItems"
+          <text
+            v-for="item in symbolLineItems"
             :key="item.id"
-            :transform="item.glyphTransform"
+            :x="item.x"
+            :y="item.y"
+            :font-size="item.fontSize"
+            :fill="scopeSvgUrl(item.fill)"
+            text-anchor="middle"
+            dominant-baseline="central"
             :class="itemClass(item)"
             :style="itemStyle(item)"
           >
-            <g :transform="item.glyphScaleTransform">
-              <path
-                :d="item.path"
-                :fill="scopeSvgUrl(item.fill)"
-                :fill-rule="item.fillRule"
-                transform="translate(-256, -256)"
-                class="map-game-icon-path"
-              />
-            </g>
-          </g>
+            {{ materialSymbolGlyphText(item.symbolIcon) }}
+          </text>
         </g>
         <g class="map-light-layer">
           <path
@@ -2594,23 +2581,20 @@ function handleMapWheel(event: WheelEvent) {
             :class="itemClass(item)"
             :style="itemStyle(item)"
           />
-          <g
-            v-for="item in gameIconRemovedLineItems"
-            :key="`removed-game-icon-${item.id}`"
-            :transform="item.glyphTransform"
+          <text
+            v-for="item in symbolRemovedLineItems"
+            :key="`removed-symbol-${item.id}`"
+            :x="item.x"
+            :y="item.y"
+            :font-size="item.fontSize"
+            :fill="scopeSvgUrl(item.fill)"
+            text-anchor="middle"
+            dominant-baseline="central"
             :class="itemClass(item)"
             :style="itemStyle(item)"
           >
-            <g :transform="item.glyphScaleTransform">
-              <path
-                :d="item.path"
-                :fill="scopeSvgUrl(item.fill)"
-                :fill-rule="item.fillRule"
-                transform="translate(-256, -256)"
-                class="map-game-icon-path"
-              />
-            </g>
-          </g>
+            {{ materialSymbolGlyphText(item.symbolIcon) }}
+          </text>
           <text
             v-for="item in removedLabelItems"
             :key="`removed-label-${item.id}`"
@@ -2775,7 +2759,6 @@ function handleMapWheel(event: WheelEvent) {
       <span>{{ totalPatchCount }} patches</span>
       <span v-if="digestLines.length">{{ digestLines[0] }}</span>
       <span v-if="digestLines[1]">{{ digestLines[1] }}</span>
-      <span class="tavern-map-icon-credit">{{ TAVERN_MAP_ICON_ATTRIBUTION }}</span>
     </footer>
   </aside>
 </template>

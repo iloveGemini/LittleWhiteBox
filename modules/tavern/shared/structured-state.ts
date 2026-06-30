@@ -32,9 +32,16 @@ import {
 import { hasSpatialMapContent } from './map-state-content';
 import { mergeMapElementPatch } from './map-state-ops';
 import {
-    TAVERN_MAP_ICON_NAMES,
-    type TavernMapIconName,
-} from './map-icon-names';
+    canonicalMaterialSymbolName,
+    normalizeMaterialSymbolName,
+    type MaterialSymbolName,
+} from './material-symbols';
+import {
+    isMapExitSemantic,
+    normalizeMapElementKind,
+    TAVERN_MAP_ELEMENT_KINDS,
+    type TavernMapElementKind,
+} from './map-material-symbols';
 import {
     canMapElementHaveDerivedLabel,
     isTavernMapCertainty,
@@ -70,6 +77,7 @@ export type TavernMapElementCategory =
     | 'water'
     | 'terrain'
     | 'furniture'
+    | 'decoration'
     | 'door'
     | 'danger'
     | 'marker'
@@ -99,11 +107,13 @@ export interface TavernMapElement {
     id: string;
     at: [number, number];
     cat: TavernMapElementCategory;
+    shape?: 'icon';
     rect?: [number, number];
     circle?: number;
     path?: Array<[number, number]>;
     curve?: Array<[number, number]>;
-    icon?: TavernMapIconName;
+    icon?: MaterialSymbolName;
+    kind?: TavernMapElementKind;
     text?: string;
     actorKey?: string;
     material?: TavernMapMaterial;
@@ -231,6 +241,7 @@ const MAP_ELEMENT_CATEGORIES = new Set<TavernMapElementCategory>([
     'water',
     'terrain',
     'furniture',
+    'decoration',
     'door',
     'danger',
     'marker',
@@ -241,8 +252,6 @@ const MAP_ELEMENT_CATEGORIES = new Set<TavernMapElementCategory>([
     'secret',
     'light',
 ]);
-const MAP_ICON_NAMES = new Set<TavernMapIconName>(TAVERN_MAP_ICON_NAMES);
-const SCENE_MAP_PLACE_SCALE_ICONS = new Set<string>(['house', 'castle', 'village', 'forest', 'temple', 'shop']);
 const MAP_THEMES = new Set<TavernMapTheme>(['parchment', 'paper', 'dark', 'blueprint', 'grid']);
 const MAP_STATUSES = new Set<TavernMapStatus>(['uninitialized', 'active']);
 const ATLAS_LOCATION_SCALES = new Set<TavernAtlasLocationScale>(['city', 'district', 'building', 'floor', 'room', 'outdoor']);
@@ -541,15 +550,28 @@ function normalizeMapCertainty(
     return fallback;
 }
 
-function normalizeIcon(value: unknown): TavernMapIconName | undefined {
-    const text = String(value || '').trim() as TavernMapIconName;
-    return MAP_ICON_NAMES.has(text) ? text : undefined;
+function normalizeMapKind(
+    value: unknown,
+    context: { elementId?: string; warnings?: string[] } = {},
+): TavernMapElementKind | undefined {
+    if (value === null || value === undefined || value === '') {return undefined;}
+    const kind = normalizeMapElementKind(value);
+    if (kind) {return kind;}
+    context.warnings?.push(`Ignored invalid map kind${context.elementId ? ` for ${context.elementId}` : ''}: ${normalizeText(value, 80)}.`);
+    return undefined;
 }
 
-function assertSceneMapIconAllowed(icon: TavernMapIconName | undefined, elementId: string): void {
-    if (icon && SCENE_MAP_PLACE_SCALE_ICONS.has(icon)) {
-        throw new Error(`map_element_icon_place_scale:${elementId}:${icon}`);
-    }
+function normalizeIcon(
+    value: unknown,
+    context: { elementId?: string; warnings?: string[] } = {},
+): MaterialSymbolName | undefined {
+    if (value === null || value === undefined || value === '') {return undefined;}
+    const normalized = normalizeMaterialSymbolName(value);
+    if (!normalized) {return undefined;}
+    const icon = canonicalMaterialSymbolName(value);
+    if (icon) {return icon;}
+    context.warnings?.push(`Ignored invalid Material Symbols icon${context.elementId ? ` for ${context.elementId}` : ''}: ${normalizeText(value, 80)}.`);
+    return undefined;
 }
 
 function normalizeActorKey(value: unknown = ''): string {
@@ -633,7 +655,9 @@ function mergeMapMeta(current: TavernMapDocumentMeta, set: Partial<TavernMapDocu
 }
 
 function shapeKeyForElement(element: Partial<TavernMapElement>): MapShapeKey | null {
+    if (element.shape === 'icon') {return 'icon';}
     for (const key of MAP_SHAPE_KEYS) {
+        if (key === 'icon') {continue;}
         if (key === 'circle') {
             if (typeof element.circle === 'number') {return key;}
             continue;
@@ -645,6 +669,7 @@ function shapeKeyForElement(element: Partial<TavernMapElement>): MapShapeKey | n
         if (Array.isArray(element[key])) {return key;}
         if (typeof element[key] === 'string' && element[key]) {return key;}
     }
+    if (typeof element.icon === 'string' && element.icon) {return 'icon';}
     return null;
 }
 
@@ -754,6 +779,8 @@ function finalizeElement(
         at,
         cat,
     };
+    const kind = normalizeMapKind(element.kind, { elementId: finalId, warnings: options.warnings });
+    if (kind) {next.kind = kind;}
     if (element.rect) {
         const rect = numberPair(element.rect);
         if (!rect || rect[0] <= 0 || rect[1] <= 0) {throw new Error(`map_element_rect_invalid:${finalId}`);}
@@ -769,10 +796,15 @@ function finalizeElement(
     if (element.curve) {
         next.curve = pointListOrThrow(element.curve, `map_element_points_required:${finalId}`, 2);
     }
-    if (element.icon) {
-        const icon = normalizeIcon(element.icon);
-        if (!icon) {throw new Error(`map_element_icon_invalid:${finalId}`);}
-        next.icon = icon;
+    if (shape === 'icon') {
+        next.shape = 'icon';
+        if (element.icon) {
+            const icon = normalizeIcon(element.icon, {
+                elementId: finalId,
+                warnings: options.warnings,
+            });
+            if (icon) {next.icon = icon;}
+        }
     }
     if (element.text !== undefined) {
         const text = normalizeText(element.text, 240);
@@ -816,6 +848,7 @@ function normalizeMapElementInput(
     const id = assertElementId(rawId, {
         allowReserved: options.allowReservedId === true || source === 'stored-document',
     });
+    const kind = normalizeMapKind(value.kind, { elementId: id, warnings: options.warnings });
     let at = normalizePoint(value.at ?? value.pos ?? value.center ?? value.position);
     if (!at && (value.x !== undefined || value.y !== undefined)) {
         at = normalizePoint({ x: value.x, y: value.y });
@@ -843,12 +876,12 @@ function normalizeMapElementInput(
     const textValue = normalizeText(value.text ?? value.content ?? value.label ?? value.value, 240);
     if (textValue) {shapeParts.text = textValue;}
 
-    const icon = normalizeIcon(value.icon);
-    if (icon) {
-        if (source === 'model-input') {
-            assertSceneMapIconAllowed(icon, id);
-        }
-        shapeParts.icon = icon;
+    const explicitIconShape = legacyType === 'icon' || String(value.shape || '').trim() === 'icon';
+    const suppliedIcon = Object.prototype.hasOwnProperty.call(value, 'icon');
+    const icon = normalizeIcon(value.icon, { elementId: id, warnings: options.warnings });
+    if (explicitIconShape || (source === 'stored-document' && suppliedIcon)) {
+        shapeParts.shape = 'icon';
+        if (icon) {shapeParts.icon = icon;}
     }
 
     if (legacyType === 'line' && pathSource) {
@@ -883,6 +916,7 @@ function normalizeMapElementInput(
     }
 
     const shapeKeys = MAP_SHAPE_KEYS.filter((key) => {
+        if (key === 'icon' && shapeParts.shape === 'icon') {return true;}
         if (key === 'circle') {return typeof shapeParts.circle === 'number';}
         if (key === 'text') {return typeof shapeParts.text === 'string' && !!shapeParts.text.trim();}
         return key in shapeParts;
@@ -913,6 +947,7 @@ function normalizeMapElementInput(
         fill,
         style: normalizeStyle(value.style),
         actorKey: normalizeText(value.actorKey, 120) || undefined,
+        kind,
         material,
         certainty,
         ...shapeParts,
@@ -929,8 +964,10 @@ function normalizeMapElementInput(
             fill: base.fill,
             style: base.style,
             actorKey: base.actorKey,
+            kind: base.kind,
             material: base.material,
             certainty: base.certainty,
+            shape: geometryKey === 'icon' ? 'icon' : undefined,
             [geometryKey]: base[geometryKey],
         };
         const geometryElement = finalizeElement(geometry, id, { allowReservedId: options.allowReservedId === true || source === 'stored-document', warnings: options.warnings, source });
@@ -1027,8 +1064,8 @@ function uniqueShortList(values: string[] = [], limit = 8): string[] {
 }
 
 function fallbackMapElementName(element: TavernMapElement): string {
-    const icon = normalizeText(element.icon, 40);
-    if (icon && !['o', 'x', '+'].includes(icon)) {return icon;}
+    const kind = normalizeText(element.kind, 40);
+    if (kind && !['marker', 'actor', 'player'].includes(kind)) {return kind;}
     return normalizeText(String(element.id || '').replace(/^__label__/, '').replace(/[-_]+/g, ' '), 40);
 }
 
@@ -1093,9 +1130,9 @@ function createMapDigest(document: TavernMapDocument, revision = 0): string {
         .filter((element) => element.cat === 'actor')
         .map((element) => actorMapElementName(element, labelsByBaseId)), 8);
     const exits = uniqueShortList(sceneElements
-        .filter((element) => element.cat === 'door' || ['stairs', 'portal', 'arrow-n', 'arrow-s', 'arrow-e', 'arrow-w'].includes(String(element.icon || '')))
+        .filter((element) => isMapExitSemantic(element.cat, element.kind))
         .map((element) => labeledMapElementName(element, labelsByBaseId)), 8);
-    const interactives = namesFor(['furniture', 'danger', 'secret', 'magic', 'marker']);
+    const interactives = namesFor(['furniture', 'decoration', 'danger', 'secret', 'magic', 'marker']);
     const terrain = namesFor(['terrain', 'road', 'water']);
     return [
         `地图：${title}`,
@@ -1445,11 +1482,9 @@ function describeMapPatchError(error = ''): string {
     case 'map_element_text_required':
         return `${id} is missing text content. \`text\` must be a short non-empty label.`;
     case 'map_element_icon_invalid':
-        return `${id} has an invalid icon. Use one of ${TAVERN_MAP_ICON_NAMES.join('/')}.`;
-    case 'map_element_icon_place_scale':
-        return `${id} uses a place icon inside a scene map. Scene maps should draw local space with geometry, small objects, labels, and actor positions instead of house/castle/village/forest/temple/shop.`;
+        return `${id} has an invalid icon. Use a Material Symbols official name in lowercase underscores, or omit icon and provide a closed kind such as door/stairs/portal/trap/chest/marker.`;
     case 'map_element_shape_required':
-        return `${id} is missing a shape field. Every element must provide exactly one of rect/circle/path/curve/icon/text.`;
+        return `${id} is missing a shape field. Every element must provide exactly one geometry shape: rect/circle/path/curve/text or explicit shape:"icon".`;
     case 'map_element_shape_conflict':
         return `${id} has multiple shape fields. Only the special "geometry + text" input is allowed, and it will be split into a derived label automatically.`;
     case 'map_element_duplicate':
@@ -1550,16 +1585,19 @@ function summarizeMapElements(document: TavernMapDocument, args: Record<string, 
     const query = normalizeText(args.query, 120).toLowerCase();
     const shape = String(args.elementType || args.type || '').trim();
     const category = String(args.category || args.cat || '').trim();
+    const kind = String(args.kind || '').trim();
     const offset = Math.max(0, Number(args.offset) || 0);
     const limit = Math.max(1, Math.min(MAX_STATE_READ_LIMIT, Number(args.limit) || 30));
     const matches = document.elements.filter((element) => {
         const elementShape = shapeKeyForElement(element) || '';
         if (shape && elementShape !== shape) {return false;}
         if (category && element.cat !== category) {return false;}
+        if (kind && element.kind !== kind) {return false;}
         if (!query) {return true;}
         const haystack = [
             element.id,
             element.cat,
+            element.kind,
             elementShape,
             element.text,
             element.icon,
@@ -1863,6 +1901,11 @@ function applyAtlasOps(source: TavernAtlasDocument, rawOps: unknown[]): {
 function normalizePartialSet(value: unknown, id: string, warnings: string[] = []): Partial<TavernMapElement> {
     if (!isPlainObject(value)) {throw new Error(`map_modify_set_required:${id}`);}
     const set: Partial<TavernMapElement> = {};
+    const legacyType = String(value.type || '').trim();
+    const explicitIconShape = legacyType === 'icon' || String(value.shape || '').trim() === 'icon';
+    if (explicitIconShape) {
+        set.shape = 'icon';
+    }
     if ('id' in value && normalizeText(value.id, 120) && normalizeText(value.id, 120) !== id) {
         throw new Error(`map_element_id_cannot_change:${id}`);
     }
@@ -1875,6 +1918,14 @@ function normalizePartialSet(value: unknown, id: string, warnings: string[] = []
     }
     if ('cat' in value) {
         set.cat = normalizeCategory(value.cat, 'wall');
+    }
+    if ('kind' in value) {
+        if (value.kind === null) {
+            set.kind = undefined;
+        } else {
+            const kind = normalizeMapKind(value.kind, { elementId: id, warnings });
+            if (kind) {set.kind = kind;}
+        }
     }
     if ('material' in value) {
         if (value.material === null) {
@@ -1926,15 +1977,20 @@ function normalizePartialSet(value: unknown, id: string, warnings: string[] = []
         }
     }
     if ('icon' in value) {
-        const icon = normalizeIcon(value.icon);
-        if (!icon) {throw new Error(`map_element_icon_invalid:${id}`);}
-        assertSceneMapIconAllowed(icon, id);
-        set.icon = icon;
+        if (value.icon === null || value.icon === undefined || value.icon === '') {
+            set.icon = undefined;
+        } else {
+            const icon = normalizeIcon(value.icon, { elementId: id, warnings });
+            if (icon) {set.icon = icon;}
+        }
     }
     if ('text' in value || 'content' in value || 'label' in value || 'value' in value) {
         const rawText = value.text ?? value.content ?? value.label ?? value.value;
         const text = normalizeText(rawText, 240);
         set.text = text || undefined;
+    }
+    if ('actorKey' in value) {
+        set.actorKey = value.actorKey === null ? undefined : normalizeText(value.actorKey, 120) || undefined;
     }
     if ('closed' in value) {
         set.closed = value.closed === true;
@@ -1949,7 +2005,6 @@ function normalizePartialSet(value: unknown, id: string, warnings: string[] = []
     if ('style' in value) {
         set.style = value.style === null ? undefined : normalizeStyle(value.style);
     }
-    const legacyType = String(value.type || '').trim();
     if (legacyType === 'fill' && !set.path) {
         const pathSource = firstNonEmptyPathLikeSource(value);
         if (pathSource) {
@@ -2002,7 +2057,18 @@ function buildCanonicalElementReplaySet(current: TavernMapElement, next: TavernM
 function hasGeometryShape(element: Partial<TavernMapElement>): boolean {
     return MAP_GEOMETRY_KEYS.some((key) => {
         if (key === 'circle') {return typeof element.circle === 'number';}
-        if (key === 'icon') {return typeof element.icon === 'string' && !!element.icon.trim();}
+        if (key === 'icon') {
+            return element.shape === 'icon'
+                || (
+                    typeof element.icon === 'string'
+                    && !!element.icon.trim()
+                    && !element.rect
+                    && typeof element.circle !== 'number'
+                    && !element.path
+                    && !element.curve
+                    && !element.text
+                );
+        }
         return Array.isArray(element[key]);
     });
 }
@@ -2102,7 +2168,15 @@ function mapIntentShapeHasUsableData(shape: MapIntentShapeKey, source: Record<st
     if (shape === 'circle') {return firstPositiveNumber(geo.radius, source.radius, geo.r, source.r, geo.circle, source.circle) !== null;}
     if (shape === 'curve') {return !!firstMapIntentCurve(source, geo);}
     if (shape === 'path') {return !!firstMapIntentPath(source, geo);}
-    if (shape === 'icon') {return !!normalizeIcon(geo.icon ?? source.icon);}
+    if (shape === 'icon') {
+        const at = normalizePoint(geo.at ?? source.at ?? geo.pos ?? source.pos ?? geo.center ?? source.center ?? {
+            x: geo.x ?? source.x ?? geo.cx ?? source.cx,
+            y: geo.y ?? source.y ?? geo.cy ?? source.cy,
+        });
+        return !!normalizeIcon(geo.icon ?? source.icon)
+            || !!normalizeMapElementKind(source.kind)
+            || (!!at && MAP_ELEMENT_CATEGORIES.has(String(source.cat || '').trim() as TavernMapElementCategory));
+    }
     return !!normalizeText(source.label ?? source.text ?? source.content ?? source.value, 240);
 }
 
@@ -2113,7 +2187,7 @@ function mapIntentShapeOrderForCategory(category: TavernMapElementCategory): Map
     if (category === 'road') {return ['path', 'curve', 'rect', 'label'];}
     if (category === 'wall') {return ['rect', 'path', 'curve', 'label'];}
     if (category === 'terrain' || category === 'water' || category === 'magic' || category === 'danger') {return ['rect', 'circle', 'path', 'curve', 'icon', 'label'];}
-    if (category === 'furniture') {return ['rect', 'circle', 'icon', 'label'];}
+    if (category === 'furniture' || category === 'decoration') {return ['rect', 'circle', 'icon', 'label'];}
     return ['rect', 'circle', 'path', 'curve', 'icon', 'label'];
 }
 
@@ -2154,10 +2228,12 @@ function buildMapIntentElementInput(rawElement: unknown, index: number, warnings
     const label = normalizeText(rawElement.label ?? rawElement.text ?? rawElement.content ?? rawElement.value, 240);
     const fallbackCat = shape === 'label' ? 'label' : defaultCategoryForShape(shape);
     const cat = normalizeCategory(rawElement.cat, fallbackCat);
+    const kind = normalizeMapKind(rawElement.kind, { elementId: id, warnings });
     const element: Record<string, unknown> = {
         id,
         cat,
     };
+    if (kind) {element.kind = kind;}
     if (at) {element.at = at;}
     const material = normalizeMapMaterial(rawElement.material, { elementId: id, warnings, source: 'model-input' });
     if (material) {element.material = material;}
@@ -2192,10 +2268,9 @@ function buildMapIntentElementInput(rawElement: unknown, index: number, warnings
         if (!hasUsablePointList(points)) {throw new Error(`map_element_points_required:${id}`);}
         element.curve = points;
     } else if (shape === 'icon') {
-        const icon = normalizeIcon(geo.icon ?? rawElement.icon);
-        if (!icon) {throw new Error(`map_element_icon_invalid:${id}`);}
-        assertSceneMapIconAllowed(icon, id);
-        element.icon = icon;
+        element.shape = 'icon';
+        const icon = normalizeIcon(geo.icon ?? rawElement.icon, { elementId: id, warnings });
+        if (icon) {element.icon = icon;}
     } else if (shape === 'label') {
         if (!label) {throw new Error(`map_element_text_required:${id}`);}
         element.text = label;
@@ -2710,7 +2785,7 @@ function applyMapOps(source: TavernMapDocument, rawOps: unknown[]): {
 function buildMapElementSchema() {
     return {
         type: 'object',
-        description: 'One map element. It must have `id` and `cat`, plus exactly one shape field: `rect`, `circle`, `path`, `curve`, `icon`, or `text`. Omit unused shape keys entirely; never send empty `path:[]`, `curve:[]`, `points:[]`, or `line:[]`. Most elements use `at:[x,y]`; `path` and `curve` may omit `at` and let the first point become the anchor.',
+        description: 'One map element. It must have `id` and `cat`, plus exactly one geometry shape: `rect`, `circle`, `path`, `curve`, `text`, or explicit `shape:"icon"`. The `icon` field is only a visual Material Symbols name for icon-shaped elements. Omit unused shape keys entirely; never send empty `path:[]`, `curve:[]`, `points:[]`, or `line:[]`. Most elements use `at:[x,y]`; `path` and `curve` may omit `at` and let the first point become the anchor.',
         properties: {
             id: {
                 type: 'string',
@@ -2726,7 +2801,12 @@ function buildMapElementSchema() {
             cat: {
                 type: 'string',
                 enum: [...MAP_ELEMENT_CATEGORIES],
-                description: 'Semantic category such as wall, door, marker, actor, terrain, road, light, or label. Use terrain for the main continuous scene surface or filled base area: floor, ground, deck, platform, clearing, yard, roadbed, shoreline area, or any large closed support surface. Do not use floor, ground, surface, deck, platform, base, area, or region as category names.',
+                description: 'Closed layer/category such as wall, door, marker, actor, terrain, road, furniture, decoration, light, or label. Use terrain for the main continuous scene surface or filled base area: floor, ground, deck, platform, clearing, yard, roadbed, shoreline area, or any large closed support surface. Do not use floor, ground, surface, deck, platform, base, area, or region as category names.',
+            },
+            kind: {
+                type: 'string',
+                enum: [...TAVERN_MAP_ELEMENT_KINDS],
+                description: 'Optional closed system semantic for logic such as exits and interactives. Use kind for facts like door/stairs/elevator/portal/passage/entrance/exit/trap/chest/marker/player/actor/north/south/east/west/up/down. Do not put visual icon names here.',
             },
             material: {
                 type: 'string',
@@ -2759,10 +2839,14 @@ function buildMapElementSchema() {
                 items: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 },
                 description: 'Smooth curve point array with at least two points. Omit this key for non-curve elements; do not send an empty array. The anchor and relative/absolute rules are the same as `path`.',
             },
+            shape: {
+                type: 'string',
+                enum: ['icon'],
+                description: 'Explicit icon geometry marker. Use shape:"icon" when the element is a point icon and `icon` is omitted or only a visual override.',
+            },
             icon: {
                 type: 'string',
-                enum: [...MAP_ICON_NAMES],
-                description: 'Named scene-map icon marker. Use only small objects or abstract markers such as chest/table/bed/barrel/door/stairs/portal/skull/trap/fire/tree/rock/water/heart/lips/lovers/cherish/love-letter/locked-heart/perfume, or x/o/+ and arrows for markers and directions. Do not put place icons such as house/castle/village/forest/temple/shop inside a scene map; describe places in the atlas and draw local space with geometry, labels, and actor positions.',
+                description: 'Optional visual Material Symbols official name for shape:"icon". Use lowercase underscores, such as door_open, stairs, elevator, inventory_2, chair, table_bar, single_bed, local_bar, menu_book, science, biotech, swords, local_fire_department, water_drop, skull, park, or location_on. Omit when unsure; renderer falls back from kind/cat. Do not invent non-official names such as sword or door.',
             },
             text: {
                 type: 'string',
@@ -2802,13 +2886,15 @@ function buildPatchSetSchema() {
             hint: { type: 'string', description: 'Map maintenance hint for uninitialized scene maps.' },
             at: { ...pointPair, description: 'Map element anchor coordinate `[x,y]`.' },
             cat: { type: 'string', enum: [...MAP_ELEMENT_CATEGORIES], description: 'Map element semantic category.' },
+            kind: { type: 'string', enum: [...TAVERN_MAP_ELEMENT_KINDS], description: 'Closed map element semantic kind for logic; do not use visual icon names here.' },
             material: { type: 'string', enum: [...TAVERN_MAP_MATERIALS], description: 'Map element material enum. Use unknown when the material is explicitly unclear.' },
             certainty: { type: 'string', enum: [...TAVERN_MAP_CERTAINTIES], description: 'Map element certainty enum. Use confirmed to clear stored uncertainty.' },
             rect: { ...pointPair, description: 'Map element rectangle size `[width,height]`.' },
             circle: { type: 'number', description: 'Map element circle radius.' },
             path: { ...pointList, description: 'Map element polyline points. Omit this key unless changing the element into a real path with at least two points; do not send an empty array.' },
             curve: { ...pointList, description: 'Map element curve points. Omit this key unless changing the element into a real curve with at least two points; do not send an empty array.' },
-            icon: { type: 'string', enum: [...MAP_ICON_NAMES], description: 'Map element icon.' },
+            shape: { type: 'string', enum: ['icon'], description: 'Explicitly changes the element geometry into an icon shape. Use this to convert an existing rect/circle/path/curve/text element into a point icon.' },
+            icon: { type: 'string', description: 'Visual Material Symbols official name for an icon-shaped element. Setting or clearing icon only affects the explicit visual name; it does not change geometry by itself.' },
             text: { type: 'string', description: 'Map label text. Empty string clears source/derived label text.' },
             actorKey: { type: 'string', description: 'Map actor identity key for cat:"actor".' },
             closed: { type: 'boolean', description: 'Whether a path or curve should be closed.' },
@@ -2869,10 +2955,10 @@ export function getTavernStateToolDefinitions(): Array<{ type: 'function'; funct
                         status: { type: 'string', enum: ['mentioned', 'visited'], description: 'Optional atlas `locations` status filter.' },
                         from: { type: 'string', description: 'Optional atlas `links` from filter.' },
                         to: { type: 'string', description: 'Optional atlas `links` to filter.' },
-                        kind: { type: 'string', enum: [...ATLAS_LINK_KINDS], description: 'Optional atlas `links` kind filter.' },
+                        kind: { type: 'string', enum: [...new Set([...ATLAS_LINK_KINDS, ...TAVERN_MAP_ELEMENT_KINDS])], description: 'Optional map element kind filter for `elements` mode, or atlas `links` kind filter.' },
                         elementType: { type: 'string', enum: [...MAP_SHAPE_KEYS], description: 'Optional `elements`-mode shape filter such as rect, circle, path, curve, icon, or text.' },
                         category: { type: 'string', enum: [...MAP_ELEMENT_CATEGORIES], description: 'Optional `elements`-mode category filter such as wall, door, marker, terrain, road, or label.' },
-                        query: { type: 'string', description: 'Optional `elements`-mode text query matched against id, category, shape, icon, label text, material, and certainty.' },
+                        query: { type: 'string', description: 'Optional `elements`-mode text query matched against id, category, kind, shape, icon, label text, material, and certainty.' },
                         offset: { type: 'number', minimum: 0, description: 'Pagination offset for `elements` or `history` results. Default 0.' },
                         limit: { type: 'number', minimum: 1, maximum: MAX_STATE_READ_LIMIT, description: 'Maximum `elements` or `history` results to return. Default 30 for `elements`, 20 for `history`.' },
                         tail: { type: 'number', minimum: 1, maximum: MAX_STATE_READ_LIMIT, description: 'For `history` mode, return the final N patch transactions.' },
@@ -2937,6 +3023,7 @@ export function getTavernStateToolDefinitions(): Array<{ type: 'function'; funct
                     'Always provide an explicit `scene` name. The runtime creates the scene file if needed, links it from the world atlas, normalizes intent into canonical map ops, and saves only clean canonical results.',
                     'Elements use one `shape` plus `geo`; label is independent and does not count as a shape. Renderer styling such as opacity, color, zIndex, blur, pattern, and custom fill is not accepted.',
                     'Use only the minimum geo for the chosen shape: rect={center,size}, circle={at,radius}, icon={at,icon}, path={points}, curve={curve}, label={at}+label. Do not fill unused geo keys.',
+                    '`cat` and optional `kind` are closed semantics for map logic; `icon` is only a visual Material Symbols official name. If unsure about the official icon name, omit icon and provide kind/cat.',
                     'If one element is bad, that element is skipped and the other valid elements can still save. Read the returned applied/skipped/warnings report before retrying only failed elements.',
                 ].join('\n'),
                 parameters: {
@@ -2959,7 +3046,8 @@ export function getTavernStateToolDefinitions(): Array<{ type: 'function'; funct
                                 type: 'object',
                                 properties: {
                                     id: { type: 'string', description: 'Stable element id within this scene.' },
-                                    cat: { type: 'string', enum: [...MAP_ELEMENT_CATEGORIES], description: 'Semantic category.' },
+                                    cat: { type: 'string', enum: [...MAP_ELEMENT_CATEGORIES], description: 'Closed layer/category.' },
+                                    kind: { type: 'string', enum: [...TAVERN_MAP_ELEMENT_KINDS], description: 'Optional closed system semantic: door/stairs/elevator/portal/passage/entrance/exit/trap/chest/marker/player/actor/north/south/east/west/up/down.' },
                                     shape: { type: 'string', enum: [...MAP_INTENT_SHAPES], description: 'One shape: rect/circle/path/curve/icon/label.' },
                                     geo: {
                                         type: 'object',
@@ -2971,7 +3059,7 @@ export function getTavernStateToolDefinitions(): Array<{ type: 'function'; funct
                                             radius: { type: 'number', description: 'Circle radius.' },
                                             points: { type: 'array', items: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 }, description: 'Path points.' },
                                             curve: { type: 'array', items: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2 }, description: 'Curve control/polyline points.' },
-                                            icon: { type: 'string', enum: [...MAP_ICON_NAMES], description: 'Icon name for shape:"icon".' },
+                                            icon: { type: 'string', description: 'Visual Material Symbols official name for shape:"icon", lowercase underscores. Examples: door_open, stairs, elevator, inventory_2, chair, table_bar, single_bed, local_bar, menu_book, science, biotech, swords, local_fire_department, water_drop, skull, park, location_on. Omit when unsure; renderer falls back from kind/cat.' },
                                         },
                                         additionalProperties: false,
                                     },
@@ -3001,7 +3089,7 @@ export function getTavernStateToolDefinitions(): Array<{ type: 'function'; funct
                     'Read MapInspect summary first unless you already have the current doc, ids, and revision from this turn. Use `baseRevision` when you are protecting against concurrent changes.',
                     'For `tavern.map`, canonical ops are `meta`, `add`, `modify`, and `remove`. One MapPatch call is one atomic transaction and becomes exactly one revision when it saves.',
                     'Use `meta` to update document fields such as name, viewBox, theme, status, mood, or hint. Mood enum is neutral/warm/cold/dark/mystic/danger/calm; write it only when the scene facts support it.',
-                    'Each element has `id` and `cat`, plus exactly one shape field: `rect`, `circle`, `path`, `curve`, `icon`, or `text`. Most elements use `at:[x,y]`; `path` and `curve` may omit `at` and use the first point as the anchor.',
+                    'Each element has `id` and closed `cat`, optional closed `kind`, plus exactly one geometry shape: `rect`, `circle`, `path`, `curve`, `text`, or explicit `shape:"icon"`. `kind` drives map logic such as exits; `icon` is only a visual Material Symbols official name and never changes geometry by itself. Most elements use `at:[x,y]`; `path` and `curve` may omit `at` and use the first point as the anchor.',
                     'Omit unused shape keys entirely. Never send empty `path:[]`, `curve:[]`, `points:[]`, or `line:[]`; for a rectangular room use only `rect`, for the player marker use only `circle`.',
                     'Minimal first scene-map example: `{"docType":"tavern.map","docId":"main","activate":true,"ops":[{"op":"meta","set":{"name":"测试房间","viewBox":[0,0,320,220],"status":"active"}},{"op":"add","element":{"id":"room-surface","cat":"terrain","at":[30,30],"rect":[240,140],"material":"wood"}},{"op":"add","element":{"id":"room-wall","cat":"wall","at":[30,30],"rect":[240,140],"text":"房间"}},{"op":"add","element":{"id":"player","cat":"actor","actorKey":"player","at":[150,110],"circle":8,"text":"玩家"}}]}`.',
                     'Use semantic material/certainty instead of renderer styling. Material enum is unknown/wood/stone/tile/carpet/bed-sheet/fabric/tatami/sand/marble/blood/water/grass/dirt/snow/metal/rune/warm-light/cold-light/shadow. Use bed-sheet/fabric only for bedding, upholstery, curtains, cushions, or other furniture/soft goods, not the main terrain surface. Certainty enum is confirmed/inferred/unknown; omit confirmed fields.',
@@ -3009,7 +3097,7 @@ export function getTavernStateToolDefinitions(): Array<{ type: 'function'; funct
                     'For `cat:"actor"`, optional `actorKey` is the full-session identity key. If omitted, the element id is used. The runtime keeps only the latest actor with the same final key across all map documents.',
                     'With `at`, `path` and `curve` points are relative offsets. Without `at`, the points are treated as absolute coordinates and the stored result becomes relative to the first point.',
                     'If one add element contains label-eligible geometry plus text, the runtime splits the text into a system label element automatically. Terrain/light/grid geometry does not derive labels.',
-                    'Atlas glyphs describe places. Scene maps describe local space. Do not put house/castle/village/forest/temple/shop icons inside a scene map; draw the local walls, doors, roads, furniture, hazards, objects, labels, and actor positions instead.',
+                    'Atlas scale describes place hierarchy; the renderer chooses its visual icon. Scene maps describe local space; draw the local walls, doors, roads, furniture, hazards, objects, labels, and actor positions instead of writing place glyphs.',
                     'For `tavern.atlas/main`, use only `upsert-location`, `remove-location`, `upsert-link`, `remove-link`, and `move-actor`. There is no set-active-location op.',
                     'Atlas links may omit `id`. The default link id is `link:${sorted(from,to).join(":")}:${kind}` for bidirectional links and `link:${from}:${to}:${kind}` for `bidirectional:false`. Use an explicit id only when two locations need multiple same-kind links.',
                     'Move the player between places with `move-actor` and `actorKey:"player"`. That updates atlas.activeLocationKey, marks the location visited, and syncs activeMapDocId when the location has mapDocId. Non-player actors do not change the current location.',

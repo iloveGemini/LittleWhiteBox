@@ -14,43 +14,20 @@ import {
     type TavernStatusTagField,
     type TavernStatusTextField,
 } from '../../shared/status-state';
+import { resolveStatusIconName, type StatusMaterialSymbolFallbackKind } from '../../shared/status-material-symbols';
 import type { TavernStructuredStateDocumentRecord } from '../../shared/session-db';
-
-const MATERIAL_SYMBOLS = new Set([
-    'person',
-    'face',
-    'face_3',
-    'sentiment_satisfied',
-    'badge',
-    'inventory_2',
-    'checkroom',
-    'eyeglasses',
-    'do_not_touch',
-    'key',
-    'description',
-    'medication',
-    'wallet',
-    'favorite',
-    'psychology',
-    'bolt',
-    'shield',
-    'skull',
-    'local_fire_department',
-    'auto_stories',
-    'radio_button_checked',
-    'arrow_drop_up',
-    'arrow_drop_down',
-    'close',
-]);
-const FALLBACK_ICON = 'inventory_2';
 
 const props = withDefaults(defineProps<{
     document: TavernStructuredStateDocumentRecord | null;
     fieldDeltas?: TavernStatusFieldDeltaMap;
     enabled?: boolean;
+    materialSymbolsReady?: boolean;
+    materialSymbolsStatus?: 'idle' | 'loading' | 'ready' | 'failed';
 }>(), {
     fieldDeltas: () => ({}),
     enabled: true,
+    materialSymbolsReady: false,
+    materialSymbolsStatus: 'idle',
 });
 
 const selectedSubjectId = ref('');
@@ -111,9 +88,9 @@ watch(statusDocument, (document) => {
     selectedItem.value = null;
 }, { immediate: true });
 
-function iconName(value?: string): string {
-    const icon = String(value || '').trim();
-    return MATERIAL_SYMBOLS.has(icon) ? icon : FALLBACK_ICON;
+function iconText(value: unknown, fallbackKind: StatusMaterialSymbolFallbackKind = 'item'): string {
+    if (!props.materialSymbolsReady) {return props.materialSymbolsStatus === 'failed' ? '!' : '';}
+    return resolveStatusIconName(value, fallbackKind);
 }
 
 function selectSubject(subject: TavernStatusSubject) {
@@ -199,7 +176,7 @@ function closeItem() {
 <template>
   <section
     class="tavern-status-panel"
-    :class="{ 'is-disabled': !enabled, 'is-empty': !statusDocument.subjects.length }"
+    :class="{ 'is-disabled': !enabled, 'is-empty': !statusDocument.subjects.length, 'is-symbol-font-ready': materialSymbolsReady, 'is-symbol-font-failed': materialSymbolsStatus === 'failed' }"
   >
     <div
       v-if="activeSubject"
@@ -207,7 +184,7 @@ function closeItem() {
     >
       <header class="tavern-status-head">
         <div class="tavern-status-avatar">
-          <span class="material-symbols-rounded">{{ iconName(activeSubject.icon || 'person') }}</span>
+          <span class="material-symbols-rounded">{{ iconText(activeSubject.icon || 'person', 'subject') }}</span>
         </div>
         <div class="tavern-status-identity">
           <strong>{{ activeSubject.name }}</strong>
@@ -281,7 +258,7 @@ function closeItem() {
                           class="tavern-status-delta"
                           :class="fieldDelta(activeSubject, activeTab, block, field) > 0 ? 'up' : 'down'"
                         >
-                          <span class="material-symbols-rounded">{{ fieldDelta(activeSubject, activeTab, block, field) > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</span>
+                          <span class="material-symbols-rounded">{{ iconText(fieldDelta(activeSubject, activeTab, block, field) > 0 ? 'arrow_drop_up' : 'arrow_drop_down', 'ui') }}</span>
                           {{ fieldDelta(activeSubject, activeTab, block, field) > 0 ? '+' : '' }}{{ numericLabel(fieldDelta(activeSubject, activeTab, block, field)) }}
                         </span>
                       </span>
@@ -305,7 +282,7 @@ function closeItem() {
                         class="tavern-status-delta"
                         :class="fieldDelta(activeSubject, activeTab, block, field) > 0 ? 'up' : 'down'"
                       >
-                        <span class="material-symbols-rounded">{{ fieldDelta(activeSubject, activeTab, block, field) > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</span>
+                        <span class="material-symbols-rounded">{{ iconText(fieldDelta(activeSubject, activeTab, block, field) > 0 ? 'arrow_drop_up' : 'arrow_drop_down', 'ui') }}</span>
                         {{ fieldDelta(activeSubject, activeTab, block, field) > 0 ? '+' : '' }}{{ numericLabel(fieldDelta(activeSubject, activeTab, block, field)) }}
                       </span>
                     </span>
@@ -338,7 +315,7 @@ function closeItem() {
                         class="tavern-status-delta"
                         :class="fieldDelta(activeSubject, activeTab, block, field) > 0 ? 'up' : 'down'"
                       >
-                        <span class="material-symbols-rounded">{{ fieldDelta(activeSubject, activeTab, block, field) > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</span>
+                        <span class="material-symbols-rounded">{{ iconText(fieldDelta(activeSubject, activeTab, block, field) > 0 ? 'arrow_drop_up' : 'arrow_drop_down', 'ui') }}</span>
                         {{ fieldDelta(activeSubject, activeTab, block, field) > 0 ? '+' : '' }}{{ numericLabel(fieldDelta(activeSubject, activeTab, block, field)) }}
                       </span>
                     </span>
@@ -394,7 +371,7 @@ function closeItem() {
                     v-if="isItemField(field) && field.qty && field.qty > 1"
                     class="tavern-status-item-qty"
                   >{{ field.qty }}</span>
-                  <span class="material-symbols-rounded">{{ iconName(isItemField(field) ? field.icon : '') }}</span>
+                  <span class="material-symbols-rounded">{{ iconText(isItemField(field) ? field.icon : '', 'item') }}</span>
                   <strong>{{ isItemField(field) ? field.name : '' }}</strong>
                 </button>
               </template>
@@ -421,7 +398,7 @@ function closeItem() {
                   @click="isItemField(field) && openItem(activeSubject, activeTab, block, field)"
                 >
                   <span class="tavern-status-item-icon">
-                    <span class="material-symbols-rounded">{{ iconName(isItemField(field) ? field.icon : '') }}</span>
+                    <span class="material-symbols-rounded">{{ iconText(isItemField(field) ? field.icon : '', 'item') }}</span>
                   </span>
                   <span class="tavern-status-item-name">
                     <strong>{{ isItemField(field) ? field.name : '' }}</strong>
@@ -481,11 +458,11 @@ function closeItem() {
           aria-label="关闭"
           @click="closeItem"
         >
-          <span class="material-symbols-rounded">close</span>
+          <span class="material-symbols-rounded">{{ iconText('close', 'ui') }}</span>
         </button>
         <span class="tavern-status-drawer-kicker">{{ selectedItem.blockTitle }}</span>
         <div class="tavern-status-drawer-title">
-          <span class="material-symbols-rounded">{{ iconName(selectedItem.field.icon) }}</span>
+          <span class="material-symbols-rounded">{{ iconText(selectedItem.field.icon, 'item') }}</span>
           <strong>{{ selectedItem.field.name }}</strong>
           <em v-if="selectedItem.field.qty && selectedItem.field.qty > 1">x{{ selectedItem.field.qty }}</em>
         </div>
@@ -497,7 +474,7 @@ function closeItem() {
       v-else
       class="tavern-status-empty"
     >
-      <span class="material-symbols-rounded">badge</span>
+      <span class="material-symbols-rounded">{{ iconText('badge', 'ui') }}</span>
       <strong>状态尚未同步</strong>
       <p>等待后台助手建立角色档案。</p>
     </div>

@@ -2,15 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-    atlasGlyphForScale,
-    getTavernGameIconGlyph,
-    getTavernMapIconRenderSize,
-    gameIconScaleTransform,
-    gameIconTransform,
-    gameIconTranslateTransform,
-    isTavernLegacyMapIcon,
-} from '../app-src/map-glyphs';
-import {
     getTavernMapDisplayViewBox,
     getTavernMapDocumentBounds,
     getTavernMapPresentationTransform,
@@ -30,7 +21,12 @@ import {
     tavernMapElementStrokeWidth,
     tavernMapElementUsesSameSurfaceMaterial,
 } from '../app-src/map-render-style';
-import { TAVERN_MAP_ICON_NAMES } from '../shared/map-icon-names';
+import {
+    isMapExitSemantic,
+    normalizeMapElementKind,
+    resolveAtlasScaleIconName,
+    resolveMapElementIconName,
+} from '../shared/map-material-symbols';
 import type { TavernMapDocument, TavernMapElement } from '../shared/structured-state';
 
 test('map display keeps the stored viewBox as the camera frame when one is present', () => {
@@ -65,7 +61,7 @@ test('map display viewBox keeps negative coordinates and tiny maps visible with 
     const document: TavernMapDocument = {
         meta: { name: 'Cellar', theme: 'dark', viewBox: null, status: 'active' },
         elements: [
-            { id: 'door', at: [-60, -40], cat: 'door', icon: 'arrow-n' },
+            { id: 'door', at: [-60, -40], cat: 'door', kind: 'door', shape: 'icon' },
             { id: 'label', at: [-30, -10], cat: 'label', text: 'Secret hatch' },
         ],
     };
@@ -79,7 +75,11 @@ test('map display viewBox keeps negative coordinates and tiny maps visible with 
     assert.ok(viewBox[0] + viewBox[2] >= bounds.maxX);
     assert.ok(viewBox[1] + viewBox[3] >= bounds.maxY);
     assert.equal(viewBox[2] >= 160, true);
-    assert.equal(Number((viewBox[2] / viewBox[3]).toFixed(2)), Number((800 / 600).toFixed(2)));
+    assert.equal(Math.abs((viewBox[2] / viewBox[3]) - (800 / 600)) <= 0.01, true);
+    assert.equal(resolveMapElementIconName(document.elements[0].icon, {
+        kind: document.elements[0].kind,
+        cat: document.elements[0].cat,
+    }), 'door_open');
 });
 
 test('map display viewBox falls back to document viewBox when the map has no elements', () => {
@@ -230,31 +230,21 @@ test('map renderer gives roads and water open lines casing and readable width', 
     assert.equal(streamCasing.width > tavernMapElementStrokeWidth(stream), true);
 });
 
-test('map glyph registry upgrades semantic icons while preserving legacy markers', () => {
-    assert.equal(TAVERN_MAP_ICON_NAMES.includes('heart'), true);
-    assert.equal(TAVERN_MAP_ICON_NAMES.includes('perfume'), true);
-    assert.equal(TAVERN_MAP_ICON_NAMES.includes('skull'), true);
-    assert.equal(TAVERN_MAP_ICON_NAMES.includes('tree'), true);
-    assert.equal(TAVERN_MAP_ICON_NAMES.includes('star'), true);
-
-    assert.equal(!!getTavernGameIconGlyph('skull'), true);
-    assert.equal(!!getTavernGameIconGlyph('tree'), true);
-    assert.equal(!!getTavernGameIconGlyph('star'), true);
-    assert.equal(isTavernLegacyMapIcon('x'), true);
-    assert.equal(isTavernLegacyMapIcon('stairs-up'), true);
-    assert.equal(isTavernLegacyMapIcon('skull'), false);
-    assert.equal(getTavernMapIconRenderSize('heart') > getTavernMapIconRenderSize('x'), true);
+test('map material symbol resolver keeps system semantics closed and visual icons open', () => {
+    assert.equal(normalizeMapElementKind('Door'), 'door');
+    assert.equal(normalizeMapElementKind('local_bar'), undefined);
+    assert.equal(resolveMapElementIconName('swords', { cat: 'marker' }), 'swords');
+    assert.equal(resolveMapElementIconName('sword_icon', { cat: 'marker' }), 'location_on');
+    assert.equal(resolveMapElementIconName('door', { kind: 'door', cat: 'door' }), 'door_open');
+    assert.equal(resolveMapElementIconName('', { cat: 'furniture' }), 'chair');
+    assert.equal(isMapExitSemantic('marker', 'portal'), true);
+    assert.equal(isMapExitSemantic('marker', 'chest'), false);
+    assert.equal(isMapExitSemantic('door', undefined), true);
 });
 
-test('game icon transforms keep at coordinates as the visual anchor', () => {
-    assert.equal(gameIconTranslateTransform(260, 292), 'translate(260, 292)');
-    assert.equal(gameIconScaleTransform(), 'scale(0.04688)');
-    assert.equal(gameIconTransform(260, 292), 'matrix(0.04688, 0, 0, 0.04688, 248, 280)');
-});
+test('atlas scale renderer maps closed place hierarchy to material symbols', () => {
+    const defaults = ['city', 'district', 'building', 'floor', 'room', 'outdoor'].map(resolveAtlasScaleIconName);
 
-test('atlas scale glyphs do not use road as a first-pass location default', () => {
-    const defaults = ['city', 'district', 'building', 'floor', 'room', 'outdoor'].map(atlasGlyphForScale);
-
-    assert.deepEqual(defaults, ['castle', 'village', 'house', 'stairs', 'door', 'forest']);
-    assert.equal(defaults.includes('road'), false);
+    assert.deepEqual(defaults, ['location_city', 'apartment', 'home_work', 'stairs', 'meeting_room', 'park']);
+    assert.equal(defaults.includes('route'), false);
 });

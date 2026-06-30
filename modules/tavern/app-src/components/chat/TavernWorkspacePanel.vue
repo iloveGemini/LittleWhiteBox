@@ -8,6 +8,7 @@ import TavernStatusPanel from '../TavernStatusPanel.vue';
 import { useTavernMemoryContext, useTavernSessionContext, useTavernWorkspaceContext } from '../tavern-app-context';
 import { useMobileSheetDrag } from './useMobileSheetDrag';
 import { buildSeedLabelId, createSeedMapDocument, isSeedLabelId } from '../../../shared/map-state-seed';
+import { isMapExitSemantic } from '../../../shared/map-material-symbols';
 import type { TavernAtlasDocument, TavernMapDocument, TavernMapElement, TavernMapElementCategory } from '../../../shared/structured-state';
 
 defineProps<{
@@ -62,6 +63,8 @@ const {
     mapStateDocuments,
     mapStateDocument,
     mapStatePatches,
+    materialSymbolFontReady,
+    materialSymbolFontStatus,
     sessionContract,
     statusFieldDeltas,
     statusStateDocument,
@@ -134,7 +137,6 @@ type MapInfoLine = {
     values: string[];
 };
 const MAP_LABEL_PREFIX_LENGTH = buildSeedLabelId('').length;
-const MAP_EXIT_ICONS = new Set(['door', 'stairs', 'portal', 'arrow-n', 'arrow-s', 'arrow-e', 'arrow-w']);
 
 function normalizeMapInfoText(value: unknown, limit = 48): string {
     return String(value || '').normalize('NFKC').replace(/\s+/g, ' ').trim().slice(0, limit);
@@ -205,10 +207,10 @@ function mapNamesForCategories(categories: TavernMapElementCategory[], limit = 1
 const mapExitNames = computed(() => {
     const labelsByBaseId = mapLabelsByBaseId.value;
     return uniqueMapInfoValues(selectedMapElements.value
-        .filter((element) => element.cat === 'door' || MAP_EXIT_ICONS.has(String(element.icon || '').trim()))
+        .filter((element) => isMapExitSemantic(element.cat, element.kind))
         .map((element) => mapElementDisplayName(element, labelsByBaseId)), 8);
 });
-const mapInteractiveNames = computed(() => mapNamesForCategories(['furniture', 'danger', 'secret', 'magic', 'marker'], 12));
+const mapInteractiveNames = computed(() => mapNamesForCategories(['furniture', 'decoration', 'danger', 'secret', 'magic', 'marker'], 12));
 const mapAreaNames = computed(() => mapNamesForCategories(['wall', 'terrain', 'road', 'water'], 8));
 const mapStandaloneLabelNames = computed(() => uniqueMapInfoValues(selectedMapElements.value
     .filter((element) => element.cat === 'label' && !isSeedLabelId(element.id))
@@ -226,7 +228,7 @@ const mapInfoStats = computed(() => {
     return [
         { label: '元素', value: String(elements.length) },
         { label: '出场', value: String(countByCat('actor')) },
-        { label: '出入口', value: String(countByCat('door')) },
+        { label: '出入口', value: String(elements.filter((element) => isMapExitSemantic(element.cat, element.kind)).length) },
         { label: '标注', value: String(countByCat('label') + countByCat('marker')) },
     ];
 });
@@ -357,6 +359,8 @@ function selectDirectoryMemoryFile(path: string) {
           :patches="selectedMapPatches"
           :player-display-name="displayUserName"
           :player-avatar-url="visibleUserAvatar"
+          :material-symbols-ready="materialSymbolFontReady"
+          :material-symbols-status="materialSymbolFontStatus"
         />
         <TavernAtlasPanel
           v-else-if="mapWorkspaceView === 'world'"
@@ -367,6 +371,8 @@ function selectDirectoryMemoryFile(path: string) {
           :active-map-doc-id="activeMapDocId"
           :preview-map-doc-id="selectedMapDocId"
           :map-documents="mapStateDocuments"
+          :material-symbols-ready="materialSymbolFontReady"
+          :material-symbols-status="materialSymbolFontStatus"
         />
         <div
           v-else
@@ -389,6 +395,8 @@ function selectDirectoryMemoryFile(path: string) {
           :active-map-doc-id="activeMapDocId"
           :preview-map-doc-id="selectedMapDocId"
           :map-documents="mapStateDocuments"
+          :material-symbols-ready="materialSymbolFontReady"
+          :material-symbols-status="materialSymbolFontStatus"
         />
         <div
           v-else-if="selectedMapRecord"
@@ -437,6 +445,8 @@ function selectDirectoryMemoryFile(path: string) {
         :document="statusStateDocument"
         :field-deltas="statusFieldDeltas"
         :enabled="sessionContract.statusPanel"
+        :material-symbols-ready="materialSymbolFontReady"
+        :material-symbols-status="materialSymbolFontStatus"
       />
     </section>
     <section

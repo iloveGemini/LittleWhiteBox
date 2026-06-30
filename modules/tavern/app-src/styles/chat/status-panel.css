@@ -1,5 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300,0,0");
-
 /* Tavern chat: status panel renderer. */
 
 .tavern-chat.xb-page .material-symbols-rounded {
@@ -8,16 +6,27 @@
     flex: 0 0 auto;
     font-family: "Material Symbols Rounded", sans-serif;
     font-feature-settings: "liga";
+    font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
     font-size: 1em;
     font-style: normal;
-    font-weight: normal;
+    font-weight: 300;
+    width: 1em;
+    min-width: 1em;
+    height: 1em;
     letter-spacing: 0;
     line-height: 1;
+    overflow: hidden;
+    text-align: center;
     text-transform: none;
     white-space: nowrap;
     word-wrap: normal;
     -webkit-font-feature-settings: "liga";
     -webkit-font-smoothing: antialiased;
+}
+
+.tavern-chat.xb-page .tavern-status-panel.is-symbol-font-failed .material-symbols-rounded {
+    font-family: var(--xb-font-ui), sans-serif;
+    font-weight: 800;
 }
 
 .tavern-chat.xb-page .tavern-status-panel {
@@ -333,7 +342,7 @@
     font-family: "Material Symbols Rounded", sans-serif;
     font-size: 13px;
     font-style: normal;
-    font-weight: normal;
+    font-weight: 300;
     letter-spacing: 0;
     line-height: 1;
     text-transform: none;

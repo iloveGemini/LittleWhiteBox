@@ -8,6 +8,9 @@ const root = resolve(import.meta.dirname, '../../..');
 const tavernRoot = resolve(root, 'modules/tavern');
 const sourceExtensions = new Set(['.ts', '.vue']);
 const ignoredPathParts = new Set(['dist', 'tests']);
+const repositoryTextExtensions = new Set(['.js', '.mjs', '.cjs', '.ts', '.tsx', '.vue', '.html', '.css', '.json', '.md', '.txt']);
+const repositoryIgnoredDirNames = new Set(['.git', 'node_modules', 'coverage']);
+const externalGoogleFontEndpointPattern = /fonts\.(?:googleapis|gstatic)/i;
 
 function collectSourceFiles(dir: string): string[] {
     return readdirSync(dir)
@@ -19,6 +22,23 @@ function collectSourceFiles(dir: string): string[] {
             }
             return sourceExtensions.has(path.slice(path.lastIndexOf('.'))) ? [path] : [];
         });
+}
+
+function collectRepositoryTextFiles(dir: string = root, files: string[] = []): string[] {
+    for (const name of readdirSync(dir)) {
+        const path = join(dir, name);
+        const stat = statSync(path);
+        if (stat.isDirectory()) {
+            if (!repositoryIgnoredDirNames.has(name)) {
+                collectRepositoryTextFiles(path, files);
+            }
+            continue;
+        }
+        const extension = path.slice(path.lastIndexOf('.')).toLowerCase();
+        if (name.endsWith('.min.js') || !repositoryTextExtensions.has(extension)) {continue;}
+        files.push(path);
+    }
+    return files;
 }
 
 function readRepoFile(path: string): string {
@@ -92,6 +112,21 @@ test('tavern source does not depend on browser crypto APIs', () => {
     const browserCryptoReferences = sourceMatches(/globalThis\.crypto|crypto\.subtle|getRandomValues|randomUUID|crypto_subtle_unavailable/);
 
     assert.deepEqual(browserCryptoReferences, []);
+});
+
+test('plugin text resources do not reference Google-hosted font endpoints', () => {
+    const matches = collectRepositoryTextFiles()
+        .flatMap((path) => {
+            const text = readFileSync(path, 'utf8');
+            if (!externalGoogleFontEndpointPattern.test(text)) {return [];}
+            return text.split(/\r?\n/).flatMap((line, index) => (
+                externalGoogleFontEndpointPattern.test(line)
+                    ? [{ path: relative(root, path).replace(/\\/g, '/'), line: index + 1, text: line.trim() }]
+                    : []
+            ));
+        });
+
+    assert.deepEqual(matches, []);
 });
 
 test('tavern source keeps cross-frame messages behind clone-safe wrappers', () => {
@@ -190,6 +225,26 @@ test('tavern startup posts frame-ready before heavy app tasks and prewarms host 
     assert.match(hostSource, /async function openTavern\(\): Promise<void> \{[\s\S]*installMessageHandler\(\);[\s\S]*await createOverlay\(\);[\s\S]*prepareInitialConfig\(\);/);
     assert.match(hostSource, /case 'xb-tavern:boot-ready':[\s\S]*frameBootReady = true;[\s\S]*postStartupProgress\(\{ percent: 15, action: 'loadTavernResources' \}\);/);
     assert.match(hostSource, /case 'xb-tavern:frame-ready':[\s\S]*postStartupProgress\(\{ percent: Math\.max\(latestStartupProgress\.percent, 20\), action: 'frameReady' \}\);[\s\S]*void sendInitialConfigToFrame\(\)\.catch\(\(error\) => \{[\s\S]*failed to send initial config[\s\S]*\}\)\.finally\(flushPendingMessages\);/);
+});
+
+test('tavern Material Symbols load from local vendor font only', () => {
+    const agentConfigSource = readRepoFile('modules/tavern/host/agent-config.ts');
+    const fontLoaderSource = readRepoFile('modules/tavern/app-src/features/material-symbol-font.ts');
+    const statusPanelSource = readRepoFile('modules/tavern/app-src/components/TavernStatusPanel.vue');
+    const statusCss = readRepoFile('modules/tavern/app-src/styles/chat/status-panel.css');
+    const mapCss = readRepoFile('modules/tavern/app-src/styles/chat/map.css');
+
+    assert.match(agentConfigSource, /extensionBasePath: `\/\$\{extensionFolderPath\}`/);
+    assert.match(fontLoaderSource, /new FontFace\(MATERIAL_SYMBOL_FONT_FAMILY[\s\S]*display: 'block'[\s\S]*weight: '300'/);
+    assert.match(fontLoaderSource, /libs\/material-symbols\/material-symbols-rounded\.woff2/);
+    assert.match(statusPanelSource, /resolveStatusIconName/);
+    assert.match(statusPanelSource, /if \(!props\.materialSymbolsReady\) \{return props\.materialSymbolsStatus === 'failed' \? '!' : '';\}/);
+    assert.doesNotMatch(statusCss, /fonts\.googleapis|fonts\.gstatic/);
+    assert.match(statusCss, /font-variation-settings: "FILL" 0, "wght" 300/);
+    assert.match(statusCss, /\.tavern-status-panel\.is-symbol-font-failed \.material-symbols-rounded/);
+    assert.doesNotMatch(mapCss, /fonts\.googleapis|fonts\.gstatic/);
+    assert.match(mapCss, /font-variation-settings: "FILL" 0, "wght" 300/);
+    assert.match(mapCss, /\.tavern-map-panel\.is-symbol-font-failed \.map-material-symbol/);
 });
 
 test('tavern mobile overlay viewport updates are frame-throttled', () => {
@@ -577,37 +632,44 @@ test('tavern runtime chat preset uses ST-confirmed active preset, never unsaved 
     assert.match(nativeSource, /throw new Error\('聊天预设未同步：缺少 prompt_order。'\)/);
 });
 
-test('tavern map game icon animation does not override SVG transform attributes', () => {
+test('tavern map material symbols use shared font and keep visual icons separate from semantics', () => {
     const mapPanel = readRepoFile('modules/tavern/app-src/components/TavernMapPanel.vue');
     const mapCss = readRepoFile('modules/tavern/app-src/styles/chat/map.css');
-    const glyphSource = readRepoFile('modules/tavern/app-src/map-glyphs.ts');
+    const mapSymbols = readRepoFile('modules/tavern/shared/map-material-symbols.ts');
+    const stateSource = readRepoFile('modules/tavern/shared/structured-state.ts');
     const fillInKeyframes = extractCssBlock(mapCss, '@keyframes tavern-map-fill-in');
     const removeKeyframes = extractCssBlock(mapCss, '@keyframes tavern-map-remove');
-    assert.match(mapPanel, /glyphTransform\?: string/);
-    assert.match(mapPanel, /glyphScaleTransform\?: string/);
-    assert.match(mapPanel, /if \(gameIcon\) \{[\s\S]*const \[glyphX, glyphY\] = projectMapPoint\(element\.at\)[\s\S]*transform: '',\s*glyphTransform: gameIconTranslateTransform\(glyphX, glyphY\),\s*glyphScaleTransform: gameIconScaleTransform\(\)/);
-    assert.match(mapPanel, /const regularLineItems = computed\(\(\) => lineItems\.value\.filter\(\(item\) => !item\.gameIcon\)\)/);
+
+    assert.match(stateSource, /icon\?: MaterialSymbolName;/);
+    assert.match(stateSource, /kind\?: TavernMapElementKind;/);
+    assert.match(stateSource, /TAVERN_MAP_ELEMENT_KINDS/);
+    assert.match(stateSource, /shape:\s*\{\s*type: 'string',\s*enum: \['icon'\]/);
+    assert.match(stateSource, /icon:\s*\{\s*type: 'string',\s*description: 'Visual Material Symbols official name[\s\S]*does not change geometry by itself/);
+    assert.doesNotMatch(stateSource, /MAP_ICON_NAMES|TAVERN_MAP_ICON_NAMES|SCENE_MAP_PLACE_SCALE_ICONS|assertSceneMapIconAllowed/);
+    assert.match(mapSymbols, /export const TAVERN_MAP_ELEMENT_KINDS = \[/);
+    assert.match(mapSymbols, /door: 'door_open'/);
+    assert.match(mapSymbols, /export function isMapExitSemantic/);
+    assert.match(mapPanel, /symbolIcon\?: string/);
+    assert.match(mapPanel, /resolveMapElementIconName\(element\.icon/);
+    assert.match(mapPanel, /text: symbolIcon,[\s\S]*x: symbolX,[\s\S]*y: symbolY,[\s\S]*symbolIcon,/);
+    assert.match(mapPanel, /const regularLineItems = computed\(\(\) => lineItems\.value\.filter\(\(item\) => !item\.symbolIcon\)\)/);
     assert.match(mapPanel, /const regularLineCasingItems = computed\(\(\) => regularLineItems\.value\.filter\(\(item\) => item\.role === 'line-casing'\)\)/);
     assert.match(mapPanel, /const regularLineCoreItems = computed\(\(\) => regularLineItems\.value\.filter\(\(item\) => item\.role !== 'line-casing'\)\)/);
-    assert.match(mapPanel, /const gameIconLineItems = computed\(\(\) => lineItems\.value\.filter\(\(item\) => item\.gameIcon\)\)/);
-    assert.match(mapPanel, /const regularRemovedLineItems = computed\(\(\) => removedLineItems\.value\.filter\(\(item\) => !item\.gameIcon\)\)/);
-    assert.match(mapPanel, /const gameIconRemovedLineItems = computed\(\(\) => removedLineItems\.value\.filter\(\(item\) => item\.gameIcon\)\)/);
+    assert.match(mapPanel, /const symbolLineItems = computed\(\(\) => lineItems\.value\.filter\(\(item\) => item\.symbolIcon\)\)/);
+    assert.match(mapPanel, /const regularRemovedLineItems = computed\(\(\) => removedLineItems\.value\.filter\(\(item\) => !item\.symbolIcon\)\)/);
+    assert.match(mapPanel, /const symbolRemovedLineItems = computed\(\(\) => removedLineItems\.value\.filter\(\(item\) => item\.symbolIcon\)\)/);
     assert.match(mapPanel, /v-for="item in regularLineCasingItems"[\s\S]*v-for="item in regularLineCoreItems"[\s\S]*:transform="item\.transform"/);
-    assert.match(mapPanel, /v-for="item in gameIconLineItems"[\s\S]*:transform="item\.glyphTransform"[\s\S]*:transform="item\.glyphScaleTransform"[\s\S]*transform="translate\(-256, -256\)"[\s\S]*class="map-game-icon-path"/);
+    assert.match(mapPanel, /v-for="item in symbolLineItems"[\s\S]*materialSymbolGlyphText\(item\.symbolIcon\)/);
     assert.match(mapPanel, /v-for="item in regularRemovedLineItems"[\s\S]*:transform="item\.transform"/);
-    assert.match(mapPanel, /v-for="item in gameIconRemovedLineItems"[\s\S]*:transform="item\.glyphTransform"[\s\S]*:transform="item\.glyphScaleTransform"[\s\S]*transform="translate\(-256, -256\)"[\s\S]*class="map-game-icon-path"/);
+    assert.match(mapPanel, /v-for="item in symbolRemovedLineItems"[\s\S]*materialSymbolGlyphText\(item\.symbolIcon\)/);
     assert.doesNotMatch(mapPanel, /<path\s+v-for="item in lineItems"/);
     assert.doesNotMatch(mapPanel, /<path\s+v-for="item in removedLineItems"/);
-    assert.match(mapCss, /\.tavern-chat\.xb-page \.map-game-icon\.is-animated \{[\s\S]*tavern-map-fill-in/);
-    assert.doesNotMatch(mapCss, /\.map-line\.is-game-icon\.is-animated/);
+    assert.match(mapCss, /\.tavern-chat\.xb-page \.map-material-symbol \{[\s\S]*font-family: "Material Symbols Rounded"[\s\S]*font-variation-settings: "FILL" 0, "wght" 300/);
+    assert.match(mapCss, /\.tavern-chat\.xb-page \.map-material-symbol\.is-animated \{[\s\S]*tavern-map-fill-in/);
+    assert.doesNotMatch(mapCss, new RegExp(['map-game-' + 'icon', 'map-game-' + 'icon-path'].join('|')));
     assert.doesNotMatch(fillInKeyframes, /transform:/);
     assert.doesNotMatch(removeKeyframes, /transform:/);
-    assert.match(glyphSource, /function gameIconTranslateTransform\(x: number, y: number\): string/);
-    assert.match(glyphSource, /function gameIconScaleTransform\(size = TAVERN_MAP_GAME_ICON_SIZE\): string/);
-    assert.match(glyphSource, /return `matrix\(\$\{Number\(scale\.toFixed\(5\)\)\}, 0, 0, \$\{Number\(scale\.toFixed\(5\)\)\}, \$\{left\}, \$\{top\}\)`/);
-    const stateSource = readRepoFile('modules/tavern/shared/structured-state.ts');
-    assert.match(stateSource, /SCENE_MAP_PLACE_SCALE_ICONS/);
-    assert.match(stateSource, /assertSceneMapIconAllowed\(icon, id\)/);
+    assert.doesNotMatch(mapPanel, new RegExp(['gameIcon', 'glyphTransform', 'glyphScaleTransform', 'map-' + 'glyphs'].join('|')));
 });
 
 test('tavern request log is sourced from runtime request snapshots', () => {
@@ -931,12 +993,12 @@ test('tavern map update badge stays collapsed until requested', () => {
     assert.doesNotMatch(mapPanelSource, /id="(?:tavern-mat-texture|mat-metal|mood-cold|map-vignette-radial)"|filter="url\(#tavern-mat-texture\)"|filter="url\(#tavern-map-sketch\)"|filter="url\(#tavern-map-shadow\)"/);
     assert.doesNotMatch(mapPanelSource, /<g\s+class="map-fill-layer"[\s\S]{0,120}filter="url\(#tavern-mat-texture\)"/);
     assert.match(mapPanelSource, /class="map-line-layer"[\s\S]*:filter="svgUrl\('tavern-map-sketch'\)"[\s\S]*v-for="item in regularLineCasingItems"/);
-    assert.match(mapPanelSource, /<g :filter="svgUrl\('tavern-map-shadow'\)">[\s\S]*v-for="item in gameIconLineItems"/);
+    assert.match(mapPanelSource, /<g :filter="svgUrl\('tavern-map-shadow'\)">[\s\S]*v-for="item in symbolLineItems"/);
     assert.match(mapPanelSource, /class="map-avatar-layer"[\s\S]*:filter="svgUrl\('tavern-map-shadow'\)"/);
     assert.match(mapPanelSource, /class="tavern-map-redraw-button"[\s\S]*title="重绘地图渲染层"[\s\S]*@click="redrawMapRenderLayer"/);
     assert.match(mapPanelSource, /class="tavern-map-zoom-controls"[\s\S]*@click="zoomMapBy\(-0\.25\)"[\s\S]*{{ mapZoomLabel }}[\s\S]*@click="zoomMapBy\(0\.25\)"/);
     assert.match(mapPanelSource, /@pointerdown="handleMapPointerDown"[\s\S]*@pointermove="handleMapPointerMove"[\s\S]*@pointerup="handleMapPointerEnd"[\s\S]*@pointercancel="handleMapPointerEnd"[\s\S]*@wheel="handleMapWheel"/);
-    assert.match(mapPanelSource, /function pickPenAnimationItem[\s\S]*!item\.gameIcon[\s\S]*item\.layer !== 'label'[\s\S]*!!item\.path/);
+    assert.match(mapPanelSource, /function pickPenAnimationItem[\s\S]*!item\.symbolIcon[\s\S]*item\.layer !== 'label'[\s\S]*!!item\.path/);
     assert.match(mapPanelSource, /const animated = pickPenAnimationItem\(animatedItems\.value\)/);
     assert.doesNotMatch(mapPanelSource, /tavern-map-active-button|设为当前|activate-document/);
     assert.doesNotMatch(appSource, /activateMapDocument/);
@@ -975,7 +1037,7 @@ test('tavern scene map player marker uses current user identity instead of gener
     assert.match(mapPanelSource, /dash: '3 2'/);
     assert.match(mapPanelSource, /id: `\$\{element\.id\}-avatar`,[\s\S]*layer: 'avatar',[\s\S]*fill: 'none'[\s\S]*avatarClipId,/);
     assert.match(mapPanelSource, /id: `\$\{element\.id\}-player-outline`,[\s\S]*layer: 'avatar',[\s\S]*dash: '3 2'/);
-    assert.match(mapPanelSource, /id: `\$\{element\.id\}-glyph`,[\s\S]*layer: 'line',[\s\S]*gameIcon: true/);
+    assert.match(mapPanelSource, /id: `\$\{element\.id\}-symbol`,[\s\S]*layer: 'line',[\s\S]*symbolIcon,/);
     assert.match(mapPanelSource, /const avatarImageItems = computed<MapAvatarImageItem\[\]>/);
     assert.match(mapPanelSource, /<clipPath[\s\S]*v-for="item in avatarImageItems"[\s\S]*:id="svgDefId\(item\.avatarClipId\)"[\s\S]*<circle[\s\S]*:r="item\.avatarSize \/ 2"/);
     assert.match(mapPanelSource, /<image[\s\S]*v-for="item in avatarImageItems"[\s\S]*:clip-path="scopeSvgUrl\(`url\(#\$\{item\.avatarClipId\}\)`\)"[\s\S]*preserveAspectRatio="xMidYMid slice"/);
@@ -986,14 +1048,16 @@ test('tavern scene map player marker uses current user identity instead of gener
     assert.doesNotMatch(mapPanelSource, /#4ea1ff/);
 });
 
-test('tavern map glyph attribution keeps runtime license metadata', () => {
-    const glyphSource = readRepoFile('modules/tavern/app-src/map-glyphs.ts');
+test('tavern map icons use Material Symbols vendor licensing instead of runtime legacy attribution', () => {
+    const mapPanelSource = readRepoFile('modules/tavern/app-src/components/TavernMapPanel.vue');
+    const atlasPanelSource = readRepoFile('modules/tavern/app-src/components/TavernAtlasPanel.vue');
+    const noticeSource = readRepoFile('docs/NOTICE');
+    const licenseSource = readRepoFile('docs/LICENSE.md');
 
-    assert.match(glyphSource, /export const TAVERN_MAP_ICON_LICENSE = \{/);
-    assert.match(glyphSource, /name: 'CC BY 3\.0'/);
-    assert.match(glyphSource, /url: 'https:\/\/creativecommons\.org\/licenses\/by\/3\.0\/'/);
-    assert.match(glyphSource, /source: 'https:\/\/game-icons\.net'/);
-    assert.match(glyphSource, /TAVERN_MAP_ICON_ATTRIBUTION = TAVERN_MAP_ICON_LICENSE\.attribution/);
+    assert.doesNotMatch(mapPanelSource, new RegExp(['TAVERN_MAP_ICON_' + 'ATTRIBUTION', 'map-' + 'glyphs'].join('|')));
+    assert.doesNotMatch(atlasPanelSource, new RegExp(['TAVERN_MAP_ICON_' + 'ATTRIBUTION', 'map-' + 'glyphs'].join('|')));
+    assert.match(noticeSource, /Material Symbols[\s\S]*Local license copy: libs\/material-symbols\/LICENSE/);
+    assert.match(licenseSource, /libs\/\*/);
 });
 
 test('tavern atlas only opens scene maps that actually exist', () => {

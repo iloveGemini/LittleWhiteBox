@@ -108,7 +108,7 @@ export function zOf(cat: unknown, material?: unknown): number {
     if (category === 'terrain') {return 10;}
     if (category === 'water') {return 20;}
     if (category === 'road') {return 30;}
-    if (category === 'furniture') {return 40;}
+    if (category === 'furniture' || category === 'decoration') {return 40;}
     if (category === 'danger' || category === 'secret') {return 50;}
     if (category === 'magic') {return 60;}
     return 90;
@@ -139,6 +139,7 @@ function semanticElementShape(element: TavernMapElement): Record<string, unknown
         'circle',
         'path',
         'curve',
+        'shape',
         'icon',
         'closed',
     ] as const).forEach((key) => {
@@ -166,6 +167,7 @@ export function semanticFingerprint(document: TavernMapDocument): unknown {
             if (element.material) {next.material = element.material;}
             if (element.certainty) {next.certainty = element.certainty;}
             if (element.actorKey) {next.actorKey = element.actorKey;}
+            if (element.kind) {next.kind = element.kind;}
             if (element.fill) {next.fill = element.fill;}
             if (element.style) {next.style = roundValue(element.style);}
             if (element.text) {next.text = element.text;}

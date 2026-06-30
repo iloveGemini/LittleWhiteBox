@@ -1,6 +1,6 @@
 import type { TavernMapDocument, TavernMapElement } from '../shared/structured-state';
 import { materialEntry } from '../shared/map-semantics';
-import { getTavernMapIconRenderSize } from './map-glyphs';
+import { TAVERN_MAP_MATERIAL_SYMBOL_SIZE } from '../shared/map-material-symbols';
 
 export interface TavernMapBounds {
     minX: number;
@@ -95,8 +95,8 @@ function circleBounds(element: TavernMapElement): TavernMapBounds | null {
 }
 
 function iconBounds(element: TavernMapElement): TavernMapBounds | null {
-    if (!element.icon) {return null;}
-    const half = getTavernMapIconRenderSize(element.icon) / 2;
+    if (element.shape !== 'icon' && !element.icon) {return null;}
+    const half = TAVERN_MAP_MATERIAL_SYMBOL_SIZE / 2;
     return createBounds(element.at[0] - half, element.at[1] - half, element.at[0] + half, element.at[1] + half);
 }
 
@@ -138,7 +138,7 @@ export function getTavernMapElementBounds(element: TavernMapElement): TavernMapB
         bounds = pointsBounds(absolutePoints(element, element.path));
     } else if (element.curve) {
         bounds = pointsBounds(absolutePoints(element, element.curve));
-    } else if (element.icon) {
+    } else if (element.shape === 'icon' || element.icon) {
         bounds = iconBounds(element);
     } else if (element.text) {
         bounds = textBounds(element);
