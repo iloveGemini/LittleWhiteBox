@@ -30,6 +30,7 @@ import type {
 import type { TavernDisplaySettings, TavernUserOption } from '../../shared/settings';
 import type { TavernCharacterArchiveProgress } from '../../shared/character-archive-types';
 import type { TavernMapStateDocumentItem } from '../../shared/structured-state';
+import type { TavernStatusFieldDeltaMap } from '../../shared/status-state';
 import type { TavernDrawContext } from '../features/draw/useTavernDrawController';
 export type { TavernDisplaySettings, TavernUserOption } from '../../shared/settings';
 
@@ -509,6 +510,9 @@ export interface TavernWorkspaceContext {
     mapStateDocuments: Ref<TavernMapStateDocumentItem[]>;
     mapStateDocument: Ref<TavernStructuredStateDocumentRecord | null>;
     mapStatePatches: Ref<TavernStructuredStatePatchRecord[]>;
+    statusFieldDeltas: Ref<TavernStatusFieldDeltaMap>;
+    statusStateDocument: Ref<TavernStructuredStateDocumentRecord | null>;
+    statusStatePatches: Ref<TavernStructuredStatePatchRecord[]>;
     saveSessionContract: TavernCommand<[nextContract?: Partial<TavernSessionContract>], Promise<TavernSessionRecord | null>>;
     sessionContract: TavernReadable<TavernSessionContract>;
     stateMemoryFile: Ref<TavernMemoryFileRecord | null>;

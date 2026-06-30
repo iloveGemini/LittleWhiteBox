@@ -3,6 +3,7 @@ export type TavernContractTier = 'silent-operations' | 'fate-arbitration' | 'nar
 export type TavernContractPermissionKey =
     | 'memoryArchiving'
     | 'cartographyEngine'
+    | 'statusPanel'
     | 'actionChecks'
     | 'randomEncounters'
     | 'questOrchestration';
@@ -10,6 +11,7 @@ export type TavernContractPermissionKey =
 export interface TavernSessionContract {
     memoryArchiving: boolean;
     cartographyEngine: boolean;
+    statusPanel: boolean;
     actionChecks: boolean;
     randomEncounters: boolean;
     questOrchestration: boolean;
@@ -18,17 +20,20 @@ export interface TavernSessionContract {
 export interface TavernContractManagerPromptOptions {
     includeMemory: boolean;
     includeCartography: boolean;
+    includeStatus: boolean;
     includeQuestOrchestration: boolean;
 }
 
 export interface TavernContractRuntimeCapability {
     includeMemoryFiles?: boolean;
     includeStructuredStates?: boolean;
+    includeStatusStates?: boolean;
     includeActionChecks?: boolean;
     includeRandomEncounters?: boolean;
     automaticManagerWork?: boolean;
     managerPromptMemory?: boolean;
     managerPromptCartography?: boolean;
+    managerPromptStatus?: boolean;
 }
 
 export interface TavernSessionContractRuntime {
@@ -36,6 +41,7 @@ export interface TavernSessionContractRuntime {
     enabledKeys: TavernContractPermissionKey[];
     includeMemoryFiles: boolean;
     includeStructuredStates: boolean;
+    includeStatusStates: boolean;
     includeActionChecks: boolean;
     includeRandomEncounters: boolean;
     includeQuestOrchestration: boolean;
@@ -55,6 +61,7 @@ export interface TavernContractMandateDefinition {
 export const DEFAULT_TAVERN_SESSION_CONTRACT: TavernSessionContract = {
     memoryArchiving: true,
     cartographyEngine: true,
+    statusPanel: true,
     actionChecks: true,
     randomEncounters: true,
     questOrchestration: false,
@@ -63,6 +70,7 @@ export const DEFAULT_TAVERN_SESSION_CONTRACT: TavernSessionContract = {
 export const TAVERN_SESSION_CONTRACT_KEYS: TavernContractPermissionKey[] = [
     'memoryArchiving',
     'cartographyEngine',
+    'statusPanel',
     'actionChecks',
     'randomEncounters',
     'questOrchestration',
@@ -90,6 +98,14 @@ export const TAVERN_CONTRACT_MANDATES: TavernContractMandateDefinition[] = [
         title: '制图引擎',
         summary: '',
         description: '允许代理人在你探索时生成、更新和渲染空间数据。随着叙事展开，区域、地标和兴趣点将在附录面板中逐渐显现。',
+    },
+    {
+        key: 'statusPanel',
+        tier: 'silent-operations',
+        icon: '档',
+        title: '角色档案',
+        summary: '',
+        description: '授权代理人持续记录状态面板。属性、状态、随身之物与关系亲疏，将被默默记录与更新。',
     },
     {
         key: 'actionChecks',
@@ -128,6 +144,11 @@ export const TAVERN_CONTRACT_RUNTIME_CAPABILITIES: Record<TavernContractPermissi
         automaticManagerWork: true,
         managerPromptCartography: true,
     },
+    statusPanel: {
+        includeStatusStates: true,
+        automaticManagerWork: true,
+        managerPromptStatus: true,
+    },
     actionChecks: {
         includeActionChecks: true,
     },
@@ -144,6 +165,7 @@ export function normalizeTavernSessionContract(value: unknown): TavernSessionCon
     return {
         memoryArchiving: 'memoryArchiving' in source ? Boolean(source.memoryArchiving) : DEFAULT_TAVERN_SESSION_CONTRACT.memoryArchiving,
         cartographyEngine: 'cartographyEngine' in source ? Boolean(source.cartographyEngine) : DEFAULT_TAVERN_SESSION_CONTRACT.cartographyEngine,
+        statusPanel: 'statusPanel' in source ? Boolean(source.statusPanel) : DEFAULT_TAVERN_SESSION_CONTRACT.statusPanel,
         actionChecks: 'actionChecks' in source ? Boolean(source.actionChecks) : DEFAULT_TAVERN_SESSION_CONTRACT.actionChecks,
         randomEncounters: 'randomEncounters' in source ? Boolean(source.randomEncounters) : DEFAULT_TAVERN_SESSION_CONTRACT.randomEncounters,
         questOrchestration: 'questOrchestration' in source ? Boolean(source.questOrchestration) : DEFAULT_TAVERN_SESSION_CONTRACT.questOrchestration,
@@ -186,6 +208,7 @@ export function resolveTavernSessionContractRuntime(
             ...current,
             includeMemoryFiles: current.includeMemoryFiles || capability.includeMemoryFiles === true,
             includeStructuredStates: current.includeStructuredStates || capability.includeStructuredStates === true,
+            includeStatusStates: current.includeStatusStates || capability.includeStatusStates === true,
             includeActionChecks: current.includeActionChecks || capability.includeActionChecks === true,
             includeRandomEncounters: current.includeRandomEncounters || capability.includeRandomEncounters === true,
             includeQuestOrchestration: current.includeQuestOrchestration || key === 'questOrchestration',
@@ -193,6 +216,7 @@ export function resolveTavernSessionContractRuntime(
             managerPromptOptions: {
                 includeMemory: current.managerPromptOptions.includeMemory || capability.managerPromptMemory === true,
                 includeCartography: current.managerPromptOptions.includeCartography || capability.managerPromptCartography === true,
+                includeStatus: current.managerPromptOptions.includeStatus || capability.managerPromptStatus === true,
                 includeQuestOrchestration: current.managerPromptOptions.includeQuestOrchestration || key === 'questOrchestration',
             },
         };
@@ -201,6 +225,7 @@ export function resolveTavernSessionContractRuntime(
         enabledKeys,
         includeMemoryFiles: false,
         includeStructuredStates: false,
+        includeStatusStates: false,
         includeActionChecks: false,
         includeRandomEncounters: false,
         includeQuestOrchestration: false,
@@ -208,6 +233,7 @@ export function resolveTavernSessionContractRuntime(
         managerPromptOptions: {
             includeMemory: false,
             includeCartography: false,
+            includeStatus: false,
             includeQuestOrchestration: false,
         },
     });

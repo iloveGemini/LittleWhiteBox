@@ -6,6 +6,7 @@ import {
 } from '../../shared/session-contract';
 import { TAVERN_SOURCE_FILE_TOOL_NAMES, type TavernMemoryToolResult } from '../../shared/memory-files';
 import { TAVERN_STATE_TOOL_NAMES, type TavernStateToolResult } from '../../shared/structured-state';
+import { TAVERN_STATUS_TOOL_NAMES, type TavernStatusToolResult } from '../../shared/status-state';
 import { TAVERN_TASK_TOOL_NAMES, type TavernTaskToolResult } from '../../shared/tasks';
 
 const SOURCE_READ_TOOL_NAMES: string[] = [
@@ -24,6 +25,7 @@ const MODEL_STATE_TOOL_NAMES: string[] = [
     TAVERN_STATE_TOOL_NAMES.EDIT_SCENE,
 ];
 const TASK_TOOL_NAMES: string[] = Object.values(TAVERN_TASK_TOOL_NAMES);
+const STATUS_TOOL_NAMES: string[] = Object.values(TAVERN_STATUS_TOOL_NAMES);
 
 export interface TavernAutoManagerToolPolicy {
     runtime: TavernSessionContractRuntime;
@@ -31,11 +33,12 @@ export interface TavernAutoManagerToolPolicy {
     deniedToolNames: string[];
 }
 
-function getAutoManagerToolModuleKey(toolName = ''): 'memoryArchiving' | 'cartographyEngine' | 'questOrchestration' | null {
+function getAutoManagerToolModuleKey(toolName = ''): 'memoryArchiving' | 'cartographyEngine' | 'statusPanel' | 'questOrchestration' | null {
     const name = String(toolName || '').trim();
     if (!name || SOURCE_READ_TOOL_NAMES.includes(name)) {return null;}
     if (SOURCE_WRITE_TOOL_NAMES.includes(name)) {return 'memoryArchiving';}
     if (INTERNAL_STATE_TOOL_NAMES.includes(name)) {return 'cartographyEngine';}
+    if (STATUS_TOOL_NAMES.includes(name)) {return 'statusPanel';}
     if (TASK_TOOL_NAMES.includes(name)) {return 'questOrchestration';}
     return null;
 }
@@ -46,6 +49,10 @@ function isStateToolName(toolName = ''): boolean {
 
 function isTaskToolName(toolName = ''): boolean {
     return TASK_TOOL_NAMES.includes(String(toolName || '').trim());
+}
+
+function isStatusToolName(toolName = ''): boolean {
+    return STATUS_TOOL_NAMES.includes(String(toolName || '').trim());
 }
 
 export function resolveTavernAutoManagerToolPolicy(
@@ -59,11 +66,14 @@ export function resolveTavernAutoManagerToolPolicy(
     if (runtime.includeStructuredStates) {
         allowedToolNames.push(...MODEL_STATE_TOOL_NAMES);
     }
+    if (runtime.includeStatusStates) {
+        allowedToolNames.push(...STATUS_TOOL_NAMES);
+    }
     if (runtime.includeQuestOrchestration) {
         allowedToolNames.push(...TASK_TOOL_NAMES);
     }
     const allowed = new Set(allowedToolNames);
-    const deniedToolNames = [...SOURCE_WRITE_TOOL_NAMES, ...INTERNAL_STATE_TOOL_NAMES, ...TASK_TOOL_NAMES].filter((name) => !allowed.has(name));
+    const deniedToolNames = [...SOURCE_WRITE_TOOL_NAMES, ...INTERNAL_STATE_TOOL_NAMES, ...STATUS_TOOL_NAMES, ...TASK_TOOL_NAMES].filter((name) => !allowed.has(name));
     return {
         runtime,
         allowedToolNames: [...allowed],
@@ -90,7 +100,7 @@ export function isAutoManagerToolAllowed(
 export function buildDeniedAutoManagerToolResult(
     toolName = '',
     contract?: Partial<TavernSessionContract> | null,
-): TavernMemoryToolResult | TavernStateToolResult | TavernTaskToolResult {
+): TavernMemoryToolResult | TavernStateToolResult | TavernStatusToolResult | TavernTaskToolResult {
     const name = String(toolName || '').trim();
     const moduleKey = getAutoManagerToolModuleKey(name);
     const moduleTitle = moduleKey
@@ -111,6 +121,17 @@ export function buildDeniedAutoManagerToolResult(
         };
     }
     if (isTaskToolName(name)) {
+        return {
+            ok: false,
+            summary,
+            changed: false,
+            error: 'contract_tool_unauthorized',
+            warnings: resolveTavernAutoManagerToolPolicy(contract).runtime.hasAutomaticManagerWork
+                ? []
+                : ['contract_manager_work_disabled'],
+        };
+    }
+    if (isStatusToolName(name)) {
         return {
             ok: false,
             summary,

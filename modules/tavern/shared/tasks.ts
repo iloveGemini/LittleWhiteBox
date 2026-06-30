@@ -255,9 +255,9 @@ export async function saveTavernTaskSnapshot(sessionId = '', floorInput?: number
         if (floor === TAVERN_TASK_BASELINE_FLOOR && !tasks.length && !abandonedFingerprints.length) {
             return null;
         }
-        const latest = await getLatestTavernTaskSnapshot(id);
+        const effective = await getLatestTavernTaskSnapshot(id, floor);
         const currentFingerprint = hashText(taskHashPayload(tasks, abandonedFingerprints));
-        if (latest && snapshotFingerprint(latest) === currentFingerprint) {
+        if (effective && snapshotFingerprint(effective) === currentFingerprint) {
             return null;
         }
         const record: TavernTaskSnapshotRecord = {

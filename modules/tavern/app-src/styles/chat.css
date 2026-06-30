@@ -5,4 +5,5 @@
 @import './chat/contract.css';
 @import './chat/memory-editor.css';
 @import './chat/map.css';
+@import './chat/status-panel.css';
 @import './chat/markdown.css';

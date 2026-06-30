@@ -66,6 +66,7 @@ import {
     runXbTavernManagerAfterTurn,
     runPendingAcceptedTurnManager,
 } from '../app-src/runtime/manager';
+import { rollbackImpactLines } from '../app-src/features/accepted-rollback/accepted-rollback';
 import {
     buildDefaultTavernCharacterMemoryContent,
     buildDefaultTavernMemoryStateContent,
@@ -102,6 +103,11 @@ import {
     type TavernAtlasDocument,
     type TavernMapDocument,
 } from '../shared/structured-state';
+import {
+    TAVERN_STATUS_TOOL_NAMES,
+    executeTavernStatusTool,
+    listTavernStatusSnapshots,
+} from '../shared/status-state';
 import {
     abandonStaleTavernTasks,
     describeTavernTaskRestoreImpact,
@@ -609,6 +615,7 @@ test('replaceTavernSessionState preserves stored contract when runtime rebuild o
             contract: {
                 memoryArchiving: false,
                 cartographyEngine: false,
+                statusPanel: true,
                 actionChecks: true,
                 randomEncounters: true,
                 questOrchestration: false,
@@ -634,6 +641,7 @@ test('replaceTavernSessionState preserves stored contract when runtime rebuild o
         contract: {
             memoryArchiving: false,
             cartographyEngine: false,
+            statusPanel: true,
             actionChecks: true,
             randomEncounters: true,
             questOrchestration: false,
@@ -3900,7 +3908,7 @@ test('event snapshots restore covering event pool and trim future snapshots', as
     assert.deepEqual((await listTavernTaskSnapshots(session.id)).map((snapshot) => snapshot.floor), [5]);
 });
 
-test('accepted state snapshot saves memory and tasks on the same floor', async () => {
+test('accepted state snapshot saves memory, tasks, and status on the same floor', async () => {
     await db.delete();
     await db.open();
 
@@ -3917,13 +3925,34 @@ test('accepted state snapshot saves memory and tasks on the same floor', async (
         doneWhen: '角色当场说出答案。',
         hookForModel: '同楼层软句。',
     }, { sourceAssistantOrder: 1 });
+    await executeTavernStatusTool(session.id, TAVERN_STATUS_TOOL_NAMES.INIT, {
+        document: {
+            meta: { activeSubject: 'user' },
+            subjects: [{
+                id: 'user',
+                name: '测试角色',
+                tabs: [{
+                    id: 'overview',
+                    label: '概览',
+                    blocks: [{
+                        id: 'stats',
+                        title: '属性',
+                        form: 'gauge',
+                        fields: [{ id: 'san', name: '理智', value: 50, max: 100 }],
+                    }],
+                }],
+            }],
+        },
+    }, { sourceAssistantOrder: 1 });
 
     const saved = await saveAcceptedStateSnapshot(session.id);
     assert.equal(saved.floor, 1);
     assert.equal(saved.memorySnapshotSaved, true);
     assert.equal(saved.taskSnapshotSaved, true);
+    assert.equal(saved.statusSnapshotSaved, true);
     assert.equal((await listTavernMemorySnapshots(session.id))[0]?.floor, 1);
     assert.equal((await listTavernTaskSnapshots(session.id))[0]?.floor, 1);
+    assert.equal((await listTavernStatusSnapshots(session.id))[0]?.floor, 1);
 });
 
 test('accepted state snapshot can explicitly anchor user-confirmed memory edits to the latest user order', async () => {
@@ -4004,6 +4033,66 @@ test('accepted state snapshot can anchor user-initiated manager chat changes to 
     assert.deepEqual(result.changedFiles, ['memory/state.md']);
     assert.equal(saved.floor, userMessage.order);
     assert.deepEqual((await listTavernMemorySnapshots(session.id)).map((snapshot) => snapshot.floor), [userMessage.order]);
+});
+
+test('accepted state snapshots use floor-aware dedupe for memory, tasks, and status', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Floor-aware accepted snapshots' });
+    await appendTavernMessage(session.id, { role: 'user', content: '第一轮。' });
+    const assistant1 = await appendTavernMessage(session.id, { role: 'assistant', content: '第一轮回复。' });
+    const user2 = await appendTavernMessage(session.id, { role: 'user', content: '请按我的修正更新。' });
+    const assistant2 = await appendTavernMessage(session.id, { role: 'assistant', content: '已更新。' });
+
+    await writeTavernMemoryFile(session.id, 'memory/state.md', '# 会话记忆\n\n旧状态。', { source: 'manager' });
+    await executeTavernStatusTool(session.id, TAVERN_STATUS_TOOL_NAMES.INIT, {
+        document: {
+            meta: { activeSubject: 'user' },
+            subjects: [{
+                id: 'user',
+                name: '测试角色',
+                tabs: [{
+                    id: 'overview',
+                    label: '概览',
+                    blocks: [{
+                        id: 'stats',
+                        title: '属性',
+                        form: 'gauge',
+                        fields: [{ id: 'san', name: '理智', value: 40, max: 100 }],
+                    }],
+                }],
+            }],
+        },
+    }, { sourceAssistantOrder: assistant1.order });
+    await saveAcceptedStateSnapshot(session.id, assistant1.order);
+
+    await writeTavernMemoryFile(session.id, 'memory/state.md', '# 会话记忆\n\n用户确认的新状态。', { source: 'user' });
+    await executeTavernTaskTool(session.id, 'EventPatch', {
+        op: 'upsert-event',
+        eventId: 'user-anchor-task',
+        title: '用户锚点事件',
+        horizon: '用户锚点远景',
+        current: '用户锚点当前',
+        doneWhen: '用户锚点完成。',
+        hookForModel: '用户锚点软句。',
+    }, { sourceAssistantOrder: assistant2.order });
+    await executeTavernStatusTool(session.id, TAVERN_STATUS_TOOL_NAMES.PATCH, {
+        ops: [
+            { op: 'set', subjectId: 'user', tabId: 'overview', blockId: 'stats', fieldId: 'san', value: 80 },
+        ],
+    }, { caller: 'chat' });
+
+    await saveAcceptedStateSnapshot(session.id, assistant2.order);
+    const userAnchor = await saveAcceptedStateSnapshot(session.id, user2.order);
+
+    assert.equal(userAnchor.floor, user2.order);
+    assert.equal(userAnchor.memorySnapshotSaved, true);
+    assert.equal(userAnchor.taskSnapshotSaved, true);
+    assert.equal(userAnchor.statusSnapshotSaved, true);
+    assert.deepEqual((await listTavernMemorySnapshots(session.id)).map((snapshot) => snapshot.floor), [assistant1.order, user2.order, assistant2.order]);
+    assert.deepEqual((await listTavernTaskSnapshots(session.id)).map((snapshot) => snapshot.floor), [assistant1.order, user2.order, assistant2.order]);
+    assert.deepEqual((await listTavernStatusSnapshots(session.id)).map((snapshot) => snapshot.floor), [assistant1.order, user2.order, assistant2.order]);
 });
 
 test('accepted state snapshot preserves user memory edits against later rollback', async () => {
@@ -5872,6 +5961,65 @@ test('rollback impact ignores old manager writes once current memory and tasks a
     assert.equal(managerImpact.hasWrittenState, true);
     assert.equal(managerImpact.writtenMemoryFiles, 1);
     assert.equal(managerImpact.writtenTaskRuns, 1);
+});
+
+test('rollback impact reports status-only manager writes as state rollback', async () => {
+    await db.delete();
+    await db.open();
+
+    const session = await createTavernSession({ title: 'Status rollback impact' });
+    const userMessage = await appendTavernMessage(session.id, { role: 'user', content: '第一轮。' });
+    const assistantMessage = await appendTavernMessage(session.id, { role: 'assistant', content: '第一轮回复。' });
+    const run = await createTavernManagerRun({
+        sessionId: session.id,
+        turn: 1,
+        userOrder: userMessage.order,
+        assistantOrder: assistantMessage.order,
+        trigger: 'after_turn',
+        status: 'completed',
+    });
+
+    const write = await executeTavernStatusTool(session.id, TAVERN_STATUS_TOOL_NAMES.INIT, {
+        document: {
+            meta: { activeSubject: 'user' },
+            subjects: [{
+                id: 'user',
+                name: '测试角色',
+                tabs: [{
+                    id: 'overview',
+                    label: '概览',
+                    blocks: [{
+                        id: 'stats',
+                        title: '属性',
+                        form: 'gauge',
+                        fields: [{ id: 'san', name: '理智', value: 50, max: 100 }],
+                    }],
+                }],
+            }],
+        },
+    }, {
+        caller: 'auto',
+        managerRunId: run.id,
+        sourceUserOrder: userMessage.order,
+        sourceAssistantOrder: assistantMessage.order,
+    });
+    assert.equal(write.ok, true);
+
+    const managerImpact = await describeXbTavernManagerRollbackImpactForMessageRange(session.id, assistantMessage.order);
+
+    assert.equal(managerImpact.hasWrittenState, true);
+    assert.equal(managerImpact.writtenMemoryFiles, 0);
+    assert.equal(managerImpact.writtenTaskRuns, 0);
+    assert.equal(managerImpact.writtenStatusPatches, 1);
+    assert.deepEqual(rollbackImpactLines({
+        targetFloor: assistantMessage.order - 1,
+        memory: { changed: false, currentFileCount: 0, targetFileCount: 0, changedPaths: [] },
+        tasks: { changed: false, currentTaskCount: 0, targetTaskCount: 0 },
+        status: { changed: true, currentExists: true, targetExists: false },
+        managers: managerImpact,
+        willRollbackState: true,
+        willCancelWork: false,
+    }), [`状态栏会恢复到第 ${assistantMessage.order} 楼后的状态。`]);
 });
 
 test('tavern manager memory rollback is idempotent', async () => {

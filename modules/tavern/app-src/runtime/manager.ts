@@ -40,6 +40,15 @@ import {
 } from '../../shared/session-db';
 import { executeTavernStateTool, TAVERN_STATE_TOOL_NAMES, type TavernStateToolResult } from '../../shared/structured-state';
 import {
+    describeStatusStateRollbackImpactForMessageRange,
+    executeTavernStatusTool,
+    isTavernStatusToolName,
+    rollbackStatusStateForManagerRun,
+    rollbackStatusStateForMessageRange,
+    TAVERN_STATUS_TOOL_NAMES,
+    type TavernStatusToolResult,
+} from '../../shared/status-state';
+import {
     abandonStaleTavernTasks,
     buildTavernTaskPoolPromptBlock,
     executeTavernTaskTool,
@@ -217,6 +226,12 @@ function getManagerToolArgumentSchemaHint(toolName = ''): string {
     if (toolName === TAVERN_STATE_TOOL_NAMES.PATCH) {
         return 'MapPatch is advanced/internal. Prefer MapSceneEdit with scene + elements using shape/geo/label. If you must use MapPatch, arguments must be a valid JSON object with an ops array.';
     }
+    if (toolName === TAVERN_STATUS_TOOL_NAMES.INIT) {
+        return 'Expected StatusInit arguments: {"document":{"meta":{"activeSubject":"user"},"subjects":[{"id":"user","name":"角色","tabs":[{"id":"overview","label":"概览","blocks":[{"id":"stats","title":"属性","form":"gauge","fields":[{"id":"san","name":"理智","value":62,"max":99}]}]}]}]}}.';
+    }
+    if (toolName === TAVERN_STATUS_TOOL_NAMES.PATCH) {
+        return 'Expected StatusPatch arguments: {"ops":[{"op":"delta","subjectId":"user","tabId":"overview","blockId":"stats","fieldId":"san","delta":-5}]}. Patch may only set/delta/push/remove fields inside existing blocks.';
+    }
     if (toolName === 'Edit') {
         return 'Expected Edit arguments: {"filePath":"memory/state.md","edits":[{"oldString":"...","newString":"..."}]} or line-range edits with startLine/endLine/newString.';
     }
@@ -274,7 +289,7 @@ function parseManagerToolArguments(toolCall: { name?: string; arguments?: unknow
 
 function buildManagerSystemPrompt(
     assistantPreset: TavernAssistantPreset | undefined,
-    options: { includeMemory?: boolean; includeCartography?: boolean; includeQuestOrchestration?: boolean } = {},
+    options: { includeMemory?: boolean; includeCartography?: boolean; includeStatus?: boolean; includeQuestOrchestration?: boolean } = {},
 ): string {
     return buildTavernManagerSystemPrompt(assistantPreset, options).trim();
 }
@@ -317,6 +332,7 @@ function buildAutoManagerUserPrompt(input: {
 }): string {
     const allowMemory = input.runtime.managerPromptOptions.includeMemory;
     const allowMap = input.runtime.managerPromptOptions.includeCartography;
+    const allowStatus = input.runtime.managerPromptOptions.includeStatus;
     const allowQuest = input.runtime.managerPromptOptions.includeQuestOrchestration;
     const playerName = normalizeText(input.playerName, 80);
     const requirements: string[] = [];
@@ -331,6 +347,10 @@ function buildAutoManagerUserPrompt(input: {
         requirements.push(`${step}. Spatial maintenance uses map files: read \`world\` with MapAtlasRead, then edit an explicit scene name with MapSceneEdit. Move the player in \`world\` only when the story reaches a new named or trackable place; small movement inside the same place belongs in that scene map actor coordinates.`);
         step += 1;
     }
+    if (allowStatus) {
+        requirements.push(`${step}. 状态栏：先用 StatusRead 查看当前状态面板。若尚未初始化，就按“状态栏”助手预设用 StatusInit 建满骨架；若已存在，只用 StatusPatch 更新本轮确实改变的已有 block 内字段。不要新增 subject/tab/block/form，不要把状态栏内容写进记忆文件。`);
+        step += 1;
+    }
     if (allowMemory && allowMap) {
         requirements.push(`${step}. Maintain \`memory/state.md\` for global memory and \`memory/characters/<角色名>.md\` for character memory. The map does not replace written memory.`);
         step += 1;
@@ -340,7 +360,7 @@ function buildAutoManagerUserPrompt(input: {
     } else if (allowMap) {
         requirements.push(`${step}. This contract authorizes only the map system. Do not write memory Markdown.`);
         step += 1;
-    } else if (!allowQuest) {
+    } else if (!allowStatus && !allowQuest) {
         requirements.push(`${step}. This contract authorizes neither background memory nor map maintenance. Do not write memory or map records; clearly say that you skipped it.`);
         step += 1;
     }
@@ -439,7 +459,7 @@ function summarizeToolArguments(args: Record<string, unknown> = {}): string {
         .join('; ');
 }
 
-function summarizeToolResult(result: TavernMemoryToolResult | TavernStateToolResult | TavernTaskToolResult): string {
+function summarizeToolResult(result: TavernMemoryToolResult | TavernStateToolResult | TavernStatusToolResult | TavernTaskToolResult): string {
     const summary = normalizeText(result.summary || result.error || '', 360);
     if (result.ok !== false) {return summary;}
     const details = (result as { details?: unknown }).details;
@@ -461,6 +481,10 @@ function isStateToolName(name = ''): boolean {
 
 function isTaskToolName(name = ''): boolean {
     return Object.values(TAVERN_TASK_TOOL_NAMES).includes(name as typeof TAVERN_TASK_TOOL_NAMES[keyof typeof TAVERN_TASK_TOOL_NAMES]);
+}
+
+function isStatusToolName(name = ''): boolean {
+    return isTavernStatusToolName(name);
 }
 
 function isSourceFileToolName(name = ''): boolean {
@@ -515,7 +539,9 @@ async function rollbackManagerRunIfWroteMemory(managerRunId = ''): Promise<{
     ]);
     const hasMemoryWrites = memorySnapshots.some((snapshot) => String(snapshot.afterHash || '').trim());
     const hasTaskWrites = taskSnapshots.some((snapshot) => String(snapshot.afterHash || '').trim());
-    if (!hasMemoryWrites && !hasTaskWrites) {
+    const statusResult = await rollbackStatusStateForManagerRun(managerRunId);
+    const hasStatusWrites = statusResult.rolledBack > 0 || statusResult.skipped > 0 || statusResult.conflicts.length > 0;
+    if (!hasMemoryWrites && !hasTaskWrites && !hasStatusWrites) {
         return null;
     }
     const memoryResult = hasMemoryWrites
@@ -524,11 +550,16 @@ async function rollbackManagerRunIfWroteMemory(managerRunId = ''): Promise<{
     const taskResult = hasTaskWrites
         ? await rollbackManagerRunTaskWrites(managerRunId)
         : { rolledBack: 0, conflicts: [], skipped: 0 };
-    const conflicts = [...memoryResult.conflicts, ...taskResult.conflicts];
+    const conflicts = [...memoryResult.conflicts, ...taskResult.conflicts, ...statusResult.conflicts];
     const run = await updateTavernManagerRun(managerRunId, {});
     if (run && conflicts.length) {
         await updateTavernManagerRun(managerRunId, {
             error: mergeRollbackRunError(run.error, conflicts),
+        });
+    } else if (run && hasStatusWrites && !hasMemoryWrites && !hasTaskWrites) {
+        await updateTavernManagerRun(managerRunId, {
+            status: 'rolled_back',
+            error: '',
         });
     }
     return {
@@ -828,7 +859,7 @@ async function runManagerAgentWithTools(input: {
             };
             toolTrace.push(traceEntry);
             await persistRunningManagerToolTrace(input.managerRunId, toolTrace);
-            let toolResult: TavernMemoryToolResult | TavernStateToolResult | TavernTaskToolResult;
+            let toolResult: TavernMemoryToolResult | TavernStateToolResult | TavernStatusToolResult | TavernTaskToolResult;
             if (!parsedArguments.ok) {
                 toolResult = parsedArguments.result!;
             } else if (input.caller === 'auto' && !isAutoManagerToolAllowed(toolCall.name, input.sessionContract)) {
@@ -845,6 +876,14 @@ async function runManagerAgentWithTools(input: {
                 });
             } else if (isStateToolName(toolCall.name)) {
                 toolResult = await executeTavernStateTool(input.sessionId, toolCall.name, args, {
+                    caller: input.caller,
+                    managerRunId: input.managerRunId,
+                    sourceUserOrder: input.userOrder,
+                    sourceAssistantOrder: input.assistantOrder,
+                    beforeWriteGuard: input.beforeWriteGuard,
+                });
+            } else if (isStatusToolName(toolCall.name)) {
+                toolResult = await executeTavernStatusTool(input.sessionId, toolCall.name, args, {
                     caller: input.caller,
                     managerRunId: input.managerRunId,
                     sourceUserOrder: input.userOrder,
@@ -1814,16 +1853,18 @@ export async function describeXbTavernManagerRollbackImpactForMessageRange(sessi
     pendingRuns: number;
     writtenMemoryFiles: number;
     writtenTaskRuns: number;
+    writtenStatusPatches: number;
     hasWrittenState: boolean;
 }> {
     const id = String(sessionId || '').trim();
     const order = Number(fromOrder);
     if (!id || !Number.isFinite(order)) {
-        return { affectedRuns: 0, pendingRuns: 0, writtenMemoryFiles: 0, writtenTaskRuns: 0, hasWrittenState: false };
+        return { affectedRuns: 0, pendingRuns: 0, writtenMemoryFiles: 0, writtenTaskRuns: 0, writtenStatusPatches: 0, hasWrittenState: false };
     }
     const runs = (await listTavernManagerRuns(id))
         .filter((run) => ['accepted_turn', 'after_turn'].includes(run.trigger)
             && (Number(run.userOrder) >= order || Number(run.assistantOrder) >= order));
+    const statusImpact = await describeStatusStateRollbackImpactForMessageRange(id, order);
     let pendingRuns = 0;
     let writtenMemoryFiles = 0;
     let writtenTaskRuns = 0;
@@ -1843,7 +1884,8 @@ export async function describeXbTavernManagerRollbackImpactForMessageRange(sessi
         pendingRuns,
         writtenMemoryFiles,
         writtenTaskRuns,
-        hasWrittenState: writtenMemoryFiles > 0 || writtenTaskRuns > 0,
+        writtenStatusPatches: statusImpact.writtenStatusPatches,
+        hasWrittenState: writtenMemoryFiles > 0 || writtenTaskRuns > 0 || statusImpact.changed,
     };
 }
 
@@ -1865,6 +1907,7 @@ export async function cancelAndRollbackXbTavernManagersForMessageRange(sessionId
         }
     });
     const memory = await rollbackManagerRunsForMessageRange(id, order);
+    const status = await rollbackStatusStateForMessageRange(id, order);
     let taskRolledBack = 0;
     let taskSkipped = 0;
     const taskConflicts: string[] = [];
@@ -1877,9 +1920,9 @@ export async function cancelAndRollbackXbTavernManagersForMessageRange(sessionId
         taskConflicts.push(...result.conflicts);
     }
     return {
-        runIds: [...new Set([...memory.runIds])],
-        rolledBack: memory.rolledBack + taskRolledBack,
-        conflicts: [...memory.conflicts, ...taskConflicts],
-        skipped: memory.skipped + taskSkipped,
+        runIds: [...new Set([...memory.runIds, ...status.runIds])],
+        rolledBack: memory.rolledBack + taskRolledBack + status.rolledBack,
+        conflicts: [...memory.conflicts, ...taskConflicts, ...status.conflicts],
+        skipped: memory.skipped + taskSkipped + status.skipped,
     };
 }

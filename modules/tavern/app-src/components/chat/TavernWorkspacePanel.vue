@@ -4,6 +4,7 @@ import TavernAtlasPanel from '../TavernAtlasPanel.vue';
 import TavernEventPanel from '../TavernEventPanel.vue';
 import TavernMapPanel from '../TavernMapPanel.vue';
 import TavernMemoryEditor from '../TavernMemoryEditor.vue';
+import TavernStatusPanel from '../TavernStatusPanel.vue';
 import { useTavernMemoryContext, useTavernSessionContext, useTavernWorkspaceContext } from '../tavern-app-context';
 import { useMobileSheetDrag } from './useMobileSheetDrag';
 import { buildSeedLabelId, createSeedMapDocument, isSeedLabelId } from '../../../shared/map-state-seed';
@@ -62,6 +63,8 @@ const {
     mapStateDocument,
     mapStatePatches,
     sessionContract,
+    statusFieldDeltas,
+    statusStateDocument,
     tavernTasks,
 } = workspace;
 const {
@@ -274,8 +277,8 @@ function selectDirectoryMemoryFile(path: string) {
       type="button"
       class="chat-mobile-sheet-handle"
       :class="{ 'is-dragging': sheetHandleDragging }"
-      title="收起记忆面板"
-      aria-label="收起记忆面板"
+      title="收起面板"
+      aria-label="收起面板"
       @click="closeMobileChatPanel"
       @pointercancel="handleSheetHandlePointerCancel"
       @pointerdown="handleSheetHandlePointerDown"
@@ -289,6 +292,13 @@ function selectDirectoryMemoryFile(path: string) {
         @click="chatWorkspacePanel = 'map'"
       >
         地图
+      </button>
+      <button
+        type="button"
+        :class="{ active: chatWorkspacePanel === 'status' }"
+        @click="chatWorkspacePanel = 'status'"
+      >
+        状态
       </button>
       <button
         type="button"
@@ -420,6 +430,16 @@ function selectDirectoryMemoryFile(path: string) {
       </article>
     </section>
     <section
+      v-else-if="chatWorkspacePanel === 'status'"
+      class="tavern-status-workspace"
+    >
+      <TavernStatusPanel
+        :document="statusStateDocument"
+        :field-deltas="statusFieldDeltas"
+        :enabled="sessionContract.statusPanel"
+      />
+    </section>
+    <section
       v-else-if="chatWorkspacePanel === 'memory'"
       class="tavern-memory-workspace"
       :class="{ 'is-memory-directory-open': memoryDirectoryOpen }"
@@ -517,7 +537,7 @@ function selectDirectoryMemoryFile(path: string) {
       />
     </section>
     <TavernEventPanel
-      v-else
+      v-else-if="chatWorkspacePanel === 'event'"
       :tasks="tavernTasks"
       :enabled="sessionContract.questOrchestration"
       :assistant-floor="currentAssistantFloor"

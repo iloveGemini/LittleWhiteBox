@@ -697,6 +697,13 @@
         z-index: 86;
     }
 
+    .tavern-chat.xb-page .chat-app-menu-shell-mobile .chat-app-menu-return-home {
+        margin-top: 4px;
+        border-top: 1px solid var(--xb-rule);
+        border-radius: 0 0 7px 7px;
+        padding-top: 8px;
+    }
+
     .tavern-chat.xb-page .chat-mobile-icon-button {
         width: 30px;
         min-width: 30px;

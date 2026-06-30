@@ -6,6 +6,7 @@ export interface TavernAssistantPreset {
     description?: string;
     statePrompt: string;
     characterPrompt: string;
+    statusPrompt: string;
     updatedAt?: number;
 }
 
@@ -17,6 +18,7 @@ export const DEFAULT_TAVERN_ASSISTANT_PRESET_VERSION = '2026-06-assistant-prompt
 interface TavernManagerPromptOptions extends Partial<TavernContractManagerPromptOptions> {
     includeMemory?: boolean;
     includeCartography?: boolean;
+    includeStatus?: boolean;
     includeQuestOrchestration?: boolean;
 }
 
@@ -24,6 +26,7 @@ function normalizeManagerPromptOptions(options: TavernManagerPromptOptions = {})
     return {
         includeMemory: options.includeMemory !== false,
         includeCartography: options.includeCartography !== false,
+        includeStatus: options.includeStatus !== false,
         includeQuestOrchestration: options.includeQuestOrchestration === true,
     };
 }
@@ -34,7 +37,7 @@ function joinSection(title: string, lines: string[] = []): string {
 }
 
 function buildFixedManagerSystemPrompt(options: TavernManagerPromptOptions = {}): string {
-    const { includeMemory, includeCartography, includeQuestOrchestration } = normalizeManagerPromptOptions(options);
+    const { includeMemory, includeCartography, includeStatus, includeQuestOrchestration } = normalizeManagerPromptOptions(options);
 
     const roleLines = [
         'You are the backstage manager for the current LittleWhiteTavern RP session, running inside the user\'s SillyTavern instance through the LittleWhiteBox tavern workspace.',
@@ -42,6 +45,7 @@ function buildFixedManagerSystemPrompt(options: TavernManagerPromptOptions = {})
         'Two work modes share one identity and one evidence standard. Accepted-turn maintenance processes the previous RP turn after the user continues; manual manager chat answers the user\'s current question.',
         includeMemory ? 'When the Memory Archiving contract is on, maintain this session\'s Markdown memory files.' : '',
         includeCartography ? 'When the Cartography Engine contract is on, maintain this session\'s map and atlas records.' : '',
+        includeStatus ? 'When the Character Archive contract is on, maintain this session\'s structured status panel.' : '',
         includeQuestOrchestration ? 'When the Quest Orchestration contract is on, maintain a small rollbackable pool of possible next narrative directions.' : '',
     ];
 
@@ -76,6 +80,7 @@ function buildFixedManagerSystemPrompt(options: TavernManagerPromptOptions = {})
         'LS/Grep/Read inspect text sources: read-only `chat/`, read-only `worldbooks/`, and this session\'s `memory/`. Grep is literal by default; pass `useRegex:true` only when intentionally using regex.',
         includeMemory ? 'Edit/Write save memory only under `memory/state.md` and `memory/characters/<角色名>.md`.' : '',
         includeCartography ? 'MapAtlasRead reads `world`; MapSceneRead reads one scene; MapSceneEdit saves tolerant scene-map intent.' : '',
+        includeStatus ? 'StatusRead reads the status panel; StatusInit initializes the preset-defined skeleton; StatusPatch changes only existing block fields.' : '',
         includeQuestOrchestration ? 'EventInspect/EventPatch maintain the event direction pool (future hooks only).' : '',
         'Evidence routing: Grep with `path:"memory/"` asks whether a fact is already stored; Grep with `path:"chat/"` asks whether it actually happened in the RP. If you know the order, Read `chat/messages/<order>.md`; if you only have a keyword, Grep under `chat/`; if you only need recent continuity, Read `chat/transcript.md` with `tail`. Read may return part of a large file; continue with nextOffset or tail.',
         'Use tools when exact evidence, ids, line numbers, current records, or a real save matter. If a direct answer is enough, answer directly.',
@@ -93,7 +98,8 @@ function buildFixedManagerSystemPrompt(options: TavernManagerPromptOptions = {})
         includeMemory ? 'Long-term memory holds established facts only. Keep what happened, what the user requested, what you inferred, and what is still unconfirmed separate. Do not write guesses, plans, hidden reasoning, unconfirmed psychology, status-bar text, or UI metadata as settled facts. Character psychology and secrets become facts only after the RP source clearly establishes them.' : '',
         includeMemory && includeCartography ? 'Map and atlas records are separate from written memory and do not replace it; maintain textual facts and spatial changes in their own places.' : '',
         includeCartography ? 'Spatial records are map files: `world` is the atlas, and each detailed scene map is edited by explicit scene name with MapSceneEdit.' : '',
-        'Manual chat: answer the user first. Write memory or map records only when the user asks for a change, or when you verify a real error or omission. If the user is only asking, do not casually modify files.',
+        includeStatus ? 'Status panel records are UI state, not memory prose. Do not copy status-bar text into memory, and do not use memory files as the status panel source of truth.' : '',
+        'Manual chat: answer the user first. Write memory, map, or status records only when the user asks for a change, or when you verify a real error or omission. If the user is only asking, do not casually modify records.',
     ];
 
     const structuredStateLines = includeCartography ? [
@@ -119,6 +125,18 @@ function buildFixedManagerSystemPrompt(options: TavernManagerPromptOptions = {})
         'Actors use `cat:"actor"` and optional `actorKey`; use `actorKey:"player"` for the player marker. The runtime dedupes the same actor key across scene files.',
         'Labels are short and attached to visible geometry. Keep at least 20 units between elements. Place text labels 15-25 units beside what they describe, not on top of the shape center.',
         'If MapSceneEdit reports skipped elements, keep the saved elements and retry only the skipped element ids with corrected `shape`/`geo`. If nothing spatial changed, skip the map update.',
+    ] : [];
+
+    const statusLines = includeStatus ? [
+        'Status panel structure is preset-defined UI state. It is not a map actor system and has no automatic binding to map actors.',
+        'Subjects are user-defined dossier/page entries. Do not infer that a subject is the player, an NPC, or an entity unless the status preset says so.',
+        'Use StatusRead first. If no status document exists, use StatusInit once to build the full subject/tab/block skeleton from the user status preset.',
+        'StatusInit may create subjects, tabs, blocks, forms, and initial fields. It must follow the status preset strictly; do not add fields just because the character card or chat suggests they exist.',
+        'Runtime maintenance uses StatusPatch only. Allowed operations are set, delta, push, and remove field inside an existing block.',
+        'Never add a subject, tab, block, or change a block form with StatusPatch. New NPC relation, status tag, or inventory item means push a field into an existing relation/status/item block, not create a new subject or block.',
+        'Gauge values may use set or delta. Respect min/max/step when present; the tool will clamp values and report warnings.',
+        'Delta is derived from before/after patches by the renderer. Do not store delta, lastDelta, or _new in the status document.',
+        'If the accepted turn did not change anything visible in the status panel, skip StatusPatch.',
     ] : [];
 
     const questLines = includeQuestOrchestration ? [
@@ -149,6 +167,7 @@ function buildFixedManagerSystemPrompt(options: TavernManagerPromptOptions = {})
         '',
         joinSection('Work Loop', workLoopLines),
         structuredStateLines.length ? '\n' + joinSection('Map Records', structuredStateLines) : '',
+        statusLines.length ? '\n' + joinSection('Status Panel', statusLines) : '',
         questLines.length ? '\n' + joinSection('Event Orchestration', questLines) : '',
         '',
         joinSection('Output', outputLines),
@@ -236,12 +255,52 @@ export function buildDefaultCharacterMemoryPrompt(): string {
     ]);
 }
 
+export function buildDefaultStatusPanelPrompt(): string {
+    return joinLines([
+        '# 状态栏设定',
+        '',
+        '写法：每行可标“名称：形态”，形态可省略。形态四种：数值 / 标签 / 物品 / 文本。',
+        '原则：只维护本条目写到的内容；没写的项不智能补全。',
+        '',
+        '## 一、维护什么',
+        '',
+        '### 角色基础（文本）',
+        '- 姓名、身份、当前地点',
+        '',
+        '### 属性（数值，0-100）',
+        '- 力量、敏捷、感知、意志、魅力、学识',
+        '',
+        '### 状态（标签，动态增删）',
+        '- 临时状态：受伤、疲惫、恐惧、中毒等',
+        '',
+        '### 着装（物品，按部位）',
+        '- 头部、上身、下身、足部、配饰',
+        '',
+        '### 背包（物品，可带数量和来历）',
+        '- 持有的物品和线索',
+        '',
+        '### 关系（数值，名称=NPC名，值=好感度0-100）',
+        '- 重要NPC对“我”的好感度，每个NPC一条：NPC名：好感值；新NPC在已有关系 block 内增加字段',
+        '',
+        '## 二、怎么分页',
+        '',
+        '分三页：',
+        '- 第一页【概览】：基础信息 + 当前状态 + 着装',
+        '- 第二页【属性】：六维属性 + 关系',
+        '- 第三页【行囊】：背包',
+    ]);
+}
+
 function buildFixedStateMemoryDutyIntro(): string {
     return 'Maintain the current session\'s global long-term memory in `memory/state.md`. This target path and responsibility are fixed system contract; the user-editable preset only defines the file\'s internal format, content scope, and selection rules.';
 }
 
 function buildFixedCharacterMemoryDutyIntro(): string {
     return 'Maintain current-session character long-term memory in `memory/characters/<角色名>.md`. Use one file per character, with the filename as the entity name; the user-editable preset only defines the file\'s internal format, content scope, and selection rules.';
+}
+
+function buildFixedStatusPanelDutyIntro(): string {
+    return 'Maintain the current session structured status panel with StatusRead, StatusInit, and StatusPatch. The user-editable preset defines the skeleton and content scope; runtime updates may only change fields inside existing blocks.';
 }
 
 function normalizeAssistantSectionText(value: unknown, fallback: string): string {
@@ -263,9 +322,10 @@ function composeManagerSystemPrompt(
     input: Partial<TavernAssistantPreset> = {},
     options: TavernManagerPromptOptions = {},
 ): string {
-    const { includeMemory } = normalizeManagerPromptOptions(options);
+    const { includeMemory, includeStatus } = normalizeManagerPromptOptions(options);
     const statePrompt = normalizeText(input.statePrompt) || buildDefaultStateMemoryPrompt();
     const characterPrompt = normalizeText(input.characterPrompt) || buildDefaultCharacterMemoryPrompt();
+    const statusPrompt = normalizeText(input.statusPrompt) || buildDefaultStatusPanelPrompt();
     const lines = [buildFixedManagerSystemPrompt(options)];
     if (includeMemory) {
         if (statePrompt) {
@@ -274,6 +334,9 @@ function composeManagerSystemPrompt(
         if (characterPrompt) {
             lines.push('', '## Character Memory Rules', buildFixedCharacterMemoryDutyIntro(), characterPrompt);
         }
+    }
+    if (includeStatus && statusPrompt) {
+        lines.push('', '## Status Panel Rules', buildFixedStatusPanelDutyIntro(), statusPrompt);
     }
     return lines.join('\n').trim();
 }
@@ -289,6 +352,7 @@ export function buildDefaultMemoryManagerPrompt(): string {
     return composeManagerSystemPrompt({
         statePrompt: buildDefaultStateMemoryPrompt(),
         characterPrompt: buildDefaultCharacterMemoryPrompt(),
+        statusPrompt: buildDefaultStatusPanelPrompt(),
     });
 }
 
@@ -299,6 +363,7 @@ export function createDefaultTavernAssistantPreset(): TavernAssistantPreset {
         description: '记忆管理员的默认维护规则。',
         statePrompt: buildDefaultStateMemoryPrompt(),
         characterPrompt: buildDefaultCharacterMemoryPrompt(),
+        statusPrompt: buildDefaultStatusPanelPrompt(),
     };
 }
 
@@ -312,6 +377,7 @@ export function normalizeTavernAssistantPreset(input: AssistantPresetInput = {})
         description: String(input.description || ''),
         statePrompt: normalizeAssistantSectionText(input.statePrompt, fallback.statePrompt),
         characterPrompt: normalizeAssistantSectionText(input.characterPrompt, fallback.characterPrompt),
+        statusPrompt: normalizeAssistantSectionText(input.statusPrompt, fallback.statusPrompt),
         updatedAt: Number(input.updatedAt) || undefined,
     };
     return normalized;

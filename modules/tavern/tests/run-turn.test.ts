@@ -4283,6 +4283,7 @@ test('xb tavern rerun preserves contract and skips automatic manager work when d
             contract: mergeTavernSessionContract(undefined, {
                 memoryArchiving: false,
                 cartographyEngine: false,
+                statusPanel: false,
             }),
         },
         runManager: true,

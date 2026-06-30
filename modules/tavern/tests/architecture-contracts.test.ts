@@ -216,14 +216,15 @@ test('tavern mobile overlay viewport updates are frame-throttled', () => {
     assert.match(appSource, /document\.removeEventListener\('focusin', handleKeyboardViewportFocus, true\);[\s\S]*document\.removeEventListener\('focusout', handleKeyboardViewportFocus, true\);/);
 });
 
-test('tavern assistant preset settings expose state and character memory rules', () => {
+test('tavern assistant preset settings expose state, character memory, and status rules', () => {
     const controllerSource = readRepoFile('modules/tavern/app-src/components/settings/useTavernSettingsController.ts');
     const sectionMatch = controllerSource.match(/const assistantPresetSections:[\s\S]*?];/);
     assert.ok(sectionMatch);
     const sectionSource = sectionMatch[0];
     assert.match(sectionSource, /key: 'statePrompt'/);
     assert.match(sectionSource, /key: 'characterPrompt'/);
-    assert.equal((sectionSource.match(/key:/g) || []).length, 2);
+    assert.match(sectionSource, /key: 'statusPrompt'/);
+    assert.equal((sectionSource.match(/key:/g) || []).length, 3);
 });
 
 test('tavern worldbook bridge edits named entries through native save boundary', () => {
@@ -780,7 +781,9 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.match(chatPageSource, /clearSelection: clearCharacterSelection,[\s\S]*refresh: refreshCharacterList,/);
     assert.match(chatPageSource, /class="home-corner-actions page-corner-actions chat-app-menu-shell"[\s\S]*title="首页"[\s\S]*class="home-icon-button chat-app-menu-button chat-app-menu-button-desktop"[\s\S]*title="酒馆操作菜单"/);
     assert.match(chatPageSource, /class="xb-sidebar settings-sidebar chat-character-sidebar"[\s\S]*class="chat-character-card"[\s\S]*@click="openChatAppWorkspace\('characters'\)"[\s\S]*v-for="item in chatAppMenuItems"[\s\S]*class="guide-step"[\s\S]*@click="openChatAppWorkspace\(item\.key\)"/);
-    assert.match(chatPageSource, /class="chat-mobile-action-group"[\s\S]*title="首页"[\s\S]*class="chat-mobile-icon-button chat-mobile-utility-button chat-app-menu-button"[\s\S]*title="酒馆操作菜单"/);
+    assert.match(chatPageSource, /class="chat-mobile-action-group"[\s\S]*title="契约"[\s\S]*class="chat-mobile-icon-button chat-mobile-utility-button chat-app-menu-button"[\s\S]*title="酒馆操作菜单"/);
+    assert.match(chatPageSource, /class="chat-app-menu-item chat-app-menu-return-home"[\s\S]*返回首页/);
+    assert.doesNotMatch(chatPageSource, /class="chat-mobile-action-group"[\s\S]*title="首页"/);
     assert.doesNotMatch(chatPageSource, /class="chat-mobile-icon-button chat-mobile-utility-button"[\s\S]*title="聊天预设"[\s\S]*@click="openChatAppWorkspace\('chatPreset'\)"/);
     assert.doesNotMatch(chatPageSource, /class="chat-mobile-icon-button chat-mobile-utility-button"[\s\S]*title="API 配置"[\s\S]*@click="openChatAppWorkspace\('api'\)"/);
     assert.doesNotMatch(chatPageSource, /class="chat-mobile-icon-button chat-mobile-utility-button"[\s\S]*title="世界书"[\s\S]*@click="openChatAppWorkspace\('worldbooks'\)"/);
@@ -1027,24 +1030,26 @@ test('tavern edit and delete route accepted rollback through its feature boundar
     assert.match(appSource, /describeAcceptedStateRollbackImpact\(message\.sessionId, message\.order\)/);
     assert.match(appSource, /rollbackImpactLines\(impact\)/);
     assert.match(appSource, /cancelAcceptedRollbackManagersBeforeMessage\(message\.sessionId, message\.order\)/);
-    assert.match(appSource, /restoreAcceptedMemoryAndTaskStateBeforeMessage\(message\.sessionId, message\.order\)/);
+    assert.match(appSource, /restoreAcceptedStateBeforeMessage\(message\.sessionId, message\.order\)/);
     assert.match(appSource, /cancelAcceptedRollbackManagersBeforeMessage\(message\.sessionId, fromOrder\)/);
-    assert.match(appSource, /restoreAcceptedMemoryAndTaskStateBeforeMessage\(message\.sessionId, fromOrder\)/);
-    assert.match(appSource, /drawContext\.cancelJobsForMessageRange\(message\.sessionId, fromOrder\);[\s\S]*await cancelAcceptedRollbackManagersBeforeMessage\(message\.sessionId, fromOrder\);[\s\S]*const deleted = await deleteTavernMessages\(message\.sessionId, ordersToDelete\);[\s\S]*if \(deleted > 0\) \{[\s\S]*await restoreAcceptedMemoryAndTaskStateBeforeMessage\(message\.sessionId, fromOrder\);[\s\S]*\}/);
-    assert.doesNotMatch(appSource, /async function restoreAcceptedStateBeforeMessage/);
+    assert.match(appSource, /restoreAcceptedStateBeforeMessage\(message\.sessionId, fromOrder\)/);
+    assert.match(appSource, /drawContext\.cancelJobsForMessageRange\(message\.sessionId, fromOrder\);[\s\S]*await cancelAcceptedRollbackManagersBeforeMessage\(message\.sessionId, fromOrder\);[\s\S]*const deleted = await deleteTavernMessages\(message\.sessionId, ordersToDelete\);[\s\S]*if \(deleted > 0\) \{[\s\S]*await restoreAcceptedStateBeforeMessage\(message\.sessionId, fromOrder\);[\s\S]*\}/);
     assert.doesNotMatch(appSource, /async function describeAcceptedStateRollbackImpact/);
     assert.doesNotMatch(appSource, /function rollbackImpactLines\(impact: AcceptedStateRollbackImpact\)/);
     assert.doesNotMatch(appSource, /describeTavernMemoryRestoreImpact|restoreTavernMemoryToFloor|trimTavernMemorySnapshotsFromFloor/);
     assert.doesNotMatch(appSource, /describeTavernTaskRestoreImpact|restoreTavernTasksToFloor|trimTavernTaskSnapshotsFromFloor/);
     assert.doesNotMatch(appSource, /describeXbTavernManagerRollbackImpactForMessageRange/);
     assert.match(rollbackSource, /export async function cancelAcceptedRollbackManagersBeforeMessage/);
-    assert.match(rollbackSource, /export async function restoreAcceptedMemoryAndTaskStateBeforeMessage/);
+    assert.match(rollbackSource, /export async function restoreAcceptedStateBeforeMessage/);
     assert.match(rollbackSource, /export async function describeAcceptedStateRollbackImpact/);
     assert.match(rollbackSource, /export function rollbackImpactLines/);
-    assert.match(rollbackSource, /memory:[\s\S]*tasks:[\s\S]*managers:/);
+    assert.match(rollbackSource, /memory:[\s\S]*tasks:[\s\S]*status:[\s\S]*managers:/);
+    assert.match(rollbackSource, /describeTavernStatusRestoreImpact/);
+    assert.match(rollbackSource, /restoreTavernStatusToFloor/);
+    assert.match(rollbackSource, /trimTavernStatusSnapshotsFromFloor/);
     assert.match(rollbackSource, /willRollbackState:[\s\S]*willCancelWork:/);
     assert.doesNotMatch(rollbackSource, /export async function rollbackAcceptedStateBeforeMessage/);
-    assert.doesNotMatch(rollbackSource, /export async function restoreAcceptedStateBeforeMessage/);
+    assert.doesNotMatch(rollbackSource, /export async function restoreAcceptedMemoryAndTaskStateBeforeMessage/);
     assert.doesNotMatch(appSource, /acceptedStateRollbackNoticeForFloor|会话记忆、人物记忆和事件线索会回滚/);
     assert.doesNotMatch(appSource, /restoreMemoryStateBeforeMessage|memoryRollbackNoticeForFloor/);
 });
@@ -1945,8 +1950,7 @@ test('tavern memory editor actions live outside the app controller', () => {
     assert.match(appSource, /commitAcceptedState,/);
     assert.match(appSource, /commitUserAcceptedState,/);
     assert.match(appSource, /let userAcceptedAnchorOrder = -1;[\s\S]*try \{[\s\S]*userAcceptedAnchorOrder = \(await getLatestTavernUserMessageAtOrBefore\(managerSessionId, Number\.POSITIVE_INFINITY\)\)\?\.order \?\? -1;[\s\S]*const budget = await ensureTavernManagerChatBudget/);
-    assert.match(appSource, /if \(\(result\.changedFiles \|\| \[\]\)\.length \|\| \(result\.changedTasks \|\| \[\]\)\.length\) \{[\s\S]*await commitUserAcceptedState\(managerSessionId, userAcceptedAnchorOrder\);[\s\S]*\}[\s\S]*await refreshManagerRecords\(managerSessionId\);/);
-    assert.doesNotMatch(appSource, /changedStates[\s\S]{0,120}commitUserAcceptedState/);
+    assert.match(appSource, /if \(\(result\.changedFiles \|\| \[\]\)\.length \|\| \(result\.changedStates \|\| \[\]\)\.length \|\| \(result\.changedTasks \|\| \[\]\)\.length\) \{[\s\S]*await commitUserAcceptedState\(managerSessionId, userAcceptedAnchorOrder\);[\s\S]*\}[\s\S]*await refreshManagerRecords\(managerSessionId\);/);
 });
 
 test('tavern streaming action-check UI renders from live runtime events and keeps dark card styling aligned', () => {
@@ -2059,7 +2063,7 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.doesNotMatch(layoutCss, /@media \(max-width: 980px\) \{[\s\S]*\.chat-head-actions button:last-child \{[\s\S]*display: none;/);
     assert.match(layoutCss, /\.chat-head \{[\s\S]*justify-content: space-between;/);
     assert.match(conversationPanelSource, /<header class="chat-head">[\s\S]*class="chat-head-main"[\s\S]*class="xb-workspace-controller chat-layout-controller"[\s\S]*chatLayout === 'chat'[\s\S]*chatLayout === 'balanced'[\s\S]*chatLayout === 'editor'[\s\S]*class="chat-head-actions"/);
-    assert.match(chatPageSource, /class="chat-mobile-context-row"[\s\S]*title="地图"[\s\S]*title="记忆"[\s\S]*title="事件"[\s\S]*title="契约"/);
+    assert.match(chatPageSource, /class="chat-mobile-context-row"[\s\S]*title="地图"[\s\S]*title="记忆"[\s\S]*title="事件"[\s\S]*title="状态"/);
     assert.doesNotMatch(conversationPanelSource, /title="事件"/);
     assert.match(contractModalSource, /契约[\s\S]*玩家 — 代理人誓约[\s\S]*故事开始之前，定义你的代理人被允许做什么。/);
     assert.match(contractModalSource, /封印中\.\.\.[\s\S]*封存誓约[\s\S]*项授权已启用/);
@@ -2069,6 +2073,7 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.match(appSource, /const chatWorkspacePanel = ref<TavernChatWorkspacePanelKey>\('map'\);/);
     assert.match(chatPageSource, /:class="\{ 'is-active': mobileChatPanel === 'workspace' && chatWorkspacePanel === 'map' \}"/);
     assert.match(chatPageSource, /:class="\{ 'is-active': mobileChatPanel === 'workspace' && chatWorkspacePanel === 'memory' \}"/);
+    assert.match(chatPageSource, /:class="\{ 'is-active': mobileChatPanel === 'workspace' && chatWorkspacePanel === 'status' \}"/);
     assert.match(conversationPanelSource, /createNewChatSession,[\s\S]*const composeMenuOpen = ref\(false\)/);
     assert.match(conversationPanelSource, /const sessionArchiveOpen = ref\(false\)/);
     assert.doesNotMatch(conversationPanelSource, /open-session-archive/);
@@ -2114,6 +2119,8 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.match(conversationPanelSource, /v-if="sessionArchiveOpen"[\s\S]*class="character-session-archive-overlay chat-session-archive-overlay"[\s\S]*v-for="archivedSession in currentChatCharacterSessions"[\s\S]*@click="openArchivedSession\(archivedSession\.id\)"/);
     assert.match(managerPanelSource, /v-model="managerInputDraft"[\s\S]*rows="1"/);
     assert.match(workspacePanelSource, /<button[\s\S]*chatWorkspacePanel === 'map'[\s\S]*>\s*地图\s*<\/button>/);
+    assert.match(workspacePanelSource, /chatWorkspacePanel === 'map'[\s\S]*>\s*地图\s*<\/button>[\s\S]*chatWorkspacePanel === 'status'[\s\S]*>\s*状态\s*<\/button>[\s\S]*chatWorkspacePanel === 'memory'[\s\S]*>\s*记忆\s*<\/button>[\s\S]*chatWorkspacePanel === 'event'[\s\S]*>\s*事件\s*<\/button>/);
+    assert.match(workspacePanelSource, /<TavernStatusPanel[\s\S]*:document="statusStateDocument"[\s\S]*:field-deltas="statusFieldDeltas"[\s\S]*:enabled="sessionContract\.statusPanel"/);
     assert.match(workspacePanelSource, /class="tavern-map-viewport"[\s\S]*class="tavern-map-inline-switcher"[\s\S]*场景图[\s\S]*世界图/);
     assert.match(workspacePanelSource, /class="tavern-map-viewport"[\s\S]*<TavernAtlasPanel[\s\S]*display-mode="graph"/);
     assert.match(workspacePanelSource, /class="tavern-map-info"[\s\S]*<TavernAtlasPanel[\s\S]*display-mode="detail"/);
@@ -2467,7 +2474,7 @@ test('tavern edited RP messages use native macro substitution before saving', ()
     assert.match(appSource, /const substitutedContent = await substituteEditedMessageContent\(message, content\);[\s\S]*const regexedContent = await applyEditRegexToMessageContent\(message, substitutedContent\);[\s\S]*updateTavernMessage\(message\.sessionId, message\.order, \{\s*content: regexedContent,/);
     assert.doesNotMatch(appSource, /\.\.\.\(shouldClearRuntimeEvents \? \{ runtimeEvents: \[\] \} : \{\}\),/);
     assert.doesNotMatch(appSource, /\.\.\.\(message\.role === 'user' \? \{ runtimeEvents: \[\] \} : \{\}\)/);
-    assert.match(appSource, /if \(updated && shouldRollbackState\) \{[\s\S]*await cancelAcceptedRollbackManagersBeforeMessage\(message\.sessionId, message\.order\);[\s\S]*await restoreAcceptedMemoryAndTaskStateBeforeMessage\(message\.sessionId, message\.order\);[\s\S]*\}/);
+    assert.match(appSource, /if \(updated && shouldRollbackState\) \{[\s\S]*await cancelAcceptedRollbackManagersBeforeMessage\(message\.sessionId, message\.order\);[\s\S]*await restoreAcceptedStateBeforeMessage\(message\.sessionId, message\.order\);[\s\S]*\}/);
     assert.match(appSource, /if \(shouldRollbackState\) \{[\s\S]*await refreshManagerRecords\(selectedSessionId\.value\);[\s\S]*\}/);
     assert.match(appSource, /if \(updated && shouldRollbackState\) \{[\s\S]*await rebuildSelectedSessionRuntimeState\(\);[\s\S]*\}/);
 });

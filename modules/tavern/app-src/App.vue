@@ -57,6 +57,7 @@ import {
     type TavernTaskRecord,
 } from '../shared/session-db';
 import { getTavernAtlasStateForSession, getTavernMapStateForSession, type TavernMapStateDocumentItem } from '../shared/structured-state';
+import { getTavernStatusStateForSession, type TavernStatusFieldDeltaMap } from '../shared/status-state';
 import { listTavernTasks } from '../shared/tasks';
 import { saveAcceptedStateSnapshot } from '../shared/accepted-state';
 import {
@@ -122,7 +123,7 @@ import {
     cancelAcceptedRollbackManagersBeforeMessage,
     describeAcceptedStateRollbackImpact,
     rollbackImpactLines,
-    restoreAcceptedMemoryAndTaskStateBeforeMessage,
+    restoreAcceptedStateBeforeMessage,
 } from './features/accepted-rollback/accepted-rollback';
 import { createTavernChatRunState, useTavernChatRunController } from './features/chat-run/useTavernChatRunController';
 import { useTavernDrawController } from './features/draw/useTavernDrawController';
@@ -301,6 +302,9 @@ const mapStatePatches = ref<TavernStructuredStatePatchRecord[]>([]);
 const atlasStateDocument = ref<TavernStructuredStateDocumentRecord | null>(null);
 const atlasStatePatches = ref<TavernStructuredStatePatchRecord[]>([]);
 const atlasActiveLocationKey = ref('');
+const statusStateDocument = ref<TavernStructuredStateDocumentRecord | null>(null);
+const statusStatePatches = ref<TavernStructuredStatePatchRecord[]>([]);
+const statusFieldDeltas = ref<TavernStatusFieldDeltaMap>({});
 const managerActionStatus = ref('');
 const retryingManagerRunId = ref('');
 const managerInputDraft = ref('');
@@ -2724,16 +2728,20 @@ async function refreshManagerRecords(sessionId = selectedSessionId.value) {
         atlasStateDocument.value = null;
         atlasStatePatches.value = [];
         atlasActiveLocationKey.value = '';
+        statusStateDocument.value = null;
+        statusStatePatches.value = [];
+        statusFieldDeltas.value = {};
         selectedMemoryFilePath.value = '';
         return;
     }
-    const [managerMessages, runs, tasks, rawIndex, mapState, atlasState, nextStateFile] = await Promise.all([
+    const [managerMessages, runs, tasks, rawIndex, mapState, atlasState, statusState, nextStateFile] = await Promise.all([
         listTavernManagerMessages(id),
         listTavernManagerRuns(id, { limit: 18 }),
         listTavernTasks(id, { includeCompleted: true }),
         getTavernMemoryIndex(id),
         getTavernMapStateForSession(id),
         getTavernAtlasStateForSession(id),
+        getTavernStatusStateForSession(id),
         getTavernMemoryFile(id, 'memory/state.md'),
     ]);
     const index = rawIndex && rawIndex.status === 'ready' && Array.isArray(rawIndex.files)
@@ -2764,6 +2772,9 @@ async function refreshManagerRecords(sessionId = selectedSessionId.value) {
     atlasStateDocument.value = atlasState.document;
     atlasStatePatches.value = atlasState.patches;
     atlasActiveLocationKey.value = atlasState.activeLocationKey;
+    statusStateDocument.value = statusState.document;
+    statusStatePatches.value = statusState.patches;
+    statusFieldDeltas.value = statusState.fieldDeltas;
     if (!memoryFiles.value.some((file) => file.path === selectedMemoryFilePath.value)) {
         if (memoryEditorDirty.value && selectedMemoryFilePath.value) {
             memoryEditorStatus.value = '当前档案已变化，草稿仍保留';
@@ -3418,7 +3429,7 @@ async function saveEditMessage(message: TavernMessageRecord, options: { rollback
     });
     if (updated && shouldRollbackState) {
         await cancelAcceptedRollbackManagersBeforeMessage(message.sessionId, message.order);
-        await restoreAcceptedMemoryAndTaskStateBeforeMessage(message.sessionId, message.order);
+        await restoreAcceptedStateBeforeMessage(message.sessionId, message.order);
     }
     if (updated && selectedSessionId.value) {
         await loadSelectedSessionMessageWindow({ sessionId: selectedSessionId.value });
@@ -3490,7 +3501,7 @@ async function deleteMessageTurn(message: TavernMessageRecord) {
     await cancelAcceptedRollbackManagersBeforeMessage(message.sessionId, fromOrder);
     const deleted = await deleteTavernMessages(message.sessionId, ordersToDelete);
     if (deleted > 0) {
-        await restoreAcceptedMemoryAndTaskStateBeforeMessage(message.sessionId, fromOrder);
+        await restoreAcceptedStateBeforeMessage(message.sessionId, fromOrder);
     }
     if (selectedSessionId.value) {
         await loadSelectedSessionMessageWindow({ sessionId: selectedSessionId.value });
@@ -4237,7 +4248,7 @@ async function sendManagerQuestion(
         if (selectedSessionId.value === managerSessionId) {
             managerChatMessages.value = await listTavernManagerMessages(managerSessionId);
         }
-        if ((result.changedFiles || []).length || (result.changedTasks || []).length) {
+        if ((result.changedFiles || []).length || (result.changedStates || []).length || (result.changedTasks || []).length) {
             await commitUserAcceptedState(managerSessionId, userAcceptedAnchorOrder);
         }
         await refreshManagerRecords(managerSessionId);
@@ -4663,6 +4674,9 @@ const workspaceContext = {
     mapStateDocuments,
     mapStateDocument,
     mapStatePatches,
+    statusFieldDeltas,
+    statusStateDocument,
+    statusStatePatches,
     saveSessionContract,
     sessionContract,
     stateMemoryFile,

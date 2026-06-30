@@ -636,6 +636,29 @@ onUpdated(() => {
           <button
             type="button"
             class="chat-mobile-icon-button chat-mobile-utility-button"
+            title="契约"
+            aria-label="契约"
+            @click="closeMobileChatPanel(); openContractModal()"
+          >
+            <svg
+              class="chat-mobile-svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M7 3.8h7.2L18 7.6V20H7z" />
+              <path d="M14 4v4h4" />
+              <path d="M10 12h5" />
+              <path d="M10 15.5h4" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="chat-mobile-icon-button chat-mobile-utility-button"
             :title="homeThemeDark ? '切换到白天' : '切换到夜间'"
             :aria-label="homeThemeDark ? '切换到白天' : '切换到夜间'"
             @click="homeThemeDark = !homeThemeDark"
@@ -679,28 +702,6 @@ onUpdated(() => {
               <path d="M20.2 14.5A7.3 7.3 0 0 1 9.5 3.8 8.7 8.7 0 1 0 20.2 14.5Z" />
             </svg>
           </button>
-          <button
-            type="button"
-            class="chat-mobile-icon-button chat-mobile-utility-button"
-            title="首页"
-            aria-label="首页"
-            @click="activeView = 'home'; closeMobileChatPanel()"
-          >
-            <svg
-              class="chat-mobile-svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M3 11.5 12 4l9 7.5" />
-              <path d="M5.5 10.5V20h13v-9.5" />
-              <path d="M9.5 20v-5.5h5V20" />
-            </svg>
-          </button>
           <div
             ref="mobileChatAppMenuRef"
             class="chat-app-menu-shell chat-app-menu-shell-mobile"
@@ -740,6 +741,15 @@ onUpdated(() => {
                 <span class="chat-app-menu-label-full">{{ item.label }}</span>
                 <span class="chat-app-menu-label-mobile">{{ item.mobileLabel }}</span>
               </button>
+              <button
+                type="button"
+                class="chat-app-menu-item chat-app-menu-return-home"
+                role="menuitem"
+                @click="activeView = 'home'; closeMobileChatPanel()"
+              >
+                <span class="chat-app-menu-label-full">返回首页</span>
+                <span class="chat-app-menu-label-mobile">返回首页</span>
+              </button>
             </div>
           </div>
         </div>
@@ -778,11 +788,12 @@ onUpdated(() => {
         <button
           type="button"
           class="chat-mobile-context-button"
-          title="契约"
-          aria-label="契约"
-          @click="closeMobileChatPanel(); openContractModal()"
+          :class="{ 'is-active': mobileChatPanel === 'workspace' && chatWorkspacePanel === 'status' }"
+          title="状态"
+          aria-label="状态"
+          @click="toggleMobileWorkspacePanel('status')"
         >
-          契约
+          状态
         </button>
       </div>
     </header>

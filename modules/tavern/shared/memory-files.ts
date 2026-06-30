@@ -1,6 +1,7 @@
 import { applyTextEdits } from '../../agent-core/tools/text-edit.js';
 
 import { getTavernManagerStateToolDefinitions } from './structured-state';
+import { getTavernStatusToolDefinitions } from './status-state';
 import { getTavernTaskToolDefinitions } from './tasks';
 import type { XbTavernContext, XbTavernWorldBook, XbTavernWorldEntry } from './message-assembler';
 import db, {
@@ -416,8 +417,8 @@ export async function saveTavernMemorySnapshot(
                 }
             }
             const currentFingerprint = memorySnapshotCollectionFingerprint(files);
-            const latest = await getLatestTavernMemorySnapshot(id);
-            if (latest && memorySnapshotRecordFingerprint(latest) === currentFingerprint) {
+            const effective = await getLatestTavernMemorySnapshot(id, floor);
+            if (effective && memorySnapshotRecordFingerprint(effective) === currentFingerprint) {
                 return null;
             }
             const record: TavernMemorySnapshotRecord = {
@@ -1393,6 +1394,7 @@ export function getTavernManagerToolDefinitions(): Array<{ type: 'function'; fun
     return [
         ...getTavernSourceFileToolDefinitions(),
         ...getTavernManagerStateToolDefinitions(),
+        ...getTavernStatusToolDefinitions(),
         ...getTavernTaskToolDefinitions(),
     ];
 }

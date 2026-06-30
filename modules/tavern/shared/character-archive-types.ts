@@ -9,6 +9,7 @@ import type {
     TavernMemorySnapshotRecord,
     TavernMessageRecord,
     TavernSessionRecord,
+    TavernStatusSnapshotRecord,
     TavernStructuredStateDocumentRecord,
     TavernStructuredStatePatchRecord,
     TavernTaskFingerprintStateRecord,
@@ -96,6 +97,7 @@ export const TAVERN_CHARACTER_ARCHIVE_TABLES = [
     'managerMemorySnapshots',
     'stateDocuments',
     'statePatches',
+    'statusSnapshots',
     'managerStateSnapshots',
     'tasks',
     'taskSnapshots',
@@ -116,6 +118,7 @@ export type TavernCharacterArchiveRecordPayload = {
     managerMemorySnapshots: TavernManagerMemorySnapshotRecord;
     stateDocuments: TavernStructuredStateDocumentRecord;
     statePatches: TavernStructuredStatePatchRecord;
+    statusSnapshots: TavernStatusSnapshotRecord;
     managerStateSnapshots: TavernManagerStateSnapshotRecord;
     tasks: TavernTaskRecord;
     taskSnapshots: TavernTaskSnapshotRecord;

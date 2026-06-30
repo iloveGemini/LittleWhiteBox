@@ -12,6 +12,7 @@ import db, {
     tavernSessionsTable,
     tavernStateDocumentsTable,
     tavernStatePatchesTable,
+    tavernStatusSnapshotsTable,
     tavernTaskFingerprintStatesTable,
     tavernTasksTable,
     tavernTaskSnapshotsTable,
@@ -20,6 +21,7 @@ import db, {
     type TavernManagerTaskSnapshotRecord,
     type TavernMemorySnapshotRecord,
     type TavernSessionRecord,
+    type TavernStatusSnapshotRecord,
     type TavernStructuredStateDocumentRecord,
     type TavernTaskRecord,
     type TavernTaskSnapshotRecord,
@@ -77,6 +79,7 @@ const archiveTables: ArchiveTableMap = {
     managerMemorySnapshots: { table: tavernManagerMemorySnapshotsTable as unknown as ArchiveRuntimeTable, sessionIndex: 'sessionId' },
     stateDocuments: { table: tavernStateDocumentsTable as unknown as ArchiveRuntimeTable, sessionIndex: 'sessionId' },
     statePatches: { table: tavernStatePatchesTable as unknown as ArchiveRuntimeTable, sessionIndex: 'sessionId' },
+    statusSnapshots: { table: tavernStatusSnapshotsTable as unknown as ArchiveRuntimeTable, sessionIndex: 'sessionId' },
     managerStateSnapshots: { table: tavernManagerStateSnapshotsTable as unknown as ArchiveRuntimeTable, sessionIndex: 'sessionId' },
     tasks: { table: tavernTasksTable as unknown as ArchiveRuntimeTable, sessionIndex: 'sessionId' },
     taskSnapshots: { table: tavernTaskSnapshotsTable as unknown as ArchiveRuntimeTable, sessionIndex: 'sessionId' },
@@ -416,6 +419,12 @@ function remapArchiveRecord(
             record.beforeDocument = remapStateDocument(snapshot.beforeDocument, options.mapSessionId);
         }
     }
+    if (table === 'statusSnapshots') {
+        const snapshot = record as unknown as TavernStatusSnapshotRecord;
+        if (snapshot.document) {
+            record.document = remapStateDocument(snapshot.document, options.mapSessionId);
+        }
+    }
     if (table === 'taskSnapshots') {
         const snapshot = record as unknown as TavernTaskSnapshotRecord;
         record.tasks = (snapshot.tasks || []).map((task) => remapTask(task, options.mapSessionId, options.mapManagerRunId));
@@ -491,6 +500,7 @@ async function writeArchiveRecordBatch(batch: TavernCharacterArchiveRecord[]): P
         tavernMemoryIndexesTable,
         tavernStateDocumentsTable,
         tavernStatePatchesTable,
+        tavernStatusSnapshotsTable,
         tavernTasksTable,
         tavernTaskSnapshotsTable,
         tavernTaskFingerprintStatesTable,
@@ -522,6 +532,7 @@ async function promoteTempArchiveToCharacter(tempCharacterKey = '', characterKey
         tavernMemoryIndexesTable,
         tavernStateDocumentsTable,
         tavernStatePatchesTable,
+        tavernStatusSnapshotsTable,
         tavernTasksTable,
         tavernTaskSnapshotsTable,
         tavernTaskFingerprintStatesTable,

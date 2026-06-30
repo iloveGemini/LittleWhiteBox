@@ -87,7 +87,7 @@ interface PromptEditorRow {
 }
 
 interface AssistantPresetSectionRow {
-    key: 'statePrompt' | 'characterPrompt';
+    key: 'statePrompt' | 'characterPrompt' | 'statusPrompt';
     label: string;
     summary: string;
 }
@@ -164,6 +164,7 @@ const REGEX_GROUP_BATCH_SIZE = 60;
 const assistantPresetSections: AssistantPresetSectionRow[] = [
     { key: 'statePrompt', label: '全局记忆', summary: '全局状态输出规则' },
     { key: 'characterPrompt', label: '人物记忆', summary: '人物长期状态输出规则' },
+    { key: 'statusPrompt', label: '状态栏', summary: '状态面板骨架与更新规则' },
 ];
 
 const placementLabels: Record<string, string> = {

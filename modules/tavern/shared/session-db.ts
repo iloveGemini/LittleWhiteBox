@@ -142,7 +142,7 @@ export interface TavernManagerRunRecord {
 export type TavernMemoryFileStatus = 'active' | 'stale';
 export type TavernMemoryIndexStatus = 'ready' | 'stale' | 'failed';
 export type TavernStructuredStateStatus = 'active' | 'stale';
-export type TavernStructuredStateDocType = 'tavern.map' | 'tavern.atlas';
+export type TavernStructuredStateDocType = 'tavern.map' | 'tavern.atlas' | 'tavern.status';
 export type TavernTaskStatus = 'active' | 'completed' | 'abandoned';
 
 export interface TavernMemoryFileRecord {
@@ -230,6 +230,8 @@ export interface TavernStructuredStatePatchRecord {
     ops?: unknown[];
     changedIds?: string[];
     removedElements?: unknown[];
+    beforeData?: unknown;
+    afterData?: unknown;
     createdAt: number;
     updatedAt: number;
 }
@@ -276,6 +278,14 @@ export interface TavernTaskSnapshotRecord {
     floor: number;
     tasks: TavernTaskRecord[];
     abandonedFingerprints: string[];
+    createdAt: number;
+}
+
+export interface TavernStatusSnapshotRecord {
+    sessionId: string;
+    floor: number;
+    document?: TavernStructuredStateDocumentRecord;
+    digest: string;
     createdAt: number;
 }
 
@@ -399,6 +409,7 @@ class TavernDatabase extends Dexie {
     managerStateSnapshots!: DexieTable<TavernManagerStateSnapshotRecord>;
     tasks!: DexieTable<TavernTaskRecord>;
     taskSnapshots!: DexieTable<TavernTaskSnapshotRecord>;
+    statusSnapshots!: DexieTable<TavernStatusSnapshotRecord>;
     managerTaskSnapshots!: DexieTable<TavernManagerTaskSnapshotRecord>;
     taskFingerprintStates!: DexieTable<TavernTaskFingerprintStateRecord>;
 
@@ -548,6 +559,28 @@ class TavernDatabase extends Dexie {
             managerTaskSnapshots: 'managerRunId, sessionId, updatedAt',
             taskFingerprintStates: 'sessionId, updatedAt',
         });
+        this.version(9).stores({
+            sessions: 'id, updatedAt, characterKey, characterName',
+            messages: '[sessionId+order], sessionId, order',
+            managerMessages: '[sessionId+order], sessionId, order',
+            meta: 'key',
+            presets: 'id, updatedAt, sourcePresetId',
+            managerRuns: 'id, sessionId, status, turn, updatedAt',
+            memoryFiles: '[sessionId+path], sessionId, path, status, updatedAt',
+            memoryStateSnapshots: null,
+            memorySnapshots: '[sessionId+floor], sessionId, floor, createdAt',
+            memoryIndexes: '[sessionId+kind], sessionId, kind, status, updatedAt',
+            assistantPresets: 'id, updatedAt',
+            managerMemorySnapshots: '[managerRunId+path], managerRunId, sessionId, path, updatedAt',
+            stateDocuments: '[sessionId+docType+docId], sessionId, docType, docId, status, updatedAt',
+            statePatches: 'id, sessionId, docType, docId, managerRunId, revision, status, updatedAt',
+            managerStateSnapshots: '[managerRunId+docType+docId], managerRunId, sessionId, docType, docId, updatedAt',
+            tasks: '[sessionId+id], sessionId, status, fingerprint, updatedOrder, updatedAt',
+            taskSnapshots: '[sessionId+floor], sessionId, floor, createdAt',
+            statusSnapshots: '[sessionId+floor], sessionId, floor, createdAt',
+            managerTaskSnapshots: 'managerRunId, sessionId, updatedAt',
+            taskFingerprintStates: 'sessionId, updatedAt',
+        });
     }
 }
 
@@ -569,6 +602,7 @@ export const tavernStatePatchesTable = db.statePatches;
 export const tavernManagerStateSnapshotsTable = db.managerStateSnapshots;
 export const tavernTasksTable = db.tasks;
 export const tavernTaskSnapshotsTable = db.taskSnapshots;
+export const tavernStatusSnapshotsTable = db.statusSnapshots;
 export const tavernManagerTaskSnapshotsTable = db.managerTaskSnapshots;
 export const tavernTaskFingerprintStatesTable = db.taskFingerprintStates;
 
@@ -851,10 +885,11 @@ export async function deleteTavernSession(sessionId = ''): Promise<number> {
         tavernStatePatchesTable,
         tavernTasksTable,
         tavernTaskSnapshotsTable,
+        tavernStatusSnapshotsTable,
         tavernTaskFingerprintStatesTable,
         tavernMetaTable,
         async () => {
-            const [messages, managerMessages, runs, snapshots, stateSnapshots, taskRunSnapshots, files, memorySnapshots, indexes, stateDocuments, statePatches, tasks, taskSnapshots, fingerprintStates] = await Promise.all([
+            const [messages, managerMessages, runs, snapshots, stateSnapshots, taskRunSnapshots, files, memorySnapshots, indexes, stateDocuments, statePatches, tasks, taskSnapshots, statusSnapshots, fingerprintStates] = await Promise.all([
                 tavernMessagesTable.where('sessionId').equals(id).toArray(),
                 tavernManagerMessagesTable.where('sessionId').equals(id).toArray(),
                 tavernManagerRunsTable.where('sessionId').equals(id).toArray(),
@@ -868,6 +903,7 @@ export async function deleteTavernSession(sessionId = ''): Promise<number> {
                 tavernStatePatchesTable.where('sessionId').equals(id).toArray(),
                 tavernTasksTable.where('sessionId').equals(id).toArray(),
                 tavernTaskSnapshotsTable.where('sessionId').equals(id).toArray(),
+                tavernStatusSnapshotsTable.where('sessionId').equals(id).toArray(),
                 tavernTaskFingerprintStatesTable.where('sessionId').equals(id).toArray(),
             ]);
             await Promise.all([
@@ -884,6 +920,7 @@ export async function deleteTavernSession(sessionId = ''): Promise<number> {
                 statePatches.length ? tavernStatePatchesTable.bulkDelete(statePatches.map((patch) => patch.id)) : 0,
                 tasks.length ? tavernTasksTable.bulkDelete(tasks.map((task) => [task.sessionId, task.id])) : 0,
                 taskSnapshots.length ? tavernTaskSnapshotsTable.bulkDelete(taskSnapshots.map((snapshot) => [snapshot.sessionId, snapshot.floor])) : 0,
+                statusSnapshots.length ? tavernStatusSnapshotsTable.bulkDelete(statusSnapshots.map((snapshot) => [snapshot.sessionId, snapshot.floor])) : 0,
                 fingerprintStates.length ? tavernTaskFingerprintStatesTable.bulkDelete(fingerprintStates.map((state) => state.sessionId)) : 0,
             ]);
             await tavernSessionsTable.delete(id);
@@ -1720,6 +1757,8 @@ export async function appendTavernStructuredStatePatch(input: Partial<TavernStru
         ops: Array.isArray(input.ops) ? cloneSerializable(input.ops, []) : [],
         changedIds: normalizeStringArray(input.changedIds, 200),
         removedElements: Array.isArray(input.removedElements) ? cloneSerializable(input.removedElements, []) : [],
+        beforeData: 'beforeData' in input ? cloneSerializable(input.beforeData, undefined) : undefined,
+        afterData: 'afterData' in input ? cloneSerializable(input.afterData, undefined) : undefined,
         createdAt: Number(input.createdAt) || timestamp,
         updatedAt: timestamp,
     };
