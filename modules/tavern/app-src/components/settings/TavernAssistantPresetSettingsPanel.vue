@@ -31,6 +31,8 @@ const {
 const selectedAssistantPresetId = computed(() => String(activeAssistantPresetId.value || assistantPreset.value.id || '').trim());
 const currentAssistantPresetRecord = computed(() => assistantPresets.value.find((item: TavernAssistantPresetRecord) => item.id === selectedAssistantPresetId.value) || null);
 const importInputRef = ref<HTMLInputElement | null>(null);
+const statusPanelHelpOpen = ref(false);
+const showStatusPanelHelpButton = computed(() => selectedAssistantPresetItem.value?.id === 'statusPrompt');
 const assistantPresetSaveButtonDisabled = computed(() => (
     !assistantPresetDirty.value
     || assistantPresetSaveFeedback.value.status === 'saving'
@@ -52,6 +54,14 @@ async function renameCurrentPreset() {
 
 function triggerImportPreset() {
     importInputRef.value?.click();
+}
+
+function openStatusPanelHelp() {
+    statusPanelHelpOpen.value = true;
+}
+
+function closeStatusPanelHelp() {
+    statusPanelHelpOpen.value = false;
 }
 
 async function handleImportPreset(event: Event) {
@@ -260,6 +270,16 @@ function exportCurrentPreset() {
           <div>
             <strong>{{ selectedAssistantPresetItem?.label || '维护规则' }}</strong>
           </div>
+          <button
+            v-if="showStatusPanelHelpButton"
+            type="button"
+            class="assistant-preset-help-button icon-button"
+            title="状态栏写法说明"
+            aria-label="状态栏写法说明"
+            @click="openStatusPanelHelp"
+          >
+            ?
+          </button>
         </div>
         <div
           v-if="selectedAssistantPresetItem"
@@ -283,6 +303,69 @@ function exportCurrentPreset() {
         >
           没有可编辑规则
         </button>
+      </section>
+    </div>
+    <div
+      v-if="statusPanelHelpOpen"
+      class="assistant-preset-help-backdrop"
+      role="presentation"
+      @click.self="closeStatusPanelHelp"
+    >
+      <section
+        class="assistant-preset-help-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="assistant-preset-status-help-title"
+        tabindex="-1"
+        @keydown.esc="closeStatusPanelHelp"
+      >
+        <header class="assistant-preset-help-head">
+          <h3 id="assistant-preset-status-help-title">
+            状态栏写法说明
+          </h3>
+          <button
+            type="button"
+            class="assistant-preset-help-close icon-button"
+            title="关闭"
+            aria-label="关闭"
+            @click="closeStatusPanelHelp"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="M6 6l12 12" />
+              <path d="M18 6 6 18" />
+            </svg>
+          </button>
+        </header>
+        <div class="assistant-preset-help-body">
+          <section>
+            <h4>状态栏是什么</h4>
+            <p>状态栏是小白自动维护的可变 UI 面板。生成后的状态栏会自动注入聊天上下文，类似酒馆变量一样给后续回复使用；但你不需要定义它每轮怎么更新，也不需要定义结构化模板，你需要在这里大白话提要求。</p>
+          </section>
+          <section>
+            <h4>这里写什么</h4>
+            <p>这里只写“你希望状态栏长什么样”：分几页、每页有哪些区块、每个区块用什么类型、哪些条目允许动态增加。</p>
+          </section>
+          <section>
+            <h4>类型说明</h4>
+            <p>文本：适合姓名、身份、当前地点、当前目标这类一句话信息。</p>
+            <p>数值：适合力量、体质、好感度、理智、体力这类会变化的数。可以提出范围，也可以提出显示方式：</p>
+            <ul>
+              <li>进度条：适合体力、理智、好感度这类有上下限的数值。</li>
+              <li>百分比：适合成功率、掌控度、污染度这类天然按百分比看的数值。</li>
+              <li>点阵：适合少量格数资源，例如行动点、弹药、护盾层数。</li>
+              <li>普通数字：适合金币、天数、次数这类不适合画条的数值。</li>
+            </ul>
+            <p>标签：适合动态增删的状态，例如受伤、疲惫、恐惧、中毒、隐匿、祝福。标签不需要固定数量。</p>
+            <p>物品：适合装备、背包、线索、钥匙、消耗品。可以要求带数量、部位、用途、来历；也可以要求用列表或格子展示。</p>
+          </section>
+          <section>
+            <h4>动态分页</h4>
+            <p>如果你需要增加分页，例如每个 NPC 一页，就在这里提出：每个新 NPC 放单独的一页，每页的内容 xxx。</p>
+          </section>
+        </div>
       </section>
     </div>
   </div>
