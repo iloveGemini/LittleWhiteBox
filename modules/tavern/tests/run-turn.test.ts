@@ -51,6 +51,7 @@ import {
     type TavernRunOnceOptions,
 } from '../app-src/runtime/run-once';
 import { executeTavernTaskTool } from '../shared/tasks';
+import { executeTavernStatusTool, TAVERN_STATUS_TOOL_NAMES } from '../shared/status-state';
 import { createXbTavernAgentRuntime, EMPTY_XB_TAVERN_CAPABILITY_REGISTRY } from '../app-src/runtime/agent-runtime';
 import { resolveXbTavernProviderConfig } from '../app-src/runtime/provider';
 import type { TavernApplyRegexItem } from '../shared/regex';
@@ -69,6 +70,52 @@ function makeContextWindowMessage(order: number, role: string, content = `messag
         role,
         content,
         createdAt: order + 1,
+    };
+}
+
+function createPromptStatusDocument() {
+    return {
+        meta: { revision: 0, activeSubject: 'user' },
+        subjects: [{
+            id: 'user',
+            name: '阿瑟',
+            subtitle: '私家侦探',
+            icon: 'person',
+            tabs: [{
+                id: 'overview',
+                label: '概览',
+                blocks: [{
+                    id: 'stats',
+                    title: '核心值',
+                    form: 'gauge',
+                    fields: [
+                        { id: 'san', name: '理智', value: 62, min: 0, max: 99, step: 1, display: 'bar', accent: true },
+                    ],
+                }, {
+                    id: 'conditions',
+                    title: '状态',
+                    form: 'tag',
+                    fields: [
+                        { id: 'wet', label: '衣物湿透', kind: 'state' },
+                    ],
+                }, {
+                    id: 'items',
+                    title: '持有物',
+                    form: 'item',
+                    layout: 'grid',
+                    fields: [
+                        { id: 'lamp', name: '煤油灯', qty: 1, key: true, slot: '右手', lore: '灯芯还剩一半。', icon: 'local_fire_department' },
+                    ],
+                }, {
+                    id: 'scene',
+                    title: '当前情境',
+                    form: 'text',
+                    fields: [
+                        { id: 'now', name: '位置', value: '站在档案室门口。' },
+                    ],
+                }],
+            }],
+        }],
     };
 }
 
@@ -309,12 +356,16 @@ test('xb tavern run turn sends the same ST-native prompt shape used by simulatio
         state: {
             contract: mergeTavernSessionContract(undefined, {
                 memoryArchiving: true,
+                statusPanel: true,
                 actionChecks: true,
                 randomEncounters: true,
             }),
         },
     });
     await writeTavernMemoryFile(session.id, 'memory/state.md', '# 会话记忆\n\nNATIVE_MEMORY_NOTE', { source: 'user' });
+    await executeTavernStatusTool(session.id, TAVERN_STATUS_TOOL_NAMES.INIT, {
+        document: createPromptStatusDocument(),
+    });
     let nativeInput: { chatPreset?: unknown; memoryPrompt?: string; chancePrompt?: string; actionCheckPrompt?: string } | null = null;
     let sentMessages: Array<{ role?: string; content?: string }> = [];
 
@@ -353,6 +404,11 @@ test('xb tavern run turn sends the same ST-native prompt shape used by simulatio
     assert.equal(result.requestSnapshot.rawRequestJson.includes('NATIVE_MESSAGE \\n'), false);
     assert.equal((nativeInput?.chatPreset as { name?: string } | undefined)?.name, preset.name);
     assert.match(nativeInput?.memoryPrompt || '', /NATIVE_MEMORY_NOTE/);
+    assert.match(nativeInput?.memoryPrompt || '', /## 状态栏/);
+    assert.match(nativeInput?.memoryPrompt || '', /status_panel:/);
+    assert.match(nativeInput?.memoryPrompt || '', /name: 理智/);
+    assert.match(nativeInput?.memoryPrompt || '', /value: 62/);
+    assert.doesNotMatch(nativeInput?.memoryPrompt || '', /\bid:|revision|docType|docId|icon|display|accent|layout/);
     assert.match(nativeInput?.chancePrompt || '', /Chance Encounter Triggered/);
     assert.match(nativeInput?.actionCheckPrompt || '', /Runtime Protocol: Action Checks/);
     assert.equal(getChanceEncounterEvent(result.userMessage.runtimeEvents)?.label, CHANCE_ENCOUNTER_LABEL);
@@ -982,6 +1038,70 @@ test('xb tavern run turn injects action-check protocol after current user and ex
     assert.match(protocolContent, /DC 1-5 is easy, 6-10 is ordinary, 11-15 is hard, 16-20 is very hard, and 21 is nearly impossible/);
     assert.match(protocolContent, /Natural 1 is a critical failure/);
     assert.match(protocolContent, /Natural 20 is a critical success/);
+    assert.deepEqual(exposedToolNames, [ACTION_CHECK_TOOL_NAME]);
+});
+
+test('xb tavern run turn injects status panel yaml without exposing status tools to RP', async () => {
+    await resetDb();
+    const preset = createDefaultXbTavernPreset();
+    const session = await createTavernSession({
+        title: 'Status prompt',
+        characterKey: 'char-status',
+        characterName: 'Aster',
+        contextSnapshot: {
+            character: { characterKey: 'char-status', name: 'Aster' },
+        },
+        state: {
+            contract: mergeTavernSessionContract(undefined, {
+                statusPanel: true,
+                actionChecks: true,
+                randomEncounters: false,
+            }),
+        },
+    });
+    await executeTavernStatusTool(session.id, TAVERN_STATUS_TOOL_NAMES.INIT, {
+        document: createPromptStatusDocument(),
+    });
+
+    let rawMessages = '';
+    let exposedToolNames: string[] = [];
+    await runXbTavernTurn({
+        sessionId: session.id,
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot: session.contextSnapshot || {},
+        preset,
+        currentUserMessage: '我看看自己的状态。',
+        executeRunOnce: async (options: TavernRunOnceOptions) => {
+            rawMessages = JSON.stringify(options.messages);
+            exposedToolNames = (Array.isArray(options.tools) ? options.tools : [])
+                .map((tool) => String((tool as { function?: { name?: string } })?.function?.name || ''))
+                .filter(Boolean);
+            return {
+                text: '你短暂确认了一下自己的状态。',
+                requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages, {
+                    requestTask: {
+                        messages: options.messages,
+                        tools: options.tools,
+                        toolChoice: options.toolChoice,
+                    },
+                }),
+            };
+        },
+    });
+
+    assert.match(rawMessages, /## 状态栏/);
+    assert.match(rawMessages, /status_panel/);
+    assert.match(rawMessages, /name: 阿瑟/);
+    assert.match(rawMessages, /subtitle: 私家侦探/);
+    assert.match(rawMessages, /title: 核心值/);
+    assert.match(rawMessages, /form: gauge/);
+    assert.match(rawMessages, /name: 理智/);
+    assert.match(rawMessages, /value: 62/);
+    assert.match(rawMessages, /label: 衣物湿透/);
+    assert.match(rawMessages, /name: 煤油灯/);
+    assert.match(rawMessages, /lore: 灯芯还剩一半。/);
+    assert.match(rawMessages, /value: 站在档案室门口。/);
+    assert.doesNotMatch(rawMessages, /\bid:|revision|docType|docId|icon|display|accent|layout|activeSubject/);
     assert.deepEqual(exposedToolNames, [ACTION_CHECK_TOOL_NAME]);
 });
 

@@ -104,6 +104,8 @@ import {
     buildXbTavernMemoryQuery,
     retrieveXbTavernMemoryContext,
 } from '../../shared/memory-retrieval';
+import { getTavernStatusStateForSession } from '../../shared/status-state';
+import { buildTavernStatusPanelYaml } from '../../shared/status-prompt';
 import { createXbTavernAgentRuntime } from './agent-runtime';
 import {
     cancelAndRollbackXbTavernManagersForMessageRange,
@@ -373,6 +375,7 @@ function buildChanceEncounterDepthEntries(event: TavernChanceEncounterRuntimeEve
 function buildMemoryPromptContent(memoryContext: XbTavernMemoryContext = {}): string {
     const memoryFiles = Array.isArray(memoryContext.memoryFiles) ? memoryContext.memoryFiles : [];
     const spatialState = String(memoryContext.spatialState || '').trim();
+    const statusPanelYaml = String(memoryContext.statusPanelYaml || '').trim();
     const questHooks = Array.isArray(memoryContext.questHooks)
         ? memoryContext.questHooks.map((hook) => String(hook || '').trim()).filter(Boolean)
         : [];
@@ -397,6 +400,9 @@ function buildMemoryPromptContent(memoryContext: XbTavernMemoryContext = {}): st
         .filter(Boolean);
     if (characterLines.length) {
         sections.push(`## 相关人物记忆\n${characterLines.join('\n\n')}`);
+    }
+    if (statusPanelYaml) {
+        sections.push(`## 状态栏\n${statusPanelYaml}`);
     }
     if (spatialState) {
         sections.push(`## 空间地图状态\n${spatialState}`);
@@ -876,7 +882,7 @@ function filterMemoryContextByRuntime(
     runtime: TavernSessionContractRuntime,
 ): XbTavernMemoryContext | undefined {
     if (!memoryContext) {return memoryContext;}
-    if (!runtime.includeMemoryFiles && !runtime.includeStructuredStates && !runtime.includeQuestOrchestration) {
+    if (!runtime.includeMemoryFiles && !runtime.includeStructuredStates && !runtime.includeStatusStates && !runtime.includeQuestOrchestration) {
         return {};
     }
     const filtered: XbTavernMemoryContext = {};
@@ -889,10 +895,21 @@ function filterMemoryContextByRuntime(
     if (runtime.includeStructuredStates && memoryContext.spatialState) {
         filtered.spatialState = memoryContext.spatialState;
     }
+    if (runtime.includeStatusStates && memoryContext.statusPanelYaml) {
+        filtered.statusPanelYaml = memoryContext.statusPanelYaml;
+    }
     if (runtime.includeQuestOrchestration && Array.isArray(memoryContext.questHooks)) {
         filtered.questHooks = memoryContext.questHooks;
     }
     return filtered;
+}
+
+async function buildStatusPanelYamlForPrompt(sessionId = '', runtime: TavernSessionContractRuntime): Promise<string> {
+    const id = String(sessionId || '').trim();
+    if (!id || !runtime.includeStatusStates) {return '';}
+    const state = await getTavernStatusStateForSession(id);
+    if (!state.document) {return '';}
+    return buildTavernStatusPanelYaml(state.status);
 }
 
 function addRegexSummary(target: TavernRegexApplicationSummary, source?: TavernRegexApplicationSummary): void {
@@ -1784,10 +1801,14 @@ export async function simulateXbTavernRequest(input: XbTavernSimulateRequestInpu
     const simulateQuestHooks = session && sessionContractRuntime.includeQuestOrchestration
         ? await runTavernStage('simulate_quest_hook_retrieval', () => getLatestQuestHooksForPrompt(session.id, 1))
         : [];
-    const memoryContext: XbTavernMemoryContext | undefined = retrievedMemoryContext || simulateQuestHooks.length
+    const statusPanelYaml = session
+        ? await runTavernStage('simulate_status_panel_prompt', () => buildStatusPanelYamlForPrompt(session.id, sessionContractRuntime))
+        : '';
+    const memoryContext: XbTavernMemoryContext | undefined = retrievedMemoryContext || simulateQuestHooks.length || statusPanelYaml
         ? {
             ...(retrievedMemoryContext || {}),
             ...(simulateQuestHooks.length ? { questHooks: simulateQuestHooks } : {}),
+            ...(statusPanelYaml ? { statusPanelYaml } : {}),
         }
         : undefined;
     const filteredMemoryContext = filterMemoryContextByRuntime(memoryContext, sessionContractRuntime);
@@ -2299,10 +2320,12 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
         // RP gets only the freshest one. The event panel may show more, but prompt hooks should stay soft and sparse.
         ? await runTavernStage('turn_quest_hook_retrieval', () => getLatestQuestHooksForPrompt(baseSession.id, 1))
         : [];
-    const memoryContext: XbTavernMemoryContext | undefined = retrievedMemoryContext || questHooks.length
+    const statusPanelYaml = await runTavernStage('turn_status_panel_prompt', () => buildStatusPanelYamlForPrompt(baseSession.id, sessionContractRuntime));
+    const memoryContext: XbTavernMemoryContext | undefined = retrievedMemoryContext || questHooks.length || statusPanelYaml
         ? {
             ...(retrievedMemoryContext || {}),
             ...(questHooks.length ? { questHooks } : {}),
+            ...(statusPanelYaml ? { statusPanelYaml } : {}),
         }
         : undefined;
     const filteredMemoryContext = filterMemoryContextByRuntime(memoryContext, sessionContractRuntime);

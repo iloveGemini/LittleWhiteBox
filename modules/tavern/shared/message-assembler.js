@@ -1161,6 +1161,7 @@ ${text}` : "";
 function buildMemoryBlock(memoryContext = {}) {
   const memoryFiles = Array.isArray(memoryContext.memoryFiles) ? memoryContext.memoryFiles : [];
   const spatialState = normalizeText(memoryContext.spatialState);
+  const statusPanelYaml = normalizeText(memoryContext.statusPanelYaml);
   const questHooks = Array.isArray(memoryContext.questHooks) ? memoryContext.questHooks.map((hook) => normalizeText(hook)).filter(Boolean) : [];
   const sections = [];
   if (questHooks.length) {
@@ -1183,6 +1184,10 @@ ${content}`;
   if (characterLines.length) {
     sections.push(`## \u76F8\u5173\u4EBA\u7269\u8BB0\u5FC6
 ${characterLines.join("\n\n")}`);
+  }
+  if (statusPanelYaml) {
+    sections.push(`## \u72B6\u6001\u680F
+${statusPanelYaml}`);
   }
   if (spatialState) {
     sections.push(`## \u7A7A\u95F4\u5730\u56FE\u72B6\u6001
@@ -1718,6 +1723,7 @@ function buildXbTavernMessagesFromPrepared(chatPreset = {}, prepared, regexAppli
       ...regexApplications ? { regexApplications } : {},
       ...memoryContext.structuredStates?.length ? { structuredStates: memoryContext.structuredStates } : {},
       ...memoryContext.spatialState ? { spatialState: memoryContext.spatialState } : {},
+      ...memoryContext.statusPanelYaml ? { statusPanelYaml: memoryContext.statusPanelYaml } : {},
       worldBudget: {
         enabled: budgetDebug.enabled,
         limit: budgetDebug.limit,
@@ -1843,6 +1849,7 @@ function createXbTavernBuildSnapshot(context = {}, chatPreset = {}, result, diag
       }))
     } : {},
     ...result.meta.spatialState ? { spatialStateChars: normalizeText(result.meta.spatialState).length } : {},
+    ...result.meta.statusPanelYaml ? { statusPanelChars: normalizeText(result.meta.statusPanelYaml).length } : {},
     worldBudget: result.meta.worldBudget,
     worldPositionCounts: result.meta.worldPositionCounts,
     scanTextChars: result.meta.scanTextChars,

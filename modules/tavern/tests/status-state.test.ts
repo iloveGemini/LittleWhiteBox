@@ -19,6 +19,7 @@ import {
     saveTavernStatusSnapshot,
     type TavernStatusDocument,
 } from '../shared/status-state';
+import { buildTavernStatusPanelYaml } from '../shared/status-prompt';
 
 beforeEach(async () => {
     await db.delete();
@@ -109,6 +110,47 @@ test('status document normalize keeps the closed form set and skips invalid fiel
     assert.equal(normalized.document.subjects[0].tabs[0].blocks[1].fields.length, 0);
     assert.match(normalized.warnings.join('\n'), /未知form/);
     assert.match(normalized.warnings.join('\n'), /text缺value/);
+});
+
+test('status panel prompt yaml keeps full RP fields without implementation metadata', () => {
+    const document = createStatusDoc(62);
+    document.subjects[0].tabs[0].blocks[2].fields = [
+        { id: 'lamp', name: '煤油灯', icon: 'local_fire_department', qty: 1, key: true, slot: '右手', lore: '灯芯还剩一半。' },
+        { id: 'empty-pocket', name: '- 空口袋', empty: true, slot: '? 外套', lore: '~' },
+    ];
+    document.subjects[0].tabs[0].blocks[3].fields[0] = {
+        id: 'now',
+        name: '位置',
+        value: '站在档案室门口。\n门缝里有冷光。',
+    };
+
+    const yaml = buildTavernStatusPanelYaml(document);
+
+    assert.match(yaml, /^status_panel:/);
+    assert.match(yaml, /subjects:/);
+    assert.match(yaml, /name: 阿瑟/);
+    assert.match(yaml, /subtitle: 私家侦探/);
+    assert.match(yaml, /label: 概览/);
+    assert.match(yaml, /title: 核心值/);
+    assert.match(yaml, /form: gauge/);
+    assert.match(yaml, /name: 理智/);
+    assert.match(yaml, /value: 62/);
+    assert.match(yaml, /max: 99/);
+    assert.match(yaml, /label: 衣物湿透/);
+    assert.match(yaml, /kind: state/);
+    assert.match(yaml, /name: 煤油灯/);
+    assert.match(yaml, /qty: 1/);
+    assert.match(yaml, /key: true/);
+    assert.match(yaml, /slot: 右手/);
+    assert.match(yaml, /lore: 灯芯还剩一半。/);
+    assert.match(yaml, /name: "- 空口袋"/);
+    assert.match(yaml, /slot: "\? 外套"/);
+    assert.match(yaml, /lore: "~"/);
+    assert.match(yaml, /empty: true/);
+    assert.match(yaml, /value: \|-/);
+    assert.match(yaml, /门缝里有冷光。/);
+    assert.doesNotMatch(yaml, /\bid:/);
+    assert.doesNotMatch(yaml, /revision|docType|docId|icon|display|accent|layout|activeSubject/);
 });
 
 test('StatusInit writes the current document and a reversible patch record', async () => {
