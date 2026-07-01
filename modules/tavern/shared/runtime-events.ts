@@ -1,4 +1,5 @@
 import type { XbTavernMessage } from './message-assembler';
+import type { TavernActionCheckDifficultyLabel, TavernActionCheckMode } from './action-checks';
 
 export type TavernRuntimeEventType = 'chanceEncounter' | 'actionCheck';
 
@@ -14,7 +15,12 @@ export interface TavernActionCheckRuntimeEvent {
     action: string;
     stat: string;
     difficulty: number;
+    difficultyLabel?: TavernActionCheckDifficultyLabel;
+    mode?: TavernActionCheckMode;
     roll: number;
+    threshold?: number;
+    statValue?: number;
+    statMax?: number;
     success: boolean;
     outcome: 'criticalSuccess' | 'success' | 'failure' | 'criticalFailure';
     insertAfterChars: number;
@@ -35,6 +41,8 @@ export const RANDOM_ENCOUNTER_PROBABILITY = 0.1;
 export const RANDOM_ENCOUNTER_COOLDOWN_TURNS = 2;
 const ACTION_CHECK_RENDER_MARKER_BASE = 0xE200;
 const ACTION_CHECK_REGEX_MARKER_BASE = 0xE000;
+const ACTION_CHECK_DIFFICULTY_LABELS = new Set(['easy', 'ordinary', 'hard', 'very_hard', 'nearly_impossible']);
+const ACTION_CHECK_MODES = new Set(['statusGauge', 'd20Fallback']);
 
 const CHANCE_ENCOUNTER_PROMPT = [
     '[Runtime Event: Chance Encounter Triggered]',
@@ -73,21 +81,54 @@ function normalizeActionCheckOutcome(roll: number, difficulty: number): TavernAc
     return roll >= difficulty ? 'success' : 'failure';
 }
 
+function normalizeStatusGaugeOutcome(roll: number, threshold: number): TavernActionCheckRuntimeEvent['outcome'] {
+    if (roll <= 5) {return 'criticalSuccess';}
+    if (roll >= 96) {return 'criticalFailure';}
+    return roll <= threshold ? 'success' : 'failure';
+}
+
+function normalizeActionCheckMode(value: unknown): TavernActionCheckMode | undefined {
+    const text = normalizeInlineText(value, 40);
+    return ACTION_CHECK_MODES.has(text) ? text as TavernActionCheckMode : undefined;
+}
+
+function normalizeActionCheckDifficultyLabel(value: unknown): TavernActionCheckDifficultyLabel | undefined {
+    const text = normalizeInlineText(value, 40);
+    return ACTION_CHECK_DIFFICULTY_LABELS.has(text) ? text as TavernActionCheckDifficultyLabel : undefined;
+}
+
+function numberOrUndefined(value: unknown): number | undefined {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : undefined;
+}
+
 function normalizeActionCheckEvent(source: Record<string, unknown>): TavernActionCheckRuntimeEvent | null {
     const action = normalizeInlineText(source.action, 240);
     const stat = normalizeInlineText(source.stat, 120);
     if (!action || !stat) {return null;}
-    const roll = clampInteger(source.roll, 1, 20, 1);
+    const mode = normalizeActionCheckMode(source.mode);
+    const roll = clampInteger(source.roll, 1, mode === 'statusGauge' ? 100 : 20, 1);
     const difficulty = clampInteger(source.difficulty, 1, 21, 10);
-    const outcome = normalizeActionCheckOutcome(roll, difficulty);
+    const threshold = mode === 'statusGauge' ? clampInteger(source.threshold, 1, 99, 50) : undefined;
+    const outcome = mode === 'statusGauge' && threshold !== undefined
+        ? normalizeStatusGaugeOutcome(roll, threshold)
+        : normalizeActionCheckOutcome(roll, difficulty);
     const success = outcome === 'success' || outcome === 'criticalSuccess';
+    const difficultyLabel = normalizeActionCheckDifficultyLabel(source.difficultyLabel);
+    const statValue = numberOrUndefined(source.statValue);
+    const statMax = numberOrUndefined(source.statMax);
     return {
         type: 'actionCheck',
         createdAt: normalizeIsoTimestamp(source.createdAt),
         action,
         stat,
         difficulty,
+        ...(difficultyLabel ? { difficultyLabel } : {}),
+        ...(mode ? { mode } : {}),
         roll,
+        ...(threshold !== undefined ? { threshold } : {}),
+        ...(statValue !== undefined ? { statValue } : {}),
+        ...(statMax !== undefined ? { statMax } : {}),
         success,
         outcome,
         insertAfterChars: Math.max(0, clampInteger(source.insertAfterChars, 0, Number.MAX_SAFE_INTEGER, 0)),
@@ -117,6 +158,11 @@ function runtimeEventKey(event: TavernRuntimeEvent): string {
         event.action,
         String(event.roll),
         String(event.difficulty),
+        event.difficultyLabel || '',
+        event.mode || '',
+        event.threshold === undefined ? '' : String(event.threshold),
+        event.statValue === undefined ? '' : String(event.statValue),
+        event.statMax === undefined ? '' : String(event.statMax),
         event.outcome,
     ].join('\u0000');
 }
@@ -148,7 +194,12 @@ export function createActionCheckEvent(input: {
     action: string;
     stat: string;
     difficulty: number;
+    difficultyLabel?: TavernActionCheckDifficultyLabel;
+    mode?: TavernActionCheckMode;
     roll: number;
+    threshold?: number;
+    statValue?: number;
+    statMax?: number;
     success: boolean;
     outcome?: TavernActionCheckRuntimeEvent['outcome'];
     insertAfterChars: number;
@@ -163,7 +214,12 @@ export function createActionCheckEvent(input: {
         action: input.action,
         stat: input.stat,
         difficulty: input.difficulty,
+        difficultyLabel: input.difficultyLabel,
+        mode: input.mode,
         roll: input.roll,
+        threshold: input.threshold,
+        statValue: input.statValue,
+        statMax: input.statMax,
         success: input.success,
         outcome: input.outcome,
         insertAfterChars: input.insertAfterChars,

@@ -51,7 +51,7 @@ test('action check regex markers preserve normalized stakes across whole-event r
     assert.equal(normalized.events[0].insertAfterChars, rawText.indexOf('，') - '猛地'.length);
 });
 
-test('action check runtime events normalize bare-d20 difficulty and critical outcomes', () => {
+test('action check runtime events normalize fallback D20 difficulty and critical outcomes', () => {
     const criticalFailure = createActionCheckEvent({
         action: '轻推门板',
         stat: '力量',
@@ -99,4 +99,48 @@ test('action check runtime events normalize bare-d20 difficulty and critical out
     });
     assert.equal(correctedCriticalFailure.success, false);
     assert.equal(correctedCriticalFailure.outcome, 'criticalFailure');
+});
+
+test('action check runtime events preserve status-gauge D100 fields', () => {
+    const event = createActionCheckEvent({
+        action: '撞开铁门',
+        stat: '力量',
+        difficulty: 15,
+        difficultyLabel: 'hard',
+        mode: 'statusGauge',
+        roll: 45,
+        threshold: 45,
+        statValue: 65,
+        statMax: 100,
+        success: false,
+        outcome: 'failure',
+        insertAfterChars: 0,
+    });
+
+    assert.equal(event.mode, 'statusGauge');
+    assert.equal(event.difficultyLabel, 'hard');
+    assert.equal(event.roll, 45);
+    assert.equal(event.threshold, 45);
+    assert.equal(event.statValue, 65);
+    assert.equal(event.statMax, 100);
+    assert.equal(event.success, true);
+    assert.equal(event.outcome, 'success');
+
+    const criticalFailure = createActionCheckEvent({
+        action: '撞开铁门',
+        stat: '力量',
+        difficulty: 5,
+        difficultyLabel: 'easy',
+        mode: 'statusGauge',
+        roll: 96,
+        threshold: 99,
+        statValue: 100,
+        statMax: 100,
+        success: true,
+        outcome: 'success',
+        insertAfterChars: 0,
+    });
+    assert.equal(criticalFailure.roll, 96);
+    assert.equal(criticalFailure.success, false);
+    assert.equal(criticalFailure.outcome, 'criticalFailure');
 });

@@ -1034,10 +1034,10 @@ test('xb tavern run turn injects action-check protocol after current user and ex
     const protocolContent = requestMessages[protocolIndex]?.content || '';
     assert.match(protocolContent, /overwhelming advantage/);
     assert.match(protocolContent, /Do not roll for intimate or everyday interactions/);
-    assert.match(protocolContent, /bare D20 with no stat bonus/);
-    assert.match(protocolContent, /DC 1-5 is easy, 6-10 is ordinary, 11-15 is hard, 16-20 is very hard, and 21 is nearly impossible/);
-    assert.match(protocolContent, /Natural 1 is a critical failure/);
-    assert.match(protocolContent, /Natural 20 is a critical success/);
+    assert.match(protocolContent, /Choose the stat that best fits the action from the status panel/);
+    assert.match(protocolContent, /Difficulty levels: `easy`, `ordinary`, `hard`, `very_hard`, `nearly_impossible`/);
+    assert.match(protocolContent, /Critical Failure means things get dramatically worse/);
+    assert.match(protocolContent, /Critical Success means an overpowering triumph/);
     assert.deepEqual(exposedToolNames, [ACTION_CHECK_TOOL_NAME]);
 });
 
@@ -1103,6 +1103,102 @@ test('xb tavern run turn injects status panel yaml without exposing status tools
     assert.match(rawMessages, /value: 站在档案室门口。/);
     assert.doesNotMatch(rawMessages, /\bid:|revision|docType|docId|icon|display|accent|layout|activeSubject/);
     assert.deepEqual(exposedToolNames, [ACTION_CHECK_TOOL_NAME]);
+});
+
+test('xb tavern action check uses status panel gauge when stat matches', async () => {
+    await resetDb();
+    const preset = createDefaultXbTavernPreset();
+    const session = await createTavernSession({
+        title: 'Status action check',
+        characterKey: 'char-status-check',
+        characterName: 'Aster',
+        contextSnapshot: {
+            character: { characterKey: 'char-status-check', name: 'Aster' },
+        },
+        state: {
+            contract: mergeTavernSessionContract(undefined, {
+                statusPanel: true,
+                actionChecks: true,
+                randomEncounters: false,
+            }),
+        },
+    });
+    await executeTavernStatusTool(session.id, TAVERN_STATUS_TOOL_NAMES.INIT, {
+        document: createPromptStatusDocument(),
+    });
+
+    let requestCount = 0;
+    let exposedToolNames: string[] = [];
+    const executeRunOnce = Object.assign(async (options: TavernRunOnceOptions) => {
+        requestCount += 1;
+        if (requestCount === 1) {
+            exposedToolNames = (Array.isArray(options.tools) ? options.tools : [])
+                .map((tool) => String((tool as { function?: { name?: string } })?.function?.name || ''))
+                .filter(Boolean);
+            return {
+                text: '阿瑟屏住呼吸，逼自己盯住门缝里的冷光。 ',
+                toolCalls: [{
+                    id: 'status-check-1',
+                    name: ACTION_CHECK_TOOL_NAME,
+                    arguments: JSON.stringify({
+                        action: '稳住心神观察冷光',
+                        stat: '理智',
+                        difficulty: 'hard',
+                    }),
+                }],
+                requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages, {
+                    requestTask: {
+                        messages: options.messages,
+                        tools: options.tools,
+                        toolChoice: options.toolChoice,
+                    },
+                }),
+            };
+        }
+        const response = options.toolResponses?.[0]?.response as Record<string, unknown> | undefined;
+        assert.equal(response?.mode, 'statusGauge');
+        assert.equal(response?.difficultyLabel, 'hard');
+        assert.equal(response?.difficulty, 15);
+        assert.equal(response?.roll, 43);
+        assert.equal(response?.threshold, 43);
+        assert.equal(response?.statValue, 62);
+        assert.equal(response?.statMax, 99);
+        assert.equal(response?.success, true);
+        return {
+            text: '他稳住了，没有被那点冷光牵着走。',
+            requestSnapshot: buildTavernRequestSnapshot(options.agentConfig, options.messages, {
+                requestTask: {
+                    messages: options.messages,
+                    toolResponses: options.toolResponses,
+                },
+            }),
+        };
+    }, { supportsSessionToolLoop: true }) as Parameters<typeof runXbTavernTurn>[0]['executeRunOnce'];
+
+    await runXbTavernTurn({
+        sessionId: session.id,
+        agentConfig: { provider: 'fake-provider', model: 'fake-model' },
+        contextSnapshot: session.contextSnapshot || {},
+        preset,
+        currentUserMessage: '我盯着门缝里的光。',
+        actionCheckRoll: () => 1,
+        actionCheckPercentRoll: () => 43,
+        executeRunOnce,
+    });
+
+    const messages = await listTavernMessages(session.id);
+    const assistantEvents = getActionCheckEvents(messages[1]?.runtimeEvents);
+    assert.deepEqual(exposedToolNames, [ACTION_CHECK_TOOL_NAME]);
+    assert.equal(assistantEvents.length, 1);
+    assert.equal(assistantEvents[0]?.mode, 'statusGauge');
+    assert.equal(assistantEvents[0]?.difficultyLabel, 'hard');
+    assert.equal(assistantEvents[0]?.difficulty, 15);
+    assert.equal(assistantEvents[0]?.roll, 43);
+    assert.equal(assistantEvents[0]?.threshold, 43);
+    assert.equal(assistantEvents[0]?.statValue, 62);
+    assert.equal(assistantEvents[0]?.statMax, 99);
+    assert.equal(assistantEvents[0]?.success, true);
+    assert.equal(assistantEvents[0]?.outcome, 'success');
 });
 
 test('xb tavern run turn executes multiple action checks and persists assistant runtime events', async () => {

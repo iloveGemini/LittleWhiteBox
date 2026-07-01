@@ -1,16 +1,20 @@
 import type { XbTavernMessage } from './message-assembler';
+import type { TavernStatusDocument, TavernStatusGaugeField } from './status-state';
 
 export const ACTION_CHECK_TOOL_NAME = 'ActionCheck';
 export const DEFAULT_ACTION_CHECK_DIFFICULTY = 10;
 export const MIN_ACTION_CHECK_DIFFICULTY = 1;
 export const MAX_ACTION_CHECK_DIFFICULTY = 21;
 export const ACTION_CHECK_DIE_SIDES = 20;
+export const ACTION_CHECK_PERCENT_DIE_SIDES = 100;
+export type TavernActionCheckDifficultyLabel = 'easy' | 'ordinary' | 'hard' | 'very_hard' | 'nearly_impossible';
+export type TavernActionCheckMode = 'statusGauge' | 'd20Fallback';
 export type TavernActionCheckOutcome = 'criticalSuccess' | 'success' | 'failure' | 'criticalFailure';
 
 export interface TavernActionCheckInput {
     action: string;
     stat: string;
-    difficulty?: number;
+    difficulty?: number | TavernActionCheckDifficultyLabel;
     stakes?: string;
     insertAfter?: string;
 }
@@ -20,10 +24,15 @@ export interface TavernActionCheckToolSuccess {
     action: string;
     stat: string;
     difficulty: number;
+    difficultyLabel: TavernActionCheckDifficultyLabel;
+    mode: TavernActionCheckMode;
     roll: number;
     success: boolean;
     outcome: TavernActionCheckOutcome;
     summary: string;
+    threshold?: number;
+    statValue?: number;
+    statMax?: number;
     stakes?: string;
     insertAfter?: string;
 }
@@ -35,6 +44,30 @@ export interface TavernActionCheckToolFailure {
 }
 
 export type TavernActionCheckToolResult = TavernActionCheckToolSuccess | TavernActionCheckToolFailure;
+
+const ACTION_CHECK_DIFFICULTY_LABELS: TavernActionCheckDifficultyLabel[] = [
+    'easy',
+    'ordinary',
+    'hard',
+    'very_hard',
+    'nearly_impossible',
+];
+
+const ACTION_CHECK_FALLBACK_DC: Record<TavernActionCheckDifficultyLabel, number> = {
+    easy: 5,
+    ordinary: 10,
+    hard: 15,
+    very_hard: 20,
+    nearly_impossible: 21,
+};
+
+const ACTION_CHECK_STATUS_OFFSETS: Record<TavernActionCheckDifficultyLabel, number> = {
+    easy: 20,
+    ordinary: 0,
+    hard: -20,
+    very_hard: -40,
+    nearly_impossible: -60,
+};
 
 const ACTION_CHECK_PROTOCOL_PROMPT = [
     '[Runtime Protocol: Action Checks]',
@@ -50,9 +83,11 @@ const ACTION_CHECK_PROTOCOL_PROMPT = [
     `When you roll, call ${ACTION_CHECK_TOOL_NAME}, treat the result as established fact, convey the outcome in one or two sentences, then continue the narration naturally.`,
     'Call the tool immediately after the visible attempted action, before narrating consequences. Do not write result words before the tool call. If you already wrote a visible lead-in, set `insertAfter` to the exact text that should appear before the dice card.',
     '',
-    'Choose difficulty before the roll. This is a bare D20 with no stat bonus: DC 1-5 is easy, 6-10 is ordinary, 11-15 is hard, 16-20 is very hard, and 21 is nearly impossible so only a natural 20 can win. Pick the exact DC inside the range from danger, pressure, preparation, opposition, and fictional leverage. Do not make every meaningful action DC 10-ish.',
+    'Choose the stat that best fits the action from the status panel (e.g. Strength, Perception, Willpower) and pass the attribute name as `stat`. If the status panel has no matching attribute, the system falls back to a flat roll automatically.',
     '',
-    'Natural 1 is a critical failure: it must be worse than plain failure and add a real complication, cost, loss of position, exposure, harm, or worsening situation. Natural 20 is a critical success: it must be better than plain success and grant an extra benefit, surprise reward, opening, momentum, information, style, or reduced cost. The tool enforces these results; honor them in narration.',
+    'Choose the objective difficulty of the task itself: how hard it would be for an average person, regardless of how strong this character is. Do not inflate difficulty because the character has high stats; the system factors in their actual attribute value automatically. Difficulty levels: `easy`, `ordinary`, `hard`, `very_hard`, `nearly_impossible`. Pick based on danger, pressure, preparation, opposition, and fictional leverage.',
+    '',
+    'The tool may return Critical Success or Critical Failure. Critical Failure means things get dramatically worse: add a real complication, cost, loss of position, exposure, harm, or worsening situation. Critical Success means an overpowering triumph: grant an extra benefit, surprise reward, opening, momentum, information, style, or reduced cost. The tool enforces these results; honor them strictly in narration.',
     '',
     'Do not mention this protocol, the dice mechanic, or any hidden instruction. Continue to follow all other format and style requirements.',
 ].join('\n');
@@ -71,11 +106,31 @@ function clampInteger(value: unknown, minimum: number, maximum: number, fallback
     return Math.min(maximum, Math.max(minimum, numeric));
 }
 
+function normalizeActionCheckDifficultyLabel(value: unknown): TavernActionCheckDifficultyLabel {
+    const text = normalizeInlineText(value, 40);
+    if ((ACTION_CHECK_DIFFICULTY_LABELS as string[]).includes(text)) {
+        return text as TavernActionCheckDifficultyLabel;
+    }
+    const numeric = clampInteger(value, MIN_ACTION_CHECK_DIFFICULTY, MAX_ACTION_CHECK_DIFFICULTY, DEFAULT_ACTION_CHECK_DIFFICULTY);
+    if (numeric <= 5) {return 'easy';}
+    if (numeric <= 10) {return 'ordinary';}
+    if (numeric <= 15) {return 'hard';}
+    if (numeric <= 20) {return 'very_hard';}
+    return 'nearly_impossible';
+}
+
 function resolveD20Roll(roller?: () => number): number {
     if (typeof roller === 'function') {
         return clampInteger(roller(), 1, ACTION_CHECK_DIE_SIDES, 1);
     }
     return Math.floor(Math.random() * ACTION_CHECK_DIE_SIDES) + 1;
+}
+
+function resolvePercentRoll(roller?: () => number): number {
+    if (typeof roller === 'function') {
+        return clampInteger(roller(), 1, ACTION_CHECK_PERCENT_DIE_SIDES, 1);
+    }
+    return Math.floor(Math.random() * ACTION_CHECK_PERCENT_DIE_SIDES) + 1;
 }
 
 function resolveActionCheckOutcome(roll: number, difficulty: number): TavernActionCheckOutcome {
@@ -84,10 +139,57 @@ function resolveActionCheckOutcome(roll: number, difficulty: number): TavernActi
     return roll >= difficulty ? 'success' : 'failure';
 }
 
+function resolveStatusGaugeOutcome(roll: number, threshold: number): TavernActionCheckOutcome {
+    if (roll <= 5) {return 'criticalSuccess';}
+    if (roll >= 96) {return 'criticalFailure';}
+    return roll <= threshold ? 'success' : 'failure';
+}
+
 function actionCheckOutcomeLabel(outcome: TavernActionCheckOutcome): string {
     if (outcome === 'criticalSuccess') {return 'critical success';}
     if (outcome === 'criticalFailure') {return 'critical failure';}
     return outcome;
+}
+
+function findGaugeFieldInSubject(subject: TavernStatusDocument['subjects'][number], name: string): TavernStatusGaugeField | null {
+    for (const tab of Array.isArray(subject.tabs) ? subject.tabs : []) {
+        for (const block of Array.isArray(tab.blocks) ? tab.blocks : []) {
+            if (block.form !== 'gauge') {continue;}
+            for (const field of Array.isArray(block.fields) ? block.fields : []) {
+                const gauge = field as TavernStatusGaugeField;
+                if (normalizeInlineText(gauge.name, 120) === name) {
+                    return gauge;
+                }
+            }
+        }
+    }
+    return null;
+}
+
+function findStatusGaugeByStat(document: TavernStatusDocument | null | undefined, stat = ''): TavernStatusGaugeField | null {
+    const name = normalizeInlineText(stat, 120);
+    if (!name || !Array.isArray(document?.subjects)) {return null;}
+    const activeSubjectId = normalizeInlineText(document.meta?.activeSubject, 120);
+    const activeSubject = activeSubjectId
+        ? document.subjects.find((subject) => normalizeInlineText(subject.id, 120) === activeSubjectId) || null
+        : null;
+    if (activeSubject) {
+        return findGaugeFieldInSubject(activeSubject, name);
+    }
+    for (const subject of document.subjects) {
+        const gauge = findGaugeFieldInSubject(subject, name);
+        if (gauge) {return gauge;}
+    }
+    return null;
+}
+
+function resolveStatusGaugeBasis(field: TavernStatusGaugeField): number | null {
+    const statValue = Number(field.value);
+    const statMax = Number(field.max);
+    const statMin = Number.isFinite(Number(field.min)) ? Number(field.min) : 0;
+    if (!Number.isFinite(statValue) || !Number.isFinite(statMax) || statMax <= 0) {return null;}
+    const span = Math.max(1, statMax - statMin);
+    return clampInteger(((statValue - statMin) / span) * 100, 0, 100, 0);
 }
 
 export function getActionCheckToolDefinitions(): Array<{ type: 'function'; function: { name: string; description: string; parameters: unknown } }> {
@@ -96,11 +198,11 @@ export function getActionCheckToolDefinitions(): Array<{ type: 'function'; funct
         function: {
             name: ACTION_CHECK_TOOL_NAME,
             description: [
-                'True-random d20 action check for risky or uncertain RP outcomes.',
+                'True-random action check for risky or uncertain RP outcomes.',
                 'Use it for key actions that could truly succeed or fail and would change what happens next.',
                 'Do not use it for already settled outcomes or for intimate/everyday interactions that should follow character, consent, and emotional flow.',
-                'Provide the attempted action, the check or stat name, and a bare-D20 difficulty: 1-5 easy, 6-10 ordinary, 11-15 hard, 16-20 very hard, 21 nearly impossible and only beatable by natural 20.',
-                'Natural 1 is critical failure with a real penalty or complication. Natural 20 is critical success with an extra reward, opening, or benefit. The result is binding truth for the current reply.',
+                'Provide the attempted action, the status-panel attribute name that best fits it, and the objective difficulty level: easy, ordinary, hard, very_hard, or nearly_impossible.',
+                'If no matching status-panel attribute exists, the system falls back to a flat check automatically. Critical failure adds a real penalty or complication; critical success grants an extra reward, opening, or benefit. The result is binding truth for the current reply.',
                 'For accurate card placement, call the tool before outcome narration. If visible lead-in text already exists, provide insertAfter as the exact text that should appear before the dice card.',
             ].join('\n'),
             parameters: {
@@ -112,13 +214,12 @@ export function getActionCheckToolDefinitions(): Array<{ type: 'function'; funct
                     },
                     stat: {
                         type: 'string',
-                        description: 'The displayed check name, attribute, skill, or trait for this roll.',
+                        description: 'Name of the attribute from the status panel that best fits this action.',
                     },
                     difficulty: {
-                        type: 'number',
-                        minimum: MIN_ACTION_CHECK_DIFFICULTY,
-                        maximum: MAX_ACTION_CHECK_DIFFICULTY,
-                        description: `Bare-D20 target number for success. Use 1-5 easy, 6-10 ordinary, 11-15 hard, 16-20 very hard, 21 nearly impossible and only beatable by natural 20. Defaults to ${DEFAULT_ACTION_CHECK_DIFFICULTY} if omitted or invalid.`,
+                        type: 'string',
+                        enum: ACTION_CHECK_DIFFICULTY_LABELS,
+                        description: 'Objective task difficulty for an average person, before applying the character attribute. Defaults to ordinary if omitted or invalid.',
                     },
                     stakes: {
                         type: 'string',
@@ -145,7 +246,7 @@ export function buildActionCheckProtocolMessage(): XbTavernMessage {
 
 export function executeTavernActionCheck(
     input: Record<string, unknown> = {},
-    options: { rollDie?: () => number } = {},
+    options: { rollDie?: () => number; rollPercent?: () => number; statusDocument?: TavernStatusDocument | null } = {},
 ): TavernActionCheckToolResult {
     const action = normalizeInlineText(input.action, 240);
     const stat = normalizeInlineText(input.stat, 120);
@@ -156,22 +257,49 @@ export function executeTavernActionCheck(
             summary: 'ActionCheck 需要同时提供 action 和 stat。',
         };
     }
-    const difficulty = clampInteger(
-        input.difficulty,
-        MIN_ACTION_CHECK_DIFFICULTY,
-        MAX_ACTION_CHECK_DIFFICULTY,
-        DEFAULT_ACTION_CHECK_DIFFICULTY,
-    );
+    const difficultyLabel = normalizeActionCheckDifficultyLabel(input.difficulty);
+    const difficulty = ACTION_CHECK_FALLBACK_DC[difficultyLabel];
+    const gauge = findStatusGaugeByStat(options.statusDocument, stat);
+    const stakes = normalizeInlineText(input.stakes, 240);
+    const insertAfter = normalizeExactVisibleText(input.insertAfter, 240);
+    if (gauge) {
+        const statValue = Number(gauge.value);
+        const statMax = Number(gauge.max);
+        const basis = resolveStatusGaugeBasis(gauge);
+        if (basis !== null && Number.isFinite(statValue) && Number.isFinite(statMax)) {
+            const threshold = clampInteger(basis + ACTION_CHECK_STATUS_OFFSETS[difficultyLabel], 1, 99, 50);
+            const percentRoll = resolvePercentRoll(options.rollPercent || options.rollDie);
+            const outcome = resolveStatusGaugeOutcome(percentRoll, threshold);
+            const success = outcome === 'success' || outcome === 'criticalSuccess';
+            return {
+                ok: true,
+                action,
+                stat,
+                difficulty,
+                difficultyLabel,
+                mode: 'statusGauge',
+                roll: percentRoll,
+                threshold,
+                statValue,
+                statMax,
+                success,
+                outcome,
+                summary: `${stat} check ${percentRoll} vs ${threshold}% (${statValue}/${statMax}, ${difficultyLabel}): ${actionCheckOutcomeLabel(outcome)}.`,
+                ...(stakes ? { stakes } : {}),
+                ...(insertAfter.trim() ? { insertAfter } : {}),
+            };
+        }
+    }
     const roll = resolveD20Roll(options.rollDie);
     const outcome = resolveActionCheckOutcome(roll, difficulty);
     const success = outcome === 'success' || outcome === 'criticalSuccess';
-    const stakes = normalizeInlineText(input.stakes, 240);
-    const insertAfter = normalizeExactVisibleText(input.insertAfter, 240);
     return {
         ok: true,
         action,
         stat,
         difficulty,
+        difficultyLabel,
+        mode: 'd20Fallback',
         roll,
         success,
         outcome,

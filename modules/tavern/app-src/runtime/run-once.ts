@@ -104,7 +104,7 @@ import {
     buildXbTavernMemoryQuery,
     retrieveXbTavernMemoryContext,
 } from '../../shared/memory-retrieval';
-import { getTavernStatusStateForSession } from '../../shared/status-state';
+import { getTavernStatusStateForSession, type TavernStatusDocument } from '../../shared/status-state';
 import { buildTavernStatusPanelYaml } from '../../shared/status-prompt';
 import { createXbTavernAgentRuntime } from './agent-runtime';
 import {
@@ -631,6 +631,7 @@ export interface XbTavernRunTurnInput {
     randomEncounterRoll?: () => number;
     rerollRuntimeEvents?: boolean;
     actionCheckRoll?: () => number;
+    actionCheckPercentRoll?: () => number;
 }
 
 export interface XbTavernRunResult {
@@ -904,12 +905,18 @@ function filterMemoryContextByRuntime(
     return filtered;
 }
 
-async function buildStatusPanelYamlForPrompt(sessionId = '', runtime: TavernSessionContractRuntime): Promise<string> {
+async function buildStatusPanelPromptContext(sessionId = '', runtime: TavernSessionContractRuntime): Promise<{
+    statusPanelYaml: string;
+    statusDocument?: TavernStatusDocument;
+}> {
     const id = String(sessionId || '').trim();
-    if (!id || !runtime.includeStatusStates) {return '';}
+    if (!id || !runtime.includeStatusStates) {return { statusPanelYaml: '' };}
     const state = await getTavernStatusStateForSession(id);
-    if (!state.document) {return '';}
-    return buildTavernStatusPanelYaml(state.status);
+    if (!state.document) {return { statusPanelYaml: '' };}
+    return {
+        statusPanelYaml: buildTavernStatusPanelYaml(state.status),
+        statusDocument: state.status,
+    };
 }
 
 function addRegexSummary(target: TavernRegexApplicationSummary, source?: TavernRegexApplicationSummary): void {
@@ -1801,9 +1808,10 @@ export async function simulateXbTavernRequest(input: XbTavernSimulateRequestInpu
     const simulateQuestHooks = session && sessionContractRuntime.includeQuestOrchestration
         ? await runTavernStage('simulate_quest_hook_retrieval', () => getLatestQuestHooksForPrompt(session.id, 1))
         : [];
-    const statusPanelYaml = session
-        ? await runTavernStage('simulate_status_panel_prompt', () => buildStatusPanelYamlForPrompt(session.id, sessionContractRuntime))
-        : '';
+    const statusPromptContext = session
+        ? await runTavernStage('simulate_status_panel_prompt', () => buildStatusPanelPromptContext(session.id, sessionContractRuntime))
+        : { statusPanelYaml: '' };
+    const statusPanelYaml = statusPromptContext.statusPanelYaml;
     const memoryContext: XbTavernMemoryContext | undefined = retrievedMemoryContext || simulateQuestHooks.length || statusPanelYaml
         ? {
             ...(retrievedMemoryContext || {}),
@@ -1933,6 +1941,8 @@ async function runTavernActionCheckLoop(input: {
     onStreamProgress?: TavernRunOnceOptions['onStreamProgress'];
     executeRunOnce: TavernRunOnceExecutor;
     actionCheckRoll?: () => number;
+    actionCheckPercentRoll?: () => number;
+    statusDocument?: TavernStatusDocument;
 }): Promise<TavernRunOnceResult & { runtimeEvents: TavernActionCheckRuntimeEvent[] }> {
     const tools = getActionCheckToolDefinitions();
     const protocolMessages = [...input.messages];
@@ -2045,7 +2055,11 @@ async function runTavernActionCheckLoop(input: {
         toolCalls.forEach((toolCall) => {
             const args = safeJsonParse(toolCall.arguments, {});
             const toolResult = toolCall.name === ACTION_CHECK_TOOL_NAME
-                ? executeTavernActionCheck(args, { rollDie: input.actionCheckRoll })
+                ? executeTavernActionCheck(args, {
+                    rollDie: input.actionCheckRoll,
+                    rollPercent: input.actionCheckPercentRoll,
+                    statusDocument: input.statusDocument,
+                })
                 : buildDeniedActionCheckToolResult(toolCall.name);
             if (toolResult.ok) {
                 const eventInsertAfterChars = resolveActionCheckInsertAfterChars(finalText, toolResult, insertAfterChars);
@@ -2053,7 +2067,12 @@ async function runTavernActionCheckLoop(input: {
                     action: toolResult.action,
                     stat: toolResult.stat,
                     difficulty: toolResult.difficulty,
+                    difficultyLabel: toolResult.difficultyLabel,
+                    mode: toolResult.mode,
                     roll: toolResult.roll,
+                    threshold: toolResult.threshold,
+                    statValue: toolResult.statValue,
+                    statMax: toolResult.statMax,
                     success: toolResult.success,
                     outcome: toolResult.outcome,
                     insertAfterChars: eventInsertAfterChars,
@@ -2320,7 +2339,8 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
         // RP gets only the freshest one. The event panel may show more, but prompt hooks should stay soft and sparse.
         ? await runTavernStage('turn_quest_hook_retrieval', () => getLatestQuestHooksForPrompt(baseSession.id, 1))
         : [];
-    const statusPanelYaml = await runTavernStage('turn_status_panel_prompt', () => buildStatusPanelYamlForPrompt(baseSession.id, sessionContractRuntime));
+    const statusPromptContext = await runTavernStage('turn_status_panel_prompt', () => buildStatusPanelPromptContext(baseSession.id, sessionContractRuntime));
+    const statusPanelYaml = statusPromptContext.statusPanelYaml;
     const memoryContext: XbTavernMemoryContext | undefined = retrievedMemoryContext || questHooks.length || statusPanelYaml
         ? {
             ...(retrievedMemoryContext || {}),
@@ -2482,6 +2502,8 @@ export async function runXbTavernTurn(input: XbTavernRunTurnInput): Promise<XbTa
                 onStreamProgress: handleStreamProgress,
                 executeRunOnce,
                 actionCheckRoll: input.actionCheckRoll,
+                actionCheckPercentRoll: input.actionCheckPercentRoll,
+                statusDocument: statusPromptContext.statusDocument,
             })
             : await executeRunOnce({
                 agentConfig: input.agentConfig,

@@ -965,9 +965,13 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
         const outcome = actionCheckOutcomeLabel(event);
         const action = String(event.action || '').trim();
         const stakes = String(event.stakes || '').trim();
+        const threshold = Number(event.threshold);
+        const hasThreshold = Number.isFinite(threshold);
         return [
             `行动判定：${event.stat}。`,
-            `掷骰 ${event.roll} 对抗难度 ${event.difficulty}。`,
+            hasThreshold
+                ? `掷骰 ${event.roll} 对抗阈值 ${threshold}%。`
+                : `掷骰 ${event.roll} 对抗难度 ${event.difficulty}。`,
             `${outcome}。`,
             action ? `行动意图：${action}。` : '',
             stakes ? `风险：${stakes}。` : '',
@@ -994,14 +998,16 @@ export function useTavernMarkdownTools(options: TavernMarkdownToolsOptions) {
 
         const grid = document.createElement('span');
         grid.className = 'action-check-card-grid';
+        const threshold = Number(event.threshold);
+        const hasThreshold = Number.isFinite(threshold);
         [{
             className: 'action-check-card-roll',
             label: '掷骰',
             value: String(event.roll),
         }, {
             className: 'action-check-card-dc',
-            label: '难度',
-            value: String(event.difficulty),
+            label: hasThreshold ? '阈值' : '难度',
+            value: hasThreshold ? `${threshold}%` : String(event.difficulty),
         }].forEach((item) => {
             const cell = document.createElement('span');
             cell.className = item.className;

@@ -811,6 +811,12 @@
         padding: 9px 11px;
     }
 
+    .settings-layout.is-api-workspace .tavern-api-settings .xb-assistant-config select.xb-assistant-preset-field {
+        padding: 0 11px;
+        font-size: 14px;
+        line-height: 40px;
+    }
+
     .settings-layout.is-api-workspace .tavern-api-settings .xb-assistant-inline-input {
         align-items: end;
         gap: 7px;
