@@ -2027,6 +2027,7 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     const markdownToolsSource = readRepoFile('modules/tavern/app-src/components/chat/useTavernMarkdownTools.ts');
     const workspacePanelSource = readRepoFile('modules/tavern/app-src/components/chat/TavernWorkspacePanel.vue');
     const contractModalSource = readRepoFile('modules/tavern/app-src/components/chat/TavernContractModal.vue');
+    const sessionContractSource = readRepoFile('modules/tavern/shared/session-contract.ts');
     const contextSource = readRepoFile('modules/tavern/app-src/components/tavern-app-context.ts');
     const cssSource = readRepoFile('modules/tavern/app-src/styles/chat/messages.css');
     const appBaseCss = readRepoFile('modules/tavern/app-src/styles/base.css');
@@ -2134,9 +2135,14 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.doesNotMatch(layoutCss, /@media \(max-width: 980px\) \{[\s\S]*\.chat-head-actions button:last-child \{[\s\S]*display: none;/);
     assert.match(layoutCss, /\.chat-head \{[\s\S]*justify-content: space-between;/);
     assert.match(conversationPanelSource, /<header class="chat-head">[\s\S]*class="chat-head-main"[\s\S]*class="xb-workspace-controller chat-layout-controller"[\s\S]*chatLayout === 'chat'[\s\S]*chatLayout === 'balanced'[\s\S]*chatLayout === 'editor'[\s\S]*class="chat-head-actions"/);
-    assert.match(chatPageSource, /class="chat-mobile-context-row"[\s\S]*title="地图"[\s\S]*title="记忆"[\s\S]*📓 记忆[\s\S]*title="事件"[\s\S]*🧭 事件[\s\S]*title="档案"[\s\S]*📋 档案/);
+    assert.match(chatPageSource, /class="chat-mobile-context-row"[\s\S]*title="地图"[\s\S]*>\s*地图\s*<\/button>[\s\S]*title="记忆"[\s\S]*>\s*记忆\s*<\/button>[\s\S]*title="事件"[\s\S]*>\s*事件\s*<\/button>[\s\S]*title="档案"[\s\S]*>\s*档案\s*<\/button>/);
+    assert.doesNotMatch(chatPageSource, /📓 记忆|🧭 事件|📋 档案/);
     assert.doesNotMatch(conversationPanelSource, /title="事件"/);
     assert.match(contractModalSource, /契约[\s\S]*玩家 — 代理人誓约[\s\S]*在故事里，定义你的代理人被允许做什么。[\s\S]*别忘记添加可执行工具的分身模型。/);
+    assert.match(sessionContractSource, /key: 'memoryArchiving'[\s\S]*icon: '📓'[\s\S]*title: '记忆存档'/);
+    assert.match(sessionContractSource, /key: 'statusPanel'[\s\S]*icon: '📋'[\s\S]*title: '角色档案'/);
+    assert.match(sessionContractSource, /key: 'questOrchestration'[\s\S]*icon: '🧭'[\s\S]*title: '织线者'/);
+    assert.doesNotMatch(sessionContractSource, /key: 'memoryArchiving'[\s\S]*icon: '🧠'|key: 'statusPanel'[\s\S]*icon: '档'/);
     assert.match(contractModalSource, /封印中\.\.\.[\s\S]*封存誓约[\s\S]*项授权已启用/);
     assert.doesNotMatch(chatPageSource, /class="chat-mobile-context-row"[\s\S]*title="请求日志"/);
     assert.doesNotMatch(chatPageSource, /class="chat-mobile-context-row"[\s\S]*>\s*会话\s*</);

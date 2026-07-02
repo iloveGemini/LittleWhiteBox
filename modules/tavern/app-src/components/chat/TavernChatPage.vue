@@ -768,7 +768,7 @@ onUpdated(() => {
           aria-label="记忆"
           @click="toggleMobileWorkspacePanel('memory')"
         >
-          📓 记忆
+          记忆
         </button>
         <button
           type="button"
@@ -778,7 +778,7 @@ onUpdated(() => {
           aria-label="事件"
           @click="toggleMobileWorkspacePanel('event')"
         >
-          🧭 事件
+          事件
         </button>
         <button
           type="button"
@@ -788,7 +788,7 @@ onUpdated(() => {
           aria-label="档案"
           @click="toggleMobileWorkspacePanel('status')"
         >
-          📋 档案
+          档案
         </button>
       </div>
     </header>

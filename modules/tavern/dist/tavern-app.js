@@ -15113,7 +15113,7 @@ var yu = {
   {
     key: "memoryArchiving",
     tier: "silent-operations",
-    icon: "🧠",
+    icon: "📓",
     title: "记忆存档",
     summary: "",
     description: "授权代理人管理你的长期记忆。它将默默维护、压缩和召回上下文——确保故事永不遗忘。"
@@ -15129,7 +15129,7 @@ var yu = {
   {
     key: "statusPanel",
     tier: "silent-operations",
-    icon: "档",
+    icon: "📋",
     title: "角色档案",
     summary: "",
     description: "授权代理人持续记录状态面板。属性、状态、随身之物与关系亲疏，将被默默记录与更新。"
@@ -15153,7 +15153,7 @@ var yu = {
   {
     key: "questOrchestration",
     tier: "narrative-orchestration",
-    icon: "📜",
+    icon: "🧭",
     title: "织线者",
     summary: "",
     description: "让代理人感知你故事中的暗流，浮现接下来可能发生的事。当势头停滞，一根线索显现——追随它、忽视它，或任它消散。"
@@ -62653,21 +62653,21 @@ var cAe = { class: "tavern-workspace-panel" }, uAe = { class: "tavern-workspace-
           title: "记忆",
           "aria-label": "记忆",
           onClick: je[8] || (je[8] = (_t) => He("memory"))
-        }, " 📓 记忆 ", 2),
+        }, " 记忆 ", 2),
         g("button", {
           type: "button",
           class: Ue(["chat-mobile-context-button", { "is-active": Qe.value === "workspace" && T(P) === "event" }]),
           title: "事件",
           "aria-label": "事件",
           onClick: je[9] || (je[9] = (_t) => He("event"))
-        }, " 🧭 事件 ", 2),
+        }, " 事件 ", 2),
         g("button", {
           type: "button",
           class: Ue(["chat-mobile-context-button", { "is-active": Qe.value === "workspace" && T(P) === "status" }]),
           title: "档案",
           "aria-label": "档案",
           onClick: je[10] || (je[10] = (_t) => He("status"))
-        }, " 📋 档案 ", 2)
+        }, " 档案 ", 2)
       ])])) : ve("", !0),
       T(ne) && Qe.value !== "none" ? (L(), D("button", {
         key: 1,

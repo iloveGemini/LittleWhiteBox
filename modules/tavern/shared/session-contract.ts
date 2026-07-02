@@ -86,7 +86,7 @@ export const TAVERN_CONTRACT_MANDATES: TavernContractMandateDefinition[] = [
     {
         key: 'memoryArchiving',
         tier: 'silent-operations',
-        icon: '🧠',
+        icon: '📓',
         title: '记忆存档',
         summary: '',
         description: '授权代理人管理你的长期记忆。它将默默维护、压缩和召回上下文——确保故事永不遗忘。',
@@ -102,7 +102,7 @@ export const TAVERN_CONTRACT_MANDATES: TavernContractMandateDefinition[] = [
     {
         key: 'statusPanel',
         tier: 'silent-operations',
-        icon: '档',
+        icon: '📋',
         title: '角色档案',
         summary: '',
         description: '授权代理人持续记录状态面板。属性、状态、随身之物与关系亲疏，将被默默记录与更新。',
@@ -126,7 +126,7 @@ export const TAVERN_CONTRACT_MANDATES: TavernContractMandateDefinition[] = [
     {
         key: 'questOrchestration',
         tier: 'narrative-orchestration',
-        icon: '📜',
+        icon: '🧭',
         title: '织线者',
         summary: '',
         description: '让代理人感知你故事中的暗流，浮现接下来可能发生的事。当势头停滞，一根线索显现——追随它、忽视它，或任它消散。',
