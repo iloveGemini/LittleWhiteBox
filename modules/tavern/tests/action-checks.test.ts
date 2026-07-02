@@ -72,6 +72,44 @@ function createMultiSubjectStatusDocument(options: {
     };
 }
 
+function createSingleSubjectMultiTabStatusDocument(): TavernStatusDocument {
+    return {
+        meta: { revision: 0, activeSubject: 'party' },
+        subjects: [{
+            id: 'party',
+            name: '队伍状态',
+            tabs: [{
+                id: 'player',
+                label: '我',
+                blocks: [{
+                    id: 'player-stats',
+                    title: '属性',
+                    form: 'gauge',
+                    fields: [{ id: 'player-str', name: '力量', value: 65, max: 100 }],
+                }],
+            }, {
+                id: 'guard',
+                label: '守卫',
+                blocks: [{
+                    id: 'guard-stats',
+                    title: '属性',
+                    form: 'gauge',
+                    fields: [{ id: 'guard-str', name: '力量', value: 40, max: 100 }],
+                }],
+            }, {
+                id: 'lia',
+                label: '莉娅',
+                blocks: [{
+                    id: 'lia-stats',
+                    title: '属性',
+                    form: 'gauge',
+                    fields: [{ id: 'lia-str', name: '力量', value: 80, max: 100 }],
+                }],
+            }],
+        }],
+    };
+}
+
 test('action check normalizes enum difficulty and defensive numeric input', () => {
     const missingDifficulty = executeTavernActionCheck({
         action: '撬开门锁',
@@ -202,6 +240,52 @@ test('action check status gauge threshold honors min and active subject', () => 
     assert.equal(missingFromActiveSubject.ok && missingFromActiveSubject.roll, 20);
 });
 
+test('action check character narrows same-name gauges across tabs', () => {
+    const npc = executeTavernActionCheck({
+        action: '守卫撞开木门',
+        character: '守卫',
+        stat: '力量',
+        difficulty: 'ordinary',
+    }, {
+        rollPercent: () => 40,
+        statusDocument: createSingleSubjectMultiTabStatusDocument(),
+    });
+    assert.equal(npc.ok, true);
+    assert.equal(npc.ok && npc.mode, 'statusGauge');
+    assert.equal(npc.ok && npc.character, '守卫');
+    assert.equal(npc.ok && npc.statValue, 40);
+    assert.equal(npc.ok && npc.threshold, 40);
+    assert.equal(npc.ok && npc.success, true);
+    assert.match(npc.ok ? npc.summary : '', /守卫 力量 check 40 vs 40%/);
+
+    const omittedCharacter = executeTavernActionCheck({
+        action: '我撞开木门',
+        stat: '力量',
+        difficulty: 'ordinary',
+    }, {
+        rollPercent: () => 66,
+        statusDocument: createSingleSubjectMultiTabStatusDocument(),
+    });
+    assert.equal(omittedCharacter.ok, true);
+    assert.equal(omittedCharacter.ok && omittedCharacter.mode, 'statusGauge');
+    assert.equal(omittedCharacter.ok && omittedCharacter.statValue, 65);
+    assert.equal(omittedCharacter.ok && omittedCharacter.success, false);
+
+    const unknownCharacter = executeTavernActionCheck({
+        action: '陌生人撞开木门',
+        character: '陌生人',
+        stat: '力量',
+        difficulty: 'ordinary',
+    }, {
+        rollDie: () => 12,
+        rollPercent: () => 1,
+        statusDocument: createSingleSubjectMultiTabStatusDocument(),
+    });
+    assert.equal(unknownCharacter.ok, true);
+    assert.equal(unknownCharacter.ok && unknownCharacter.mode, 'd20Fallback');
+    assert.equal(unknownCharacter.ok && unknownCharacter.roll, 12);
+});
+
 test('action check status gauge D100 enforces critical bands', () => {
     const criticalSuccess = executeTavernActionCheck({
         action: '强行掀开石门',
@@ -276,12 +360,24 @@ test('action check preserves exact insertAfter visible text whitespace', () => {
     assert.equal(blank.ok && 'insertAfter' in blank, false);
 });
 
-test('action check tool description teaches status attributes and enum difficulty', () => {
+test('action check tool description is a parameter manual', () => {
     const description = String(getActionCheckToolDefinitions()[0]?.function.description || '');
-    const parameters = getActionCheckToolDefinitions()[0]?.function.parameters as { properties?: Record<string, { enum?: string[]; description?: string }> };
+    const parameters = getActionCheckToolDefinitions()[0]?.function.parameters as {
+        properties?: Record<string, { enum?: string[]; description?: string }>;
+        required?: string[];
+    };
+    assert.match(description, /Action check for uncertain RP outcomes/);
+    assert.match(description, /Parameters:/);
+    assert.match(description, /character \(optional\): the name of the character acting/);
     assert.match(description, /status-panel attribute name/);
-    assert.match(description, /easy, ordinary, hard, very_hard, or nearly_impossible/);
-    assert.match(description, /Critical failure adds a real penalty or complication/);
+    assert.match(description, /easy \/ ordinary \/ hard \/ very_hard \/ nearly_impossible/);
+    assert.match(description, /Returns: success, failure, critical success, or critical failure/);
+    assert.doesNotMatch(description, /When to roll/);
+    assert.doesNotMatch(description, /When NOT to roll/);
+    assert.doesNotMatch(description, /Critical failure adds a real penalty or complication/);
     assert.deepEqual(parameters.properties?.difficulty?.enum, ['easy', 'ordinary', 'hard', 'very_hard', 'nearly_impossible']);
+    assert.deepEqual(parameters.required, ['action', 'stat', 'difficulty']);
+    assert.match(String(parameters.properties?.character?.description || ''), /subject name or tab label/);
     assert.match(String(parameters.properties?.stat?.description || ''), /status panel/);
+    assert.match(String(parameters.properties?.difficulty?.description || ''), /Do not inflate/);
 });

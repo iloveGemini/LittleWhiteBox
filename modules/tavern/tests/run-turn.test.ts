@@ -1033,11 +1033,15 @@ test('xb tavern run turn injects action-check protocol after current user and ex
     assert.ok(afterHistoryIndex > protocolIndex);
     const protocolContent = requestMessages[protocolIndex]?.content || '';
     assert.match(protocolContent, /overwhelming advantage/);
-    assert.match(protocolContent, /Do not roll for intimate or everyday interactions/);
-    assert.match(protocolContent, /Choose the stat that best fits the action from the status panel/);
-    assert.match(protocolContent, /Difficulty levels: `easy`, `ordinary`, `hard`, `very_hard`, `nearly_impossible`/);
-    assert.match(protocolContent, /Critical Failure means things get dramatically worse/);
-    assert.match(protocolContent, /Critical Success means an overpowering triumph/);
+    assert.match(protocolContent, /Consensual or natural intimacy/);
+    assert.match(protocolContent, /How to call the tool \(Before the roll\):/);
+    assert.match(protocolContent, /before narrating any consequence or assuming the outcome/);
+    assert.match(protocolContent, /How to narrate the outcome \(After the roll\):/);
+    assert.match(protocolContent, /If Critical Failure: make things dramatically worse/);
+    assert.match(protocolContent, /If Critical Success: describe an overpowering triumph/);
+    assert.doesNotMatch(protocolContent, /How to narrate:/);
+    assert.doesNotMatch(protocolContent, /Choose the stat that best fits the action from the status panel/);
+    assert.doesNotMatch(protocolContent, /Difficulty levels: `easy`, `ordinary`, `hard`, `very_hard`, `nearly_impossible`/);
     assert.deepEqual(exposedToolNames, [ACTION_CHECK_TOOL_NAME]);
 });
 

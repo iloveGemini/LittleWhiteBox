@@ -2065,6 +2065,7 @@ async function runTavernActionCheckLoop(input: {
                 const eventInsertAfterChars = resolveActionCheckInsertAfterChars(finalText, toolResult, insertAfterChars);
                 runtimeEvents.push(createActionCheckEvent({
                     action: toolResult.action,
+                    character: toolResult.character,
                     stat: toolResult.stat,
                     difficulty: toolResult.difficulty,
                     difficultyLabel: toolResult.difficultyLabel,

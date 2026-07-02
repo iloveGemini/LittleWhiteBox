@@ -108,6 +108,12 @@
     font-size: 25px;
 }
 
+.tavern-chat.xb-page .tavern-status-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
 .tavern-chat.xb-page .tavern-status-identity {
     min-width: 0;
     display: grid;
@@ -143,6 +149,7 @@
 }
 
 .tavern-chat.xb-page .tavern-status-subjects::-webkit-scrollbar,
+.tavern-chat.xb-page .tavern-status-segments::-webkit-scrollbar,
 .tavern-chat.xb-page .tavern-status-content::-webkit-scrollbar {
     display: none;
 }
@@ -170,16 +177,19 @@
 .tavern-chat.xb-page .tavern-status-segments {
     display: flex;
     gap: 3px;
+    overflow: auto hidden;
     margin: 0 22px 12px;
     border-radius: 10px;
     background: rgba(0, 0, 0, 0.36);
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.42);
     padding: 3px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
 }
 
 .tavern-chat.xb-page .tavern-status-segments button {
-    min-width: 0;
-    flex: 1 1 0;
+    min-width: 72px;
+    flex: 1 0 72px;
     min-height: 28px;
     overflow: hidden;
     border: 0;

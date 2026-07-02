@@ -13,6 +13,7 @@ export interface TavernActionCheckRuntimeEvent {
     type: 'actionCheck';
     createdAt: string;
     action: string;
+    character?: string;
     stat: string;
     difficulty: number;
     difficultyLabel?: TavernActionCheckDifficultyLabel;
@@ -104,6 +105,7 @@ function numberOrUndefined(value: unknown): number | undefined {
 
 function normalizeActionCheckEvent(source: Record<string, unknown>): TavernActionCheckRuntimeEvent | null {
     const action = normalizeInlineText(source.action, 240);
+    const character = normalizeInlineText(source.character, 120);
     const stat = normalizeInlineText(source.stat, 120);
     if (!action || !stat) {return null;}
     const mode = normalizeActionCheckMode(source.mode);
@@ -121,6 +123,7 @@ function normalizeActionCheckEvent(source: Record<string, unknown>): TavernActio
         type: 'actionCheck',
         createdAt: normalizeIsoTimestamp(source.createdAt),
         action,
+        ...(character ? { character } : {}),
         stat,
         difficulty,
         ...(difficultyLabel ? { difficultyLabel } : {}),
@@ -154,6 +157,7 @@ function runtimeEventKey(event: TavernRuntimeEvent): string {
         event.toolCallId || '',
         event.createdAt,
         String(event.insertAfterChars),
+        event.character || '',
         event.stat,
         event.action,
         String(event.roll),
@@ -192,6 +196,7 @@ export function createChanceEncounterEvent(createdAt = new Date().toISOString())
 
 export function createActionCheckEvent(input: {
     action: string;
+    character?: string;
     stat: string;
     difficulty: number;
     difficultyLabel?: TavernActionCheckDifficultyLabel;
@@ -212,6 +217,7 @@ export function createActionCheckEvent(input: {
         type: 'actionCheck',
         createdAt: input.createdAt || new Date().toISOString(),
         action: input.action,
+        character: input.character,
         stat: input.stat,
         difficulty: input.difficulty,
         difficultyLabel: input.difficultyLabel,

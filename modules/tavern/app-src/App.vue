@@ -1230,6 +1230,7 @@ const runtimeActionCheckSignature = computed(() => runtimeActionCheckEvents.valu
     .map((event, index) => [
         index,
         event.toolCallId || '',
+        event.character || '',
         event.stat,
         event.action,
         event.roll,
@@ -1551,6 +1552,7 @@ function actionCheckEventsCacheSignature(events: TavernActionCheckRuntimeEvent[]
             index,
             event.toolCallId || '',
             event.createdAt || '',
+            event.character || '',
             event.stat,
             event.action,
             event.roll,

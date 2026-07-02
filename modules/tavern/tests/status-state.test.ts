@@ -13,6 +13,7 @@ import {
     TAVERN_STATUS_TOOL_NAMES,
     createStatusFieldKey,
     executeTavernStatusTool,
+    getTavernStatusToolDefinitions,
     getTavernStatusStateForSession,
     normalizeStatusDocument,
     rollbackStatusStateForMessageRange,
@@ -24,6 +25,15 @@ import { buildTavernStatusPanelYaml } from '../shared/status-prompt';
 beforeEach(async () => {
     await db.delete();
     await db.open();
+});
+
+test('StatusInit tool definition documents gauge display mapping', () => {
+    const initTool = getTavernStatusToolDefinitions().find((tool) => tool.function.name === TAVERN_STATUS_TOOL_NAMES.INIT);
+    const parameters = initTool?.function.parameters as { properties?: { document?: { description?: string } } } | undefined;
+    const documentDescription = String(parameters?.properties?.document?.description || '');
+    assert.match(documentDescription, /Gauge fields may set display to bar, percent, dots, or num/);
+    assert.match(documentDescription, /百分比\/percent => display "percent"/);
+    assert.match(documentDescription, /点阵\/dots => display "dots"/);
 });
 
 function createStatusDoc(value = 50): TavernStatusDocument {

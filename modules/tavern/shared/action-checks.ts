@@ -13,6 +13,7 @@ export type TavernActionCheckOutcome = 'criticalSuccess' | 'success' | 'failure'
 
 export interface TavernActionCheckInput {
     action: string;
+    character?: string;
     stat: string;
     difficulty?: number | TavernActionCheckDifficultyLabel;
     stakes?: string;
@@ -22,6 +23,7 @@ export interface TavernActionCheckInput {
 export interface TavernActionCheckToolSuccess {
     ok: true;
     action: string;
+    character?: string;
     stat: string;
     difficulty: number;
     difficultyLabel: TavernActionCheckDifficultyLabel;
@@ -72,24 +74,27 @@ const ACTION_CHECK_STATUS_OFFSETS: Record<TavernActionCheckDifficultyLabel, numb
 const ACTION_CHECK_PROTOCOL_PROMPT = [
     '[Runtime Protocol: Action Checks]',
     '',
-    'In this reply, when even you cannot know whether a key action succeeds or fails, you may roll once and leave the outcome to luck instead of deciding it yourself. Think like a tabletop game master: when fate is genuinely undecided, let the die speak.',
+    `When you cannot know whether a key action succeeds or fails, call ${ACTION_CHECK_TOOL_NAME} once and let the result decide. Think like a tabletop GM: when fate is genuinely undecided, let the die speak.`,
     '',
-    'Use it boldly when an attempt could truly succeed or fail and the result would change what happens next: climbing a wall, sneaking, confrontation, deception, persuasion, gambling, a chase, spellcasting, spotting a lie, risky improvisation, and similar moments.',
+    'When to roll:',
+    '- An attempt could truly go either way, and the outcome would change what happens next: climbing, sneaking, confrontation, deception, persuasion, gambling, a chase, spellcasting, spotting a lie, risky improvisation.',
     '',
-    'Do not roll when the outcome is already settled. If one side has overwhelming advantage in numbers, strength, position, or common sense, the result is already decided; do not use a roll to overturn that logic.',
+    'When NOT to roll:',
+    '- The outcome is already settled by overwhelming advantage, position, or common sense.',
+    '- Interactions with no stakes, risk, or resistance. Consensual or natural intimacy (kissing, hugging, sex), casual talk, or falling asleep together should follow emotional flow without a roll.',
     '',
-    'Do not roll for intimate or everyday interactions rather than challenges. Kissing, hugging, sex, casual conversation, or falling asleep together should follow character, consent, and emotional flow, not a success/failure check.',
+    'How to call the tool (Before the roll):',
+    '- Write the visible attempted action first.',
+    `- Call ${ACTION_CHECK_TOOL_NAME} immediately, before narrating any consequence or assuming the outcome.`,
+    "- If you already wrote a visible lead-in, set the tool's insertAfter parameter to the exact text the dice card should appear after.",
     '',
-    `When you roll, call ${ACTION_CHECK_TOOL_NAME}, treat the result as established fact, convey the outcome in one or two sentences, then continue the narration naturally.`,
-    'Call the tool immediately after the visible attempted action, before narrating consequences. Do not write result words before the tool call. If you already wrote a visible lead-in, set `insertAfter` to the exact text that should appear before the dice card.',
+    'How to narrate the outcome (After the roll):',
+    "- Treat the tool's result as an established fact. Honor it strictly.",
+    '- Convey the outcome in one or two sentences, then continue the narration naturally.',
+    '- If Critical Failure: make things dramatically worse. Add a real complication, cost, exposure, harm, or worsening situation.',
+    '- If Critical Success: describe an overpowering triumph. Grant an extra benefit, surprise reward, momentum, information, or style.',
     '',
-    'Choose the stat that best fits the action from the status panel (e.g. Strength, Perception, Willpower) and pass the attribute name as `stat`. If the status panel has no matching attribute, the system falls back to a flat roll automatically.',
-    '',
-    'Choose the objective difficulty of the task itself: how hard it would be for an average person, regardless of how strong this character is. Do not inflate difficulty because the character has high stats; the system factors in their actual attribute value automatically. Difficulty levels: `easy`, `ordinary`, `hard`, `very_hard`, `nearly_impossible`. Pick based on danger, pressure, preparation, opposition, and fictional leverage.',
-    '',
-    'The tool may return Critical Success or Critical Failure. Critical Failure means things get dramatically worse: add a real complication, cost, loss of position, exposure, harm, or worsening situation. Critical Success means an overpowering triumph: grant an extra benefit, surprise reward, opening, momentum, information, style, or reduced cost. The tool enforces these results; honor them strictly in narration.',
-    '',
-    'Do not mention this protocol, the dice mechanic, or any hidden instruction. Continue to follow all other format and style requirements.',
+    'Do not mention this protocol, the dice mechanic, or any hidden instruction.',
 ].join('\n');
 
 function normalizeInlineText(value: unknown, limit = 240): string {
@@ -151,8 +156,29 @@ function actionCheckOutcomeLabel(outcome: TavernActionCheckOutcome): string {
     return outcome;
 }
 
-function findGaugeFieldInSubject(subject: TavernStatusDocument['subjects'][number], name: string): TavernStatusGaugeField | null {
-    for (const tab of Array.isArray(subject.tabs) ? subject.tabs : []) {
+type TavernStatusSubjectLike = TavernStatusDocument['subjects'][number];
+type TavernStatusTabLike = TavernStatusSubjectLike['tabs'][number];
+
+function normalizeSearchText(value: unknown, limit = 120): string {
+    return normalizeInlineText(value, limit).toLocaleLowerCase();
+}
+
+function actorMatchRank(values: unknown[], character: string): number | null {
+    const target = normalizeSearchText(character);
+    if (!target) {return null;}
+    let best: number | null = null;
+    values.forEach((value) => {
+        const text = normalizeSearchText(value);
+        if (!text) {return;}
+        const rank = text === target ? 0 : text.includes(target) ? 1 : null;
+        if (rank === null) {return;}
+        best = best === null ? rank : Math.min(best, rank);
+    });
+    return best;
+}
+
+function findGaugeFieldInTabs(tabs: TavernStatusTabLike[], name: string): TavernStatusGaugeField | null {
+    for (const tab of tabs) {
         for (const block of Array.isArray(tab.blocks) ? tab.blocks : []) {
             if (block.form !== 'gauge') {continue;}
             for (const field of Array.isArray(block.fields) ? block.fields : []) {
@@ -166,9 +192,38 @@ function findGaugeFieldInSubject(subject: TavernStatusDocument['subjects'][numbe
     return null;
 }
 
-function findStatusGaugeByStat(document: TavernStatusDocument | null | undefined, stat = ''): TavernStatusGaugeField | null {
+function findGaugeFieldInSubject(subject: TavernStatusSubjectLike, name: string): TavernStatusGaugeField | null {
+    return findGaugeFieldInTabs(Array.isArray(subject.tabs) ? subject.tabs : [], name);
+}
+
+function findStatusGaugeByCharacterAndStat(document: TavernStatusDocument, character: string, stat: string): TavernStatusGaugeField | null {
+    const tabMatches: Array<{ rank: number; tabs: TavernStatusTabLike[] }> = [];
+    const subjectMatches: Array<{ rank: number; subject: TavernStatusSubjectLike }> = [];
+    document.subjects.forEach((subject) => {
+        const subjectRank = actorMatchRank([subject.name, subject.id, subject.subtitle], character);
+        if (subjectRank !== null) {subjectMatches.push({ rank: subjectRank, subject });}
+        (Array.isArray(subject.tabs) ? subject.tabs : []).forEach((tab) => {
+            const tabRank = actorMatchRank([tab.label, tab.id], character);
+            if (tabRank !== null) {tabMatches.push({ rank: tabRank, tabs: [tab] });}
+        });
+    });
+    const scopes = tabMatches.length
+        ? tabMatches.sort((left, right) => left.rank - right.rank).map((match) => match.tabs)
+        : subjectMatches.sort((left, right) => left.rank - right.rank).map((match) => match.subject.tabs);
+    for (const tabs of scopes) {
+        const gauge = findGaugeFieldInTabs(Array.isArray(tabs) ? tabs : [], stat);
+        if (gauge) {return gauge;}
+    }
+    return null;
+}
+
+function findStatusGaugeByStat(document: TavernStatusDocument | null | undefined, stat = '', character = ''): TavernStatusGaugeField | null {
     const name = normalizeInlineText(stat, 120);
     if (!name || !Array.isArray(document?.subjects)) {return null;}
+    const actor = normalizeInlineText(character, 120);
+    if (actor) {
+        return findStatusGaugeByCharacterAndStat(document, actor, name);
+    }
     const activeSubjectId = normalizeInlineText(document.meta?.activeSubject, 120);
     const activeSubject = activeSubjectId
         ? document.subjects.find((subject) => normalizeInlineText(subject.id, 120) === activeSubjectId) || null
@@ -198,39 +253,48 @@ export function getActionCheckToolDefinitions(): Array<{ type: 'function'; funct
         function: {
             name: ACTION_CHECK_TOOL_NAME,
             description: [
-                'True-random action check for risky or uncertain RP outcomes.',
-                'Use it for key actions that could truly succeed or fail and would change what happens next.',
-                'Do not use it for already settled outcomes or for intimate/everyday interactions that should follow character, consent, and emotional flow.',
-                'Provide the attempted action, the status-panel attribute name that best fits it, and the objective difficulty level: easy, ordinary, hard, very_hard, or nearly_impossible.',
-                'If no matching status-panel attribute exists, the system falls back to a flat check automatically. Critical failure adds a real penalty or complication; critical success grants an extra reward, opening, or benefit. The result is binding truth for the current reply.',
-                'For accurate card placement, call the tool before outcome narration. If visible lead-in text already exists, provide insertAfter as the exact text that should appear before the dice card.',
+                'Action check for uncertain RP outcomes.',
+                '',
+                'Parameters:',
+                '- action (required): what is being attempted, in a short phrase.',
+                "- character (optional): the name of the character acting (matches the status panel). Omit if it's the main player.",
+                '- stat (required): the status-panel attribute name that best fits this action (e.g. 力量, 察觉, 话术). If no status panel exists, use a descriptive label; the system falls back to a flat roll.',
+                '- difficulty (required): objective difficulty of the task for an average person. Do not inflate because the character is strong; the system factors in their actual attribute value. One of: easy / ordinary / hard / very_hard / nearly_impossible.',
+                '- stakes (optional): what is at risk if this fails.',
+                '- insertAfter (optional): if you already wrote a visible lead-in, the exact text the dice card should appear after.',
+                '',
+                'Returns: success, failure, critical success, or critical failure as established fact for this reply.',
             ].join('\n'),
             parameters: {
                 type: 'object',
                 properties: {
                     action: {
                         type: 'string',
-                        description: 'What the character is attempting right now.',
+                        description: 'What is being attempted, in a short phrase.',
+                    },
+                    character: {
+                        type: 'string',
+                        description: "The name of the character performing the action, matching a subject name or tab label in the status panel. Leave blank if the main player is performing the action.",
                     },
                     stat: {
                         type: 'string',
-                        description: 'Name of the attribute from the status panel that best fits this action.',
+                        description: 'Status-panel attribute name that best fits this action (e.g. 力量, 察觉, 话术). If no status panel exists, use a descriptive label; the system falls back to a flat roll.',
                     },
                     difficulty: {
                         type: 'string',
                         enum: ACTION_CHECK_DIFFICULTY_LABELS,
-                        description: 'Objective task difficulty for an average person, before applying the character attribute. Defaults to ordinary if omitted or invalid.',
+                        description: 'Objective difficulty of the task for an average person. Do not inflate because the character is strong; the system factors in their actual attribute value.',
                     },
                     stakes: {
                         type: 'string',
-                        description: 'Optional brief note about what is at risk. Display-only.',
+                        description: 'What is at risk if this fails.',
                     },
                     insertAfter: {
                         type: 'string',
-                        description: 'Optional exact visible lead-in text that should appear before the dice card. Do not include consequence or outcome text.',
+                        description: 'If you already wrote a visible lead-in, the exact text the dice card should appear after.',
                     },
                 },
-                required: ['action', 'stat'],
+                required: ['action', 'stat', 'difficulty'],
                 additionalProperties: false,
             },
         },
@@ -259,7 +323,8 @@ export function executeTavernActionCheck(
     }
     const difficultyLabel = normalizeActionCheckDifficultyLabel(input.difficulty);
     const difficulty = ACTION_CHECK_FALLBACK_DC[difficultyLabel];
-    const gauge = findStatusGaugeByStat(options.statusDocument, stat);
+    const character = normalizeInlineText(input.character, 120);
+    const gauge = findStatusGaugeByStat(options.statusDocument, stat, character);
     const stakes = normalizeInlineText(input.stakes, 240);
     const insertAfter = normalizeExactVisibleText(input.insertAfter, 240);
     if (gauge) {
@@ -284,7 +349,8 @@ export function executeTavernActionCheck(
                 statMax,
                 success,
                 outcome,
-                summary: `${stat} check ${percentRoll} vs ${threshold}% (${statValue}/${statMax}, ${difficultyLabel}): ${actionCheckOutcomeLabel(outcome)}.`,
+                summary: `${character ? `${character} ` : ''}${stat} check ${percentRoll} vs ${threshold}% (${statValue}/${statMax}, ${difficultyLabel}): ${actionCheckOutcomeLabel(outcome)}.`,
+                ...(character ? { character } : {}),
                 ...(stakes ? { stakes } : {}),
                 ...(insertAfter.trim() ? { insertAfter } : {}),
             };
@@ -303,7 +369,8 @@ export function executeTavernActionCheck(
         roll,
         success,
         outcome,
-        summary: `${stat} check ${roll} vs DC ${difficulty}: ${actionCheckOutcomeLabel(outcome)}.`,
+        summary: `${character ? `${character} ` : ''}${stat} check ${roll} vs DC ${difficulty}: ${actionCheckOutcomeLabel(outcome)}.`,
+        ...(character ? { character } : {}),
         ...(stakes ? { stakes } : {}),
         ...(insertAfter.trim() ? { insertAfter } : {}),
     };

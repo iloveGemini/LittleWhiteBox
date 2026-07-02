@@ -843,7 +843,7 @@ test('tavern chat exposes local settings modals without leaving the session', ()
     assert.match(chatPageSource, /clearSelection: clearCharacterSelection,[\s\S]*refresh: refreshCharacterList,/);
     assert.match(chatPageSource, /class="home-corner-actions page-corner-actions chat-app-menu-shell"[\s\S]*title="首页"[\s\S]*class="home-icon-button chat-app-menu-button chat-app-menu-button-desktop"[\s\S]*title="酒馆操作菜单"/);
     assert.match(chatPageSource, /class="xb-sidebar settings-sidebar chat-character-sidebar"[\s\S]*class="chat-character-card"[\s\S]*@click="openChatAppWorkspace\('characters'\)"[\s\S]*v-for="item in chatAppMenuItems"[\s\S]*class="guide-step"[\s\S]*@click="openChatAppWorkspace\(item\.key\)"/);
-    assert.match(chatPageSource, /class="chat-mobile-action-group"[\s\S]*title="契约"[\s\S]*class="chat-mobile-icon-button chat-mobile-utility-button chat-app-menu-button"[\s\S]*title="酒馆操作菜单"/);
+    assert.match(chatPageSource, /class="chat-mobile-action-group"[\s\S]*title="契约"[\s\S]*📜[\s\S]*class="chat-mobile-icon-button chat-mobile-utility-button chat-app-menu-button"[\s\S]*title="酒馆操作菜单"/);
     assert.match(chatPageSource, /class="chat-app-menu-item chat-app-menu-return-home"[\s\S]*返回首页/);
     assert.doesNotMatch(chatPageSource, /class="chat-mobile-action-group"[\s\S]*title="首页"/);
     assert.doesNotMatch(chatPageSource, /class="chat-mobile-icon-button chat-mobile-utility-button"[\s\S]*title="聊天预设"[\s\S]*@click="openChatAppWorkspace\('chatPreset'\)"/);
@@ -2045,8 +2045,15 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.match(appSource, /const chatRunState = createTavernChatRunState\(\);/);
     assert.match(chatRunSource, /runtimeUserMessageVisible: ref\(false\)/);
     assert.doesNotMatch(chatRunSource, /runtimeFinalizedAssistantMessage/);
+    assert.match(appSource, /const runtimeActionCheckSignature = computed\(\(\) => runtimeActionCheckEvents\.value[\s\S]*event\.character \|\| ''[\s\S]*event\.stat/);
+    assert.match(appSource, /function actionCheckEventsCacheSignature\(events: TavernActionCheckRuntimeEvent\[\] = \[\]\): string \{[\s\S]*event\.character \|\| ''[\s\S]*event\.stat/);
+    assert.match(chatPageSource, /const runtimeActionCheckScrollSignature = computed\(\(\) => runtimeActionCheckEvents\.value[\s\S]*event\.character \|\| ''[\s\S]*event\.stat/);
     assert.match(markdownToolsSource, /const stakes = String\(event\.stakes \|\| ''\)\.trim\(\);/);
     assert.match(markdownToolsSource, /stakes \? `风险：\$\{stakes\}。` : ''/);
+    assert.match(markdownToolsSource, /function actionCheckDifficultyLabel\(event: TavernActionCheckRuntimeEvent\)[\s\S]*event\.difficultyLabel === 'hard'[\s\S]*return '困难';/);
+    assert.match(markdownToolsSource, /function actionCheckTitle\(event: TavernActionCheckRuntimeEvent\)[\s\S]*const character = String\(event\.character \|\| ''\)\.trim\(\)[\s\S]*event\.mode === 'statusGauge'[\s\S]*`\$\{stat\} \$\{statValue\}`[\s\S]*return character \? `\$\{character\} \$\{statLabel\}` : statLabel/);
+    assert.match(markdownToolsSource, /label: '难度',[\s\S]*value: isStatusGauge \? actionCheckDifficultyLabel\(event\) : String\(event\.difficulty\)/);
+    assert.doesNotMatch(markdownToolsSource, /label: hasThreshold \? '阈值' : '难度'/);
     assert.match(markdownToolsSource, /if \(event\.stakes\) \{[\s\S]*className = 'action-check-card-stakes'[\s\S]*textContent = event\.stakes/);
     assert.match(chatRunSource, /function clearRuntimeAssistantLiveState\(\) \{[\s\S]*state\.runtimeText\.value = '';[\s\S]*state\.runtimeThoughts\.value = \[\];[\s\S]*state\.runtimeActionCheckEvents\.value = \[\];[\s\S]*state\.runtimeUserMessageVisible\.value = false;/);
     assert.match(chatRunSource, /state\.runtimeUserMessageVisible\.value = false;[\s\S]*state\.runtimeProvider\.value = ''/);
@@ -2127,9 +2134,9 @@ test('tavern streaming action-check UI renders from live runtime events and keep
     assert.doesNotMatch(layoutCss, /@media \(max-width: 980px\) \{[\s\S]*\.chat-head-actions button:last-child \{[\s\S]*display: none;/);
     assert.match(layoutCss, /\.chat-head \{[\s\S]*justify-content: space-between;/);
     assert.match(conversationPanelSource, /<header class="chat-head">[\s\S]*class="chat-head-main"[\s\S]*class="xb-workspace-controller chat-layout-controller"[\s\S]*chatLayout === 'chat'[\s\S]*chatLayout === 'balanced'[\s\S]*chatLayout === 'editor'[\s\S]*class="chat-head-actions"/);
-    assert.match(chatPageSource, /class="chat-mobile-context-row"[\s\S]*title="地图"[\s\S]*title="记忆"[\s\S]*title="事件"[\s\S]*title="状态"/);
+    assert.match(chatPageSource, /class="chat-mobile-context-row"[\s\S]*title="地图"[\s\S]*title="记忆"[\s\S]*📓 记忆[\s\S]*title="事件"[\s\S]*🧭 事件[\s\S]*title="档案"[\s\S]*📋 档案/);
     assert.doesNotMatch(conversationPanelSource, /title="事件"/);
-    assert.match(contractModalSource, /契约[\s\S]*玩家 — 代理人誓约[\s\S]*故事开始之前，定义你的代理人被允许做什么。/);
+    assert.match(contractModalSource, /契约[\s\S]*玩家 — 代理人誓约[\s\S]*在故事里，定义你的代理人被允许做什么。[\s\S]*别忘记添加可执行工具的分身模型。/);
     assert.match(contractModalSource, /封印中\.\.\.[\s\S]*封存誓约[\s\S]*项授权已启用/);
     assert.doesNotMatch(chatPageSource, /class="chat-mobile-context-row"[\s\S]*title="请求日志"/);
     assert.doesNotMatch(chatPageSource, /class="chat-mobile-context-row"[\s\S]*>\s*会话\s*</);

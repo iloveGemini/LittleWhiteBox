@@ -28,6 +28,12 @@ const TAG_KINDS = new Set(['harm', 'boon', 'state']);
 const GAUGE_DISPLAYS = new Set(['bar', 'percent', 'dots', 'num']);
 const ITEM_LAYOUTS = new Set(['list', 'grid']);
 const MAX_READ_LIMIT = 80;
+const STATUS_INIT_DOCUMENT_DESCRIPTION = [
+    'Full StatusDoc: meta plus subjects/tabs/blocks/fields.',
+    'Block forms are gauge/tag/item/text.',
+    'Gauge fields may set display to bar, percent, dots, or num.',
+    'Map user wording exactly when present: 进度条/bar => display "bar"; 百分比/percent => display "percent"; 点阵/dots => display "dots"; 普通数字/数字/num => display "num".',
+].join(' ');
 
 export type TavernStatusForm = 'gauge' | 'tag' | 'item' | 'text';
 export type TavernStatusToolCaller = 'auto' | 'chat';
@@ -819,7 +825,7 @@ export function getTavernStatusToolDefinitions(): Array<{ type: 'function'; func
                     type: 'object',
                     properties: {
                         desc: { type: 'string', description: 'Short summary of this initialization.' },
-                        document: { type: 'object', description: 'Full StatusDoc: meta plus subjects/tabs/blocks/fields. Forms are gauge/tag/item/text.' },
+                        document: { type: 'object', description: STATUS_INIT_DOCUMENT_DESCRIPTION },
                         dryRun: { type: 'boolean' },
                     },
                     required: ['document'],

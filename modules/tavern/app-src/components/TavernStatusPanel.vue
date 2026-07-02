@@ -23,12 +23,17 @@ const props = withDefaults(defineProps<{
     enabled?: boolean;
     materialSymbolsReady?: boolean;
     materialSymbolsStatus?: 'idle' | 'loading' | 'ready' | 'failed';
+    userAvatarUrl?: string;
 }>(), {
     fieldDeltas: () => ({}),
     enabled: true,
     materialSymbolsReady: false,
     materialSymbolsStatus: 'idle',
+    userAvatarUrl: '',
 });
+const emit = defineEmits<{
+    (event: 'user-avatar-error', url: string): void;
+}>();
 
 const selectedSubjectId = ref('');
 const selectedTabBySubject = ref<Record<string, string>>({});
@@ -72,6 +77,7 @@ const revisionLabel = computed(() => {
     const revision = Number(props.document?.revision || statusDocument.value.meta.revision || 0);
     return `REV ${Math.max(0, Math.floor(revision))}`;
 });
+const normalizedUserAvatarUrl = computed(() => String(props.userAvatarUrl || '').trim());
 
 watch(statusDocument, (document) => {
     const preferredSubject = document.meta.activeSubject || document.subjects[0]?.id || '';
@@ -91,6 +97,11 @@ watch(statusDocument, (document) => {
 function iconText(value: unknown, fallbackKind: StatusMaterialSymbolFallbackKind = 'item'): string {
     if (!props.materialSymbolsReady) {return props.materialSymbolsStatus === 'failed' ? '!' : '';}
     return resolveStatusIconName(value, fallbackKind);
+}
+
+function handleUserAvatarError() {
+    if (!normalizedUserAvatarUrl.value) {return;}
+    emit('user-avatar-error', normalizedUserAvatarUrl.value);
 }
 
 function selectSubject(subject: TavernStatusSubject) {
@@ -184,7 +195,16 @@ function closeItem() {
     >
       <header class="tavern-status-head">
         <div class="tavern-status-avatar">
-          <span class="material-symbols-rounded">{{ iconText(activeSubject.icon || 'person', 'subject') }}</span>
+          <img
+            v-if="normalizedUserAvatarUrl"
+            :src="normalizedUserAvatarUrl"
+            alt=""
+            @error="handleUserAvatarError"
+          >
+          <span
+            v-else
+            class="material-symbols-rounded"
+          >{{ iconText(activeSubject.icon || 'person', 'subject') }}</span>
         </div>
         <div class="tavern-status-identity">
           <strong>{{ activeSubject.name }}</strong>

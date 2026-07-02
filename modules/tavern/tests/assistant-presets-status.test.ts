@@ -44,6 +44,9 @@ test('manager system prompt includes status rules only when status is authorized
     assert.match(withStatus, /## Status Panel/);
     assert.match(withStatus, /StatusRead reads the full status panel/);
     assert.match(withStatus, /StatusInit \*\*once\*\* to build the full skeleton/);
+    assert.match(withStatus, /Gauge display mapping/);
+    assert.match(withStatus, /"百分比" \/ "percent", set `display: "percent"`/);
+    assert.match(withStatus, /"点阵" \/ "dots", set `display: "dots"`/);
     assert.match(withStatus, /Ongoing maintenance uses StatusPatch only/);
     assert.match(withStatus, /<状态栏设定>\s*STATUS_RULE\s*<\/状态栏设定>/);
     assert.match(withStatus, /STATUS_RULE/);

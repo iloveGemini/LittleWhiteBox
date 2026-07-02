@@ -147,6 +147,7 @@ const runtimeActionCheckScrollSignature = computed(() => runtimeActionCheckEvent
     .map((event, index) => [
         index,
         event.toolCallId || '',
+        event.character || '',
         event.stat,
         event.action,
         event.roll,
@@ -645,21 +646,10 @@ onUpdated(() => {
             aria-label="契约"
             @click="closeMobileChatPanel(); openContractModal()"
           >
-            <svg
-              class="chat-mobile-svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+            <span
+              class="chat-mobile-emoji"
               aria-hidden="true"
-            >
-              <path d="M7 3.8h7.2L18 7.6V20H7z" />
-              <path d="M14 4v4h4" />
-              <path d="M10 12h5" />
-              <path d="M10 15.5h4" />
-            </svg>
+            >📜</span>
           </button>
           <button
             type="button"
@@ -778,7 +768,7 @@ onUpdated(() => {
           aria-label="记忆"
           @click="toggleMobileWorkspacePanel('memory')"
         >
-          记忆
+          📓 记忆
         </button>
         <button
           type="button"
@@ -788,17 +778,17 @@ onUpdated(() => {
           aria-label="事件"
           @click="toggleMobileWorkspacePanel('event')"
         >
-          事件
+          🧭 事件
         </button>
         <button
           type="button"
           class="chat-mobile-context-button"
           :class="{ 'is-active': mobileChatPanel === 'workspace' && chatWorkspacePanel === 'status' }"
-          title="状态"
-          aria-label="状态"
+          title="档案"
+          aria-label="档案"
           @click="toggleMobileWorkspacePanel('status')"
         >
-          状态
+          📋 档案
         </button>
       </div>
     </header>

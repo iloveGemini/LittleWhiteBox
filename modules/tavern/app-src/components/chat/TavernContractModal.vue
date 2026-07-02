@@ -71,9 +71,9 @@ const activeCount = computed(() => countActiveTavernSessionContract(props.draftC
 
       <div class="tavern-contract-body">
         <p class="tavern-contract-preamble">
-          故事开始之前，定义你的代理人被允许做什么。
+          在故事里，定义你的代理人被允许做什么。
           每一条封印的授权赋予一项特定权限。
-          你可以随时修改。
+          别忘记添加可执行工具的分身模型。
         </p>
 
         <section

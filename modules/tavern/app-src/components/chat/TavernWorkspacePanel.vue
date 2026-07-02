@@ -5,7 +5,7 @@ import TavernEventPanel from '../TavernEventPanel.vue';
 import TavernMapPanel from '../TavernMapPanel.vue';
 import TavernMemoryEditor from '../TavernMemoryEditor.vue';
 import TavernStatusPanel from '../TavernStatusPanel.vue';
-import { useTavernMemoryContext, useTavernSessionContext, useTavernWorkspaceContext } from '../tavern-app-context';
+import { useTavernMemoryContext, useTavernSessionContext, useTavernShellContext, useTavernWorkspaceContext } from '../tavern-app-context';
 import { useMobileSheetDrag } from './useMobileSheetDrag';
 import { buildSeedLabelId, createSeedMapDocument, isSeedLabelId } from '../../../shared/map-state-seed';
 import { isMapExitSemantic } from '../../../shared/map-material-symbols';
@@ -22,12 +22,16 @@ const emit = defineEmits<{
 
 const memory = useTavernMemoryContext();
 const session = useTavernSessionContext();
+const shell = useTavernShellContext();
 const workspace = useTavernWorkspaceContext();
 const {
     chatWorkspacePanel,
     displayUserName,
     visibleUserAvatar,
 } = workspace;
+const {
+    rememberBrokenAvatar,
+} = shell;
 const {
     activeMemoryFiles,
     discardMemoryDraft,
@@ -447,6 +451,8 @@ function selectDirectoryMemoryFile(path: string) {
         :enabled="sessionContract.statusPanel"
         :material-symbols-ready="materialSymbolFontReady"
         :material-symbols-status="materialSymbolFontStatus"
+        :user-avatar-url="visibleUserAvatar"
+        @user-avatar-error="rememberBrokenAvatar"
       />
     </section>
     <section

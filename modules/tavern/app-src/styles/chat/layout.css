@@ -735,6 +735,11 @@
         height: 16px;
     }
 
+    .tavern-chat.xb-page .chat-mobile-icon-button .chat-mobile-emoji {
+        font-size: 16px;
+        line-height: 1;
+    }
+
     .tavern-chat.xb-page .chat-mobile-icon-button.chat-app-menu-button .chat-mobile-svg {
         fill: none;
         stroke: currentColor;
