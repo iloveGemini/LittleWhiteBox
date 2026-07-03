@@ -15,7 +15,12 @@
 import { getContext } from "../../../../../../extensions.js";
 import { xbLog } from "../../../core/debug-core.js";
 import { getSummaryStore, getFacts, isRelationFact } from "../data/store.js";
-import { getVectorConfig, getSummaryPanelConfig, getSettings, DEFAULT_MEMORY_PROMPT_TEMPLATE } from "../data/config.js";
+import {
+    getVectorConfig,
+    getSummaryPanelConfig,
+    getSettings,
+    DEFAULT_MEMORY_PROMPT_TEMPLATE,
+} from "../data/config.js";
 import { recallMemory } from "../vector/retrieval/recall.js";
 import { getMeta } from "../vector/storage/chunk-store.js";
 import { getStateAtoms } from "../vector/storage/state-store.js";
@@ -96,7 +101,10 @@ function parseFloorRange(summary) {
     const match = String(summary).match(/\(#(\d+)(?:-(\d+))?\)/);
     if (!match) return null;
     const start = Math.max(0, parseInt(match[1], 10) - 1);
-    const end = Math.max(0, (match[2] ? parseInt(match[2], 10) : parseInt(match[1], 10)) - 1);
+    const end = Math.max(
+        0,
+        (match[2] ? parseInt(match[2], 10) : parseInt(match[1], 10)) - 1,
+    );
     return { start, end };
 }
 
@@ -117,9 +125,9 @@ function cleanSummary(summary) {
  * @returns {string} 标准化后的字符串
  */
 function normalize(s) {
-    return String(s || '')
-        .normalize('NFKC')
-        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    return String(s || "")
+        .normalize("NFKC")
+        .replace(/[\u200B-\u200D\uFEFF]/g, "")
         .trim()
         .toLowerCase();
 }
@@ -139,7 +147,7 @@ function collectL0Entities(l0) {
         if (n) set.add(n);
     };
 
-    for (const e of (atom.edges || [])) {
+    for (const e of atom.edges || []) {
         add(e?.s);
         add(e?.t);
     }
@@ -167,7 +175,7 @@ function shouldKeepEvidenceL0(l0, focusSet) {
     }
 
     // 兼容旧数据：semantic 文本包含焦点实体
-    const textNorm = normalize(l0?.atom?.semantic || l0?.text || '');
+    const textNorm = normalize(l0?.atom?.semantic || l0?.text || "");
     for (const f of focusSet) {
         if (f && textNorm.includes(f)) return true;
     }
@@ -207,7 +215,8 @@ function renumberEventText(text, newIndex) {
  */
 function buildMemoryPromptText(memoryBody) {
     const templateRaw = String(
-        getSummaryPanelConfig()?.prompts?.memoryTemplate || DEFAULT_MEMORY_PROMPT_TEMPLATE
+        getSummaryPanelConfig()?.prompts?.memoryTemplate ||
+            DEFAULT_MEMORY_PROMPT_TEMPLATE,
     );
     const template = templateRaw.trim() || DEFAULT_MEMORY_PROMPT_TEMPLATE;
     if (template.includes("{$剧情记忆}")) {
@@ -240,7 +249,7 @@ function getKnownCharacters(store) {
  * @returns {string|null} 目标名称
  */
 function parseRelationTarget(predicate) {
-    const match = String(predicate || '').match(/^对(.+)的/);
+    const match = String(predicate || "").match(/^对(.+)的/);
     return match ? match[1] : null;
 }
 
@@ -256,13 +265,13 @@ function filterConstraintsByRelevance(facts, focusCharacters, knownCharacters) {
 
     const focusSet = new Set((focusCharacters || []).map(normalize));
 
-    return facts.filter(f => {
+    return facts.filter((f) => {
         if (f._isState === true) return true;
 
         if (isRelationFact(f)) {
             const from = normalize(f.s);
             const target = parseRelationTarget(f.p);
-            const to = target ? normalize(target) : '';
+            const to = target ? normalize(target) : "";
 
             if (focusSet.has(from) || focusSet.has(to)) return true;
             return false;
@@ -288,7 +297,7 @@ function filterConstraintsByRelevance(facts, focusCharacters, knownCharacters) {
 function buildConstraintPeopleDict(recallResult, focusCharacters = []) {
     const dict = new Map();
     const add = (raw) => {
-        const display = String(raw || '').trim();
+        const display = String(raw || "").trim();
         const key = normalize(display);
         if (!display || !key) return;
         if (!dict.has(key)) dict.set(key, display);
@@ -301,7 +310,7 @@ function buildConstraintPeopleDict(recallResult, focusCharacters = []) {
     }
 
     if (dict.size === 0) {
-        for (const f of (focusCharacters || [])) add(f);
+        for (const f of focusCharacters || []) add(f);
     }
 
     return dict;
@@ -317,7 +326,7 @@ function groupConstraintsForDisplay(facts, peopleDict) {
     const people = new Map();
     const world = [];
 
-    for (const f of (facts || [])) {
+    for (const f of facts || []) {
         const subjectNorm = normalize(f?.s);
         const displayName = peopleDict.get(subjectNorm);
         if (displayName) {
@@ -332,13 +341,13 @@ function groupConstraintsForDisplay(facts, peopleDict) {
 }
 
 function formatConstraintLine(f, includeSubject = false) {
-    const subject = String(f?.s || '').trim();
-    const predicate = String(f?.p || '').trim();
-    const object = String(f?.o || '').trim();
-    const trendRaw = String(f?.trend || '').trim();
+    const subject = String(f?.s || "").trim();
+    const predicate = String(f?.p || "").trim();
+    const object = String(f?.o || "").trim();
+    const trendRaw = String(f?.trend || "").trim();
     const hasSince = f?.since !== undefined && f?.since !== null;
-    const since = hasSince ? ` (#${f.since + 1})` : '';
-    const trend = isRelationFact(f) && trendRaw ? ` [${trendRaw}]` : '';
+    const since = hasSince ? ` (#${f.since + 1})` : "";
+    const trend = isRelationFact(f) && trendRaw ? ` [${trendRaw}]` : "";
     if (includeSubject) {
         return `- ${subject} ${predicate}: ${object}${trend}${since}`;
     }
@@ -350,16 +359,17 @@ function formatConstraintLine(f, includeSubject = false) {
  * @param {{ people: Map<string, object[]>, world: object[] }} grouped
  * @returns {string[]}
  */
-function formatConstraintsStructured(grouped, order = 'desc') {
+function formatConstraintsStructured(grouped, order = "desc") {
     const lines = [];
     const people = grouped?.people || new Map();
     const world = grouped?.world || [];
-    const sorter = order === 'asc'
-        ? ((a, b) => (a.since || 0) - (b.since || 0))
-        : ((a, b) => (b.since || 0) - (a.since || 0));
+    const sorter =
+        order === "asc"
+            ? (a, b) => (a.since || 0) - (b.since || 0)
+            : (a, b) => (b.since || 0) - (a.since || 0);
 
     if (people.size > 0) {
-        lines.push('people:');
+        lines.push("people:");
         for (const [name, facts] of people.entries()) {
             lines.push(`  ${name}:`);
             const sorted = [...facts].sort(sorter);
@@ -370,7 +380,7 @@ function formatConstraintsStructured(grouped, order = 'desc') {
     }
 
     if (world.length > 0) {
-        lines.push('world:');
+        lines.push("world:");
         const sortedWorld = [...world].sort(sorter);
         for (const f of sortedWorld) {
             lines.push(`  ${formatConstraintLine(f, true)}`);
@@ -394,7 +404,7 @@ function selectConstraintsByBudgetDesc(grouped, budgetState) {
     const world = grouped?.world || [];
 
     if (people.size > 0) {
-        if (!tryConsumeConstraintLineBudget('people:', budgetState)) {
+        if (!tryConsumeConstraintLineBudget("people:", budgetState)) {
             return { people: selectedPeople, world: selectedWorld };
         }
         for (const [name, facts] of people.entries()) {
@@ -403,7 +413,9 @@ function selectConstraintsByBudgetDesc(grouped, budgetState) {
                 return { people: selectedPeople, world: selectedWorld };
             }
             const picked = [];
-            const sorted = [...facts].sort((a, b) => (b.since || 0) - (a.since || 0));
+            const sorted = [...facts].sort(
+                (a, b) => (b.since || 0) - (a.since || 0),
+            );
             for (const f of sorted) {
                 const line = `    ${formatConstraintLine(f, false)}`;
                 if (!tryConsumeConstraintLineBudget(line, budgetState)) {
@@ -416,10 +428,12 @@ function selectConstraintsByBudgetDesc(grouped, budgetState) {
     }
 
     if (world.length > 0) {
-        if (!tryConsumeConstraintLineBudget('world:', budgetState)) {
+        if (!tryConsumeConstraintLineBudget("world:", budgetState)) {
             return { people: selectedPeople, world: selectedWorld };
         }
-        const sortedWorld = [...world].sort((a, b) => (b.since || 0) - (a.since || 0));
+        const sortedWorld = [...world].sort(
+            (a, b) => (b.since || 0) - (a.since || 0),
+        );
         for (const f of sortedWorld) {
             const line = `  ${formatConstraintLine(f, true)}`;
             if (!tryConsumeConstraintLineBudget(line, budgetState)) {
@@ -443,7 +457,7 @@ function selectConstraintsByBudgetDesc(grouped, budgetState) {
  */
 function formatArcLine(arc) {
     const moments = (arc.moments || [])
-        .map(m => (typeof m === "string" ? m : m.text))
+        .map((m) => (typeof m === "string" ? m : m.text))
         .filter(Boolean);
 
     if (moments.length) {
@@ -460,7 +474,9 @@ function formatArcLine(arc) {
  */
 function formatL1Line(chunk, isContext) {
     const { name1, name2 } = getContext();
-    const speaker = chunk.isUser ? (name1 || "用户") : (chunk.speaker || name2 || "角色");
+    const speaker = chunk.isUser
+        ? name1 || "用户"
+        : chunk.speaker || name2 || "角色";
     const text = String(chunk.text || "").trim();
     const symbol = isContext ? "┌" : "›";
     return `    ${symbol} #${chunk.floor + 1} [${speaker}] ${text}`;
@@ -482,7 +498,9 @@ function formatCausalEventLine(causalItem) {
     const summary = cleanSummary(ev.summary);
 
     const r = parseFloorRange(ev.summary);
-    const floorHint = r ? `(#${r.start + 1}${r.end !== r.start ? `-${r.end + 1}` : ""})` : "";
+    const floorHint = r
+        ? `(#${r.start + 1}${r.end !== r.start ? `-${r.end + 1}` : ""})`
+        : "";
 
     const lines = [];
     lines.push(`${prefix}${time}${people ? ` ${people}` : ""}`);
@@ -520,13 +538,18 @@ function groupL0ByFloor(l0List) {
  * @returns {object[]}
  */
 function getRecentWindowL0Atoms(recentStart, recentEnd) {
-    if (!Number.isFinite(recentStart) || !Number.isFinite(recentEnd) || recentEnd < recentStart) return [];
+    if (
+        !Number.isFinite(recentStart) ||
+        !Number.isFinite(recentEnd) ||
+        recentEnd < recentStart
+    )
+        return [];
     const atoms = getStateAtoms() || [];
     const out = [];
     for (const atom of atoms) {
         const floor = atom?.floor;
         const atomId = atom?.atomId;
-        const semantic = String(atom?.semantic || '').trim();
+        const semantic = String(atom?.semantic || "").trim();
         if (!Number.isFinite(floor)) continue;
         if (floor < recentStart || floor > recentEnd) continue;
         if (!atomId || !semantic) continue;
@@ -635,7 +658,12 @@ function formatEvidenceGroup(group) {
  * @param {Set<string>} usedL0Ids - 已消费的 L0 ID 集合（会被修改）
  * @returns {EvidenceGroup[]} 该事件的证据组列表（按楼层排序）
  */
-function collectEvidenceGroupsForEvent(eventObj, l0Selected, l1ByFloor, usedL0Ids) {
+function collectEvidenceGroupsForEvent(
+    eventObj,
+    l0Selected,
+    l1ByFloor,
+    usedL0Ids,
+) {
     const range = parseFloorRange(eventObj?.summary);
     if (!range) return [];
 
@@ -685,7 +713,9 @@ function formatEventWithEvidence(eventItem, idx, evidenceGroups, causalById) {
     const summary = cleanSummary(ev.summary);
 
     const displayTitle = title || people || ev.id || "事件";
-    const header = time ? `${idx}.【${time}】${displayTitle}` : `${idx}. ${displayTitle}`;
+    const header = time
+        ? `${idx}.【${time}】${displayTitle}`
+        : `${idx}. ${displayTitle}`;
 
     const lines = [header];
     if (people && displayTitle !== people) lines.push(`  ${people}`);
@@ -719,22 +749,29 @@ function buildNonVectorPrompt(store) {
     const sections = [];
 
     // [Constraints] L3 Facts (structured: people/world)
-    const allFacts = getFacts().filter(f => !f.retracted);
+    const allFacts = getFacts().filter((f) => !f.retracted);
     const nonVectorPeopleDict = buildConstraintPeopleDict(
         { events: data.events || [] },
-        []
+        [],
     );
-    const nonVectorFocus = nonVectorPeopleDict.size > 0
-        ? [...nonVectorPeopleDict.values()]
-        : [...getKnownCharacters(store)];
+    const nonVectorFocus =
+        nonVectorPeopleDict.size > 0
+            ? [...nonVectorPeopleDict.values()]
+            : [...getKnownCharacters(store)];
     const nonVectorKnownCharacters = getKnownCharacters(store);
     const filteredConstraints = filterConstraintsByRelevance(
         allFacts,
         nonVectorFocus,
-        nonVectorKnownCharacters
+        nonVectorKnownCharacters,
     );
-    const groupedConstraints = groupConstraintsForDisplay(filteredConstraints, nonVectorPeopleDict);
-    const constraintLines = formatConstraintsStructured(groupedConstraints, 'asc');
+    const groupedConstraints = groupConstraintsForDisplay(
+        filteredConstraints,
+        nonVectorPeopleDict,
+    );
+    const constraintLines = formatConstraintsStructured(
+        groupedConstraints,
+        "asc",
+    );
 
     if (constraintLines.length) {
         sections.push(`[定了的事] 已确立的事实\n${constraintLines.join("\n")}`);
@@ -747,7 +784,9 @@ function buildNonVectorPrompt(store) {
             const title = ev.title || "";
             const people = (ev.participants || []).join(" / ");
             const summary = cleanSummary(ev.summary);
-            const header = time ? `${i + 1}.【${time}】${title || people}` : `${i + 1}. ${title || people}`;
+            const header = time
+                ? `${i + 1}.【${time}】${title || people}`
+                : `${i + 1}. ${title || people}`;
             return `${header}\n  ${summary}`;
         });
         sections.push(`[剧情记忆]\n\n${lines.join("\n\n")}`);
@@ -804,7 +843,14 @@ export function buildNonVectorPromptText() {
  * @param {object} metrics - 指标对象
  * @returns {Promise<{promptText: string, injectionStats: object, metrics: object}>}
  */
-async function buildVectorPrompt(store, recallResult, causalById, focusCharacters, meta, metrics) {
+async function buildVectorPrompt(
+    store,
+    recallResult,
+    causalById,
+    focusCharacters,
+    meta,
+    metrics,
+) {
     const T_Start = performance.now();
 
     const data = store.json || {};
@@ -852,17 +898,34 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
 
     const allFacts = getFacts();
     const knownCharacters = getKnownCharacters(store);
-    const filteredConstraints = filterConstraintsByRelevance(allFacts, focusCharacters, knownCharacters);
-    const constraintPeopleDict = buildConstraintPeopleDict(recallResult, focusCharacters);
-    const groupedConstraints = groupConstraintsForDisplay(filteredConstraints, constraintPeopleDict);
+    const filteredConstraints = filterConstraintsByRelevance(
+        allFacts,
+        focusCharacters,
+        knownCharacters,
+    );
+    const constraintPeopleDict = buildConstraintPeopleDict(
+        recallResult,
+        focusCharacters,
+    );
+    const groupedConstraints = groupConstraintsForDisplay(
+        filteredConstraints,
+        constraintPeopleDict,
+    );
 
     if (metrics) {
         metrics.constraint.total = allFacts.length;
-        metrics.constraint.filtered = allFacts.length - filteredConstraints.length;
+        metrics.constraint.filtered =
+            allFacts.length - filteredConstraints.length;
     }
 
-    const constraintBudget = { used: 0, max: Math.min(CONSTRAINT_MAX, total.max - total.used) };
-    const groupedSelectedConstraints = selectConstraintsByBudgetDesc(groupedConstraints, constraintBudget);
+    const constraintBudget = {
+        used: 0,
+        max: Math.min(CONSTRAINT_MAX, total.max - total.used),
+    };
+    const groupedSelectedConstraints = selectConstraintsByBudgetDesc(
+        groupedConstraints,
+        constraintBudget,
+    );
     const injectedConstraintFacts = (() => {
         let count = groupedSelectedConstraints.world.length;
         for (const facts of groupedSelectedConstraints.people.values()) {
@@ -870,7 +933,10 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
         }
         return count;
     })();
-    const constraintLines = formatConstraintsStructured(groupedSelectedConstraints, 'asc');
+    const constraintLines = formatConstraintsStructured(
+        groupedSelectedConstraints,
+        "asc",
+    );
 
     if (constraintLines.length) {
         assembled.constraints.lines.push(...constraintLines);
@@ -878,18 +944,25 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
         total.used += constraintBudget.used;
         injectionStats.constraint.count = assembled.constraints.lines.length;
         injectionStats.constraint.tokens = constraintBudget.used;
-        injectionStats.constraint.filtered = allFacts.length - filteredConstraints.length;
+        injectionStats.constraint.filtered =
+            allFacts.length - filteredConstraints.length;
 
         if (metrics) {
             metrics.constraint.injected = injectedConstraintFacts;
             metrics.constraint.tokens = constraintBudget.used;
-            metrics.constraint.samples = assembled.constraints.lines.slice(0, 3).map(line =>
-                line.length > 60 ? line.slice(0, 60) + '...' : line
+            metrics.constraint.samples = assembled.constraints.lines
+                .slice(0, 3)
+                .map((line) =>
+                    line.length > 60 ? line.slice(0, 60) + "..." : line,
+                );
+            metrics.timing.constraintFilter = Math.round(
+                performance.now() - T_Constraint_Start,
             );
-            metrics.timing.constraintFilter = Math.round(performance.now() - T_Constraint_Start);
         }
     } else if (metrics) {
-        metrics.timing.constraintFilter = Math.round(performance.now() - T_Constraint_Start);
+        metrics.timing.constraintFilter = Math.round(
+            performance.now() - T_Constraint_Start,
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -902,20 +975,24 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
 
         const relevant = new Set(
             [userName, ...(focusCharacters || [])]
-                .map(s => String(s || "").trim())
-                .filter(Boolean)
+                .map((s) => String(s || "").trim())
+                .filter(Boolean),
         );
 
-        const filteredArcs = (data.arcs || []).filter(a => {
+        const filteredArcs = (data.arcs || []).filter((a) => {
             const n = String(a?.name || "").trim();
             return n && relevant.has(n);
         });
 
         if (filteredArcs.length) {
-            const arcBudget = { used: 0, max: Math.min(ARCS_MAX, total.max - total.used) };
+            const arcBudget = {
+                used: 0,
+                max: Math.min(ARCS_MAX, total.max - total.used),
+            };
             for (const a of filteredArcs) {
                 const line = formatArcLine(a);
-                if (!pushWithBudget(assembled.arcs.lines, line, arcBudget)) break;
+                if (!pushWithBudget(assembled.arcs.lines, line, arcBudget))
+                    break;
             }
             assembled.arcs.tokens = arcBudget.used;
             total.used += arcBudget.used;
@@ -927,10 +1004,17 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
     // ═══════════════════════════════════════════════════════════════════════
     // [Events] L2 Events → 直接命中 + 相似命中 + 因果链 + EvidenceGroup
     // ═══════════════════════════════════════════════════════════════════════
-    const eventHits = (recallResult?.events || []).filter(e => e?.event?.summary);
+    const eventHits = (recallResult?.events || []).filter(
+        (e) => e?.event?.summary,
+    );
 
-    const candidates = [...eventHits].sort((a, b) => (b.similarity || 0) - (a.similarity || 0));
-    const eventBudget = { used: 0, max: Math.min(EVENT_BUDGET_MAX, total.max - total.used) };
+    const candidates = [...eventHits].sort(
+        (a, b) => (b.similarity || 0) - (a.similarity || 0),
+    );
+    const eventBudget = {
+        used: 0,
+        max: Math.min(EVENT_BUDGET_MAX, total.max - total.used),
+    };
     const relatedBudget = { used: 0, max: RELATED_EVENT_MAX };
     // Once budget becomes tight, keep high-score L2 summaries and stop attaching evidence.
     let allowEventEvidence = true;
@@ -938,7 +1022,11 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
     const selectedDirect = [];
     const selectedRelated = [];
 
-    for (let candidateRank = 0; candidateRank < candidates.length; candidateRank++) {
+    for (
+        let candidateRank = 0;
+        candidateRank < candidates.length;
+        candidateRank++
+    ) {
         const e = candidates[candidateRank];
 
         if (total.used >= total.max) break;
@@ -951,25 +1039,47 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
         // DIRECT 才允许收集事件内证据组。
         const useEvidenceForThisEvent = isDirect && allowEventEvidence;
         const evidenceGroups = useEvidenceForThisEvent
-            ? collectEvidenceGroupsForEvent(e.event, l0Selected, l1ByFloor, usedL0Ids)
+            ? collectEvidenceGroupsForEvent(
+                  e.event,
+                  l0Selected,
+                  l1ByFloor,
+                  usedL0Ids,
+              )
             : [];
 
         // 格式化事件（含证据）
         const text = formatEventWithEvidence(e, 0, evidenceGroups, causalById);
         const cost = estimateTokens(text);
         const fitEventBudget = eventBudget.used + cost <= eventBudget.max;
-        const fitRelatedBudget = isDirect || (relatedBudget.used + cost <= relatedBudget.max);
+        const fitRelatedBudget =
+            isDirect || relatedBudget.used + cost <= relatedBudget.max;
 
         // 预算检查：整个事件（含证据）作为原子单元
         // 约束：总预算 + 事件预算 + related 子预算（若 applicable）
-        if (total.used + cost > total.max || !fitEventBudget || !fitRelatedBudget) {
+        if (
+            total.used + cost > total.max ||
+            !fitEventBudget ||
+            !fitRelatedBudget
+        ) {
             // 尝试不带证据的版本
-            const textNoEvidence = formatEventWithEvidence(e, 0, [], causalById);
+            const textNoEvidence = formatEventWithEvidence(
+                e,
+                0,
+                [],
+                causalById,
+            );
             const costNoEvidence = estimateTokens(textNoEvidence);
-            const fitEventBudgetNoEvidence = eventBudget.used + costNoEvidence <= eventBudget.max;
-            const fitRelatedBudgetNoEvidence = isDirect || (relatedBudget.used + costNoEvidence <= relatedBudget.max);
+            const fitEventBudgetNoEvidence =
+                eventBudget.used + costNoEvidence <= eventBudget.max;
+            const fitRelatedBudgetNoEvidence =
+                isDirect ||
+                relatedBudget.used + costNoEvidence <= relatedBudget.max;
 
-            if (total.used + costNoEvidence > total.max || !fitEventBudgetNoEvidence || !fitRelatedBudgetNoEvidence) {
+            if (
+                total.used + costNoEvidence > total.max ||
+                !fitEventBudgetNoEvidence ||
+                !fitRelatedBudgetNoEvidence
+            ) {
                 // 归还 usedL0Ids
                 for (const group of evidenceGroups) {
                     for (const l0 of group.l0Atoms) {
@@ -978,7 +1088,10 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
                 }
                 // Hard cap reached: no-evidence version also cannot fit total/event budget.
                 // Keep ranking semantics (higher-score events first): stop here.
-                if (total.used + costNoEvidence > total.max || !fitEventBudgetNoEvidence) {
+                if (
+                    total.used + costNoEvidence > total.max ||
+                    !fitEventBudgetNoEvidence
+                ) {
                     break;
                 }
                 // Related sub-budget overflow: skip this related event and continue.
@@ -998,13 +1111,19 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
 
             if (isDirect) {
                 selectedDirect.push({
-                    event: e.event, text: textNoEvidence, tokens: costNoEvidence,
-                    evidenceGroups: [], candidateRank,
+                    event: e.event,
+                    text: textNoEvidence,
+                    tokens: costNoEvidence,
+                    evidenceGroups: [],
+                    candidateRank,
                 });
             } else {
                 selectedRelated.push({
-                    event: e.event, text: textNoEvidence, tokens: costNoEvidence,
-                    evidenceGroups: [], candidateRank,
+                    event: e.event,
+                    text: textNoEvidence,
+                    tokens: costNoEvidence,
+                    evidenceGroups: [],
+                    candidateRank,
                 });
             }
 
@@ -1037,13 +1156,19 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
 
         if (isDirect) {
             selectedDirect.push({
-                event: e.event, text, tokens: cost,
-                evidenceGroups, candidateRank,
+                event: e.event,
+                text,
+                tokens: cost,
+                evidenceGroups,
+                candidateRank,
             });
         } else {
             selectedRelated.push({
-                event: e.event, text, tokens: cost,
-                evidenceGroups, candidateRank,
+                event: e.event,
+                text,
+                tokens: cost,
+                evidenceGroups,
+                candidateRank,
             });
         }
 
@@ -1067,8 +1192,12 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
     }
 
     // 排序
-    selectedDirect.sort((a, b) => getEventSortKey(a.event) - getEventSortKey(b.event));
-    selectedRelated.sort((a, b) => getEventSortKey(a.event) - getEventSortKey(b.event));
+    selectedDirect.sort(
+        (a, b) => getEventSortKey(a.event) - getEventSortKey(b.event),
+    );
+    selectedRelated.sort(
+        (a, b) => getEventSortKey(a.event) - getEventSortKey(b.event),
+    );
 
     // ═══════════════════════════════════════════════════════════════════
     // 邻近补挂：未被事件消费的 L0，距最近已选事件 ≤ 2 楼则补挂
@@ -1104,33 +1233,44 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
         : 6;
 
     // 收集未被事件消费的 L0，按 rerankScore 降序
-    const focusSetForEvidence = new Set((focusCharacters || []).map(normalize).filter(Boolean));
+    const focusSetForEvidence = new Set(
+        (focusCharacters || []).map(normalize).filter(Boolean),
+    );
 
     const remainingL0 = l0Selected
-        .filter(l0 => !usedL0Ids.has(l0.id))
-        .filter(l0 => shouldKeepEvidenceL0(l0, focusSetForEvidence))
+        .filter((l0) => !usedL0Ids.has(l0.id))
+        .filter((l0) => shouldKeepEvidenceL0(l0, focusSetForEvidence))
         .sort((a, b) => (b.rerankScore || 0) - (a.rerankScore || 0));
 
     // 远期：floor <= lastSummarized
-    const distantL0 = remainingL0.filter(l0 => l0.floor <= lastSummarized);
+    const distantL0 = remainingL0.filter((l0) => l0.floor <= lastSummarized);
 
     if (distantL0.length && total.used < total.max) {
-        const distantBudget = { used: 0, max: Math.min(SUMMARIZED_EVIDENCE_MAX, total.max - total.used) };
+        const distantBudget = {
+            used: 0,
+            max: Math.min(SUMMARIZED_EVIDENCE_MAX, total.max - total.used),
+        };
 
         // 先按分数挑组（高分优先），再按时间输出（楼层升序）
         const distantFloorMap = groupL0ByFloor(distantL0);
         const distantRanked = [];
         for (const [floor, l0s] of distantFloorMap) {
             const group = buildEvidenceGroup(floor, l0s, l1ByFloor);
-            const bestScore = Math.max(...l0s.map(l0 => (l0.rerankScore ?? l0.similarity ?? 0)));
+            const bestScore = Math.max(
+                ...l0s.map((l0) => l0.rerankScore ?? l0.similarity ?? 0),
+            );
             distantRanked.push({ group, bestScore });
         }
-        distantRanked.sort((a, b) => (b.bestScore - a.bestScore) || (a.group.floor - b.group.floor));
+        distantRanked.sort(
+            (a, b) =>
+                b.bestScore - a.bestScore || a.group.floor - b.group.floor,
+        );
 
         const acceptedDistantGroups = [];
         for (const item of distantRanked) {
             const group = item.group;
-            if (distantBudget.used + group.totalTokens > distantBudget.max) continue;
+            if (distantBudget.used + group.totalTokens > distantBudget.max)
+                continue;
             distantBudget.used += group.totalTokens;
             acceptedDistantGroups.push(group);
             for (const l0 of group.l0Atoms) usedL0Ids.add(l0.id);
@@ -1160,8 +1300,8 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
     if (recentEnd >= recentStart) {
         const recentAllL0 = getRecentWindowL0Atoms(recentStart, recentEnd);
         const recentL0 = recentAllL0
-            .filter(l0 => !usedL0Ids.has(l0.id))
-            .filter(l0 => l0.floor >= recentStart && l0.floor <= recentEnd);
+            .filter((l0) => !usedL0Ids.has(l0.id))
+            .filter((l0) => l0.floor >= recentStart && l0.floor <= recentEnd);
 
         if (recentL0.length) {
             const recentBudget = { used: 0, max: UNSUMMARIZED_EVIDENCE_MAX };
@@ -1178,7 +1318,8 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
             const acceptedRecentGroups = [];
             for (const item of recentRanked) {
                 const group = item.group;
-                if (recentBudget.used + group.totalTokens > recentBudget.max) continue;
+                if (recentBudget.used + group.totalTokens > recentBudget.max)
+                    continue;
                 recentBudget.used += group.totalTokens;
                 acceptedRecentGroups.push(group);
                 for (const l0 of group.l0Atoms) usedL0Ids.add(l0.id);
@@ -1207,52 +1348,77 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
     const sections = [];
 
     if (assembled.constraints.lines.length) {
-        sections.push(`[定了的事] 已确立的事实\n${assembled.constraints.lines.join("\n")}`);
+        sections.push(
+            `[事实图谱] 已确立的事实\n${assembled.constraints.lines.join("\n")}`,
+        );
     }
     if (assembled.directEvents.lines.length) {
-        sections.push(`[印象深的事] 记得很清楚\n\n${assembled.directEvents.lines.join("\n\n")}`);
+        sections.push(
+            `[情景记忆链] 直接相关的过往情景\n\n${assembled.directEvents.lines.join("\n\n")}`,
+        );
     }
     if (assembled.relatedEvents.lines.length) {
-        sections.push(`[其他人的事] 别人经历的类似事\n\n${assembled.relatedEvents.lines.join("\n\n")}`);
+        sections.push(
+            `[旁支记忆] 与当前情景相近的事\n\n${assembled.relatedEvents.lines.join("\n\n")}`,
+        );
     }
     if (assembled.distantEvidence.lines.length) {
-        sections.push(`[零散记忆] 没归入事件的片段\n${assembled.distantEvidence.lines.join("\n")}`);
+        sections.push(
+            `[回声记忆] 远处呼应的相似片段\n${assembled.distantEvidence.lines.join("\n")}`,
+        );
     }
     if (assembled.recentEvidence.lines.length) {
-        sections.push(`[新鲜记忆] 还没总结的部分\n${assembled.recentEvidence.lines.join("\n")}`);
+        //sections.push(`[新鲜记忆] 还没总结的部分\n${assembled.recentEvidence.lines.join("\n")}`);
     }
     if (assembled.arcs.lines.length) {
-        sections.push(`[这些人] 他们的弧光\n${assembled.arcs.lines.join("\n")}`);
+        sections.push(
+            `[角色弧光] 他们的成长轨迹\n${assembled.arcs.lines.join("\n")}`,
+        );
     }
 
     if (!sections.length) {
         if (metrics) {
-            metrics.timing.evidenceAssembly = Math.round(performance.now() - T_Start - (metrics.timing.constraintFilter || 0));
+            metrics.timing.evidenceAssembly = Math.round(
+                performance.now() -
+                    T_Start -
+                    (metrics.timing.constraintFilter || 0),
+            );
             metrics.timing.formatting = 0;
         }
         return { promptText: "", injectionStats, metrics };
     }
 
-    const memoryBody = `<剧情记忆>\n\n${sections.join("\n\n")}\n\n</剧情记忆>`;
+    const memoryBody = `${sections.join("\n\n")}`;
     const promptText = buildMemoryPromptText(memoryBody);
 
     if (metrics) {
         metrics.formatting.sectionsIncluded = [];
-        if (assembled.constraints.lines.length) metrics.formatting.sectionsIncluded.push('constraints');
-        if (assembled.directEvents.lines.length) metrics.formatting.sectionsIncluded.push('direct_events');
-        if (assembled.relatedEvents.lines.length) metrics.formatting.sectionsIncluded.push('related_events');
-        if (assembled.distantEvidence.lines.length) metrics.formatting.sectionsIncluded.push('distant_evidence');
-        if (assembled.recentEvidence.lines.length) metrics.formatting.sectionsIncluded.push('recent_evidence');
-        if (assembled.arcs.lines.length) metrics.formatting.sectionsIncluded.push('arcs');
+        if (assembled.constraints.lines.length)
+            metrics.formatting.sectionsIncluded.push("constraints");
+        if (assembled.directEvents.lines.length)
+            metrics.formatting.sectionsIncluded.push("direct_events");
+        if (assembled.relatedEvents.lines.length)
+            metrics.formatting.sectionsIncluded.push("related_events");
+        if (assembled.distantEvidence.lines.length)
+            metrics.formatting.sectionsIncluded.push("distant_evidence");
+        if (assembled.recentEvidence.lines.length)
+            metrics.formatting.sectionsIncluded.push("recent_evidence");
+        if (assembled.arcs.lines.length)
+            metrics.formatting.sectionsIncluded.push("arcs");
 
-        metrics.formatting.time = Math.round(performance.now() - T_Format_Start);
+        metrics.formatting.time = Math.round(
+            performance.now() - T_Format_Start,
+        );
         metrics.timing.formatting = metrics.formatting.time;
 
-        const effectiveTotal = total.used + (assembled.recentEvidence.tokens || 0);
+        const effectiveTotal =
+            total.used + (assembled.recentEvidence.tokens || 0);
         const effectiveLimit = SHARED_POOL_MAX + UNSUMMARIZED_EVIDENCE_MAX;
         metrics.budget.total = effectiveTotal;
         metrics.budget.limit = effectiveLimit;
-        metrics.budget.utilization = Math.round(effectiveTotal / effectiveLimit * 100);
+        metrics.budget.utilization = Math.round(
+            (effectiveTotal / effectiveLimit) * 100,
+        );
         metrics.budget.breakdown = {
             constraints: assembled.constraints.tokens,
             events: injectionStats.event.tokens,
@@ -1261,22 +1427,35 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
             arcs: assembled.arcs.tokens,
         };
 
-        metrics.evidence.tokens = injectionStats.distantEvidence.tokens + injectionStats.recentEvidence.tokens;
-        metrics.evidence.recentSource = 'all_l0_window';
+        metrics.evidence.tokens =
+            injectionStats.distantEvidence.tokens +
+            injectionStats.recentEvidence.tokens;
+        metrics.evidence.recentSource = "all_l0_window";
         metrics.evidence.recentL1Attached = 0;
         metrics.evidence.assemblyTime = Math.round(
-            performance.now() - T_Start - (metrics.timing.constraintFilter || 0) - metrics.formatting.time
+            performance.now() -
+                T_Start -
+                (metrics.timing.constraintFilter || 0) -
+                metrics.formatting.time,
         );
         metrics.timing.evidenceAssembly = metrics.evidence.assemblyTime;
 
-        const relevantFacts = Math.max(0, allFacts.length - (metrics.constraint.filtered || 0));
-        metrics.quality.constraintCoverage = relevantFacts > 0
-            ? Math.round((metrics.constraint.injected || 0) / relevantFacts * 100)
-            : 100;
-        metrics.quality.eventPrecisionProxy = metrics.event?.similarityDistribution?.mean || 0;
+        const relevantFacts = Math.max(
+            0,
+            allFacts.length - (metrics.constraint.filtered || 0),
+        );
+        metrics.quality.constraintCoverage =
+            relevantFacts > 0
+                ? Math.round(
+                      ((metrics.constraint.injected || 0) / relevantFacts) *
+                          100,
+                  )
+                : 100;
+        metrics.quality.eventPrecisionProxy =
+            metrics.event?.similarityDistribution?.mean || 0;
 
         // l1AttachRate：有 L1 挂载的唯一楼层占所有 L0 覆盖楼层的比例
-        const l0Floors = new Set(l0Selected.map(l0 => l0.floor));
+        const l0Floors = new Set(l0Selected.map((l0) => l0.floor));
         const l0FloorsWithL1 = new Set();
         for (const floor of l0Floors) {
             const pair = l1ByFloor.get(floor);
@@ -1284,9 +1463,10 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
                 l0FloorsWithL1.add(floor);
             }
         }
-        metrics.quality.l1AttachRate = l0Floors.size > 0
-            ? Math.round(l0FloorsWithL1.size / l0Floors.size * 100)
-            : 0;
+        metrics.quality.l1AttachRate =
+            l0Floors.size > 0
+                ? Math.round((l0FloorsWithL1.size / l0Floors.size) * 100)
+                : 0;
 
         metrics.quality.potentialIssues = detectIssues(metrics);
     }
@@ -1294,8 +1474,22 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
     return { promptText, injectionStats, metrics };
 }
 
-export async function buildVectorPromptForReplay(store, recallResult, causalById, focusCharacters, meta, metrics) {
-    return await buildVectorPrompt(store, recallResult, causalById, focusCharacters, meta, metrics);
+export async function buildVectorPromptForReplay(
+    store,
+    recallResult,
+    causalById,
+    focusCharacters,
+    meta,
+    metrics,
+) {
+    return await buildVectorPrompt(
+        store,
+        recallResult,
+        causalById,
+        focusCharacters,
+        meta,
+        metrics,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1309,7 +1503,11 @@ export async function buildVectorPromptForReplay(store, recallResult, causalById
  * @returns {Promise<{text: string, logText: string}>}
  */
 export async function buildVectorPromptText(excludeLastAi = false, hooks = {}) {
-    const { postToFrame = null, echo = null, pendingUserMessage = null } = hooks;
+    const {
+        postToFrame = null,
+        echo = null,
+        pendingUserMessage = null,
+    } = hooks;
 
     if (!getSettings().storySummary?.enabled) {
         return { text: "", logText: "" };
@@ -1353,8 +1551,10 @@ export async function buildVectorPromptText(excludeLastAi = false, hooks = {}) {
             l0Selected: recallResult?.l0Selected || [],
             l1ByFloor: recallResult?.l1ByFloor || new Map(),
             causalChain: recallResult?.causalChain || [],
-            focusTerms: recallResult?.focusTerms || recallResult?.focusEntities || [],
-            focusEntities: recallResult?.focusTerms || recallResult?.focusEntities || [], // compat alias
+            focusTerms:
+                recallResult?.focusTerms || recallResult?.focusEntities || [],
+            focusEntities:
+                recallResult?.focusTerms || recallResult?.focusEntities || [], // compat alias
             focusCharacters: recallResult?.focusCharacters || [],
             metrics: recallResult?.metrics || null,
         };
@@ -1362,15 +1562,19 @@ export async function buildVectorPromptText(excludeLastAi = false, hooks = {}) {
         // 构建因果事件索引
         causalById = new Map(
             (recallResult.causalChain || [])
-                .map(c => [c?.event?.id, c])
-                .filter(x => x[0])
+                .map((c) => [c?.event?.id, c])
+                .filter((x) => x[0]),
         );
     } catch (e) {
         xbLog.error(MODULE_ID, "向量召回失败", e);
 
         if (echo && canNotifyRecallFail()) {
-            const msg = String(e?.message || "未知错误").replace(/\s+/g, " ").slice(0, 200);
-            await echo(`/echo severity=warning 嵌入 API 请求失败：${msg}（本次跳过记忆召回）`);
+            const msg = String(e?.message || "未知错误")
+                .replace(/\s+/g, " ")
+                .slice(0, 200);
+            await echo(
+                `/echo severity=warning 嵌入 API 请求失败：${msg}（本次跳过记忆召回）`,
+            );
         }
 
         if (postToFrame) {
@@ -1380,7 +1584,10 @@ export async function buildVectorPromptText(excludeLastAi = false, hooks = {}) {
             });
         }
 
-        return { text: "", logText: `\n[Vector Recall Failed]\n${String(e?.stack || e?.message || e)}\n` };
+        return {
+            text: "",
+            logText: `\n[Vector Recall Failed]\n${String(e?.stack || e?.message || e)}\n`,
+        };
     }
 
     const hasUseful =
@@ -1389,16 +1596,23 @@ export async function buildVectorPromptText(excludeLastAi = false, hooks = {}) {
         (recallResult?.causalChain?.length || 0) > 0;
 
     if (!hasUseful) {
-        const noVectorsGenerated = !meta?.fingerprint || (meta?.lastChunkFloor ?? -1) < 0;
-        const fpMismatch = meta?.fingerprint && meta.fingerprint !== getEngineFingerprint(vectorCfg);
+        const noVectorsGenerated =
+            !meta?.fingerprint || (meta?.lastChunkFloor ?? -1) < 0;
+        const fpMismatch =
+            meta?.fingerprint &&
+            meta.fingerprint !== getEngineFingerprint(vectorCfg);
 
         if (fpMismatch) {
             if (echo && canNotifyRecallFail()) {
-                await echo("/echo severity=warning 向量引擎已变更，请重新生成向量");
+                await echo(
+                    "/echo severity=warning 向量引擎已变更，请重新生成向量",
+                );
             }
         } else if (noVectorsGenerated) {
             if (echo && canNotifyRecallFail()) {
-                await echo("/echo severity=warning 没有可用向量，请在剧情总结面板中生成向量");
+                await echo(
+                    "/echo severity=warning 没有可用向量，请在剧情总结面板中生成向量",
+                );
             }
         }
         // 向量存在但本次未命中 → 静默跳过，不打扰用户
@@ -1409,7 +1623,11 @@ export async function buildVectorPromptText(excludeLastAi = false, hooks = {}) {
                 text: "\n[Vector Recall Empty]\nNo recall candidates / vectors not ready.\n",
             });
         }
-        return { text: "", logText: "\n[Vector Recall Empty]\nNo recall candidates / vectors not ready.\n" };
+        return {
+            text: "",
+            logText:
+                "\n[Vector Recall Empty]\nNo recall candidates / vectors not ready.\n",
+        };
     }
 
     const { promptText, metrics: promptMetrics } = await buildVectorPrompt(
@@ -1418,15 +1636,17 @@ export async function buildVectorPromptText(excludeLastAi = false, hooks = {}) {
         causalById,
         recallResult?.focusCharacters || [],
         meta,
-        recallResult?.metrics || null
+        recallResult?.metrics || null,
     );
 
     const cfg = getSummaryPanelConfig();
     let finalText = String(promptText || "");
-    if (cfg.trigger?.wrapperHead) finalText = cfg.trigger.wrapperHead + "\n" + finalText;
-    if (cfg.trigger?.wrapperTail) finalText = finalText + "\n" + cfg.trigger.wrapperTail;
+    if (cfg.trigger?.wrapperHead)
+        finalText = cfg.trigger.wrapperHead + "\n" + finalText;
+    if (cfg.trigger?.wrapperTail)
+        finalText = finalText + "\n" + cfg.trigger.wrapperTail;
 
-    const metricsLogText = promptMetrics ? formatMetricsLog(promptMetrics) : '';
+    const metricsLogText = promptMetrics ? formatMetricsLog(promptMetrics) : "";
 
     if (postToFrame) {
         postToFrame({ type: "RECALL_LOG", text: metricsLogText });
