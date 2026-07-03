@@ -1689,6 +1689,16 @@ function setHideUiSettings(patch = {}) {
     return next.ui;
 }
 
+function clampSummaryTargetToKeepUnsummary(mesId) {
+    const { chat } = getContext();
+    const lastFloor = Array.isArray(chat) ? chat.length - 1 : mesId;
+    const keepUnsummaryCount = getHideUiSettings().keepVisibleCount;
+    const maxTarget = lastFloor - keepUnsummaryCount;
+    const parsedMesId = Number.parseInt(mesId, 10);
+    const requestedTarget = Number.isFinite(parsedMesId) ? parsedMesId : lastFloor;
+    return Math.min(requestedTarget, maxTarget);
+}
+
 async function sendFrameBaseData(store, totalFloors) {
     const ui = getHideUiSettings();
     const boundary = await getHideBoundaryFloor(store);
@@ -2561,8 +2571,7 @@ async function maybeAutoRunSummary(reason) {
 
     const store = getSummaryStore();
     const lastSummarized = store?.lastSummarizedMesId ?? -1;
-    const keepUnsummaryCount = getHideUiSettings().keepVisibleCount;
-    const targetMesId = chat.length - 1 - keepUnsummaryCount;
+    const targetMesId = clampSummaryTargetToKeepUnsummary(chat.length - 1);
     if (targetMesId <= lastSummarized) return;
     const pending = targetMesId - lastSummarized;
     if (pending < (trig.interval || 1)) return;
@@ -3224,7 +3233,8 @@ async function handleManualGenerate(mesId, config) {
     notifySummaryState();
 
     try {
-        await runSummaryGeneration(mesId, config, {
+        const targetMesId = clampSummaryTargetToKeepUnsummary(mesId);
+        await runSummaryGeneration(targetMesId, config, {
             onStatus: (text) =>
                 postToFrame({ type: "SUMMARY_STATUS", statusText: text }),
             onError: (msg) =>

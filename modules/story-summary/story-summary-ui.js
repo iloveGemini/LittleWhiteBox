@@ -2606,19 +2606,22 @@
             config.ui.useVectorBoundary = e.target.checked;
             postMsg('TOGGLE_USE_VECTOR_BOUNDARY', { enabled: e.target.checked });
         };
+        const setKeepVisibleCount = c => {
+            config.ui.keepVisibleCount = c;
+            postMsg('UPDATE_KEEP_VISIBLE', { count: c });
+            saveConfig({ statusId: 'api-connect-status' });
+        };
         const applyKeepVisibleCount = e => {
             const parsedCount = Number.parseInt(e.target.value, 10);
             const c = Number.isFinite(parsedCount) ? Math.max(0, Math.min(50, parsedCount)) : 6;
             e.target.value = c;
-            config.ui.keepVisibleCount = c;
-            postMsg('UPDATE_KEEP_VISIBLE', { count: c });
-            saveConfig({ statusId: 'api-connect-status' });
+            setKeepVisibleCount(c);
         };
         $('keep-visible-count').onchange = applyKeepVisibleCount;
         $('keep-visible-count').oninput = e => {
             const parsedCount = Number.parseInt(e.target.value, 10);
             if (!Number.isFinite(parsedCount)) return;
-            config.ui.keepVisibleCount = Math.max(0, Math.min(50, parsedCount));
+            setKeepVisibleCount(Math.max(0, Math.min(50, parsedCount)));
         };
 
         // Fullscreen relations
