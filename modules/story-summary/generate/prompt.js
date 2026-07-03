@@ -53,9 +53,6 @@ const RELATED_EVENT_MAX = 500;
 const SUMMARIZED_EVIDENCE_MAX = 2000;
 const UNSUMMARIZED_EVIDENCE_MAX = 2000;
 const TOP_N_STAR = 5;
-
-// L0 显示文本：分号拼接 vs 多行模式的阈值
-const L0_JOINED_MAX_LENGTH = 120;
 // 背景证据：无实体匹配时保留的最低相似度（与 recall.js CONFIG.EVENT_ENTITY_BYPASS_SIM 保持一致）
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -456,19 +453,6 @@ function formatArcLine(arc) {
 }
 
 /**
- * 从 L0 获取展示文本
- *
- * v7: L0 的 semantic 字段已是纯自然语言场景摘要（60-100字），直接使用。
- *
- * @param {object} l0 - L0 对象
- * @returns {string} 场景描述文本
- */
-function buildL0DisplayText(l0) {
-    const atom = l0.atom || {};
-    return String(atom.semantic || l0.text || '').trim() || '（未知锚点）';
-}
-
-/**
  * 格式化 L1 chunk 行
  * @param {object} chunk - L1 chunk 对象
  * @param {boolean} isContext - 是否为上下文（USER 侧）
@@ -585,15 +569,7 @@ function buildEvidenceGroup(floor, l0AtomsForFloor, l1ByFloor) {
     const userL1 = pair?.userTop1 || null;
     const aiL1 = pair?.aiTop1 || null;
 
-    // 计算整组 token 开销
     let totalTokens = 0;
-
-    // 所有 L0 的显示文本
-    for (const l0 of l0AtomsForFloor) {
-        totalTokens += estimateTokens(buildL0DisplayText(l0));
-    }
-    // 固定开销：楼层前缀、📌 标记、分号等
-    totalTokens += 10;
 
     // L1 仅算一次
     if (userL1) totalTokens += estimateTokens(formatL1Line(userL1, true));
@@ -608,13 +584,8 @@ function buildEvidenceGroup(floor, l0AtomsForFloor, l1ByFloor) {
  * @param {object[]} l0AtomsForFloor
  * @returns {object}
  */
-function buildRecentEvidenceGroup(floor, l0AtomsForFloor) {
-    let totalTokens = 0;
-    for (const l0 of l0AtomsForFloor) {
-        totalTokens += estimateTokens(buildL0DisplayText(l0));
-    }
-    totalTokens += 10;
-    return { floor, l0Atoms: l0AtomsForFloor, userL1: null, aiL1: null, totalTokens };
+function buildRecentEvidenceGroup(floor, l0AtomsForFloor, l1ByFloor) {
+    return buildEvidenceGroup(floor, l0AtomsForFloor, l1ByFloor);
 }
 
 /**
@@ -636,23 +607,7 @@ function buildRecentEvidenceGroup(floor, l0AtomsForFloor) {
  * @returns {string[]} 文本行数组
  */
 function formatEvidenceGroup(group) {
-    const displayTexts = group.l0Atoms.map(l0 => buildL0DisplayText(l0));
-
     const lines = [];
-
-    // L0 部分
-    const joined = displayTexts.join('；');
-
-    if (joined.length <= L0_JOINED_MAX_LENGTH) {
-        // 短行：分号拼接为一行
-        lines.push(`  › #${group.floor + 1} [📌] ${joined}`);
-    } else {
-        // 长行：每个 L0 独占一行，首行带楼层号
-        lines.push(`  › #${group.floor + 1} [📌] ${displayTexts[0]}`);
-        for (let i = 1; i < displayTexts.length; i++) {
-            lines.push(`  │      ${displayTexts[i]}`);
-        }
-    }
 
     // L1 证据（仅一次）
     if (group.userL1) {
@@ -1215,7 +1170,7 @@ async function buildVectorPrompt(store, recallResult, causalById, focusCharacter
             const recentFloorMap = groupL0ByFloor(recentL0);
             const recentRanked = [];
             for (const [floor, l0s] of recentFloorMap) {
-                const group = buildRecentEvidenceGroup(floor, l0s);
+                const group = buildRecentEvidenceGroup(floor, l0s, l1ByFloor);
                 recentRanked.push({ group });
             }
             recentRanked.sort((a, b) => b.group.floor - a.group.floor);

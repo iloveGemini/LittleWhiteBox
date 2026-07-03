@@ -20,8 +20,15 @@ import { extensionFolderPath } from "../../core/constants.js";
 import { xbLog, CacheRegistry } from "../../core/debug-core.js";
 import { createModuleEvents } from "../../core/event-manager.js";
 import { postToIframe, isTrustedMessage } from "../../core/iframe-messaging.js";
-import { initAfterAiGate, notifyAfterAiHint, registerAfterAiHandler } from "../../core/after-ai-gate.js";
-import { getDefaultApiPrefix, resolveApiBaseUrl } from "../../shared/common/openai-url-utils.js";
+import {
+    initAfterAiGate,
+    notifyAfterAiHint,
+    registerAfterAiHandler,
+} from "../../core/after-ai-gate.js";
+import {
+    getDefaultApiPrefix,
+    resolveApiBaseUrl,
+} from "../../shared/common/openai-url-utils.js";
 import {
     fetchHostOpenAICompatibleModels,
     setHostChatCompletionsRequestHeadersProvider,
@@ -59,15 +66,26 @@ import {
 import { runSummaryGeneration } from "./generate/generator.js";
 
 // vector service
-import { embed, getEngineFingerprint, testOnlineService } from "./vector/utils/embedder.js";
+import {
+    embed,
+    getEngineFingerprint,
+    testOnlineService,
+} from "./vector/utils/embedder.js";
 import { testL0Service } from "./vector/llm/llm-service.js";
 import { testRerankService } from "./vector/llm/reranker.js";
 
 // tokenizer
-import { preload as preloadTokenizer, injectEntities, isReady as isTokenizerReady } from "./vector/utils/tokenizer.js";
+import {
+    preload as preloadTokenizer,
+    injectEntities,
+    isReady as isTokenizerReady,
+} from "./vector/utils/tokenizer.js";
 
 // entity lexicon
-import { buildEntityLexicon, buildDisplayNameMap } from "./vector/retrieval/entity-lexicon.js";
+import {
+    buildEntityLexicon,
+    buildDisplayNameMap,
+} from "./vector/retrieval/entity-lexicon.js";
 
 import {
     getMeta,
@@ -107,7 +125,16 @@ import {
 } from "./vector/storage/state-store.js";
 
 // vector io
-import { exportVectors, importVectors, backupToServer, restoreFromServer, fetchManifest, deleteServerBackup, isDeleteUnsupportedError, getBackupFilename } from "./vector/storage/vector-io.js";
+import {
+    exportVectors,
+    importVectors,
+    backupToServer,
+    restoreFromServer,
+    fetchManifest,
+    deleteServerBackup,
+    isDeleteUnsupportedError,
+    getBackupFilename,
+} from "./vector/storage/vector-io.js";
 import {
     clearRecallRuntime,
     getRecallRuntimeStats,
@@ -116,7 +143,12 @@ import {
     warmRecallRuntime,
 } from "./vector/runtime/runtime.js";
 
-import { invalidateLexicalIndex, warmupIndex, removeDocumentsByFloor, addEventDocuments } from "./vector/retrieval/lexical-index.js";
+import {
+    invalidateLexicalIndex,
+    warmupIndex,
+    removeDocumentsByFloor,
+    addEventDocuments,
+} from "./vector/retrieval/lexical-index.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 常量
@@ -131,29 +163,36 @@ const SUMMARY_MODEL_FETCH_TIMEOUT_MS = 5000;
 
 function compactRecallRuntimeStatsForLog(statsList = getRecallRuntimeStats()) {
     if (!Array.isArray(statsList) || !statsList.length) return "[]";
-    return statsList.map((item) => {
-        const stats = item?.stats || item || {};
-        return [
-            `chat=${stats.chatId || "-"}`,
-            `backend=${stats.backend || "-"}`,
-            `owner=${stats.owner || "-"}`,
-            `status=${stats.status || "-"}`,
-            `ready=${stats.ready ? 1 : 0}`,
-            `warming=${stats.warming ? 1 : 0}`,
-            `chunks=${stats.chunks ?? "-"}`,
-            `l1v=${stats.chunkVectors ?? "-"}`,
-            `l2v=${stats.eventVectors ?? "-"}`,
-            `l0v=${stats.stateVectors ?? "-"}`,
-            `ver=${stats.version ?? "-"}`,
-            `err=${stats.lastError || "-"}`,
-        ].join(" ");
-    }).join(" | ");
+    return statsList
+        .map((item) => {
+            const stats = item?.stats || item || {};
+            return [
+                `chat=${stats.chatId || "-"}`,
+                `backend=${stats.backend || "-"}`,
+                `owner=${stats.owner || "-"}`,
+                `status=${stats.status || "-"}`,
+                `ready=${stats.ready ? 1 : 0}`,
+                `warming=${stats.warming ? 1 : 0}`,
+                `chunks=${stats.chunks ?? "-"}`,
+                `l1v=${stats.chunkVectors ?? "-"}`,
+                `l2v=${stats.eventVectors ?? "-"}`,
+                `l0v=${stats.stateVectors ?? "-"}`,
+                `ver=${stats.version ?? "-"}`,
+                `err=${stats.lastError || "-"}`,
+            ].join(" ");
+        })
+        .join(" | ");
 }
 
 async function fetchSummaryModelsForUi(payload = {}) {
-    const provider = String(payload?.provider || "").trim().toLowerCase() === "custom"
-        ? "openai"
-        : String(payload?.provider || "").trim().toLowerCase();
+    const provider =
+        String(payload?.provider || "")
+            .trim()
+            .toLowerCase() === "custom"
+            ? "openai"
+            : String(payload?.provider || "")
+                  .trim()
+                  .toLowerCase();
     const baseUrl = String(payload?.url || "").trim();
     const apiKey = String(payload?.apiKey || "").trim();
 
@@ -168,14 +207,23 @@ async function fetchSummaryModelsForUi(payload = {}) {
     }
 
     const controller = new AbortController();
-    const timeoutMs = Math.max(1000, Number(payload?.timeoutMs) || SUMMARY_MODEL_FETCH_TIMEOUT_MS);
+    const timeoutMs = Math.max(
+        1000,
+        Number(payload?.timeoutMs) || SUMMARY_MODEL_FETCH_TIMEOUT_MS,
+    );
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
         setHostChatCompletionsRequestHeadersProvider(() => getRequestHeaders());
-        return await fetchHostOpenAICompatibleModels({
-            baseUrl: resolveApiBaseUrl(baseUrl, getDefaultApiPrefix(provider)),
-            apiKey,
-        }, { signal: controller.signal });
+        return await fetchHostOpenAICompatibleModels(
+            {
+                baseUrl: resolveApiBaseUrl(
+                    baseUrl,
+                    getDefaultApiPrefix(provider),
+                ),
+                apiKey,
+            },
+            { signal: controller.signal },
+        );
     } catch (error) {
         if (error?.name === "AbortError") {
             throw new Error(`请求超时（>${Math.floor(timeoutMs / 1000)}s）`);
@@ -188,12 +236,20 @@ async function fetchSummaryModelsForUi(payload = {}) {
 
 function logRecallRuntimeCheckpoint(label, extra = "") {
     const suffix = extra ? ` ${extra}` : "";
-    xbLog.info(MODULE_ID, `[RecallRuntime] ${label}${suffix} stats=${compactRecallRuntimeStatsForLog()}`);
+    xbLog.info(
+        MODULE_ID,
+        `[RecallRuntime] ${label}${suffix} stats=${compactRecallRuntimeStatsForLog()}`,
+    );
 }
 
-function getCurrentRecallRuntimeStat(chatId, statsList = getRecallRuntimeStats()) {
+function getCurrentRecallRuntimeStat(
+    chatId,
+    statsList = getRecallRuntimeStats(),
+) {
     const list = Array.isArray(statsList) ? statsList : [];
-    const current = list.find((item) => String(item?.chatId || "") === String(chatId || ""));
+    const current = list.find(
+        (item) => String(item?.chatId || "") === String(chatId || ""),
+    );
     if (current) return current;
     return {
         chatId: chatId || "",
@@ -253,7 +309,7 @@ class TaskGuard {
     }
 
     isAnyRunning(...taskNames) {
-        return taskNames.some(t => this.#running.has(t));
+        return taskNames.some((t) => this.#running.has(t));
     }
 }
 
@@ -278,7 +334,11 @@ function onSendPointerdown(e) {
 }
 
 function onSendKeydown(e) {
-    if (e.key === "Enter" && !e.shiftKey && e.target?.closest?.("#send_textarea")) {
+    if (
+        e.key === "Enter" &&
+        !e.shiftKey &&
+        e.target?.closest?.("#send_textarea")
+    ) {
         captureUserInput();
     }
 }
@@ -319,7 +379,7 @@ function isHostGenerating() {
     return !!document.body?.dataset?.generating;
 }
 
-function rememberVectorMaintenance(chatId, floor = null, reason = 'unknown') {
+function rememberVectorMaintenance(chatId, floor = null, reason = "unknown") {
     if (!chatId) return;
     let entry = pendingVectorMaintenanceByChat.get(chatId);
     if (!entry) {
@@ -340,23 +400,26 @@ function clearVectorMaintenance(chatId = null) {
 let lastVectorWarningAt = 0;
 const VECTOR_WARNING_COOLDOWN_MS = 120000; // 2分钟内不重复提醒
 let backupDeleteSupported = true;
-let backupDeleteUnsupportedReason = '';
+let backupDeleteUnsupportedReason = "";
 let backupManagerCleanup = null;
 
 const EXT_PROMPT_KEY = "LittleWhiteBox_StorySummary";
-const MIN_INJECTION_DEPTH = 2;
+// 注入深度
+const MIN_INJECTION_DEPTH = 999;
 const R_AGG_MAX_CHARS = 256;
 
 function buildRAggregateText(atom) {
     const uniq = new Set();
-    for (const edge of (atom?.edges || [])) {
+    for (const edge of atom?.edges || []) {
         const r = String(edge?.r || "").trim();
         if (!r) continue;
         uniq.add(r);
     }
     const joined = [...uniq].join(" ; ");
     if (!joined) return String(atom?.semantic || "").trim();
-    return joined.length > R_AGG_MAX_CHARS ? joined.slice(0, R_AGG_MAX_CHARS) : joined;
+    return joined.length > R_AGG_MAX_CHARS
+        ? joined.slice(0, R_AGG_MAX_CHARS)
+        : joined;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -376,7 +439,11 @@ function maybePreloadTokenizer() {
             }
         })
         .catch((e) => {
-            xbLog.warn(MODULE_ID, "分词器预热失败（将降级运行，可稀后重试）", e);
+            xbLog.warn(
+                MODULE_ID,
+                "分词器预热失败（将降级运行，可稀后重试）",
+                e,
+            );
         });
 }
 
@@ -396,7 +463,8 @@ async function executeSlashCommand(command) {
         const executeCmd =
             window.executeSlashCommands ||
             window.executeSlashCommandsOnChatInput ||
-            (typeof SillyTavern !== "undefined" && SillyTavern.getContext()?.executeSlashCommands);
+            (typeof SillyTavern !== "undefined" &&
+                SillyTavern.getContext()?.executeSlashCommands);
 
         if (executeCmd) {
             await executeCmd(command);
@@ -446,11 +514,14 @@ function applyHideRangeInMemory(range) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function isSummaryGenerating() {
-    return guard.isRunning('summary');
+    return guard.isRunning("summary");
 }
 
 function notifySummaryState() {
-    postToFrame({ type: "GENERATION_STATE", isGenerating: guard.isRunning('summary') });
+    postToFrame({
+        type: "GENERATION_STATE",
+        isGenerating: guard.isRunning("summary"),
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -475,7 +546,9 @@ function flushPendingFrameMessages() {
     if (!frameReady) return;
     const iframe = document.getElementById("xiaobaix-story-summary-iframe");
     if (!iframe?.contentWindow) return;
-    pendingFrameMessages.forEach((p) => postToIframe(iframe, p, "LittleWhiteBox"));
+    pendingFrameMessages.forEach((p) =>
+        postToIframe(iframe, p, "LittleWhiteBox"),
+    );
     pendingFrameMessages = [];
     sendAnchorStatsToFrame();
 }
@@ -531,29 +604,49 @@ async function sendAnchorStatsToFrame() {
 }
 
 async function handleAnchorGenerate() {
-    const release = guard.acquire('anchor');
+    const release = guard.acquire("anchor");
     if (!release) return;
 
     try {
         const vectorCfg = getVectorConfig();
         if (!vectorCfg?.enabled) {
-            await executeSlashCommand("/echo severity=warning 请先启用向量检索");
+            await executeSlashCommand(
+                "/echo severity=warning 请先启用向量检索",
+            );
             return;
         }
 
         if (!vectorCfg.l0Api?.key) {
-            postToFrame({ type: "VECTOR_ONLINE_STATUS", status: "error", message: "请配置 L0 API Key" });
+            postToFrame({
+                type: "VECTOR_ONLINE_STATUS",
+                status: "error",
+                message: "请配置 L0 API Key",
+            });
             return;
         }
 
         const { chatId, chat } = getContext();
         if (!chatId || !chat?.length) return;
 
-        postToFrame({ type: "ANCHOR_GEN_PROGRESS", current: 0, total: 1, message: "分析中..." });
-
-        const l0Result = await incrementalExtractAtoms(chatId, chat, (message, current, total) => {
-            postToFrame({ type: "ANCHOR_GEN_PROGRESS", current, total, message });
+        postToFrame({
+            type: "ANCHOR_GEN_PROGRESS",
+            current: 0,
+            total: 1,
+            message: "分析中...",
         });
+
+        const l0Result = await incrementalExtractAtoms(
+            chatId,
+            chat,
+            (message, current, total) => {
+                postToFrame({
+                    type: "ANCHOR_GEN_PROGRESS",
+                    current,
+                    total,
+                    message,
+                });
+            },
+        );
 
         if (l0Result?.cancelled) {
             await sendAnchorStatsToFrame();
@@ -569,13 +662,27 @@ async function handleAnchorGenerate() {
             getStorageStats(chatId),
         ]);
         const lastFloor = (chat?.length || 0) - 1;
-        if (storageStats.chunks === 0 && lastFloor >= 0 && (meta.lastChunkFloor ?? -1) >= lastFloor) {
+        if (
+            storageStats.chunks === 0 &&
+            lastFloor >= 0 &&
+            (meta.lastChunkFloor ?? -1) >= lastFloor
+        ) {
             await updateMeta(chatId, { lastChunkFloor: -1 });
-            xbLog.warn(MODULE_ID, "Detected empty L1 chunks with full boundary, reset lastChunkFloor=-1");
+            xbLog.warn(
+                MODULE_ID,
+                "Detected empty L1 chunks with full boundary, reset lastChunkFloor=-1",
+            );
         }
 
-        postToFrame({ type: "ANCHOR_GEN_PROGRESS", current: 0, total: 1, message: "向量化 L1..." });
-        const chunkResult = await buildIncrementalChunks({ vectorConfig: vectorCfg });
+        postToFrame({
+            type: "ANCHOR_GEN_PROGRESS",
+            current: 0,
+            total: 1,
+            message: "向量化 L1...",
+        });
+        const chunkResult = await buildIncrementalChunks({
+            vectorConfig: vectorCfg,
+        });
 
         // L1 rebuild only if new chunks were added (usually 0 in normal chat)
         if (chunkResult.built > 0) {
@@ -589,7 +696,9 @@ async function handleAnchorGenerate() {
         xbLog.info(MODULE_ID, "记忆锚点生成完成");
     } catch (e) {
         xbLog.error(MODULE_ID, "记忆锚点生成失败", e);
-        await executeSlashCommand(`/echo severity=error 记忆锚点生成失败：${e.message}`);
+        await executeSlashCommand(
+            `/echo severity=error 记忆锚点生成失败：${e.message}`,
+        );
     } finally {
         release();
         postToFrame({ type: "ANCHOR_GEN_PROGRESS", current: -1, total: 0 });
@@ -615,7 +724,12 @@ function handleAnchorCancel() {
 
 async function handleTestOnlineService(provider, config, target = "embedding") {
     try {
-        postToFrame({ type: "VECTOR_ONLINE_STATUS", target, status: "downloading", message: "连接中..." });
+        postToFrame({
+            type: "VECTOR_ONLINE_STATUS",
+            target,
+            status: "downloading",
+            message: "连接中...",
+        });
         let result;
         if (target === "l0") result = await testL0Service(config);
         else if (target === "rerank") result = await testRerankService(config);
@@ -624,22 +738,33 @@ async function handleTestOnlineService(provider, config, target = "embedding") {
             type: "VECTOR_ONLINE_STATUS",
             target,
             status: "success",
-            message: target === "embedding"
-                ? `连接成功 (${result.dims}维)`
-                : (result.message || "连接成功"),
+            message:
+                target === "embedding"
+                    ? `连接成功 (${result.dims}维)`
+                    : result.message || "连接成功",
         });
     } catch (e) {
-        postToFrame({ type: "VECTOR_ONLINE_STATUS", target, status: "error", message: e.message });
+        postToFrame({
+            type: "VECTOR_ONLINE_STATUS",
+            target,
+            status: "error",
+            message: e.message,
+        });
     }
 }
 
 async function handleGenerateVectors(vectorCfg) {
-    const release = guard.acquire('vector');
+    const release = guard.acquire("vector");
     if (!release) return;
 
     try {
         if (!vectorCfg?.enabled) {
-            postToFrame({ type: "VECTOR_GEN_PROGRESS", phase: "ALL", current: -1, total: 0 });
+            postToFrame({
+                type: "VECTOR_GEN_PROGRESS",
+                phase: "ALL",
+                current: -1,
+                total: 0,
+            });
             return;
         }
 
@@ -647,7 +772,11 @@ async function handleGenerateVectors(vectorCfg) {
         if (!chatId || !chat?.length) return;
 
         if (!vectorCfg.embeddingApi?.key) {
-            postToFrame({ type: "VECTOR_ONLINE_STATUS", status: "error", message: "请配置 Embedding API Key" });
+            postToFrame({
+                type: "VECTOR_ONLINE_STATUS",
+                status: "error",
+                message: "请配置 Embedding API Key",
+            });
             return;
         }
 
@@ -663,13 +792,21 @@ async function handleGenerateVectors(vectorCfg) {
         await updateMeta(chatId, { lastChunkFloor: -1, fingerprint });
 
         // Helper to embed with retry
-        const embedWithRetry = async (texts, phase, currentBatchIdx, totalItems) => {
+        const embedWithRetry = async (
+            texts,
+            phase,
+            currentBatchIdx,
+            totalItems,
+        ) => {
             while (true) {
                 if (vectorCancelled) return null;
                 try {
-                    return await embed(texts, vectorCfg, { signal: vectorAbortController.signal });
+                    return await embed(texts, vectorCfg, {
+                        signal: vectorAbortController.signal,
+                    });
                 } catch (e) {
-                    if (e?.name === "AbortError" || vectorCancelled) return null;
+                    if (e?.name === "AbortError" || vectorCancelled)
+                        return null;
                     xbLog.error(MODULE_ID, `${phase} 向量化单次失败`, e);
 
                     // 等待 60 秒重试
@@ -681,35 +818,61 @@ async function handleGenerateVectors(vectorCfg) {
                             phase,
                             current: currentBatchIdx,
                             total: totalItems,
-                            message: `触发限流，${s}s 后重试...`
+                            message: `触发限流，${s}s 后重试...`,
                         });
-                        await new Promise(r => setTimeout(r, 1000));
+                        await new Promise((r) => setTimeout(r, 1000));
                     }
-                    postToFrame({ type: "VECTOR_GEN_PROGRESS", phase, current: currentBatchIdx, total: totalItems, message: "正在重试..." });
+                    postToFrame({
+                        type: "VECTOR_GEN_PROGRESS",
+                        phase,
+                        current: currentBatchIdx,
+                        total: totalItems,
+                        message: "正在重试...",
+                    });
                 }
             }
         };
 
         const atoms = getStateAtoms();
         if (!atoms.length) {
-            postToFrame({ type: "VECTOR_GEN_PROGRESS", phase: "L0", current: 0, total: 0, message: "L0 为空，跳过" });
+            postToFrame({
+                type: "VECTOR_GEN_PROGRESS",
+                phase: "L0",
+                current: 0,
+                total: 0,
+                message: "L0 为空，跳过",
+            });
         } else {
-            postToFrame({ type: "VECTOR_GEN_PROGRESS", phase: "L0", current: 0, total: atoms.length, message: "L0 向量化..." });
+            postToFrame({
+                type: "VECTOR_GEN_PROGRESS",
+                phase: "L0",
+                current: 0,
+                total: atoms.length,
+                message: "L0 向量化...",
+            });
 
             let l0Completed = 0;
             for (let i = 0; i < atoms.length; i += batchSize) {
                 if (vectorCancelled) break;
 
                 const batch = atoms.slice(i, i + batchSize);
-                const semTexts = batch.map(a => a.semantic);
-                const rTexts = batch.map(a => buildRAggregateText(a));
+                const semTexts = batch.map((a) => a.semantic);
+                const rTexts = batch.map((a) => buildRAggregateText(a));
 
-                const vectors = await embedWithRetry(semTexts.concat(rTexts), "L0", l0Completed, atoms.length);
+                const vectors = await embedWithRetry(
+                    semTexts.concat(rTexts),
+                    "L0",
+                    l0Completed,
+                    atoms.length,
+                );
                 if (!vectors) break; // cancelled
 
                 const split = semTexts.length;
                 if (!Array.isArray(vectors) || vectors.length < split * 2) {
-                    xbLog.error(MODULE_ID, `embed长度不匹配: expect>=${split * 2}, got=${vectors?.length || 0}`);
+                    xbLog.error(
+                        MODULE_ID,
+                        `embed长度不匹配: expect>=${split * 2}, got=${vectors?.length || 0}`,
+                    );
                     continue;
                 }
                 const semVectors = vectors.slice(0, split);
@@ -722,7 +885,12 @@ async function handleGenerateVectors(vectorCfg) {
                 }));
                 await saveStateVectors(chatId, items, fingerprint);
                 l0Completed += batch.length;
-                postToFrame({ type: "VECTOR_GEN_PROGRESS", phase: "L0", current: l0Completed, total: atoms.length });
+                postToFrame({
+                    type: "VECTOR_GEN_PROGRESS",
+                    phase: "L0",
+                    current: l0Completed,
+                    total: atoms.length,
+                });
             }
         }
 
@@ -743,9 +911,21 @@ async function handleGenerateVectors(vectorCfg) {
 
         let l1Vectors = [];
         if (!allChunks.length) {
-            postToFrame({ type: "VECTOR_GEN_PROGRESS", phase: "L1", current: 0, total: 0, message: "L1 为空，跳过" });
+            postToFrame({
+                type: "VECTOR_GEN_PROGRESS",
+                phase: "L1",
+                current: 0,
+                total: 0,
+                message: "L1 为空，跳过",
+            });
         } else {
-            postToFrame({ type: "VECTOR_GEN_PROGRESS", phase: "L1", current: 0, total: allChunks.length, message: "L1 向量化..." });
+            postToFrame({
+                type: "VECTOR_GEN_PROGRESS",
+                phase: "L1",
+                current: 0,
+                total: allChunks.length,
+                message: "L1 向量化...",
+            });
             await saveChunks(chatId, allChunks);
 
             let l1Completed = 0;
@@ -753,9 +933,14 @@ async function handleGenerateVectors(vectorCfg) {
                 if (vectorCancelled) break;
 
                 const batch = allChunks.slice(i, i + batchSize);
-                const texts = batch.map(c => c.text);
+                const texts = batch.map((c) => c.text);
 
-                const vectors = await embedWithRetry(texts, "L1", l1Completed, allChunks.length);
+                const vectors = await embedWithRetry(
+                    texts,
+                    "L1",
+                    l1Completed,
+                    allChunks.length,
+                );
                 if (!vectors) break; // cancelled
 
                 const items = batch.map((c, j) => ({
@@ -765,7 +950,12 @@ async function handleGenerateVectors(vectorCfg) {
                 await saveChunkVectors(chatId, items, fingerprint);
                 l1Vectors = l1Vectors.concat(items);
                 l1Completed += batch.length;
-                postToFrame({ type: "VECTOR_GEN_PROGRESS", phase: "L1", current: l1Completed, total: allChunks.length });
+                postToFrame({
+                    type: "VECTOR_GEN_PROGRESS",
+                    phase: "L1",
+                    current: l1Completed,
+                    total: allChunks.length,
+                });
             }
         }
 
@@ -775,22 +965,42 @@ async function handleGenerateVectors(vectorCfg) {
         const events = store?.json?.events || [];
 
         const l2Pairs = events
-            .map((e) => ({ id: e.id, text: `${e.title || ""} ${e.summary || ""}`.trim() }))
+            .map((e) => ({
+                id: e.id,
+                text: `${e.title || ""} ${e.summary || ""}`.trim(),
+            }))
             .filter((p) => p.text);
 
         if (!l2Pairs.length) {
-            postToFrame({ type: "VECTOR_GEN_PROGRESS", phase: "L2", current: 0, total: 0, message: "L2 为空，跳过" });
+            postToFrame({
+                type: "VECTOR_GEN_PROGRESS",
+                phase: "L2",
+                current: 0,
+                total: 0,
+                message: "L2 为空，跳过",
+            });
         } else {
-            postToFrame({ type: "VECTOR_GEN_PROGRESS", phase: "L2", current: 0, total: l2Pairs.length, message: "L2 向量化..." });
+            postToFrame({
+                type: "VECTOR_GEN_PROGRESS",
+                phase: "L2",
+                current: 0,
+                total: l2Pairs.length,
+                message: "L2 向量化...",
+            });
 
             let l2Completed = 0;
             for (let i = 0; i < l2Pairs.length; i += batchSize) {
                 if (vectorCancelled) break;
 
                 const batch = l2Pairs.slice(i, i + batchSize);
-                const texts = batch.map(p => p.text);
+                const texts = batch.map((p) => p.text);
 
-                const vectors = await embedWithRetry(texts, "L2", l2Completed, l2Pairs.length);
+                const vectors = await embedWithRetry(
+                    texts,
+                    "L2",
+                    l2Completed,
+                    l2Pairs.length,
+                );
                 if (!vectors) break; // cancelled
 
                 const items = batch.map((p, idx) => ({
@@ -799,20 +1009,38 @@ async function handleGenerateVectors(vectorCfg) {
                 }));
                 await saveEventVectorsToDb(chatId, items, fingerprint);
                 l2Completed += batch.length;
-                postToFrame({ type: "VECTOR_GEN_PROGRESS", phase: "L2", current: l2Completed, total: l2Pairs.length });
+                postToFrame({
+                    type: "VECTOR_GEN_PROGRESS",
+                    phase: "L2",
+                    current: l2Completed,
+                    total: l2Pairs.length,
+                });
             }
         }
 
         // Full rebuild completed: vector boundary should match latest floor.
         await updateMeta(chatId, { lastChunkFloor: chat.length - 1 });
 
-        postToFrame({ type: "VECTOR_GEN_PROGRESS", phase: "ALL", current: -1, total: 0 });
+        postToFrame({
+            type: "VECTOR_GEN_PROGRESS",
+            phase: "ALL",
+            current: -1,
+            total: 0,
+        });
         await sendVectorStatsToFrame();
 
-        xbLog.info(MODULE_ID, `向量生成完成: L0=${atoms.length}, L1=${l1Vectors.length}, L2=${l2Pairs.length}`);
+        xbLog.info(
+            MODULE_ID,
+            `向量生成完成: L0=${atoms.length}, L1=${l1Vectors.length}, L2=${l2Pairs.length}`,
+        );
     } catch (e) {
-        xbLog.error(MODULE_ID, '向量生成失败', e);
-        postToFrame({ type: "VECTOR_GEN_PROGRESS", phase: "ALL", current: -1, total: 0 });
+        xbLog.error(MODULE_ID, "向量生成失败", e);
+        postToFrame({
+            type: "VECTOR_GEN_PROGRESS",
+            phase: "ALL",
+            current: -1,
+            total: 0,
+        });
         await sendVectorStatsToFrame();
     } finally {
         release();
@@ -832,7 +1060,9 @@ async function handleClearVectors() {
     // without being blocked by stale engine fingerprint mismatch.
     await updateMeta(chatId, { lastChunkFloor: -1, fingerprint: null });
     await sendVectorStatsToFrame();
-    await executeSlashCommand('/echo severity=info 向量数据已清除。如需恢复召回功能，请重新点击"生成向量"。');
+    await executeSlashCommand(
+        '/echo severity=info 向量数据已清除。如需恢复召回功能，请重新点击"生成向量"。',
+    );
     xbLog.info(MODULE_ID, "向量数据已清除");
 }
 
@@ -868,9 +1098,13 @@ async function maybeRunDelayedVectorMaintenance(scheduledChatId = null) {
 
     const { chatId, chat } = getContext();
     const targetChatId = scheduledChatId || chatId;
-    if (!targetChatId || !chatId || targetChatId !== chatId || !chat?.length) return;
+    if (!targetChatId || !chatId || targetChatId !== chatId || !chat?.length)
+        return;
 
-    if (isHostGenerating() || guard.isAnyRunning('summary', 'anchor', 'vector')) {
+    if (
+        isHostGenerating() ||
+        guard.isAnyRunning("summary", "anchor", "vector")
+    ) {
         scheduleAutoL0Backfill(AUTO_L0_BACKFILL_DELAY_MS, targetChatId);
         return;
     }
@@ -888,18 +1122,23 @@ async function maybeRunDelayedVectorMaintenance(scheduledChatId = null) {
     }
 
     if (!pendingEntry && hasL0Work) {
-        rememberVectorMaintenance(chatId, null, 'backfill');
+        rememberVectorMaintenance(chatId, null, "backfill");
     }
 
-    const release = guard.acquire('anchor');
+    const release = guard.acquire("anchor");
     if (!release) {
         scheduleAutoL0Backfill(AUTO_L0_BACKFILL_DELAY_MS, chatId);
         return;
     }
 
     try {
-        const floorsText = pendingEntry?.floors?.size ? [...pendingEntry.floors].sort((a, b) => a - b).join(',') : '-';
-        xbLog.info(MODULE_ID, `延迟向量维护开始 chat=${chatId} floors=${floorsText} l0Pending=${stats.pending} l1Pending=${chunkStatus.pending}`);
+        const floorsText = pendingEntry?.floors?.size
+            ? [...pendingEntry.floors].sort((a, b) => a - b).join(",")
+            : "-";
+        xbLog.info(
+            MODULE_ID,
+            `延迟向量维护开始 chat=${chatId} floors=${floorsText} l0Pending=${stats.pending} l1Pending=${chunkStatus.pending}`,
+        );
 
         const chunkResult = hasL1Work
             ? await buildIncrementalChunks({ vectorConfig: vectorCfg })
@@ -915,7 +1154,9 @@ async function maybeRunDelayedVectorMaintenance(scheduledChatId = null) {
                 scheduleAutoL0Backfill(AUTO_L0_BACKFILL_DELAY_MS, chatId);
                 return;
             }
-            const preferredFloors = pendingEntry?.floors ? [...pendingEntry.floors] : [];
+            const preferredFloors = pendingEntry?.floors
+                ? [...pendingEntry.floors]
+                : [];
             l0Result = await incrementalExtractAtoms(chatId, chat, null, {
                 maxFloors: 20,
                 preferredFloors,
@@ -932,7 +1173,10 @@ async function maybeRunDelayedVectorMaintenance(scheduledChatId = null) {
         await sendVectorStatsToFrame();
         clearVectorMaintenance(chatId);
 
-        xbLog.info(MODULE_ID, `延迟向量维护完成 l0=${l0Result?.built || 0} l1=${chunkResult.built || 0}`);
+        xbLog.info(
+            MODULE_ID,
+            `延迟向量维护完成 l0=${l0Result?.built || 0} l1=${chunkResult.built || 0}`,
+        );
     } catch (e) {
         xbLog.error(MODULE_ID, "延迟向量维护失败", e);
     } finally {
@@ -947,36 +1191,45 @@ async function maybeRunDelayedVectorMaintenance(scheduledChatId = null) {
 function warmupEmbeddingConnection() {
     const vectorCfg = getVectorConfig();
     if (!vectorCfg?.enabled) return;
-    embed(['.'], vectorCfg, { timeout: 5000 }).catch(() => { });
+    embed(["."], vectorCfg, { timeout: 5000 }).catch(() => {});
 }
 
 function warmupActiveVectorCache() {
     const vectorCfg = getVectorConfig();
     const { chatId } = getContext();
-    logRecallRuntimeCheckpoint("warmupActiveVectorCache:start", `chat=${chatId || "-"} enabled=${vectorCfg?.enabled ? 1 : 0}`);
+    logRecallRuntimeCheckpoint(
+        "warmupActiveVectorCache:start",
+        `chat=${chatId || "-"} enabled=${vectorCfg?.enabled ? 1 : 0}`,
+    );
     retainRecallRuntimeOnly(chatId || null).catch((error) => {
-        xbLog.warn(MODULE_ID, '召回运行时清理非当前聊天缓存失败', error);
+        xbLog.warn(MODULE_ID, "召回运行时清理非当前聊天缓存失败", error);
     });
     if (!vectorCfg?.enabled) {
         if (chatId) {
-            logRecallRuntimeCheckpoint("warmupActiveVectorCache:clear-disabled", `chat=${chatId}`);
+            logRecallRuntimeCheckpoint(
+                "warmupActiveVectorCache:clear-disabled",
+                `chat=${chatId}`,
+            );
             clearRecallRuntime().catch((error) => {
-                xbLog.warn(MODULE_ID, '召回运行时清理失败', error);
+                xbLog.warn(MODULE_ID, "召回运行时清理失败", error);
             });
         }
         return;
     }
     if (!chatId) return;
-    warmRecallRuntime(chatId, { reason: 'active-chat-warmup' })
+    warmRecallRuntime(chatId, { reason: "active-chat-warmup" })
         .then((result) => {
-            logRecallRuntimeCheckpoint("warmupActiveVectorCache:done", `chat=${chatId} skipped=${result?.skipped ? 1 : 0} status=${result?.stats?.status || '-'}`);
+            logRecallRuntimeCheckpoint(
+                "warmupActiveVectorCache:done",
+                `chat=${chatId} skipped=${result?.skipped ? 1 : 0} status=${result?.stats?.status || "-"}`,
+            );
         })
         .catch((error) => {
-            xbLog.warn(MODULE_ID, '召回运行时预热失败', error);
+            xbLog.warn(MODULE_ID, "召回运行时预热失败", error);
         })
         .finally(() => {
             if (activeChatId !== chatId) return;
-            sendVectorStatsToFrame().catch(() => { });
+            sendVectorStatsToFrame().catch(() => {});
         });
 }
 
@@ -988,12 +1241,25 @@ async function rebuildActiveVectorCacheAfterSummary() {
     if (!chatId) return;
 
     try {
-        logRecallRuntimeCheckpoint("afterSummaryRefresh:start", `chat=${chatId}`);
-        postToFrame({ type: "SUMMARY_STATUS", statusText: "记忆数据已更新，下次召回时加载。" });
-        let result = await refreshRecallRuntime(chatId, { reason: 'after-summary' });
+        logRecallRuntimeCheckpoint(
+            "afterSummaryRefresh:start",
+            `chat=${chatId}`,
+        );
+        postToFrame({
+            type: "SUMMARY_STATUS",
+            statusText: "记忆数据已更新，下次召回时加载。",
+        });
+        let result = await refreshRecallRuntime(chatId, {
+            reason: "after-summary",
+        });
         if (result?.stale) {
-            logRecallRuntimeCheckpoint("afterSummaryRefresh:retry", `chat=${chatId}`);
-            result = await refreshRecallRuntime(chatId, { reason: 'after-summary-retry' });
+            logRecallRuntimeCheckpoint(
+                "afterSummaryRefresh:retry",
+                `chat=${chatId}`,
+            );
+            result = await refreshRecallRuntime(chatId, {
+                reason: "after-summary-retry",
+            });
         }
         if (result?.skipped) {
             xbLog.info(MODULE_ID, "大总结后召回运行时已标记待加载");
@@ -1002,7 +1268,10 @@ async function rebuildActiveVectorCacheAfterSummary() {
         } else {
             xbLog.info(MODULE_ID, "大总结后召回运行时已更新状态");
         }
-        logRecallRuntimeCheckpoint("afterSummaryRefresh:done", `chat=${chatId} ready=${result?.ready ? 1 : 0} stale=${result?.stale ? 1 : 0}`);
+        logRecallRuntimeCheckpoint(
+            "afterSummaryRefresh:done",
+            `chat=${chatId} ready=${result?.ready ? 1 : 0} stale=${result?.stale ? 1 : 0}`,
+        );
         await sendVectorStatsToFrame();
     } catch (error) {
         xbLog.warn(MODULE_ID, "大总结后刷新向量热缓存失败", error);
@@ -1014,7 +1283,9 @@ function buildEventVectorText(event) {
 }
 
 function buildEventLexicalSignature(event) {
-    const participants = Array.isArray(event?.participants) ? event.participants.join(" ") : "";
+    const participants = Array.isArray(event?.participants)
+        ? event.participants.join(" ")
+        : "";
     return `${event?.title || ""} ${participants} ${event?.summary || ""}`.trim();
 }
 
@@ -1071,7 +1342,7 @@ async function autoVectorizeNewEvents(newEventIds) {
 function syncEventVectorsOnEdit(oldEvents, newEvents) {
     const syncToken = ++eventEditSyncToken;
     eventEditSyncQueue = eventEditSyncQueue
-        .catch(() => { })
+        .catch(() => {})
         .then(() => syncEventVectorsOnEditNow(oldEvents, newEvents, syncToken));
     return eventEditSyncQueue;
 }
@@ -1089,8 +1360,12 @@ async function syncEventVectorsOnEditNow(oldEvents, newEvents, syncToken) {
 
         const oldList = Array.isArray(oldEvents) ? oldEvents : [];
         const newList = Array.isArray(newEvents) ? newEvents : [];
-        const oldById = new Map(oldList.map((e) => [e?.id, e]).filter(([id]) => id));
-        const newById = new Map(newList.map((e) => [e?.id, e]).filter(([id]) => id));
+        const oldById = new Map(
+            oldList.map((e) => [e?.id, e]).filter(([id]) => id),
+        );
+        const newById = new Map(
+            newList.map((e) => [e?.id, e]).filter(([id]) => id),
+        );
         const oldIds = new Set(oldById.keys());
         const newIds = new Set(newById.keys());
 
@@ -1098,12 +1373,17 @@ async function syncEventVectorsOnEditNow(oldEvents, newEvents, syncToken) {
         const lexicalChangedEvents = newList.filter((event) => {
             const oldEvent = oldById.get(event?.id);
             if (!oldEvent) return true;
-            return buildEventLexicalSignature(oldEvent) !== buildEventLexicalSignature(event);
+            return (
+                buildEventLexicalSignature(oldEvent) !==
+                buildEventLexicalSignature(event)
+            );
         });
         const vectorChangedEvents = newList.filter((event) => {
             const oldEvent = oldById.get(event?.id);
             if (!oldEvent) return true;
-            return buildEventVectorText(oldEvent) !== buildEventVectorText(event);
+            return (
+                buildEventVectorText(oldEvent) !== buildEventVectorText(event)
+            );
         });
         if (syncToken !== eventEditSyncToken || isChatStale(chatId)) return;
 
@@ -1112,10 +1392,17 @@ async function syncEventVectorsOnEditNow(oldEvents, newEvents, syncToken) {
             if (vectorCfg?.enabled) {
                 await deleteEventVectorsByIds(chatId, deletedIds);
             }
-            xbLog.info(MODULE_ID, `L2 同步删除: ${deletedIds.length} 个事件向量`);
+            xbLog.info(
+                MODULE_ID,
+                `L2 同步删除: ${deletedIds.length} 个事件向量`,
+            );
         }
 
-        if (lexicalChangedEvents.some((event) => !buildEventLexicalSignature(event))) {
+        if (
+            lexicalChangedEvents.some(
+                (event) => !buildEventLexicalSignature(event),
+            )
+        ) {
             invalidateLexicalIndex();
         } else if (lexicalChangedEvents.length > 0) {
             addEventDocuments(lexicalChangedEvents);
@@ -1132,14 +1419,19 @@ async function syncEventVectorsOnEditNow(oldEvents, newEvents, syncToken) {
             const batchSize = 20;
 
             if (staleVectorIds.length > 0) {
-                if (syncToken !== eventEditSyncToken || isChatStale(chatId)) return;
+                if (syncToken !== eventEditSyncToken || isChatStale(chatId))
+                    return;
                 await deleteEventVectorsByIds(chatId, staleVectorIds);
             }
 
             for (let i = 0; i < pairs.length; i += batchSize) {
-                if (syncToken !== eventEditSyncToken || isChatStale(chatId)) return;
+                if (syncToken !== eventEditSyncToken || isChatStale(chatId))
+                    return;
                 const batch = pairs.slice(i, i + batchSize);
-                const vectors = await embed(batch.map((p) => p.text), vectorCfg);
+                const vectors = await embed(
+                    batch.map((p) => p.text),
+                    vectorCfg,
+                );
                 if (syncToken !== eventEditSyncToken || isChatStale(chatId)) {
                     return;
                 }
@@ -1152,10 +1444,17 @@ async function syncEventVectorsOnEditNow(oldEvents, newEvents, syncToken) {
         }
 
         if (lexicalChangedEvents.length > 0 || vectorChangedEvents.length > 0) {
-            xbLog.info(MODULE_ID, `L2 同步刷新: ${lexicalChangedEvents.length} 个事件`);
+            xbLog.info(
+                MODULE_ID,
+                `L2 同步刷新: ${lexicalChangedEvents.length} 个事件`,
+            );
         }
 
-        if (deletedIds.length > 0 || lexicalChangedEvents.length > 0 || vectorChangedEvents.length > 0) {
+        if (
+            deletedIds.length > 0 ||
+            lexicalChangedEvents.length > 0 ||
+            vectorChangedEvents.length > 0
+        ) {
             await sendVectorStatsToFrame();
         }
     } catch (e) {
@@ -1190,7 +1489,7 @@ async function checkVectorIntegrityAndWarn() {
     const issues = [];
 
     if (meta.fingerprint && meta.fingerprint !== fingerprint) {
-        issues.push('向量引擎/模型已变更');
+        issues.push("向量引擎/模型已变更");
     }
 
     const chunkFloorGap = totalFloors - 1 - (meta.lastChunkFloor ?? -1);
@@ -1205,7 +1504,9 @@ async function checkVectorIntegrityAndWarn() {
 
     if (issues.length > 0) {
         lastVectorWarningAt = now;
-        await executeSlashCommand(`/echo severity=warning 向量数据不完整：${issues.join('、')}。请打开剧情总结面板点击"生成向量"。`);
+        await executeSlashCommand(
+            `/echo severity=warning 向量数据不完整：${issues.join("、")}。请打开剧情总结面板点击"生成向量"。`,
+        );
     }
 }
 
@@ -1217,9 +1518,12 @@ function createOverlay() {
     if (overlayCreated) return;
     overlayCreated = true;
 
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent);
+    const isMobile =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(
+            navigator.userAgent,
+        );
     const isNarrow = window.matchMedia?.("(max-width: 768px)").matches;
-    const overlayHeight = (isMobile || isNarrow) ? "92.5vh" : "100vh";
+    const overlayHeight = isMobile || isNarrow ? "92.5vh" : "100vh";
 
     const $overlay = $(`
         <div id="xiaobaix-story-summary-overlay" style="
@@ -1301,7 +1605,9 @@ function addSummaryBtnToMessage(mesId) {
     const btn = createSummaryBtn(mesId);
     if (window.registerButtonToSubContainer?.(mesId, btn)) return;
 
-    msg.querySelector(".flex-container.flex1.alignitemscenter")?.appendChild(btn);
+    msg.querySelector(".flex-container.flex1.alignitemscenter")?.appendChild(
+        btn,
+    );
 }
 
 function initButtonsForAll() {
@@ -1340,7 +1646,9 @@ function getHideUiSettings() {
     const cfg = getSummaryPanelConfig() || {};
     const ui = cfg.ui || {};
     const parsedKeep = Number.parseInt(ui.keepVisibleCount, 10);
-    const keepVisibleCount = Number.isFinite(parsedKeep) ? Math.max(0, Math.min(50, parsedKeep)) : 6;
+    const keepVisibleCount = Number.isFinite(parsedKeep)
+        ? Math.max(0, Math.min(50, parsedKeep))
+        : 6;
     return {
         hideSummarized: !!ui.hideSummarized,
         keepVisibleCount,
@@ -1355,16 +1663,26 @@ function setHideUiSettings(patch = {}) {
         ...cfg,
         ui: {
             ...(cfg.ui || {}),
-            hideSummarized: patch.hideSummarized !== undefined ? !!patch.hideSummarized : current.hideSummarized,
-            keepVisibleCount: patch.keepVisibleCount !== undefined
-                ? (() => {
-                    const parsedKeep = Number.parseInt(patch.keepVisibleCount, 10);
-                    return Number.isFinite(parsedKeep) ? Math.max(0, Math.min(50, parsedKeep)) : 6;
-                })()
-                : current.keepVisibleCount,
-            useVectorBoundary: patch.useVectorBoundary !== undefined
-                ? !!patch.useVectorBoundary
-                : current.useVectorBoundary,
+            hideSummarized:
+                patch.hideSummarized !== undefined
+                    ? !!patch.hideSummarized
+                    : current.hideSummarized,
+            keepVisibleCount:
+                patch.keepVisibleCount !== undefined
+                    ? (() => {
+                          const parsedKeep = Number.parseInt(
+                              patch.keepVisibleCount,
+                              10,
+                          );
+                          return Number.isFinite(parsedKeep)
+                              ? Math.max(0, Math.min(50, parsedKeep))
+                              : 6;
+                      })()
+                    : current.keepVisibleCount,
+            useVectorBoundary:
+                patch.useVectorBoundary !== undefined
+                    ? !!patch.useVectorBoundary
+                    : current.useVectorBoundary,
         },
     };
     saveSummaryPanelConfig(next);
@@ -1375,9 +1693,11 @@ async function sendFrameBaseData(store, totalFloors) {
     const ui = getHideUiSettings();
     const boundary = await getHideBoundaryFloor(store);
     const range = calcHideRange(boundary, ui.keepVisibleCount);
-    const hiddenCount = (ui.hideSummarized && range) ? (range.end + 1) : 0;
+    const hiddenCount = ui.hideSummarized && range ? range.end + 1 : 0;
 
     const lastSummarized = store?.lastSummarizedMesId ?? -1;
+    const summaryTarget = Math.max(-1, totalFloors - 1 - ui.keepVisibleCount);
+    const pendingSummarizable = Math.max(0, summaryTarget - lastSummarized);
     const rollbackTargetEndMesId = getRollbackOnceTargetEndMesId(store);
     postToFrame({
         type: "SUMMARY_BASE_DATA",
@@ -1385,7 +1705,7 @@ async function sendFrameBaseData(store, totalFloors) {
             totalFloors,
             summarizedUpTo: lastSummarized + 1,
             eventsCount: store?.json?.events?.length || 0,
-            pendingFloors: totalFloors - lastSummarized - 1,
+            pendingFloors: pendingSummarizable,
             hiddenCount,
         },
         hideSummarized: ui.hideSummarized,
@@ -1393,8 +1713,10 @@ async function sendFrameBaseData(store, totalFloors) {
         useVectorBoundary: ui.useVectorBoundary,
         vectorEnabled: !!getVectorConfig()?.enabled,
         canRollback: rollbackTargetEndMesId != null,
-        rollbackTargetSummarizedUpTo: rollbackTargetEndMesId == null ? 0 : rollbackTargetEndMesId + 1,
-        rollbackWillClearAll: rollbackTargetEndMesId != null && rollbackTargetEndMesId < 0,
+        rollbackTargetSummarizedUpTo:
+            rollbackTargetEndMesId == null ? 0 : rollbackTargetEndMesId + 1,
+        rollbackWillClearAll:
+            rollbackTargetEndMesId != null && rollbackTargetEndMesId < 0,
     });
 }
 
@@ -1413,7 +1735,7 @@ function buildFramePayload(store) {
     const json = store?.json || {};
     const facts = json.facts || [];
     return {
-        chatId: getContext().chatId || '',
+        chatId: getContext().chatId || "",
         keywords: json.keywords || [],
         events: json.events || [],
         characters: {
@@ -1522,61 +1844,88 @@ function serializePortableFact(fact) {
 
 function cloneSummaryJsonForPortability(json) {
     const src = json && typeof json === "object" ? json : {};
-    const characters = src.characters && typeof src.characters === "object" ? src.characters : {};
+    const characters =
+        src.characters && typeof src.characters === "object"
+            ? src.characters
+            : {};
     return {
         keywords: Array.isArray(src.keywords)
-            ? src.keywords.map((item) => ({
-                text: String(item?.text || "").trim(),
-                weight: String(item?.weight || "").trim(),
-            })).filter((item) => item.text)
+            ? src.keywords
+                  .map((item) => ({
+                      text: String(item?.text || "").trim(),
+                      weight: String(item?.weight || "").trim(),
+                  }))
+                  .filter((item) => item.text)
             : [],
         events: Array.isArray(src.events)
-            ? src.events.map((item) => ({
-                id: String(item?.id || "").trim(),
-                title: String(item?.title || "").trim(),
-                timeLabel: String(item?.timeLabel || "").trim(),
-                summary: stripFloorMarker(item?.summary),
-                participants: Array.isArray(item?.participants)
-                    ? item.participants.map((name) => String(name || "").trim()).filter(Boolean)
-                    : [],
-                type: String(item?.type || "").trim(),
-                weight: String(item?.weight || "").trim(),
-                causedBy: Array.isArray(item?.causedBy)
-                    ? item.causedBy.map((id) => String(id || "").trim()).filter(Boolean)
-                    : [],
-            })).filter((item) => item.id || item.title || item.summary)
+            ? src.events
+                  .map((item) => ({
+                      id: String(item?.id || "").trim(),
+                      title: String(item?.title || "").trim(),
+                      timeLabel: String(item?.timeLabel || "").trim(),
+                      summary: stripFloorMarker(item?.summary),
+                      participants: Array.isArray(item?.participants)
+                          ? item.participants
+                                .map((name) => String(name || "").trim())
+                                .filter(Boolean)
+                          : [],
+                      type: String(item?.type || "").trim(),
+                      weight: String(item?.weight || "").trim(),
+                      causedBy: Array.isArray(item?.causedBy)
+                          ? item.causedBy
+                                .map((id) => String(id || "").trim())
+                                .filter(Boolean)
+                          : [],
+                  }))
+                  .filter((item) => item.id || item.title || item.summary)
             : [],
         characters: {
             main: Array.isArray(characters.main)
                 ? characters.main
-                    .map((item) => typeof item === "string"
-                        ? { name: String(item).trim() }
-                        : { name: String(item?.name || "").trim() })
-                    .filter((item) => item.name)
-                : (Array.isArray(characters)
-                    ? characters
-                        .map((item) => typeof item === "string"
-                            ? { name: String(item).trim() }
-                            : { name: String(item?.name || "").trim() })
+                      .map((item) =>
+                          typeof item === "string"
+                              ? { name: String(item).trim() }
+                              : { name: String(item?.name || "").trim() },
+                      )
+                      .filter((item) => item.name)
+                : Array.isArray(characters)
+                  ? characters
+                        .map((item) =>
+                            typeof item === "string"
+                                ? { name: String(item).trim() }
+                                : { name: String(item?.name || "").trim() },
+                        )
                         .filter((item) => item.name)
-                    : []),
+                  : [],
         },
         arcs: Array.isArray(src.arcs)
-            ? src.arcs.map((item) => ({
-                name: String(item?.name || "").trim(),
-                trajectory: String(item?.trajectory || "").trim(),
-                progress: Number.isFinite(Number(item?.progress)) ? Number(item.progress) : 0,
-                moments: Array.isArray(item?.moments)
-                    ? item.moments
-                        .map((moment) => typeof moment === "string"
-                            ? { text: String(moment).trim() }
-                            : { text: String(moment?.text || "").trim() })
-                        .filter((moment) => moment.text)
-                    : [],
-            })).filter((item) => item.name)
+            ? src.arcs
+                  .map((item) => ({
+                      name: String(item?.name || "").trim(),
+                      trajectory: String(item?.trajectory || "").trim(),
+                      progress: Number.isFinite(Number(item?.progress))
+                          ? Number(item.progress)
+                          : 0,
+                      moments: Array.isArray(item?.moments)
+                          ? item.moments
+                                .map((moment) =>
+                                    typeof moment === "string"
+                                        ? { text: String(moment).trim() }
+                                        : {
+                                              text: String(
+                                                  moment?.text || "",
+                                              ).trim(),
+                                          },
+                                )
+                                .filter((moment) => moment.text)
+                          : [],
+                  }))
+                  .filter((item) => item.name)
             : [],
         facts: Array.isArray(src.facts)
-            ? src.facts.map(normalizeInternalFact).filter((item) => item.s && item.p && item.o)
+            ? src.facts
+                  .map(normalizeInternalFact)
+                  .filter((item) => item.s && item.p && item.o)
             : [],
     };
 }
@@ -1587,8 +1936,14 @@ function extractSummaryImportJson(raw) {
     }
 
     const candidate =
-        (raw.type === "LittleWhiteBoxStorySummaryMemory" && raw.data && typeof raw.data === "object" ? raw.data : null) ||
-        (raw.storySummary?.json && typeof raw.storySummary.json === "object" ? raw.storySummary.json : null) ||
+        (raw.type === "LittleWhiteBoxStorySummaryMemory" &&
+        raw.data &&
+        typeof raw.data === "object"
+            ? raw.data
+            : null) ||
+        (raw.storySummary?.json && typeof raw.storySummary.json === "object"
+            ? raw.storySummary.json
+            : null) ||
         (raw.json && typeof raw.json === "object" ? raw.json : null) ||
         raw;
 
@@ -1605,7 +1960,9 @@ function extractSummaryImportJson(raw) {
 
     const json = cloneSummaryJsonForPortability(candidate);
     json.facts = Array.isArray(candidate.facts)
-        ? candidate.facts.map(normalizePortableFact).filter((item) => item.s && item.p && item.o)
+        ? candidate.facts
+              .map(normalizePortableFact)
+              .filter((item) => item.s && item.p && item.o)
         : [];
     return json;
 }
@@ -1651,82 +2008,118 @@ function formatStorySummaryMemoryText(store) {
     const json = cloneSummaryJsonForPortability(store?.json || {});
     const lines = [];
 
-    pushSection(lines, "关键词", (json.keywords || [])
-        .map((item) => {
-            const text = String(item?.text || "").trim();
-            if (!text) return "";
-            const weight = String(item?.weight || "").trim();
-            return `- ${text}${weight ? `（${weight}）` : ""}`;
-        })
-        .filter(Boolean));
+    pushSection(
+        lines,
+        "关键词",
+        (json.keywords || [])
+            .map((item) => {
+                const text = String(item?.text || "").trim();
+                if (!text) return "";
+                const weight = String(item?.weight || "").trim();
+                return `- ${text}${weight ? `（${weight}）` : ""}`;
+            })
+            .filter(Boolean),
+    );
 
-    pushSection(lines, "事件时间线", (json.events || [])
-        .map((event, index) => {
-            const title = String(event?.title || "").trim() || `事件 ${index + 1}`;
-            const timeLabel = String(event?.timeLabel || "").trim();
-            const summary = stripFloorMarker(event?.summary);
-            const participants = Array.isArray(event?.participants)
-                ? event.participants.map((name) => String(name || "").trim()).filter(Boolean)
-                : [];
-            const meta = [
-                timeLabel ? `时间：${timeLabel}` : "",
-                participants.length ? `参与者：${participants.join("、")}` : "",
-                event?.type ? `类型：${event.type}` : "",
-                event?.weight ? `权重：${event.weight}` : "",
-            ].filter(Boolean).join("；");
-            return [
-                `### ${title}`,
-                meta,
-                summary,
-            ].filter(Boolean).join("\n");
-        })
-        .filter(Boolean));
+    pushSection(
+        lines,
+        "事件时间线",
+        (json.events || [])
+            .map((event, index) => {
+                const title =
+                    String(event?.title || "").trim() || `事件 ${index + 1}`;
+                const timeLabel = String(event?.timeLabel || "").trim();
+                const summary = stripFloorMarker(event?.summary);
+                const participants = Array.isArray(event?.participants)
+                    ? event.participants
+                          .map((name) => String(name || "").trim())
+                          .filter(Boolean)
+                    : [];
+                const meta = [
+                    timeLabel ? `时间：${timeLabel}` : "",
+                    participants.length
+                        ? `参与者：${participants.join("、")}`
+                        : "",
+                    event?.type ? `类型：${event.type}` : "",
+                    event?.weight ? `权重：${event.weight}` : "",
+                ]
+                    .filter(Boolean)
+                    .join("；");
+                return [`### ${title}`, meta, summary]
+                    .filter(Boolean)
+                    .join("\n");
+            })
+            .filter(Boolean),
+    );
 
-    pushSection(lines, "主要角色", (json.characters?.main || [])
-        .map(formatSummaryCharacterName)
-        .filter(Boolean)
-        .map((name) => `- ${name}`));
+    pushSection(
+        lines,
+        "主要角色",
+        (json.characters?.main || [])
+            .map(formatSummaryCharacterName)
+            .filter(Boolean)
+            .map((name) => `- ${name}`),
+    );
 
-    pushSection(lines, "角色弧光", (json.arcs || [])
-        .map((arc) => {
-            const name = String(arc?.name || "").trim();
-            if (!name) return "";
-            const trajectory = String(arc?.trajectory || "").trim();
-            const moments = Array.isArray(arc?.moments)
-                ? arc.moments.map((moment) => String(moment?.text || "").trim()).filter(Boolean)
-                : [];
-            return [
-                `### ${name}`,
-                trajectory ? `${trajectory}（进度：${formatSummaryProgress(arc?.progress)}）` : `进度：${formatSummaryProgress(arc?.progress)}`,
-                ...moments.map((moment) => `- ${moment}`),
-            ].filter(Boolean).join("\n");
-        })
-        .filter(Boolean));
+    pushSection(
+        lines,
+        "角色弧光",
+        (json.arcs || [])
+            .map((arc) => {
+                const name = String(arc?.name || "").trim();
+                if (!name) return "";
+                const trajectory = String(arc?.trajectory || "").trim();
+                const moments = Array.isArray(arc?.moments)
+                    ? arc.moments
+                          .map((moment) => String(moment?.text || "").trim())
+                          .filter(Boolean)
+                    : [];
+                return [
+                    `### ${name}`,
+                    trajectory
+                        ? `${trajectory}（进度：${formatSummaryProgress(arc?.progress)}）`
+                        : `进度：${formatSummaryProgress(arc?.progress)}`,
+                    ...moments.map((moment) => `- ${moment}`),
+                ]
+                    .filter(Boolean)
+                    .join("\n");
+            })
+            .filter(Boolean),
+    );
 
-    pushSection(lines, "事实图谱", (json.facts || [])
-        .map((fact) => {
-            const subject = String(fact?.s || "").trim();
-            const predicate = String(fact?.p || "").trim();
-            const object = String(fact?.o || "").trim();
-            if (!subject || !predicate || !object) return "";
-            const trend = String(fact?.trend || "").trim();
-            return `- ${subject}｜${predicate}｜${object}${trend ? `（趋势：${trend}）` : ""}`;
-        })
-        .filter(Boolean));
+    pushSection(
+        lines,
+        "事实图谱",
+        (json.facts || [])
+            .map((fact) => {
+                const subject = String(fact?.s || "").trim();
+                const predicate = String(fact?.p || "").trim();
+                const object = String(fact?.o || "").trim();
+                if (!subject || !predicate || !object) return "";
+                const trend = String(fact?.trend || "").trim();
+                return `- ${subject}｜${predicate}｜${object}${trend ? `（趋势：${trend}）` : ""}`;
+            })
+            .filter(Boolean),
+    );
 
     return lines.join("\n").trim();
 }
 
 function stampImportedSummaryJson(json, boundary) {
-    if (!json || typeof json !== "object" || !Number.isFinite(boundary) || boundary < 0) {
+    if (
+        !json ||
+        typeof json !== "object" ||
+        !Number.isFinite(boundary) ||
+        boundary < 0
+    ) {
         return;
     }
 
-    for (const item of (json.keywords || [])) {
+    for (const item of json.keywords || []) {
         if (item && typeof item === "object") item._addedAt = boundary;
     }
 
-    for (const item of (json.events || [])) {
+    for (const item of json.events || []) {
         if (item && typeof item === "object") item._addedAt = boundary;
     }
 
@@ -1735,15 +2128,16 @@ function stampImportedSummaryJson(json, boundary) {
         if (item && typeof item === "object") item._addedAt = boundary;
     }
 
-    for (const arc of (json.arcs || [])) {
+    for (const arc of json.arcs || []) {
         if (!arc || typeof arc !== "object") continue;
         arc._addedAt = boundary;
-        for (const moment of (arc.moments || [])) {
-            if (moment && typeof moment === "object") moment._addedAt = boundary;
+        for (const moment of arc.moments || []) {
+            if (moment && typeof moment === "object")
+                moment._addedAt = boundary;
         }
     }
 
-    for (const fact of (json.facts || [])) {
+    for (const fact of json.facts || []) {
         if (fact && typeof fact === "object") fact._addedAt = boundary;
     }
 }
@@ -1870,7 +2264,11 @@ function getNextFactIdValue(facts) {
     return max + 1;
 }
 
-function mergeCharacterRelationshipsIntoFacts(existingFacts, relationships, floorHint = 0) {
+function mergeCharacterRelationshipsIntoFacts(
+    existingFacts,
+    relationships,
+    floorHint = 0,
+) {
     const safeFacts = Array.isArray(existingFacts) ? existingFacts : [];
     const safeRels = Array.isArray(relationships) ? relationships : [];
 
@@ -1924,10 +2322,16 @@ function factKeyBySubjectPredicate(fact) {
     return `${s}::${p}`;
 }
 
-function mergeEditedFactsWithTimestamps(existingFacts, editedFacts, floorHint = 0) {
+function mergeEditedFactsWithTimestamps(
+    existingFacts,
+    editedFacts,
+    floorHint = 0,
+) {
     const currentFacts = Array.isArray(existingFacts) ? existingFacts : [];
     const incomingFacts = Array.isArray(editedFacts) ? editedFacts : [];
-    const oldMap = new Map(currentFacts.map((f) => [factKeyBySubjectPredicate(f), f]));
+    const oldMap = new Map(
+        currentFacts.map((f) => [factKeyBySubjectPredicate(f), f]),
+    );
 
     let nextFactId = getNextFactIdValue(currentFacts);
     const merged = [];
@@ -1992,7 +2396,10 @@ async function getHideBoundaryFloor(store) {
     }
 
     const vectorCfg = getVectorConfig();
-    if (!vectorCfg?.enabled || getHideUiSettings().useVectorBoundary === false) {
+    if (
+        !vectorCfg?.enabled ||
+        getHideUiSettings().useVectorBoundary === false
+    ) {
         return store?.lastSummarizedMesId ?? -1;
     }
 
@@ -2026,7 +2433,10 @@ async function applyHideState({ reset = true } = {}) {
 
     const changed = applyHideRangeInMemory(range);
     if (changed > 0) {
-        xbLog.info(MODULE_ID, `后台隐藏已同步到当前聊天状态：${range.start}-${range.end} changed=${changed}`);
+        xbLog.info(
+            MODULE_ID,
+            `后台隐藏已同步到当前聊天状态：${range.start}-${range.end} changed=${changed}`,
+        );
     }
 }
 
@@ -2041,7 +2451,9 @@ function applyHideStateDebounced({ reset = false } = {}) {
         hideApplyTimer = null;
         if (!getSettings().storySummary?.enabled) return;
         if (!getHideUiSettings().hideSummarized) return;
-        applyHideState({ reset }).catch((e) => xbLog.warn(MODULE_ID, "applyHideState failed", e));
+        applyHideState({ reset }).catch((e) =>
+            xbLog.warn(MODULE_ID, "applyHideState failed", e),
+        );
     }, HIDE_APPLY_DEBOUNCE_MS);
 }
 
@@ -2078,7 +2490,10 @@ function scheduleAutoSummary(reason, delayMs = AUTO_SUMMARY_DELAY_MS) {
     autoSummaryTimers.set(reason, timer);
 }
 
-function scheduleAutoL0Backfill(delayMs = AUTO_L0_BACKFILL_DELAY_MS, chatIdOverride = null) {
+function scheduleAutoL0Backfill(
+    delayMs = AUTO_L0_BACKFILL_DELAY_MS,
+    chatIdOverride = null,
+) {
     clearTimeout(autoL0BackfillTimer);
     const scheduledChatId = chatIdOverride || getContext().chatId || null;
     autoL0BackfillTimer = setTimeout(() => {
@@ -2146,43 +2561,67 @@ async function maybeAutoRunSummary(reason) {
 
     const store = getSummaryStore();
     const lastSummarized = store?.lastSummarizedMesId ?? -1;
-    const pending = chat.length - lastSummarized - 1;
+    const keepUnsummaryCount = getHideUiSettings().keepVisibleCount;
+    const targetMesId = chat.length - 1 - keepUnsummaryCount;
+    if (targetMesId <= lastSummarized) return;
+    const pending = targetMesId - lastSummarized;
     if (pending < (trig.interval || 1)) return;
 
-    await autoRunSummaryWithRetry(chat.length - 1, { api: cfgAll.api, gen: cfgAll.gen, trigger: trig });
+    await autoRunSummaryWithRetry(targetMesId, {
+        api: cfgAll.api,
+        gen: cfgAll.gen,
+        trigger: trig,
+    });
 }
 
 async function autoRunSummaryWithRetry(targetMesId, configForRun) {
-    const release = guard.acquire('summary');
+    const release = guard.acquire("summary");
     if (!release) return;
     notifySummaryState();
 
     try {
         for (let attempt = 1; attempt <= 3; attempt++) {
-            const result = await runSummaryGeneration(targetMesId, configForRun, {
-                onStatus: (text) => postToFrame({ type: "SUMMARY_STATUS", statusText: text }),
-                onError: (msg) => postToFrame({ type: "SUMMARY_ERROR", message: msg }),
-                onComplete: async ({ merged, endMesId, newEventIds }) => {
-                    const store = getSummaryStore();
-                    clearPendingImportBoundary(store);
-                    postToFrame({ type: "SUMMARY_FULL_DATA", payload: buildFramePayload(store) });
+            const result = await runSummaryGeneration(
+                targetMesId,
+                configForRun,
+                {
+                    onStatus: (text) =>
+                        postToFrame({
+                            type: "SUMMARY_STATUS",
+                            statusText: text,
+                        }),
+                    onError: (msg) =>
+                        postToFrame({ type: "SUMMARY_ERROR", message: msg }),
+                    onComplete: async ({ merged, endMesId, newEventIds }) => {
+                        const store = getSummaryStore();
+                        clearPendingImportBoundary(store);
+                        postToFrame({
+                            type: "SUMMARY_FULL_DATA",
+                            payload: buildFramePayload(store),
+                        });
 
-                    // Incrementally add new events to the lexical index
-                    if (newEventIds?.length) {
-                        const allEvents = store?.json?.events || [];
-                        const idSet = new Set(newEventIds);
-                        addEventDocuments(allEvents.filter(e => idSet.has(e.id)));
-                    }
+                        // Incrementally add new events to the lexical index
+                        if (newEventIds?.length) {
+                            const allEvents = store?.json?.events || [];
+                            const idSet = new Set(newEventIds);
+                            addEventDocuments(
+                                allEvents.filter((e) => idSet.has(e.id)),
+                            );
+                        }
 
-                    if (getSettings().storySummary?.enabled && getHideUiSettings().hideSummarized) {
-                        applyHideStateDebounced();
-                    }
-                    await updateFrameStatsAfterSummary(store);
+                        if (
+                            getSettings().storySummary?.enabled &&
+                            getHideUiSettings().hideSummarized
+                        ) {
+                            applyHideStateDebounced();
+                        }
+                        await updateFrameStatsAfterSummary(store);
 
-                    await autoVectorizeNewEvents(newEventIds);
-                    await rebuildActiveVectorCacheAfterSummary();
+                        await autoVectorizeNewEvents(newEventIds);
+                        await rebuildActiveVectorCacheAfterSummary();
+                    },
                 },
-            });
+            );
 
             if (result.success) {
                 return;
@@ -2191,7 +2630,9 @@ async function autoRunSummaryWithRetry(targetMesId, configForRun) {
             if (attempt < 3) await sleep(1000);
         }
 
-        await executeSlashCommand("/echo severity=error 剧情总结失败（已自动重试 3 次）。请稍后再试。");
+        await executeSlashCommand(
+            "/echo severity=error 剧情总结失败（已自动重试 3 次）。请稍后再试。",
+        );
     } finally {
         release();
         notifySummaryState();
@@ -2277,7 +2718,11 @@ async function handleFrameMessage(event) {
             break;
 
         case "VECTOR_TEST_ONLINE":
-            handleTestOnlineService(data.provider, data.config, data.target || "embedding");
+            handleTestOnlineService(
+                data.provider,
+                data.config,
+                data.target || "embedding",
+            );
             break;
 
         case "VECTOR_GENERATE":
@@ -2294,8 +2739,15 @@ async function handleFrameMessage(event) {
         case "VECTOR_CANCEL_GENERATE":
             vectorCancelled = true;
             cancelL0Extraction();
-            try { vectorAbortController?.abort?.(); } catch { }
-            postToFrame({ type: "VECTOR_GEN_PROGRESS", phase: "ALL", current: -1, total: 0 });
+            try {
+                vectorAbortController?.abort?.();
+            } catch {}
+            postToFrame({
+                type: "VECTOR_GEN_PROGRESS",
+                phase: "ALL",
+                current: -1,
+                total: 0,
+            });
             break;
 
         case "ANCHOR_GENERATE":
@@ -2333,7 +2785,11 @@ async function handleFrameMessage(event) {
                         eventCount: result.eventCount,
                     });
                 } catch (e) {
-                    postToFrame({ type: "VECTOR_EXPORT_RESULT", success: false, error: e.message });
+                    postToFrame({
+                        type: "VECTOR_EXPORT_RESULT",
+                        success: false,
+                        error: e.message,
+                    });
                 }
             })();
             break;
@@ -2351,26 +2807,40 @@ async function handleFrameMessage(event) {
                         facts: payload.counts.facts,
                     });
                 } catch (e) {
-                    postToFrame({ type: "SUMMARY_COPY_RESULT", success: false, error: e.message });
+                    postToFrame({
+                        type: "SUMMARY_COPY_RESULT",
+                        success: false,
+                        error: e.message,
+                    });
                 }
             })();
             break;
 
         case "SUMMARY_IMPORT_TEXT":
-            if (guard.isAnyRunning('summary', 'vector', 'anchor')) {
-                postToFrame({ type: "SUMMARY_IMPORT_RESULT", success: false, error: "请等待当前总结/向量任务结束" });
+            if (guard.isAnyRunning("summary", "vector", "anchor")) {
+                postToFrame({
+                    type: "SUMMARY_IMPORT_RESULT",
+                    success: false,
+                    error: "请等待当前总结/向量任务结束",
+                });
                 break;
             }
             (async () => {
                 try {
-                    const result = await importSummaryMemoryPackage(data.text || "");
+                    const result = await importSummaryMemoryPackage(
+                        data.text || "",
+                    );
                     postToFrame({
                         type: "SUMMARY_IMPORT_RESULT",
                         success: true,
                         counts: result.counts,
                     });
                 } catch (e) {
-                    postToFrame({ type: "SUMMARY_IMPORT_RESULT", success: false, error: e.message });
+                    postToFrame({
+                        type: "SUMMARY_IMPORT_RESULT",
+                        success: false,
+                        error: e.message,
+                    });
                 }
             })();
             break;
@@ -2385,7 +2855,11 @@ async function handleFrameMessage(event) {
                 input.onchange = async () => {
                     const file = input.files?.[0];
                     if (!file) {
-                        postToFrame({ type: "VECTOR_IMPORT_RESULT", success: false, error: "未选择文件" });
+                        postToFrame({
+                            type: "VECTOR_IMPORT_RESULT",
+                            success: false,
+                            error: "未选择文件",
+                        });
                         return;
                     }
 
@@ -2403,7 +2877,11 @@ async function handleFrameMessage(event) {
                         });
                         await sendVectorStatsToFrame();
                     } catch (e) {
-                        postToFrame({ type: "VECTOR_IMPORT_RESULT", success: false, error: e.message });
+                        postToFrame({
+                            type: "VECTOR_IMPORT_RESULT",
+                            success: false,
+                            error: e.message,
+                        });
                     }
                 };
 
@@ -2424,7 +2902,11 @@ async function handleFrameMessage(event) {
                         eventCount: result.eventCount,
                     });
                 } catch (e) {
-                    postToFrame({ type: "VECTOR_BACKUP_RESULT", success: false, error: e.message });
+                    postToFrame({
+                        type: "VECTOR_BACKUP_RESULT",
+                        success: false,
+                        error: e.message,
+                    });
                 }
             })();
             break;
@@ -2445,7 +2927,11 @@ async function handleFrameMessage(event) {
                     });
                     await sendVectorStatsToFrame();
                 } catch (e) {
-                    postToFrame({ type: "VECTOR_RESTORE_RESULT", success: false, error: e.message });
+                    postToFrame({
+                        type: "VECTOR_RESTORE_RESULT",
+                        success: false,
+                        error: e.message,
+                    });
                 }
             })();
             break;
@@ -2467,8 +2953,10 @@ async function handleFrameMessage(event) {
             break;
 
         case "REQUEST_CLEAR": {
-            if (guard.isAnyRunning('summary', 'vector', 'anchor')) {
-                await executeSlashCommand("/echo severity=warning 当前有任务运行中，暂时不能清理总结数据");
+            if (guard.isAnyRunning("summary", "vector", "anchor")) {
+                await executeSlashCommand(
+                    "/echo severity=warning 当前有任务运行中，暂时不能清理总结数据",
+                );
                 break;
             }
             const { chat, chatId } = getContext();
@@ -2485,8 +2973,10 @@ async function handleFrameMessage(event) {
         }
 
         case "REQUEST_ROLLBACK_ONCE": {
-            if (guard.isAnyRunning('summary', 'vector', 'anchor')) {
-                await executeSlashCommand("/echo severity=warning 当前有任务运行中，暂时不能回退总结");
+            if (guard.isAnyRunning("summary", "vector", "anchor")) {
+                await executeSlashCommand(
+                    "/echo severity=warning 当前有任务运行中，暂时不能回退总结",
+                );
                 break;
             }
 
@@ -2494,9 +2984,12 @@ async function handleFrameMessage(event) {
             if (!chatId) break;
 
             const currentStore = getSummaryStore();
-            const rollbackTargetEndMesId = getRollbackOnceTargetEndMesId(currentStore);
+            const rollbackTargetEndMesId =
+                getRollbackOnceTargetEndMesId(currentStore);
             if (rollbackTargetEndMesId == null) {
-                await executeSlashCommand("/echo severity=info 当前没有可回退的总结快照");
+                await executeSlashCommand(
+                    "/echo severity=info 当前没有可回退的总结快照",
+                );
                 break;
             }
 
@@ -2518,14 +3011,20 @@ async function handleFrameMessage(event) {
             sendFrameFullData(nextStore, totalFloors);
 
             if (!result.success) {
-                await executeSlashCommand("/echo severity=error 回退总结失败，请稍后重试");
+                await executeSlashCommand(
+                    "/echo severity=error 回退总结失败，请稍后重试",
+                );
                 break;
             }
 
             if (result.clearedAll) {
-                await executeSlashCommand("/echo severity=info 已回退上一次总结，当前总结数据已清空");
+                await executeSlashCommand(
+                    "/echo severity=info 已回退上一次总结，当前总结数据已清空",
+                );
             } else {
-                await executeSlashCommand(`/echo severity=info 已回退上一次总结，已总结楼层退回到 ${result.targetEndMesId + 1} 楼`);
+                await executeSlashCommand(
+                    `/echo severity=info 已回退上一次总结，已总结楼层退回到 ${result.targetEndMesId + 1} 楼`,
+                );
             }
             break;
         }
@@ -2540,19 +3039,31 @@ async function handleFrameMessage(event) {
             store.json ||= {};
 
             // 如果是 events，先记录旧数据用于同步向量
-            const oldEvents = data.section === "events" ? [...(store.json.events || [])] : null;
-            const oldFacts = data.section === "facts" ? [...(store.json.facts || [])] : null;
+            const oldEvents =
+                data.section === "events"
+                    ? [...(store.json.events || [])]
+                    : null;
+            const oldFacts =
+                data.section === "facts" ? [...(store.json.facts || [])] : null;
 
             if (VALID_SECTIONS.includes(data.section)) {
                 store.json[data.section] = data.data;
             }
             if (data.section === "facts") {
-                store.json.facts = mergeEditedFactsWithTimestamps(oldFacts, data.data, getCurrentFloorHint());
+                store.json.facts = mergeEditedFactsWithTimestamps(
+                    oldFacts,
+                    data.data,
+                    getCurrentFloorHint(),
+                );
             }
             if (data.section === "characters") {
                 const rels = data?.data?.relationships || [];
                 const floorHint = getCurrentFloorHint();
-                store.json.facts = mergeCharacterRelationshipsIntoFacts(store.json.facts, rels, floorHint);
+                store.json.facts = mergeCharacterRelationshipsIntoFacts(
+                    store.json.facts,
+                    rels,
+                    floorHint,
+                );
             }
             store.updatedAt = Date.now();
             saveSummaryStore();
@@ -2580,7 +3091,9 @@ async function handleFrameMessage(event) {
         case "UPDATE_KEEP_VISIBLE": {
             const oldCount = getHideUiSettings().keepVisibleCount;
             const parsedCount = Number.parseInt(data.count, 10);
-            const newCount = Number.isFinite(parsedCount) ? Math.max(0, Math.min(50, parsedCount)) : 6;
+            const newCount = Number.isFinite(parsedCount)
+                ? Math.max(0, Math.min(50, parsedCount))
+                : 6;
             if (newCount === oldCount) break;
 
             setHideUiSettings({ keepVisibleCount: newCount });
@@ -2591,7 +3104,10 @@ async function handleFrameMessage(event) {
                 }
                 const { chat } = getContext();
                 const store = getSummaryStore();
-                await sendFrameBaseData(store, Array.isArray(chat) ? chat.length : 0);
+                await sendFrameBaseData(
+                    store,
+                    Array.isArray(chat) ? chat.length : 0,
+                );
             })();
             break;
         }
@@ -2605,7 +3121,10 @@ async function handleFrameMessage(event) {
                 }
                 const { chat } = getContext();
                 const store = getSummaryStore();
-                await sendFrameBaseData(store, Array.isArray(chat) ? chat.length : 0);
+                await sendFrameBaseData(
+                    store,
+                    Array.isArray(chat) ? chat.length : 0,
+                );
             })();
             break;
         }
@@ -2614,23 +3133,34 @@ async function handleFrameMessage(event) {
             if (data.config) {
                 try {
                     const previousVectorConfig = getVectorConfig();
-                    const previousVectorFingerprint = previousVectorConfig?.enabled
-                        ? getEngineFingerprint(previousVectorConfig)
-                        : null;
-                    const savedConfig = await saveSummaryPanelConfigVerified(data.config);
+                    const previousVectorFingerprint =
+                        previousVectorConfig?.enabled
+                            ? getEngineFingerprint(previousVectorConfig)
+                            : null;
+                    const savedConfig = await saveSummaryPanelConfigVerified(
+                        data.config,
+                    );
                     const nextVectorConfig = savedConfig?.vector || {};
                     const nextVectorFingerprint = nextVectorConfig?.enabled
                         ? getEngineFingerprint(nextVectorConfig)
                         : null;
-                    const vectorEnabledChanged = !!previousVectorConfig?.enabled !== !!nextVectorConfig?.enabled;
+                    const vectorEnabledChanged =
+                        !!previousVectorConfig?.enabled !==
+                        !!nextVectorConfig?.enabled;
                     const vectorCacheInvalidated =
                         !nextVectorConfig?.enabled ||
                         previousVectorFingerprint !== nextVectorFingerprint;
                     if (vectorCacheInvalidated) {
-                        logRecallRuntimeCheckpoint("savePanelConfig:clear-runtime", `chat=${getContext().chatId || "-"} invalidated=1`);
+                        logRecallRuntimeCheckpoint(
+                            "savePanelConfig:clear-runtime",
+                            `chat=${getContext().chatId || "-"} invalidated=1`,
+                        );
                         await clearRecallRuntime();
                     } else {
-                        logRecallRuntimeCheckpoint("savePanelConfig:warm-runtime", `chat=${getContext().chatId || "-"} invalidated=0`);
+                        logRecallRuntimeCheckpoint(
+                            "savePanelConfig:warm-runtime",
+                            `chat=${getContext().chatId || "-"} invalidated=0`,
+                        );
                         warmupActiveVectorCache();
                     }
                     postToFrame({
@@ -2641,13 +3171,22 @@ async function handleFrameMessage(event) {
                     });
                     sendVectorConfigToFrame();
                     const hideUi = getHideUiSettings();
-                    if (hideUi.hideSummarized && hideUi.useVectorBoundary && vectorEnabledChanged) {
-                        await applyHideState({ reset: !!previousVectorConfig?.enabled });
+                    if (
+                        hideUi.hideSummarized &&
+                        hideUi.useVectorBoundary &&
+                        vectorEnabledChanged
+                    ) {
+                        await applyHideState({
+                            reset: !!previousVectorConfig?.enabled,
+                        });
                     }
                     {
                         const { chat } = getContext();
                         const store = getSummaryStore();
-                        await sendFrameBaseData(store, Array.isArray(chat) ? chat.length : 0);
+                        await sendFrameBaseData(
+                            store,
+                            Array.isArray(chat) ? chat.length : 0,
+                        );
                     }
                 } catch (e) {
                     xbLog.error(MODULE_ID, "保存面板配置失败", e);
@@ -2673,28 +3212,36 @@ async function handleFrameMessage(event) {
 
 async function handleManualGenerate(mesId, config) {
     if (isSummaryGenerating()) {
-        postToFrame({ type: "SUMMARY_STATUS", statusText: "上一轮总结仍在进行中..." });
+        postToFrame({
+            type: "SUMMARY_STATUS",
+            statusText: "上一轮总结仍在进行中...",
+        });
         return;
     }
 
-    const release = guard.acquire('summary');
+    const release = guard.acquire("summary");
     if (!release) return;
     notifySummaryState();
 
     try {
         await runSummaryGeneration(mesId, config, {
-            onStatus: (text) => postToFrame({ type: "SUMMARY_STATUS", statusText: text }),
-            onError: (msg) => postToFrame({ type: "SUMMARY_ERROR", message: msg }),
+            onStatus: (text) =>
+                postToFrame({ type: "SUMMARY_STATUS", statusText: text }),
+            onError: (msg) =>
+                postToFrame({ type: "SUMMARY_ERROR", message: msg }),
             onComplete: async ({ merged, endMesId, newEventIds }) => {
                 const store = getSummaryStore();
                 clearPendingImportBoundary(store);
-                postToFrame({ type: "SUMMARY_FULL_DATA", payload: buildFramePayload(store) });
+                postToFrame({
+                    type: "SUMMARY_FULL_DATA",
+                    payload: buildFramePayload(store),
+                });
 
                 // Incrementally add new events to the lexical index
                 if (newEventIds?.length) {
                     const allEvents = store?.json?.events || [];
                     const idSet = new Set(newEventIds);
-                    addEventDocuments(allEvents.filter(e => idSet.has(e.id)));
+                    addEventDocuments(allEvents.filter((e) => idSet.has(e.id)));
                 }
 
                 applyHideStateDebounced();
@@ -2717,11 +3264,14 @@ async function handleManualGenerate(mesId, config) {
 async function handleChatChanged() {
     if (!events) return;
     clearDeferredBackgroundTasks();
-    _lastBuiltPromptText = "";  // ← 加这一行，切聊天时清掉旧 summary
+    _lastBuiltPromptText = ""; // ← 加这一行，切聊天时清掉旧 summary
     lastRecallLogText = "";
     const { chat } = getContext();
     activeChatId = getContext().chatId || null;
-    logRecallRuntimeCheckpoint("chatChanged:before-retain", `chat=${activeChatId || "-"} length=${Array.isArray(chat) ? chat.length : 0}`);
+    logRecallRuntimeCheckpoint(
+        "chatChanged:before-retain",
+        `chat=${activeChatId || "-"} length=${Array.isArray(chat) ? chat.length : 0}`,
+    );
     await retainRecallRuntimeOnly(activeChatId);
     const newLength = Array.isArray(chat) ? chat.length : 0;
 
@@ -2752,7 +3302,10 @@ async function handleChatChanged() {
     // Embedding 连接预热（保持 TCP keep-alive，减少首次召回超时）
     warmupEmbeddingConnection();
     warmupActiveVectorCache();
-    logRecallRuntimeCheckpoint("chatChanged:after-warm-request", `chat=${activeChatId || "-"}`);
+    logRecallRuntimeCheckpoint(
+        "chatChanged:after-warm-request",
+        `chat=${activeChatId || "-"}`,
+    );
 
     scheduleVectorIntegrityCheck();
 }
@@ -2806,7 +3359,9 @@ async function handleMessageReceived(scheduledChatId, targetMesId = null) {
     if (isChatStale(scheduledChatId)) return;
     const { chat, chatId } = getContext();
     const lastFloor = (chat?.length || 1) - 1;
-    const floor = Number.isFinite(targetMesId) ? Number(targetMesId) : lastFloor;
+    const floor = Number.isFinite(targetMesId)
+        ? Number(targetMesId)
+        : lastFloor;
     if (floor < 0 || floor > lastFloor) return;
     const message = chat?.[floor];
     if (!message || message.is_user) return;
@@ -2821,7 +3376,7 @@ async function handleMessageReceived(scheduledChatId, targetMesId = null) {
     refreshEntityLexiconAndWarmup();
 
     if (vectorConfig?.enabled) {
-        rememberVectorMaintenance(chatId, floor, 'after_ai');
+        rememberVectorMaintenance(chatId, floor, "after_ai");
         scheduleAutoL0Backfill(AUTO_L0_BACKFILL_DELAY_MS, chatId);
     }
 }
@@ -2840,7 +3395,9 @@ async function handleMessageUpdated(scheduledChatId) {
 }
 
 function handleMessageRendered(data) {
-    const mesId = data?.element ? $(data.element).attr("mesid") : data?.messageId;
+    const mesId = data?.element
+        ? $(data.element).attr("mesid")
+        : data?.messageId;
     if (mesId != null) addSummaryBtnToMessage(mesId);
     else initButtonsForAll();
 }
@@ -2881,9 +3438,9 @@ async function handleGenerationStarted(type, _params, isDryRun) {
         const total = Math.round(performance.now() - T0);
         xbLog.info(
             MODULE_ID,
-            `Prompt inject timing: type=${type || 'unknown'} reason=${reason} total=${total}ms `
-            + `tokenizer=${timing.tokenizer}ms boundary=${timing.boundary}ms `
-            + `build=${timing.buildPrompt}ms write=${timing.writePrompt}ms`
+            `Prompt inject timing: type=${type || "unknown"} reason=${reason} total=${total}ms ` +
+                `tokenizer=${timing.tokenizer}ms boundary=${timing.boundary}ms ` +
+                `build=${timing.buildPrompt}ms write=${timing.writePrompt}ms`,
         );
     };
 
@@ -2906,7 +3463,11 @@ async function handleGenerationStarted(type, _params, isDryRun) {
 
     // 判断是否使用缓存的用户消息（30秒内有效）
     let pendingUserMessage = null;
-    if (type === "normal" && lastSentUserMessage && (Date.now() - lastSentTimestamp < 30000)) {
+    if (
+        type === "normal" &&
+        lastSentUserMessage &&
+        Date.now() - lastSentTimestamp < 30000
+    ) {
         pendingUserMessage = lastSentUserMessage;
     }
     // 用完清空
@@ -2916,7 +3477,7 @@ async function handleGenerationStarted(type, _params, isDryRun) {
     const { chat, chatId } = getContext();
     const chatLen = Array.isArray(chat) ? chat.length : 0;
     if (chatLen === 0) {
-        logTiming('empty_chat');
+        logTiming("empty_chat");
         return;
     }
 
@@ -2934,12 +3495,17 @@ async function handleGenerationStarted(type, _params, isDryRun) {
     } else {
         boundary = store?.lastSummarizedMesId ?? -1;
     }
-    if (!vectorCfg?.enabled && boundary < 0 && store?.pendingImportBoundary && store?.json) {
+    if (
+        !vectorCfg?.enabled &&
+        boundary < 0 &&
+        store?.pendingImportBoundary &&
+        store?.json
+    ) {
         boundary = chatLen - 1;
     }
     timing.boundary = Math.round(performance.now() - T_Boundary);
     if (boundary < 0) {
-        logTiming('no_boundary');
+        logTiming("no_boundary");
         return;
     }
 
@@ -2947,7 +3513,7 @@ async function handleGenerationStarted(type, _params, isDryRun) {
     // 最小为 MIN_INJECTION_DEPTH，避免插入太靠近底部
     const depth = Math.max(MIN_INJECTION_DEPTH, chatLen - boundary - 1);
     if (depth < 0) {
-        logTiming('invalid_depth');
+        logTiming("invalid_depth");
         return;
     }
 
@@ -2969,13 +3535,13 @@ async function handleGenerationStarted(type, _params, isDryRun) {
     timing.buildPrompt = Math.round(performance.now() - T_BuildPrompt);
     _lastBuiltPromptText = text;
     if (!text.trim()) {
-        logTiming('empty_prompt');
+        logTiming("empty_prompt");
         return;
     }
 
     // 获取用户配置的 role
     const cfg = getSummaryPanelConfig();
-    const roleKey = cfg.trigger?.role || 'system';
+    const roleKey = cfg.trigger?.role || "system";
     const role = ROLE_MAP[roleKey] || extension_prompt_roles.SYSTEM;
 
     // 写入 extension_prompts
@@ -2987,7 +3553,7 @@ async function handleGenerationStarted(type, _params, isDryRun) {
         role,
     };
     timing.writePrompt = Math.round(performance.now() - T_WritePrompt);
-    logTiming('injected');
+    logTiming("injected");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3009,9 +3575,12 @@ function notifyStorySummaryAfterAi(data, source) {
     const { chatId, chat } = getContext();
     if (!chatId || !Array.isArray(chat) || !chat.length) return;
 
-    const messageId = source === "generation_ended"
-        ? (chat.length - 1)
-        : (typeof data === "number" ? data : data?.messageId ?? data?.mesId ?? (chat.length - 1));
+    const messageId =
+        source === "generation_ended"
+            ? chat.length - 1
+            : typeof data === "number"
+              ? data
+              : (data?.messageId ?? data?.mesId ?? chat.length - 1);
     if (!Number.isFinite(messageId) || messageId < 0) return;
 
     const message = chat[messageId];
@@ -3028,11 +3597,14 @@ function notifyStorySummaryAfterAi(data, source) {
 function registerAfterAiGateHandler() {
     initAfterAiGate();
     if (afterAiGateDispose) return;
-    afterAiGateDispose = registerAfterAiHandler(MODULE_ID, async ({ chatId, messageId }) => {
-        if (!getSettings().storySummary?.enabled) return;
-        if (activeChatId !== chatId) return;
-        scheduleWithChatGuard(handleMessageReceived, 0, messageId);
-    });
+    afterAiGateDispose = registerAfterAiHandler(
+        MODULE_ID,
+        async ({ chatId, messageId }) => {
+            if (!getSettings().storySummary?.enabled) return;
+            if (activeChatId !== chatId) return;
+            scheduleWithChatGuard(handleMessageReceived, 0, messageId);
+        },
+    );
 }
 
 function registerEvents() {
@@ -3045,22 +3617,26 @@ function registerEvents() {
         name: "剧情总结运行缓存",
         getSize: () => {
             const vectorStats = getRecallRuntimeStats();
-            const vectorItems = vectorStats.reduce((sum, item) => (
-                sum
-                + Number(item.chunks || 0)
-                + Number(item.chunkVectors || 0)
-                + Number(item.eventVectors || 0)
-                + Number(item.stateVectors || 0)
-            ), 0);
+            const vectorItems = vectorStats.reduce(
+                (sum, item) =>
+                    sum +
+                    Number(item.chunks || 0) +
+                    Number(item.chunkVectors || 0) +
+                    Number(item.eventVectors || 0) +
+                    Number(item.stateVectors || 0),
+                0,
+            );
             return pendingFrameMessages.length + vectorItems;
         },
         getBytes: () => {
             try {
-                return JSON.stringify({
-                    pendingFrameMessages,
-                    lastRecallLogText,
-                    recallRuntime: getRecallRuntimeStats(),
-                }).length * 2;
+                return (
+                    JSON.stringify({
+                        pendingFrameMessages,
+                        lastRecallLogText,
+                        recallRuntime: getRecallRuntimeStats(),
+                    }).length * 2
+                );
             } catch {
                 return 0;
             }
@@ -3085,14 +3661,28 @@ function registerEvents() {
         activeChatId = getContext().chatId || null;
         scheduleWithChatGuard(handleChatChanged, 80);
     });
-    events.on(event_types.MESSAGE_DELETED, () => scheduleWithChatGuard(handleMessageDeleted, 50));
-    events.on(event_types.MESSAGE_RECEIVED, (data) => notifyStorySummaryAfterAi(data, "message_received"));
-    events.on(event_types.MESSAGE_SENT, () => scheduleWithChatGuard(handleMessageSent, 150));
+    events.on(event_types.MESSAGE_DELETED, () =>
+        scheduleWithChatGuard(handleMessageDeleted, 50),
+    );
+    events.on(event_types.MESSAGE_RECEIVED, (data) =>
+        notifyStorySummaryAfterAi(data, "message_received"),
+    );
+    events.on(event_types.MESSAGE_SENT, () =>
+        scheduleWithChatGuard(handleMessageSent, 150),
+    );
     events.on(event_types.MESSAGE_SENT, handleMessageSentForRecall);
-    events.on(event_types.MESSAGE_SWIPED, () => scheduleWithChatGuard(handleMessageSwiped, 100));
-    events.on(event_types.MESSAGE_UPDATED, () => scheduleWithChatGuard(handleMessageUpdated, 100));
-    events.on(event_types.MESSAGE_EDITED, () => scheduleWithChatGuard(handleMessageUpdated, 100));
-    events.on(event_types.USER_MESSAGE_RENDERED, (data) => setTimeout(() => handleMessageRendered(data), 50));
+    events.on(event_types.MESSAGE_SWIPED, () =>
+        scheduleWithChatGuard(handleMessageSwiped, 100),
+    );
+    events.on(event_types.MESSAGE_UPDATED, () =>
+        scheduleWithChatGuard(handleMessageUpdated, 100),
+    );
+    events.on(event_types.MESSAGE_EDITED, () =>
+        scheduleWithChatGuard(handleMessageUpdated, 100),
+    );
+    events.on(event_types.USER_MESSAGE_RENDERED, (data) =>
+        setTimeout(() => handleMessageRendered(data), 50),
+    );
     events.on(event_types.CHARACTER_MESSAGE_RENDERED, (data) => {
         notifyStorySummaryAfterAi(data, "character_message_rendered");
         setTimeout(() => handleMessageRendered(data), 50);
@@ -3102,10 +3692,23 @@ function registerEvents() {
     document.addEventListener("pointerdown", onSendPointerdown, true);
     document.addEventListener("keydown", onSendKeydown, true);
     document.addEventListener("focusin", onDocumentFocusIn, true);
-    document.addEventListener("visibilitychange", handleVisibilityChangeForBackground);
-    window.addEventListener("resize", handleViewportChangeForBackground, { passive: true });
-    window.visualViewport?.addEventListener?.("resize", handleViewportChangeForBackground, { passive: true });
-    window.visualViewport?.addEventListener?.("scroll", handleViewportChangeForBackground, { passive: true });
+    document.addEventListener(
+        "visibilitychange",
+        handleVisibilityChangeForBackground,
+    );
+    window.addEventListener("resize", handleViewportChangeForBackground, {
+        passive: true,
+    });
+    window.visualViewport?.addEventListener?.(
+        "resize",
+        handleViewportChangeForBackground,
+        { passive: true },
+    );
+    window.visualViewport?.addEventListener?.(
+        "scroll",
+        handleViewportChangeForBackground,
+        { passive: true },
+    );
 
     // 注入链路
     events.on(event_types.GENERATION_STARTED, handleGenerationStarted);
@@ -3141,10 +3744,19 @@ function unregisterEvents() {
     document.removeEventListener("pointerdown", onSendPointerdown, true);
     document.removeEventListener("keydown", onSendKeydown, true);
     document.removeEventListener("focusin", onDocumentFocusIn, true);
-    document.removeEventListener("visibilitychange", handleVisibilityChangeForBackground);
+    document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChangeForBackground,
+    );
     window.removeEventListener("resize", handleViewportChangeForBackground);
-    window.visualViewport?.removeEventListener?.("resize", handleViewportChangeForBackground);
-    window.visualViewport?.removeEventListener?.("scroll", handleViewportChangeForBackground);
+    window.visualViewport?.removeEventListener?.(
+        "resize",
+        handleViewportChangeForBackground,
+    );
+    window.visualViewport?.removeEventListener?.(
+        "scroll",
+        handleViewportChangeForBackground,
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3152,7 +3764,10 @@ function unregisterEvents() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function handleChatDeleted(chatId) {
-    logRecallRuntimeCheckpoint("chatDeleted:clear-runtime", `chat=${chatId || "-"}`);
+    logRecallRuntimeCheckpoint(
+        "chatDeleted:clear-runtime",
+        `chat=${chatId || "-"}`,
+    );
     await clearRecallRuntime(chatId);
     try {
         const filename = getBackupFilename(chatId);
@@ -3170,26 +3785,34 @@ async function handleChatDeleted(chatId) {
 function removeBackupManagerModal() {
     backupManagerCleanup?.();
     backupManagerCleanup = null;
-    document.getElementById('lwb-backup-manager-modal')?.remove();
+    document.getElementById("lwb-backup-manager-modal")?.remove();
 }
 
 function showBackupManagerModal(initialFiles) {
     removeBackupManagerModal();
-    const isNarrowViewport = window.matchMedia?.('(max-width: 640px)').matches || window.innerWidth <= 640;
+    const isNarrowViewport =
+        window.matchMedia?.("(max-width: 640px)").matches ||
+        window.innerWidth <= 640;
 
-    const overlay = document.createElement('div');
-    overlay.id = 'lwb-backup-manager-modal';
+    const overlay = document.createElement("div");
+    overlay.id = "lwb-backup-manager-modal";
     overlay.style.cssText = [
-        'position:fixed', 'inset:0', 'background:rgba(0,0,0,.55)',
-        'z-index:100000', 'display:flex', 'align-items:center', 'justify-content:center',
-        'box-sizing:border-box', `padding:${isNarrowViewport ? '10px' : '16px'}`,
-        'overflow:hidden',
-    ].join(';');
+        "position:fixed",
+        "inset:0",
+        "background:rgba(0,0,0,.55)",
+        "z-index:100000",
+        "display:flex",
+        "align-items:center",
+        "justify-content:center",
+        "box-sizing:border-box",
+        `padding:${isNarrowViewport ? "10px" : "16px"}`,
+        "overflow:hidden",
+    ].join(";");
 
     const viewport = window.visualViewport;
     const syncOverlayToViewport = () => {
         if (!viewport) return;
-        overlay.style.inset = 'auto';
+        overlay.style.inset = "auto";
         overlay.style.left = `${viewport.offsetLeft}px`;
         overlay.style.top = `${viewport.offsetTop}px`;
         overlay.style.width = `${viewport.width}px`;
@@ -3197,136 +3820,172 @@ function showBackupManagerModal(initialFiles) {
     };
     if (viewport) {
         syncOverlayToViewport();
-        viewport.addEventListener('resize', syncOverlayToViewport);
-        viewport.addEventListener('scroll', syncOverlayToViewport);
+        viewport.addEventListener("resize", syncOverlayToViewport);
+        viewport.addEventListener("scroll", syncOverlayToViewport);
         backupManagerCleanup = () => {
-            viewport.removeEventListener('resize', syncOverlayToViewport);
-            viewport.removeEventListener('scroll', syncOverlayToViewport);
+            viewport.removeEventListener("resize", syncOverlayToViewport);
+            viewport.removeEventListener("scroll", syncOverlayToViewport);
         };
     }
 
-    const box = document.createElement('div');
+    const box = document.createElement("div");
     box.style.cssText = [
-        'background:#fff', 'color:#222', 'border-radius:8px',
-        `width:${isNarrowViewport ? '100%' : 'min(520px,92vw)'}`,
-        `padding:${isNarrowViewport ? '12px' : '18px'}`,
-        `max-height:${isNarrowViewport ? 'calc(100dvh - 20px)' : '80vh'}`,
-        'box-sizing:border-box', 'display:flex', 'flex-direction:column',
-        'overflow:hidden',
-        'box-shadow:0 8px 32px rgba(0,0,0,.35)', 'font-size:14px',
-    ].join(';');
+        "background:#fff",
+        "color:#222",
+        "border-radius:8px",
+        `width:${isNarrowViewport ? "100%" : "min(520px,92vw)"}`,
+        `padding:${isNarrowViewport ? "12px" : "18px"}`,
+        `max-height:${isNarrowViewport ? "calc(100dvh - 20px)" : "80vh"}`,
+        "box-sizing:border-box",
+        "display:flex",
+        "flex-direction:column",
+        "overflow:hidden",
+        "box-shadow:0 8px 32px rgba(0,0,0,.35)",
+        "font-size:14px",
+    ].join(";");
 
     // Header
-    const header = document.createElement('div');
+    const header = document.createElement("div");
     header.style.cssText = [
-        'display:flex', 'justify-content:space-between', 'align-items:center',
-        'gap:8px', 'margin-bottom:10px', 'flex-shrink:0',
-    ].join(';');
-    const title = document.createElement('span');
-    title.style.cssText = 'font-weight:700;font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-    title.textContent = '服务器向量备份';
-    const badge = document.createElement('span');
-    badge.id = 'lwb-backup-badge';
-    badge.style.cssText = 'opacity:0.5;font-size:0.85em;margin-left:4px';
+        "display:flex",
+        "justify-content:space-between",
+        "align-items:center",
+        "gap:8px",
+        "margin-bottom:10px",
+        "flex-shrink:0",
+    ].join(";");
+    const title = document.createElement("span");
+    title.style.cssText =
+        "font-weight:700;font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+    title.textContent = "服务器向量备份";
+    const badge = document.createElement("span");
+    badge.id = "lwb-backup-badge";
+    badge.style.cssText = "opacity:0.5;font-size:0.85em;margin-left:4px";
     title.appendChild(badge);
 
-    const btnRow = document.createElement('div');
-    btnRow.style.cssText = 'display:flex;gap:6px';
+    const btnRow = document.createElement("div");
+    btnRow.style.cssText = "display:flex;gap:6px";
 
-    const btnRefresh = document.createElement('button');
-    btnRefresh.className = 'btn btn-sm';
-    btnRefresh.textContent = '刷新';
+    const btnRefresh = document.createElement("button");
+    btnRefresh.className = "btn btn-sm";
+    btnRefresh.textContent = "刷新";
 
-    const btnClose = document.createElement('button');
-    btnClose.className = 'btn btn-sm';
-    btnClose.textContent = '✕';
+    const btnClose = document.createElement("button");
+    btnClose.className = "btn btn-sm";
+    btnClose.textContent = "✕";
     btnClose.onclick = removeBackupManagerModal;
 
     btnRow.append(btnRefresh, btnClose);
     header.append(title, btnRow);
 
     // List area
-    const listEl = document.createElement('div');
-    listEl.id = 'lwb-backup-list';
-    listEl.style.cssText = 'overflow-y:auto;overflow-x:hidden;flex:1;min-height:60px;-webkit-overflow-scrolling:touch';
+    const listEl = document.createElement("div");
+    listEl.id = "lwb-backup-list";
+    listEl.style.cssText =
+        "overflow-y:auto;overflow-x:hidden;flex:1;min-height:60px;-webkit-overflow-scrolling:touch";
 
     // Status bar
-    const statusEl = document.createElement('div');
-    statusEl.id = 'lwb-backup-status';
-    statusEl.style.cssText = 'margin-top:8px;font-size:0.82em;color:#666;min-height:1em;flex-shrink:0;word-break:break-word';
+    const statusEl = document.createElement("div");
+    statusEl.id = "lwb-backup-status";
+    statusEl.style.cssText =
+        "margin-top:8px;font-size:0.82em;color:#666;min-height:1em;flex-shrink:0;word-break:break-word";
 
     box.append(header, listEl, statusEl);
     overlay.appendChild(box);
     document.body.appendChild(overlay);
 
     // Close on backdrop click
-    overlay.addEventListener('click', e => { if (e.target === overlay) removeBackupManagerModal(); });
+    overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) removeBackupManagerModal();
+    });
 
     function setStatus(text, isError) {
         statusEl.textContent = text;
-        statusEl.style.color = isError ? '#c00' : '#666';
+        statusEl.style.color = isError ? "#c00" : "#666";
     }
 
     function renderList(files) {
         badge.textContent = `(${files.length})`;
         if (!files.length) {
-            listEl.innerHTML = '<div style="padding:12px;opacity:0.5;text-align:center">暂无备份记录</div>';
+            listEl.innerHTML =
+                '<div style="padding:12px;opacity:0.5;text-align:center">暂无备份记录</div>';
             return;
         }
-        const sorted = [...files].sort((a, b) => new Date(b.backupTime) - new Date(a.backupTime));
+        const sorted = [...files].sort(
+            (a, b) => new Date(b.backupTime) - new Date(a.backupTime),
+        );
         listEl.replaceChildren();
-        sorted.forEach(f => {
-            const row = document.createElement('div');
+        sorted.forEach((f) => {
+            const row = document.createElement("div");
             row.style.cssText = isNarrowViewport
                 ? [
-                    'display:grid', 'grid-template-columns:1fr auto', 'gap:4px 8px',
-                    'align-items:center', 'padding:8px 2px',
-                    'border-bottom:1px solid #e8e8e8', 'font-size:0.82em',
-                ].join(';')
+                      "display:grid",
+                      "grid-template-columns:1fr auto",
+                      "gap:4px 8px",
+                      "align-items:center",
+                      "padding:8px 2px",
+                      "border-bottom:1px solid #e8e8e8",
+                      "font-size:0.82em",
+                  ].join(";")
                 : [
-                    'display:flex', 'gap:8px', 'align-items:center', 'padding:6px 2px',
-                    'border-bottom:1px solid #e8e8e8', 'font-size:0.82em',
-                ].join(';');
+                      "display:flex",
+                      "gap:8px",
+                      "align-items:center",
+                      "padding:6px 2px",
+                      "border-bottom:1px solid #e8e8e8",
+                      "font-size:0.82em",
+                  ].join(";");
 
-            const label = document.createElement('span');
+            const label = document.createElement("span");
             label.style.cssText = isNarrowViewport
-                ? 'grid-column:1 / -1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#333'
-                : 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#333';
+                ? "grid-column:1 / -1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#333"
+                : "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#333";
             label.title = f.chatId || f.filename;
             label.textContent = f.chatId || f.filename;
 
-            const size = document.createElement('span');
-            size.style.cssText = 'white-space:nowrap;color:#555';
-            size.textContent = f.size ? (f.size / 1024 / 1024).toFixed(2) + 'MB' : '?';
+            const size = document.createElement("span");
+            size.style.cssText = "white-space:nowrap;color:#555";
+            size.textContent = f.size
+                ? (f.size / 1024 / 1024).toFixed(2) + "MB"
+                : "?";
 
-            const time = document.createElement('span');
+            const time = document.createElement("span");
             time.style.cssText = isNarrowViewport
-                ? 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#888'
-                : 'white-space:nowrap;color:#888';
-            time.textContent = f.backupTime ? new Date(f.backupTime).toLocaleString() : '?';
+                ? "min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#888"
+                : "white-space:nowrap;color:#888";
+            time.textContent = f.backupTime
+                ? new Date(f.backupTime).toLocaleString()
+                : "?";
 
-            const btnDel = document.createElement('button');
-            btnDel.className = 'btn btn-sm';
-            btnDel.style.cssText = 'padding:1px 10px;flex-shrink:0;color:#c00;border-color:#c00';
-            btnDel.textContent = '删';
+            const btnDel = document.createElement("button");
+            btnDel.className = "btn btn-sm";
+            btnDel.style.cssText =
+                "padding:1px 10px;flex-shrink:0;color:#c00;border-color:#c00";
+            btnDel.textContent = "删";
             btnDel.onclick = async () => {
                 if (!confirm(`确认删除此备份？\n${f.filename}`)) return;
-                setStatus('删除中...');
+                setStatus("删除中...");
                 btnDel.disabled = true;
                 try {
                     await deleteServerBackup(f.filename, f.serverPath);
-                    setStatus('已删除');
+                    setStatus("已删除");
                     const updated = await fetchManifest();
                     renderList(updated);
                 } catch (e) {
                     if (isDeleteUnsupportedError(e)) {
                         backupDeleteSupported = false;
-                        backupDeleteUnsupportedReason = e.message || '宿主不支持删除接口';
-                        setStatus('⚠️ 只读模式：' + backupDeleteUnsupportedReason, true);
+                        backupDeleteUnsupportedReason =
+                            e.message || "宿主不支持删除接口";
+                        setStatus(
+                            "⚠️ 只读模式：" + backupDeleteUnsupportedReason,
+                            true,
+                        );
                         // 禁用所有删除按钮
-                        listEl.querySelectorAll('button').forEach(b => { b.disabled = true; });
+                        listEl.querySelectorAll("button").forEach((b) => {
+                            b.disabled = true;
+                        });
                     } else {
-                        setStatus('删除失败: ' + (e.message || '未知'), true);
+                        setStatus("删除失败: " + (e.message || "未知"), true);
                         btnDel.disabled = false;
                     }
                 }
@@ -3337,19 +3996,21 @@ function showBackupManagerModal(initialFiles) {
         });
 
         if (!backupDeleteSupported) {
-            setStatus('⚠️ 只读模式：' + backupDeleteUnsupportedReason, true);
-            listEl.querySelectorAll('button').forEach(b => { b.disabled = true; });
+            setStatus("⚠️ 只读模式：" + backupDeleteUnsupportedReason, true);
+            listEl.querySelectorAll("button").forEach((b) => {
+                b.disabled = true;
+            });
         }
     }
 
     btnRefresh.onclick = async () => {
-        setStatus('加载中...');
+        setStatus("加载中...");
         try {
             const files = await fetchManifest();
             renderList(files);
-            setStatus('');
+            setStatus("");
         } catch (e) {
-            setStatus('加载失败: ' + e.message, true);
+            setStatus("加载失败: " + e.message, true);
         }
     };
 
@@ -3387,7 +4048,11 @@ jQuery(() => {
         initStateIntegration();
         maybePreloadTokenizer();
     })().catch((e) => {
-        xbLog.warn(MODULE_ID, "初始化前加载服务端配置失败，继续使用本地缓存", e);
+        xbLog.warn(
+            MODULE_ID,
+            "初始化前加载服务端配置失败，继续使用本地缓存",
+            e,
+        );
         registerEvents();
         initStateIntegration();
         maybePreloadTokenizer();

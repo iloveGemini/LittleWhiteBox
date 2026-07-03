@@ -290,15 +290,10 @@ export function getKeepVisibleCount() {
     return store?.keepVisibleCount ?? 6;
 }
 
-export function calcHideRange(boundary, keepCountOverride = null) {
+export function calcHideRange(boundary) {
     if (boundary == null || boundary < 0) return null;
 
-    const keepCount = Number.isFinite(keepCountOverride)
-        ? Math.max(0, Math.min(50, Number(keepCountOverride)))
-        : getKeepVisibleCount();
-    const hideEnd = boundary - keepCount;
-    if (hideEnd < 0) return null;
-    return { start: 0, end: hideEnd };
+    return { start: 0, end: boundary };
 }
 
 export function addSummarySnapshot(store, endMesId) {
