@@ -369,7 +369,7 @@ function formatConstraintsStructured(grouped, order = "desc") {
             : (a, b) => (b.since || 0) - (a.since || 0);
 
     if (people.size > 0) {
-        lines.push("people:");
+        lines.push("人物事实:");
         for (const [name, facts] of people.entries()) {
             lines.push(`  ${name}:`);
             const sorted = [...facts].sort(sorter);
@@ -380,7 +380,7 @@ function formatConstraintsStructured(grouped, order = "desc") {
     }
 
     if (world.length > 0) {
-        lines.push("world:");
+        lines.push("世界事实:");
         const sortedWorld = [...world].sort(sorter);
         for (const f of sortedWorld) {
             lines.push(`  ${formatConstraintLine(f, true)}`);
@@ -404,7 +404,7 @@ function selectConstraintsByBudgetDesc(grouped, budgetState) {
     const world = grouped?.world || [];
 
     if (people.size > 0) {
-        if (!tryConsumeConstraintLineBudget("people:", budgetState)) {
+        if (!tryConsumeConstraintLineBudget("人物事实:", budgetState)) {
             return { people: selectedPeople, world: selectedWorld };
         }
         for (const [name, facts] of people.entries()) {
@@ -428,7 +428,7 @@ function selectConstraintsByBudgetDesc(grouped, budgetState) {
     }
 
     if (world.length > 0) {
-        if (!tryConsumeConstraintLineBudget("world:", budgetState)) {
+        if (!tryConsumeConstraintLineBudget("世界事实:", budgetState)) {
             return { people: selectedPeople, world: selectedWorld };
         }
         const sortedWorld = [...world].sort(
@@ -1364,7 +1364,7 @@ async function buildVectorPrompt(
     }
     if (assembled.distantEvidence.lines.length) {
         sections.push(
-            `[回声记忆] 远处呼应的相似片段\n${assembled.distantEvidence.lines.join("\n")}`,
+            `[关联片段] 未归入主记忆链的相关原文\n${assembled.distantEvidence.lines.join("\n")}`,
         );
     }
     if (assembled.recentEvidence.lines.length) {
@@ -1372,7 +1372,7 @@ async function buildVectorPrompt(
     }
     if (assembled.arcs.lines.length) {
         sections.push(
-            `[角色弧光] 他们的成长轨迹\n${assembled.arcs.lines.join("\n")}`,
+            `[角色弧光] 长期状态与关系走向\n${assembled.arcs.lines.join("\n")}`,
         );
     }
 
