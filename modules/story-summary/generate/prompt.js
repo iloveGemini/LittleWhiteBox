@@ -50,11 +50,11 @@ function canNotifyRecallFail() {
 // 预算常量
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SHARED_POOL_MAX = 10000;
+const SHARED_POOL_MAX = 12000;
 const CONSTRAINT_MAX = 2000;
 const ARCS_MAX = 1500;
-const EVENT_BUDGET_MAX = 5000;
-const RELATED_EVENT_MAX = 500;
+const EVENT_BUDGET_MAX = 8000;
+const RELATED_EVENT_MAX = 2000;
 const SUMMARIZED_EVIDENCE_MAX = 2000;
 const UNSUMMARIZED_EVIDENCE_MAX = 2000;
 const TOP_N_STAR = 5;
@@ -380,7 +380,7 @@ function formatConstraintsStructured(grouped, order = "desc") {
     }
 
     if (world.length > 0) {
-        lines.push("世界事实:");
+        lines.push("\n世界事实:");
         const sortedWorld = [...world].sort(sorter);
         for (const f of sortedWorld) {
             lines.push(`  ${formatConstraintLine(f, true)}`);
@@ -428,7 +428,7 @@ function selectConstraintsByBudgetDesc(grouped, budgetState) {
     }
 
     if (world.length > 0) {
-        if (!tryConsumeConstraintLineBudget("世界事实:", budgetState)) {
+        if (!tryConsumeConstraintLineBudget("\n世界事实:", budgetState)) {
             return { people: selectedPeople, world: selectedWorld };
         }
         const sortedWorld = [...world].sort(
