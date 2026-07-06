@@ -34,11 +34,11 @@ import {
     scoreRecallRuntimeAnchors,
     scoreRecallRuntimeEvents,
     scoreRecallRuntimeL1,
-} from '../runtime/runtime.js';
-import { getStateAtoms } from '../storage/state-store.js';
-import { getEngineFingerprint, embed } from '../utils/embedder.js';
-import { xbLog } from '../../../../core/debug-core.js';
-import { getContext } from '../../../../../../../extensions.js';
+} from "../runtime/runtime.js";
+import { getStateAtoms } from "../storage/state-store.js";
+import { getEngineFingerprint, embed } from "../utils/embedder.js";
+import { xbLog } from "../../../../core/debug-core.js";
+import { getContext } from "../../../../../../../extensions.js";
 import {
     buildQueryBundle,
     refineQueryBundle,
@@ -46,13 +46,13 @@ import {
     FOCUS_BASE_WEIGHT_R2,
     CONTEXT_BASE_WEIGHTS_R2,
     FOCUS_MIN_NORMALIZED_WEIGHT,
-} from './query-builder.js';
-import { getLexicalIndex, searchLexicalIndex } from './lexical-index.js';
-import { rerankChunks } from '../llm/reranker.js';
-import { createMetrics, calcSimilarityStats } from './metrics.js';
-import { tokenizeForIndex } from '../utils/tokenizer.js';
+} from "./query-builder.js";
+import { getLexicalIndex, searchLexicalIndex } from "./lexical-index.js";
+import { rerankChunks } from "../llm/reranker.js";
+import { createMetrics, calcSimilarityStats } from "./metrics.js";
+import { tokenizeForIndex } from "../utils/tokenizer.js";
 
-const MODULE_ID = 'recall';
+const MODULE_ID = "recall";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 配置
@@ -69,13 +69,19 @@ const CONFIG = {
     // Event (L2 Events)
     EVENT_CANDIDATE_MAX: 100,
     EVENT_SELECT_MAX: 50,
-    EVENT_MIN_SIMILARITY: 0.60,
+    EVENT_MIN_SIMILARITY: 0.55, // 情感向调低：情绪/氛围类召回偏弥散语义，0.6 略严（噪声↑，看日志再回调）
     EVENT_MMR_LAMBDA: 0.72,
-    EVENT_ENTITY_BYPASS_SIM: 0.70,
+    EVENT_ENTITY_BYPASS_SIM: 0.7,
+
+    // 强保：核心剧情 + 近期保鲜（有界加分，不硬覆盖 similarity）
+    EVENT_CORE_PLOT_BONUS: 0.1, // 核心/主线/转折 的排序加分
+    EVENT_RECENCY_WINDOW: 12, // 最新楼向前多少楼视为“近期”
+    EVENT_RECENCY_MAX_BONUS: 0.08, // 近期加分上限（越近越大，线性衰减）
+    EVENT_RECENCY_FORCE_KEEP: 4, // 距最新 ≤ 此值的事件绝不丢弃
 
     // Lexical Dense 门槛
-    LEXICAL_EVENT_DENSE_MIN: 0.60,
-    LEXICAL_FLOOR_DENSE_MIN: 0.50,
+    LEXICAL_EVENT_DENSE_MIN: 0.6,
+    LEXICAL_FLOOR_DENSE_MIN: 0.5,
 
     // W-RRF 融合（L0-only）
     RRF_K: 60,
@@ -88,7 +94,7 @@ const CONFIG = {
 
     // Rerank（floor-level）
     RERANK_TOP_N: 20,
-    RERANK_MIN_SCORE: 0.10,
+    RERANK_MIN_SCORE: 0.1,
 
     // Fusion guard: lexical must-keep floors
     MUST_KEEP_MAX_FLOORS: 3,
@@ -106,7 +112,9 @@ const CONFIG = {
 
 function cosineSimilarity(a, b) {
     if (!a?.length || !b?.length || a.length !== b.length) return 0;
-    let dot = 0, nA = 0, nB = 0;
+    let dot = 0,
+        nA = 0,
+        nB = 0;
     for (let i = 0; i < a.length; i++) {
         dot += a[i] * b[i];
         nA += a[i] * a[i];
@@ -125,14 +133,17 @@ function parseFloorRange(summary) {
     const match = String(summary).match(/\(#(\d+)(?:-(\d+))?\)/);
     if (!match) return null;
     const start = Math.max(0, parseInt(match[1], 10) - 1);
-    const end = Math.max(0, (match[2] ? parseInt(match[2], 10) : parseInt(match[1], 10)) - 1);
+    const end = Math.max(
+        0,
+        (match[2] ? parseInt(match[2], 10) : parseInt(match[1], 10)) - 1,
+    );
     return { start, end };
 }
 
 function normalize(s) {
-    return String(s || '')
-        .normalize('NFKC')
-        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    return String(s || "")
+        .normalize("NFKC")
+        .replace(/[\u200B-\u200D\uFEFF]/g, "")
         .trim()
         .toLowerCase();
 }
@@ -140,7 +151,11 @@ function normalize(s) {
 function getLastMessages(chat, count = 3, excludeLastAi = false) {
     if (!chat?.length) return [];
     let messages = [...chat];
-    if (excludeLastAi && messages.length > 0 && !messages[messages.length - 1]?.is_user) {
+    if (
+        excludeLastAi &&
+        messages.length > 0 &&
+        !messages[messages.length - 1]?.is_user
+    ) {
         messages = messages.slice(0, -1);
     }
     return messages.slice(-count);
@@ -151,7 +166,12 @@ function getLastMessages(chat, count = 3, excludeLastAi = false) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function weightedAverageVectors(vectors, weights) {
-    if (!vectors?.length || !weights?.length || vectors.length !== weights.length) return null;
+    if (
+        !vectors?.length ||
+        !weights?.length ||
+        vectors.length !== weights.length
+    )
+        return null;
 
     const dims = vectors[0].length;
     const result = new Array(dims).fill(0);
@@ -185,7 +205,9 @@ function clampMinNormalizedWeight(weights, targetIdx, minWeight) {
     const remain = 1 - minWeight;
     const scale = remain / otherSum;
 
-    const out = weights.map((w, i) => (i === targetIdx ? minWeight : w * scale));
+    const out = weights.map((w, i) =>
+        i === targetIdx ? minWeight : w * scale,
+    );
     const drift = 1 - out.reduce((a, b) => a + b, 0);
     out[targetIdx] += drift;
     return out;
@@ -194,14 +216,21 @@ function clampMinNormalizedWeight(weights, targetIdx, minWeight) {
 function computeSegmentWeights(segments) {
     if (!segments?.length) return [];
 
-    const adjusted = segments.map(s => s.baseWeight * computeLengthFactor(s.charCount));
+    const adjusted = segments.map(
+        (s) => s.baseWeight * computeLengthFactor(s.charCount),
+    );
     const sum = adjusted.reduce((a, b) => a + b, 0);
-    const normalized = sum <= 0
-        ? segments.map(() => 1 / segments.length)
-        : adjusted.map(w => w / sum);
+    const normalized =
+        sum <= 0
+            ? segments.map(() => 1 / segments.length)
+            : adjusted.map((w) => w / sum);
 
     const focusIdx = segments.length - 1;
-    return clampMinNormalizedWeight(normalized, focusIdx, FOCUS_MIN_NORMALIZED_WEIGHT);
+    return clampMinNormalizedWeight(
+        normalized,
+        focusIdx,
+        FOCUS_MIN_NORMALIZED_WEIGHT,
+    );
 }
 
 function computeR2Weights(segments, hintsSegment) {
@@ -210,24 +239,39 @@ function computeR2Weights(segments, hintsSegment) {
     const contextCount = segments.length - 1;
     const r2Base = [];
     for (let i = 0; i < contextCount; i++) {
-        const weightIdx = Math.max(0, CONTEXT_BASE_WEIGHTS_R2.length - contextCount + i);
-        r2Base.push(CONTEXT_BASE_WEIGHTS_R2[weightIdx] || CONTEXT_BASE_WEIGHTS_R2[0]);
+        const weightIdx = Math.max(
+            0,
+            CONTEXT_BASE_WEIGHTS_R2.length - contextCount + i,
+        );
+        r2Base.push(
+            CONTEXT_BASE_WEIGHTS_R2[weightIdx] || CONTEXT_BASE_WEIGHTS_R2[0],
+        );
     }
     r2Base.push(FOCUS_BASE_WEIGHT_R2);
 
-    const adjusted = r2Base.map((w, i) => w * computeLengthFactor(segments[i].charCount));
+    const adjusted = r2Base.map(
+        (w, i) => w * computeLengthFactor(segments[i].charCount),
+    );
 
     if (hintsSegment) {
-        adjusted.push(hintsSegment.baseWeight * computeLengthFactor(hintsSegment.charCount));
+        adjusted.push(
+            hintsSegment.baseWeight *
+                computeLengthFactor(hintsSegment.charCount),
+        );
     }
 
     const sum = adjusted.reduce((a, b) => a + b, 0);
-    const normalized = sum <= 0
-        ? adjusted.map(() => 1 / adjusted.length)
-        : adjusted.map(w => w / sum);
+    const normalized =
+        sum <= 0
+            ? adjusted.map(() => 1 / adjusted.length)
+            : adjusted.map((w) => w / sum);
 
     const focusIdx = segments.length - 1;
-    return clampMinNormalizedWeight(normalized, focusIdx, FOCUS_MIN_NORMALIZED_WEIGHT);
+    return clampMinNormalizedWeight(
+        normalized,
+        focusIdx,
+        FOCUS_MIN_NORMALIZED_WEIGHT,
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -277,43 +321,52 @@ function mmrSelect(candidates, k, lambda, getVector, getScore) {
 // [Anchors] L0 StateAtoms 检索
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function recallAnchors(queryVector, vectorConfig, metrics, snapshot = null) {
+async function recallAnchors(
+    queryVector,
+    vectorConfig,
+    metrics,
+    snapshot = null,
+) {
     const { chatId } = getContext();
     if (!chatId || !queryVector?.length) {
         return { hits: [], floors: new Set() };
     }
     const canUseSnapshot = snapshot?.chatId === chatId;
 
-    const meta = canUseSnapshot && snapshot?.meta ? snapshot.meta : await getRecallRuntimeMeta(chatId);
+    const meta =
+        canUseSnapshot && snapshot?.meta
+            ? snapshot.meta
+            : await getRecallRuntimeMeta(chatId);
     const fp = getEngineFingerprint(vectorConfig);
     if (meta?.fingerprint && meta.fingerprint !== fp) {
-        xbLog.warn(MODULE_ID, 'Anchor fingerprint 不匹配');
+        xbLog.warn(MODULE_ID, "Anchor fingerprint 不匹配");
         return { hits: [], floors: new Set() };
     }
 
     const atomsList = getStateAtoms();
-    const atomMap = new Map(atomsList.map(a => [a.atomId, a]));
+    const atomMap = new Map(atomsList.map((a) => [a.atomId, a]));
 
     const runtimeScores = await scoreRecallRuntimeAnchors(chatId, queryVector);
     if (metrics) {
-        metrics.timing.runtimeScoreAnchors = runtimeScores?.stats?.timings?.scoreAnchorsMs ?? null;
+        metrics.timing.runtimeScoreAnchors =
+            runtimeScores?.stats?.timings?.scoreAnchorsMs ?? null;
     }
     const scored = (runtimeScores?.scores || [])
-        .map(s => {
+        .map((s) => {
             const atom = atomMap.get(s.atomId);
             if (!atom) return null;
             return { ...s, atom };
         })
         .filter(Boolean)
-        .filter(s => s.similarity >= CONFIG.ANCHOR_MIN_SIMILARITY)
+        .filter((s) => s.similarity >= CONFIG.ANCHOR_MIN_SIMILARITY)
         .sort((a, b) => b.similarity - a.similarity);
 
-    const floors = new Set(scored.map(s => s.floor));
+    const floors = new Set(scored.map((s) => s.floor));
 
     if (metrics) {
         metrics.anchor.matched = scored.length;
         metrics.anchor.floorsHit = floors.size;
-        metrics.anchor.topHits = scored.slice(0, 5).map(s => ({
+        metrics.anchor.topHits = scored.slice(0, 5).map((s) => ({
             floor: s.floor,
             semantic: s.atom?.semantic?.slice(0, 50),
             similarity: Math.round(s.similarity * 1000) / 1000,
@@ -328,17 +381,28 @@ async function recallAnchors(queryVector, vectorConfig, metrics, snapshot = null
 // 返回 { events, scoreMap }；不回传整库 event vectors
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function recallEvents(queryVector, allEvents, vectorConfig, focusCharacters, metrics, snapshot = null) {
-    const { chatId } = getContext();
+async function recallEvents(
+    queryVector,
+    allEvents,
+    vectorConfig,
+    focusCharacters,
+    metrics,
+    snapshot = null,
+) {
+    const { chatId, chat } = getContext();
     if (!chatId || !queryVector?.length || !allEvents?.length) {
         return { events: [], scoreMap: new Map(), vectorMap: new Map() };
     }
     const canUseSnapshot = snapshot?.chatId === chatId;
+    const latestFloor = (chat?.length || 0) - 1;
 
-    const meta = canUseSnapshot && snapshot?.meta ? snapshot.meta : await getRecallRuntimeMeta(chatId);
+    const meta =
+        canUseSnapshot && snapshot?.meta
+            ? snapshot.meta
+            : await getRecallRuntimeMeta(chatId);
     const fp = getEngineFingerprint(vectorConfig);
     if (meta?.fingerprint && meta.fingerprint !== fp) {
-        xbLog.warn(MODULE_ID, 'Event fingerprint 不匹配');
+        xbLog.warn(MODULE_ID, "Event fingerprint 不匹配");
         return { events: [], scoreMap: new Map(), vectorMap: new Map() };
     }
 
@@ -346,24 +410,63 @@ async function recallEvents(queryVector, allEvents, vectorConfig, focusCharacter
 
     const runtimeScores = await scoreRecallRuntimeEvents(chatId, queryVector);
     if (metrics) {
-        metrics.timing.runtimeScoreEvents = runtimeScores?.stats?.timings?.scoreEventsMs ?? null;
+        metrics.timing.runtimeScoreEvents =
+            runtimeScores?.stats?.timings?.scoreEventsMs ?? null;
     }
-    const scoreMap = new Map((runtimeScores?.scores || []).map((item) => [item.eventId, item.similarity]));
+    const scoreMap = new Map(
+        (runtimeScores?.scores || []).map((item) => [
+            item.eventId,
+            item.similarity,
+        ]),
+    );
     if (!scoreMap.size) {
         return { events: [], scoreMap, vectorMap: new Map() };
     }
 
-    const scored = allEvents.map(event => {
-        const baseSim = scoreMap.get(event.id) ?? 0;
+    const scored = allEvents.map((event) => {
+        let baseSim = scoreMap.get(event.id) ?? 0;
 
-        const participants = (event.participants || []).map(p => normalize(p));
-        const hasEntityMatch = participants.some(p => focusSet.has(p));
+        const participants = (event.participants || []).map((p) =>
+            normalize(p),
+        );
+        let hasEntityMatch = participants.some((p) => focusSet.has(p));
+
+        // ★ 核心手术 1：强保重要剧情 + 近期保鲜
+        // 不硬覆盖 similarity（会污染 MMR 排序与下游 ⭐/排序），改为有界加分：
+        //   - 核心/主线/转折：固定加分
+        //   - 近期事件：距最新越近加分越大（线性衰减），防“相似度不够→记忆断链”
+        // 另用 forceKeep 保证这两类事件不被 MIN_SIMILARITY 阈值与实体过滤丢弃。
+        const weight = event.weight || "";
+        const isCorePlot = ["核心", "主线", "转折"].some((w) =>
+            weight.includes(w),
+        );
+
+        let recencyBonus = 0;
+        let recentDist = Infinity;
+        const range = parseFloorRange(event.summary);
+        if (range && latestFloor >= 0) {
+            recentDist = latestFloor - range.end;
+            if (recentDist >= 0 && recentDist <= CONFIG.EVENT_RECENCY_WINDOW) {
+                recencyBonus =
+                    CONFIG.EVENT_RECENCY_MAX_BONUS *
+                    (1 - recentDist / CONFIG.EVENT_RECENCY_WINDOW);
+            }
+        }
+
+        const boost =
+            (isCorePlot ? CONFIG.EVENT_CORE_PLOT_BONUS : 0) + recencyBonus;
+        if (boost > 0) baseSim = Math.min(1, baseSim + boost);
+
+        const forceKeep =
+            isCorePlot || recentDist <= CONFIG.EVENT_RECENCY_FORCE_KEEP;
+        if (forceKeep) hasEntityMatch = true;
 
         return {
             _id: event.id,
             event,
             similarity: baseSim,
             _hasEntityMatch: hasEntityMatch,
+            _forceKeep: forceKeep,
             vector: null,
         };
     });
@@ -373,7 +476,9 @@ async function recallEvents(queryVector, allEvents, vectorConfig, focusCharacter
     }
 
     let candidates = scored
-        .filter(s => s.similarity >= CONFIG.EVENT_MIN_SIMILARITY)
+        .filter(
+            (s) => s.similarity >= CONFIG.EVENT_MIN_SIMILARITY || s._forceKeep,
+        )
         .sort((a, b) => b.similarity - a.similarity)
         .slice(0, CONFIG.EVENT_CANDIDATE_MAX);
 
@@ -385,7 +490,7 @@ async function recallEvents(queryVector, allEvents, vectorConfig, focusCharacter
     if (focusSet.size > 0) {
         const beforeFilter = candidates.length;
 
-        candidates = candidates.filter(c => {
+        candidates = candidates.filter((c) => {
             if (c.similarity >= CONFIG.EVENT_ENTITY_BYPASS_SIM) return true;
             return c._hasEntityMatch;
         });
@@ -401,37 +506,49 @@ async function recallEvents(queryVector, allEvents, vectorConfig, focusCharacter
         }
     }
 
-    const candidateEventIds = candidates.map(c => c._id).filter(Boolean);
-    const candidateVectors = await getRecallRuntimeEventVectorsByIds(chatId, candidateEventIds);
+    const candidateEventIds = candidates.map((c) => c._id).filter(Boolean);
+    const candidateVectors = await getRecallRuntimeEventVectorsByIds(
+        chatId,
+        candidateEventIds,
+    );
     if (metrics) {
-        metrics.timing.runtimeGetEventVectors = candidateVectors?._stats?.timings?.getEventVectorsByIdsMs ?? 0;
+        metrics.timing.runtimeGetEventVectors =
+            candidateVectors?._stats?.timings?.getEventVectorsByIdsMs ?? 0;
     }
-    const vectorMap = new Map(candidateVectors.map(v => [v.eventId, v.vector]));
+    const vectorMap = new Map(
+        candidateVectors.map((v) => [v.eventId, v.vector]),
+    );
     for (const candidate of candidates) {
         candidate.vector = vectorMap.get(candidate._id) || null;
     }
-    const missingCandidateVectors = Math.max(0, candidateEventIds.length - vectorMap.size);
+    const missingCandidateVectors = Math.max(
+        0,
+        candidateEventIds.length - vectorMap.size,
+    );
     if (metrics) {
         metrics.lexical.eventCandidateVectorsMissing = missingCandidateVectors;
     }
     if (missingCandidateVectors > 0) {
-        xbLog.warn(MODULE_ID, `L2候选向量缺失 ${missingCandidateVectors}/${candidateEventIds.length}，MMR diversity 可能退化`);
+        xbLog.warn(
+            MODULE_ID,
+            `L2候选向量缺失 ${missingCandidateVectors}/${candidateEventIds.length}，MMR diversity 可能退化`,
+        );
     }
     // MMR 选择
     const selected = mmrSelect(
         candidates,
         CONFIG.EVENT_SELECT_MAX,
         CONFIG.EVENT_MMR_LAMBDA,
-        c => c.vector,
-        c => c.similarity
+        (c) => c.vector,
+        (c) => c.similarity,
     );
 
     let directCount = 0;
     let relatedCount = 0;
 
-    const results = selected.map(s => {
-        const recallType = s._hasEntityMatch ? 'DIRECT' : 'RELATED';
-        if (recallType === 'DIRECT') directCount++;
+    const results = selected.map((s) => {
+        const recallType = s._hasEntityMatch ? "DIRECT" : "RELATED";
+        if (recallType === "DIRECT") directCount++;
         else relatedCount++;
 
         return {
@@ -443,8 +560,16 @@ async function recallEvents(queryVector, allEvents, vectorConfig, focusCharacter
 
     if (metrics) {
         metrics.event.selected = results.length;
-        metrics.event.byRecallType = { direct: directCount, related: relatedCount, causal: 0, lexical: 0, l0Linked: 0 };
-        metrics.event.similarityDistribution = calcSimilarityStats(results.map(r => r.similarity));
+        metrics.event.byRecallType = {
+            direct: directCount,
+            related: relatedCount,
+            causal: 0,
+            lexical: 0,
+            l0Linked: 0,
+        };
+        metrics.event.similarityDistribution = calcSimilarityStats(
+            results.map((r) => r.similarity),
+        );
     }
 
     return { events: results, scoreMap, vectorMap };
@@ -462,7 +587,11 @@ function buildEventIndex(allEvents) {
     return map;
 }
 
-function traceCausation(eventHits, eventIndex, maxDepth = CONFIG.CAUSAL_CHAIN_MAX_DEPTH) {
+function traceCausation(
+    eventHits,
+    eventIndex,
+    maxDepth = CONFIG.CAUSAL_CHAIN_MAX_DEPTH,
+) {
     const out = new Map();
     const idRe = /^evt-\d+$/;
     let maxActualDepth = 0;
@@ -481,19 +610,20 @@ function traceCausation(eventHits, eventIndex, maxDepth = CONFIG.CAUSAL_CHAIN_MA
             out.set(parentId, { event: ev, depth, chainFrom: [chainFrom] });
         } else {
             if (depth < existed.depth) existed.depth = depth;
-            if (!existed.chainFrom.includes(chainFrom)) existed.chainFrom.push(chainFrom);
+            if (!existed.chainFrom.includes(chainFrom))
+                existed.chainFrom.push(chainFrom);
         }
 
-        for (const next of (ev.causedBy || [])) {
-            visit(String(next || '').trim(), depth + 1, chainFrom);
+        for (const next of ev.causedBy || []) {
+            visit(String(next || "").trim(), depth + 1, chainFrom);
         }
     }
 
     for (const r of eventHits || []) {
         const rid = r?.event?.id;
         if (!rid) continue;
-        for (const cid of (r.event?.causedBy || [])) {
-            visit(String(cid || '').trim(), 1, rid);
+        for (const cid of r.event?.causedBy || []) {
+            visit(String(cid || "").trim(), 1, rid);
         }
     }
 
@@ -574,11 +704,14 @@ function buildMustKeepFloors(lexicalResult, lexicalTerms, atomFloorSet, chat) {
         lexHitButNotSelected: 0,
     };
 
-    if (!lexicalResult || !lexicalTerms?.length || !atomFloorSet?.size) return out;
+    if (!lexicalResult || !lexicalTerms?.length || !atomFloorSet?.size)
+        return out;
 
-    const queryTermSet = new Set((lexicalTerms || []).map(normalize).filter(Boolean));
+    const queryTermSet = new Set(
+        (lexicalTerms || []).map(normalize).filter(Boolean),
+    );
     const topIdfTerms = (lexicalResult.topIdfTerms || [])
-        .filter(x => {
+        .filter((x) => {
             const term = normalize(x?.term);
             if (!term) return false;
             if (!queryTermSet.has(term)) return false;
@@ -592,7 +725,10 @@ function buildMustKeepFloors(lexicalResult, lexicalTerms, atomFloorSet, chat) {
 
     if (!topIdfTerms.length) return out;
 
-    out.terms = topIdfTerms.map(x => ({ term: normalize(x.term), idf: x.idf || 0 }));
+    out.terms = topIdfTerms.map((x) => ({
+        term: normalize(x.term),
+        idf: x.idf || 0,
+    }));
 
     const floorAgg = new Map(); // floor -> { lexHitScore, terms:Set<string> }
     for (const { term } of out.terms) {
@@ -602,7 +738,10 @@ function buildMustKeepFloors(lexicalResult, lexicalTerms, atomFloorSet, chat) {
             if (aiFloor == null) continue;
             if (!atomFloorSet.has(aiFloor)) continue;
 
-            const cur = floorAgg.get(aiFloor) || { lexHitScore: 0, terms: new Set() };
+            const cur = floorAgg.get(aiFloor) || {
+                lexHitScore: 0,
+                terms: new Set(),
+            };
             cur.lexHitScore += Number(hit?.weightedScore || 0);
             cur.terms.add(term);
             floorAgg.set(aiFloor, cur);
@@ -612,7 +751,8 @@ function buildMustKeepFloors(lexicalResult, lexicalTerms, atomFloorSet, chat) {
     const candidates = [...floorAgg.entries()]
         .map(([floor, info]) => {
             const termCoverage = info.terms.size;
-            const finalFloorScore = info.lexHitScore * (1 + 0.2 * Math.max(0, termCoverage - 1));
+            const finalFloorScore =
+                info.lexHitScore * (1 + 0.2 * Math.max(0, termCoverage - 1));
             return {
                 floor,
                 score: finalFloorScore,
@@ -627,14 +767,17 @@ function buildMustKeepFloors(lexicalResult, lexicalTerms, atomFloorSet, chat) {
     // Cluster by floor distance and keep the highest score per cluster.
     const selected = [];
     for (const c of candidates) {
-        const conflict = selected.some(s => Math.abs(s.floor - c.floor) <= CONFIG.MUST_KEEP_CLUSTER_WINDOW);
+        const conflict = selected.some(
+            (s) =>
+                Math.abs(s.floor - c.floor) <= CONFIG.MUST_KEEP_CLUSTER_WINDOW,
+        );
         if (conflict) continue;
         selected.push(c);
         if (selected.length >= CONFIG.MUST_KEEP_MAX_FLOORS) break;
     }
 
     out.floors = selected;
-    out.floorSet = new Set(selected.map(x => x.floor));
+    out.floorSet = new Set(selected.map((x) => x.floor));
     return out;
 }
 
@@ -642,9 +785,21 @@ function buildMustKeepFloors(lexicalResult, lexicalTerms, atomFloorSet, chat) {
 // [Stage 6] Floor 融合 + Rerank
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexicalResult, lexicalTerms, metrics) {
+async function locateAndPullEvidence(
+    anchorHits,
+    queryVector,
+    rerankQuery,
+    lexicalResult,
+    lexicalTerms,
+    metrics,
+) {
     const { chatId, chat, name1, name2 } = getContext();
-    if (!chatId) return { l0Selected: [], l1ScoredByFloor: new Map(), mustKeepFloors: [] };
+    if (!chatId)
+        return {
+            l0Selected: [],
+            l1ScoredByFloor: new Map(),
+            mustKeepFloors: [],
+        };
 
     const T_Start = performance.now();
 
@@ -653,7 +808,7 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
     // ─────────────────────────────────────────────────────────────────
 
     const denseFloorMax = new Map();
-    for (const a of (anchorHits || [])) {
+    for (const a of anchorHits || []) {
         const cur = denseFloorMax.get(a.floor);
         if (!cur || a.similarity > cur) {
             denseFloorMax.set(a.floor, a.similarity);
@@ -671,12 +826,12 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
     // 6b. Lexical floor rank（密度加成 + Dense 门槛过滤）
     // ─────────────────────────────────────────────────────────────────
 
-    const atomFloorSet = new Set(getStateAtoms().map(a => a.floor));
+    const atomFloorSet = new Set(getStateAtoms().map((a) => a.floor));
 
     const lexFloorAgg = new Map();
     let lexFloorFilteredByDense = 0;
 
-    for (const { chunkId, score } of (lexicalResult?.chunkScores || [])) {
+    for (const { chunkId, score } of lexicalResult?.chunkScores || []) {
         const match = chunkId?.match(/^c-(\d+)-/);
         if (!match) continue;
         const floor = mapChunkFloorToAiFloor(parseInt(match[1], 10), chat);
@@ -704,7 +859,11 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
     const lexFloorRank = [...lexFloorAgg.entries()]
         .map(([floor, info]) => ({
             id: floor,
-            score: info.maxScore * (1 + CONFIG.LEX_DENSITY_BONUS * Math.log2(Math.max(1, info.hitCount))),
+            score:
+                info.maxScore *
+                (1 +
+                    CONFIG.LEX_DENSITY_BONUS *
+                        Math.log2(Math.max(1, info.hitCount))),
         }))
         .sort((a, b) => b.score - a.score);
 
@@ -716,14 +875,23 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
     // 6b.5 Fusion Guard: lexical must-keep floors
     // ─────────────────────────────────────────────────────────────────
 
-    const mustKeep = buildMustKeepFloors(lexicalResult, lexicalTerms, atomFloorSet, chat);
+    const mustKeep = buildMustKeepFloors(
+        lexicalResult,
+        lexicalTerms,
+        atomFloorSet,
+        chat,
+    );
 
     // ─────────────────────────────────────────────────────────────────
     // 6c. Floor W-RRF 融合
     // ─────────────────────────────────────────────────────────────────
 
     const T_Fusion_Start = performance.now();
-    const { top: fusedFloors, totalUnique } = fuseByFloor(denseFloorRank, lexFloorRank, CONFIG.FUSION_CAP);
+    const { top: fusedFloors, totalUnique } = fuseByFloor(
+        denseFloorRank,
+        lexFloorRank,
+        CONFIG.FUSION_CAP,
+    );
     const fusionTime = Math.round(performance.now() - T_Fusion_Start);
 
     if (metrics) {
@@ -732,13 +900,18 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
         metrics.fusion.totalUnique = totalUnique;
         metrics.fusion.afterCap = fusedFloors.length;
         metrics.fusion.time = fusionTime;
-        metrics.fusion.denseAggMethod = 'maxSim';
+        metrics.fusion.denseAggMethod = "maxSim";
         metrics.fusion.lexDensityBonus = CONFIG.LEX_DENSITY_BONUS;
         metrics.evidence.floorCandidates = fusedFloors.length;
         metrics.evidence.mustKeepTermsCount = mustKeep.terms.length;
         metrics.evidence.mustKeepFloorsCount = mustKeep.floors.length;
-        metrics.evidence.mustKeepFloors = mustKeep.floors.map(x => x.floor).slice(0, 10);
-        metrics.evidence.lexHitButNotSelected = Math.max(0, mustKeep.lexHitButNotSelected - mustKeep.floors.length);
+        metrics.evidence.mustKeepFloors = mustKeep.floors
+            .map((x) => x.floor)
+            .slice(0, 10);
+        metrics.evidence.lexHitButNotSelected = Math.max(
+            0,
+            mustKeep.lexHitButNotSelected - mustKeep.floors.length,
+        );
     }
 
     if (fusedFloors.length === 0) {
@@ -750,7 +923,11 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
             metrics.evidence.l1CosineTime = 0;
             metrics.evidence.rerankApplied = false;
         }
-        return { l0Selected: [], l1ScoredByFloor: new Map(), mustKeepFloors: [] };
+        return {
+            l0Selected: [],
+            l1ScoredByFloor: new Map(),
+            mustKeepFloors: [],
+        };
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -770,16 +947,25 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
     if (metrics) {
         metrics.evidence.l1PrefetchAiFloors = prefetchedFloorItems.length;
         metrics.evidence.l1PrefetchWithContextFloors = floorsToFetch.size;
-        metrics.evidence.l1PrefetchTrimmed = Math.max(0, fusedFloors.length - prefetchedFloorItems.length);
+        metrics.evidence.l1PrefetchTrimmed = Math.max(
+            0,
+            fusedFloors.length - prefetchedFloorItems.length,
+        );
     }
 
-    const l1ScoredByFloor = await pullAndScoreL1(chatId, [...floorsToFetch], queryVector);
+    const l1ScoredByFloor = await pullAndScoreL1(
+        chatId,
+        [...floorsToFetch],
+        queryVector,
+    );
 
     // ─────────────────────────────────────────────────────────────────
     // 6e. 构建 rerank documents（每个 floor: USER chunks + AI chunks）
     // ─────────────────────────────────────────────────────────────────
 
-    const normalFloors = fusedFloors.filter(f => !mustKeep.floorSet.has(f.id));
+    const normalFloors = fusedFloors.filter(
+        (f) => !mustKeep.floorSet.has(f.id),
+    );
 
     const rerankCandidates = [];
     for (const f of normalFloors) {
@@ -787,22 +973,25 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
         const userFloor = aiFloor - 1;
 
         const aiChunks = l1ScoredByFloor.get(aiFloor) || [];
-        const userChunks = (userFloor >= 0 && chat?.[userFloor]?.is_user)
-            ? (l1ScoredByFloor.get(userFloor) || [])
-            : [];
+        const userChunks =
+            userFloor >= 0 && chat?.[userFloor]?.is_user
+                ? l1ScoredByFloor.get(userFloor) || []
+                : [];
 
         const parts = [];
-        const userName = chat?.[userFloor]?.name || name1 || '用户';
-        const aiName = chat?.[aiFloor]?.name || name2 || '角色';
+        const userName = chat?.[userFloor]?.name || name1 || "用户";
+        const aiName = chat?.[aiFloor]?.name || name2 || "角色";
 
         if (userChunks.length > 0) {
-            parts.push(`${userName}：${userChunks.map(c => c.text).join(' ')}`);
+            parts.push(
+                `${userName}：${userChunks.map((c) => c.text).join(" ")}`,
+            );
         }
         if (aiChunks.length > 0) {
-            parts.push(`${aiName}：${aiChunks.map(c => c.text).join(' ')}`);
+            parts.push(`${aiName}：${aiChunks.map((c) => c.text).join(" ")}`);
         }
 
-        const text = parts.join('\n');
+        const text = parts.join("\n");
         if (!text.trim()) continue;
 
         rerankCandidates.push({
@@ -829,24 +1018,38 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
         metrics.evidence.rerankApplied = true;
         metrics.evidence.beforeRerank = rerankCandidates.length;
         metrics.evidence.afterRerank = reranked.length;
-        metrics.evidence.droppedByRerankCount = Math.max(0, rerankCandidates.length - reranked.length);
-        metrics.evidence.rerankFailed = reranked.some(c => c._rerankFailed);
+        metrics.evidence.droppedByRerankCount = Math.max(
+            0,
+            rerankCandidates.length - reranked.length,
+        );
+        metrics.evidence.rerankFailed = reranked.some((c) => c._rerankFailed);
         metrics.evidence.rerankTime = rerankTime;
         metrics.timing.evidenceRerank = rerankTime;
 
-        const scores = reranked.map(c => c._rerankScore || 0).filter(s => s > 0);
+        const scores = reranked
+            .map((c) => c._rerankScore || 0)
+            .filter((s) => s > 0);
         if (scores.length > 0) {
             scores.sort((a, b) => a - b);
             metrics.evidence.rerankScores = {
                 min: Number(scores[0].toFixed(3)),
                 max: Number(scores[scores.length - 1].toFixed(3)),
-                mean: Number((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(3)),
+                mean: Number(
+                    (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(
+                        3,
+                    ),
+                ),
             };
         }
 
         if (rerankCandidates.length > 0) {
-            const totalLen = rerankCandidates.reduce((s, c) => s + (c.text?.length || 0), 0);
-            metrics.evidence.rerankDocAvgLength = Math.round(totalLen / rerankCandidates.length);
+            const totalLen = rerankCandidates.reduce(
+                (s, c) => s + (c.text?.length || 0),
+                0,
+            );
+            metrics.evidence.rerankDocAvgLength = Math.round(
+                totalLen / rerankCandidates.length,
+            );
         }
     }
 
@@ -858,13 +1061,16 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
     // once a floor is selected by fusion/rerank, L0 atoms come from that floor.
     // Dense anchor hits are used as similarity signals (ranking), not hard admission.
     const allAtoms = getStateAtoms();
-    const atomById = new Map(allAtoms.map(a => [a.atomId, a]));
-    const anchorSimilarityByAtomId = new Map((anchorHits || []).map(h => [h.atomId, h.similarity || 0]));
+    const atomById = new Map(allAtoms.map((a) => [a.atomId, a]));
+    const anchorSimilarityByAtomId = new Map(
+        (anchorHits || []).map((h) => [h.atomId, h.similarity || 0]),
+    );
     const matchedAtomsByFloor = new Map();
-    for (const hit of (anchorHits || [])) {
+    for (const hit of anchorHits || []) {
         const atom = hit.atom || atomById.get(hit.atomId);
         if (!atom) continue;
-        if (!matchedAtomsByFloor.has(hit.floor)) matchedAtomsByFloor.set(hit.floor, []);
+        if (!matchedAtomsByFloor.has(hit.floor))
+            matchedAtomsByFloor.set(hit.floor, []);
         matchedAtomsByFloor.get(hit.floor).push({
             atom,
             similarity: hit.similarity,
@@ -875,15 +1081,15 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
     }
 
     const mustKeepMissing = mustKeep.floors
-        .filter(mf => !reranked.some(r => r.floor === mf.floor))
-        .map(mf => ({
+        .filter((mf) => !reranked.some((r) => r.floor === mf.floor))
+        .map((mf) => ({
             floor: mf.floor,
             _rerankScore: 0.12 + Math.min(0.05, 0.01 * (mf.termCoverage || 1)),
             _isMustKeep: true,
         }));
 
     const finalFloorItems = [
-        ...reranked.map(r => ({ ...r, _isMustKeep: false })),
+        ...reranked.map((r) => ({ ...r, _isMustKeep: false })),
         ...mustKeepMissing,
     ];
 
@@ -899,7 +1105,9 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
 
     for (const item of finalFloorItems) {
         const floor = item.floor;
-        const rerankScore = Number.isFinite(item?._rerankScore) ? item._rerankScore : 0;
+        const rerankScore = Number.isFinite(item?._rerankScore)
+            ? item._rerankScore
+            : 0;
 
         const floorAtoms = allAtomsByFloor.get(floor) || [];
         floorAtoms.sort((a, b) => {
@@ -917,10 +1125,9 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
                 similarity,
                 rerankScore,
                 atom,
-                text: atom.semantic || '',
+                text: atom.semantic || "",
             });
         }
-
     }
 
     if (metrics) {
@@ -935,17 +1142,21 @@ async function locateAndPullEvidence(anchorHits, queryVector, rerankQuery, lexic
 
     const totalTime = Math.round(performance.now() - T_Start);
     if (metrics) {
-        metrics.timing.evidenceRetrieval = Math.max(0, totalTime - fusionTime - rerankTime);
+        metrics.timing.evidenceRetrieval = Math.max(
+            0,
+            totalTime - fusionTime - rerankTime,
+        );
     }
 
-    xbLog.info(MODULE_ID,
-        `Evidence: ${denseFloorRank.length} dense floors + ${lexFloorRank.length} lex floors (${lexFloorFilteredByDense} lex filtered by dense) → fusion=${fusedFloors.length} → rerank(normal)=${reranked.length} + mustKeep=${mustKeepMissing.length} floors → L0=${l0Selected.length} (${totalTime}ms)`
+    xbLog.info(
+        MODULE_ID,
+        `Evidence: ${denseFloorRank.length} dense floors + ${lexFloorRank.length} lex floors (${lexFloorFilteredByDense} lex filtered by dense) → fusion=${fusedFloors.length} → rerank(normal)=${reranked.length} + mustKeep=${mustKeepMissing.length} floors → L0=${l0Selected.length} (${totalTime}ms)`,
     );
 
     return {
         l0Selected,
         l1ScoredByFloor,
-        mustKeepFloors: mustKeep.floors.map(x => x.floor),
+        mustKeepFloors: mustKeep.floors.map((x) => x.floor),
     };
 }
 
@@ -975,19 +1186,28 @@ async function pullAndScoreL1(chatId, floors, queryVector) {
     result._stats ||= {};
     result._stats.totalTime = result._cosineTime;
     result._stats.cacheWarm = result._stats.cacheFallbackDbTime === 0;
-    result._runtimeScoreL1Ms = result._stats.runtimeScoreL1Ms ?? result._stats.scoreTime ?? result._cosineTime;
+    result._runtimeScoreL1Ms =
+        result._stats.runtimeScoreL1Ms ??
+        result._stats.scoreTime ??
+        result._cosineTime;
 
-    xbLog.info(MODULE_ID,
-        `L1 runtime: ${floors.length} floors → ${result._stats.chunkCount || 0} chunks → vectors=${result._stats.vectorHits || 0}/${result._stats.chunkCount || 0} `
-        + `(backend=${result._stats.backend || 'unknown'} owner=${result._stats.cacheOwner || 'unknown'} `
-        + `fallback_db=${result._stats.cacheFallbackDbTime || 0}ms, `
-        + `deserialize=${result._stats.deserializeTime}ms, score=${result._stats.scoreTime}ms, sort=${result._stats.sortTime}ms, total=${result._cosineTime}ms)`
+    xbLog.info(
+        MODULE_ID,
+        `L1 runtime: ${floors.length} floors → ${result._stats.chunkCount || 0} chunks → vectors=${result._stats.vectorHits || 0}/${result._stats.chunkCount || 0} ` +
+            `(backend=${result._stats.backend || "unknown"} owner=${result._stats.cacheOwner || "unknown"} ` +
+            `fallback_db=${result._stats.cacheFallbackDbTime || 0}ms, ` +
+            `deserialize=${result._stats.deserializeTime}ms, score=${result._stats.scoreTime}ms, sort=${result._stats.sortTime}ms, total=${result._cosineTime}ms)`,
     );
 
     return result;
 }
 
-async function buildL1PairsForSelectedFloors(l0Selected, queryVector, prefetchedL1ByFloor, metrics) {
+async function buildL1PairsForSelectedFloors(
+    l0Selected,
+    queryVector,
+    prefetchedL1ByFloor,
+    metrics,
+) {
     const T0 = performance.now();
     const { chatId, chat } = getContext();
 
@@ -1030,8 +1250,14 @@ async function buildL1PairsForSelectedFloors(l0Selected, queryVector, prefetched
         chunkCacheMisses: Number(prefetched._stats?.chunkCacheMisses || 0),
         vectorCacheHits: Number(prefetched._stats?.vectorCacheHits || 0),
         vectorCacheMisses: Number(prefetched._stats?.vectorCacheMisses || 0),
-        cacheFallbackDbTime: Number(prefetched._stats?.cacheFallbackDbTime || 0),
-        runtimeScoreL1Ms: Number(prefetched._runtimeScoreL1Ms || prefetched._stats?.runtimeScoreL1Ms || 0),
+        cacheFallbackDbTime: Number(
+            prefetched._stats?.cacheFallbackDbTime || 0,
+        ),
+        runtimeScoreL1Ms: Number(
+            prefetched._runtimeScoreL1Ms ||
+                prefetched._stats?.runtimeScoreL1Ms ||
+                0,
+        ),
     };
 
     for (const [floor, chunks] of prefetched) {
@@ -1039,25 +1265,45 @@ async function buildL1PairsForSelectedFloors(l0Selected, queryVector, prefetched
         merged.set(floor, chunks);
     }
 
-    const missingFloors = [...requiredFloors].filter(f => !merged.has(f));
+    const missingFloors = [...requiredFloors].filter((f) => !merged.has(f));
     if (missingFloors.length > 0) {
         const extra = await pullAndScoreL1(chatId, missingFloors, queryVector);
         totalCosineTime += Number(extra._cosineTime || 0);
-        aggregateStats.chunkFetchTime += Number(extra._stats?.chunkFetchTime || 0);
-        aggregateStats.vectorFetchTime += Number(extra._stats?.vectorFetchTime || 0);
-        aggregateStats.deserializeTime += Number(extra._stats?.deserializeTime || 0);
+        aggregateStats.chunkFetchTime += Number(
+            extra._stats?.chunkFetchTime || 0,
+        );
+        aggregateStats.vectorFetchTime += Number(
+            extra._stats?.vectorFetchTime || 0,
+        );
+        aggregateStats.deserializeTime += Number(
+            extra._stats?.deserializeTime || 0,
+        );
         aggregateStats.scoreTime += Number(extra._stats?.scoreTime || 0);
         aggregateStats.sortTime += Number(extra._stats?.sortTime || 0);
         aggregateStats.vectorHits += Number(extra._stats?.vectorHits || 0);
-        aggregateStats.missingVectors += Number(extra._stats?.missingVectors || 0);
-        aggregateStats.chunkCacheHits += Number(extra._stats?.chunkCacheHits || 0);
-        aggregateStats.chunkCacheMisses += Number(extra._stats?.chunkCacheMisses || 0);
-        aggregateStats.vectorCacheHits += Number(extra._stats?.vectorCacheHits || 0);
-        aggregateStats.vectorCacheMisses += Number(extra._stats?.vectorCacheMisses || 0);
-        aggregateStats.cacheFallbackDbTime += Number(extra._stats?.cacheFallbackDbTime || 0);
-        aggregateStats.runtimeScoreL1Ms += Number(extra._runtimeScoreL1Ms || extra._stats?.runtimeScoreL1Ms || 0);
+        aggregateStats.missingVectors += Number(
+            extra._stats?.missingVectors || 0,
+        );
+        aggregateStats.chunkCacheHits += Number(
+            extra._stats?.chunkCacheHits || 0,
+        );
+        aggregateStats.chunkCacheMisses += Number(
+            extra._stats?.chunkCacheMisses || 0,
+        );
+        aggregateStats.vectorCacheHits += Number(
+            extra._stats?.vectorCacheHits || 0,
+        );
+        aggregateStats.vectorCacheMisses += Number(
+            extra._stats?.vectorCacheMisses || 0,
+        );
+        aggregateStats.cacheFallbackDbTime += Number(
+            extra._stats?.cacheFallbackDbTime || 0,
+        );
+        aggregateStats.runtimeScoreL1Ms += Number(
+            extra._runtimeScoreL1Ms || extra._stats?.runtimeScoreL1Ms || 0,
+        );
         for (const [floor, chunks] of extra) {
-            if (floor === '_cosineTime') continue;
+            if (floor === "_cosineTime") continue;
             if (!requiredFloors.has(floor)) continue;
             merged.set(floor, chunks);
         }
@@ -1068,16 +1314,23 @@ async function buildL1PairsForSelectedFloors(l0Selected, queryVector, prefetched
     for (const floor of selectedFloors) {
         const aiChunks = merged.get(floor) || [];
         const userFloor = floor - 1;
-        const userChunks = (userFloor >= 0 && chat?.[userFloor]?.is_user)
-            ? (merged.get(userFloor) || [])
-            : [];
+        const userChunks =
+            userFloor >= 0 && chat?.[userFloor]?.is_user
+                ? merged.get(userFloor) || []
+                : [];
 
-        const aiTop1 = aiChunks.length > 0
-            ? aiChunks.reduce((best, c) => (c._cosineScore > best._cosineScore ? c : best))
-            : null;
-        const userTop1 = userChunks.length > 0
-            ? userChunks.reduce((best, c) => (c._cosineScore > best._cosineScore ? c : best))
-            : null;
+        const aiTop1 =
+            aiChunks.length > 0
+                ? aiChunks.reduce((best, c) =>
+                      c._cosineScore > best._cosineScore ? c : best,
+                  )
+                : null;
+        const userTop1 =
+            userChunks.length > 0
+                ? userChunks.reduce((best, c) =>
+                      c._cosineScore > best._cosineScore ? c : best,
+                  )
+                : null;
 
         if (aiTop1) totalAttached++;
         if (userTop1) {
@@ -1106,8 +1359,11 @@ async function buildL1PairsForSelectedFloors(l0Selected, queryVector, prefetched
         metrics.evidence.l1ChunkCacheMisses = aggregateStats.chunkCacheMisses;
         metrics.evidence.l1VectorCacheHits = aggregateStats.vectorCacheHits;
         metrics.evidence.l1VectorCacheMisses = aggregateStats.vectorCacheMisses;
-        metrics.evidence.l1CacheFallbackDbTime = aggregateStats.cacheFallbackDbTime;
-        metrics.evidence.l1CacheWarm = aggregateStats.chunkCacheMisses === 0 && aggregateStats.vectorCacheMisses === 0;
+        metrics.evidence.l1CacheFallbackDbTime =
+            aggregateStats.cacheFallbackDbTime;
+        metrics.evidence.l1CacheWarm =
+            aggregateStats.chunkCacheMisses === 0 &&
+            aggregateStats.vectorCacheMisses === 0;
         metrics.timing.runtimeScoreL1 = aggregateStats.runtimeScoreL1Ms;
         metrics.evidence.contextPairsAdded = contextPairsAdded;
         metrics.timing.evidenceRetrieval += Math.round(performance.now() - T0);
@@ -1121,7 +1377,9 @@ function finalizeRecallTiming(metrics, totalStart) {
     const timing = metrics.timing;
     timing.total = Math.round(performance.now() - totalStart);
 
-    const lexicalTotal = (metrics.lexical?.searchTime || 0) + (metrics.lexical?.indexReadyTime || 0);
+    const lexicalTotal =
+        (metrics.lexical?.searchTime || 0) +
+        (metrics.lexical?.indexReadyTime || 0);
     const externalTotal =
         (timing.round1Embed || 0) +
         (timing.round2Embed || 0) +
@@ -1144,7 +1402,12 @@ function finalizeRecallTiming(metrics, totalStart) {
 
     timing.externalTotal = Math.round(externalTotal);
     timing.localKnownTotal = Math.round(localKnownTotal);
-    timing.unattributed = Math.max(0, Math.round(timing.total - timing.externalTotal - timing.localKnownTotal));
+    timing.unattributed = Math.max(
+        0,
+        Math.round(
+            timing.total - timing.externalTotal - timing.localKnownTotal,
+        ),
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1171,7 +1434,7 @@ export async function recallMemory(allEvents, vectorConfig, options = {}) {
             focusCharacters: [],
             mustKeepFloors: [],
             elapsed: metrics.timing.total,
-            logText: 'No events.',
+            logText: "No events.",
             metrics,
         };
     }
@@ -1189,12 +1452,20 @@ export async function recallMemory(allEvents, vectorConfig, options = {}) {
     const lastMessagesCount = pendingUserMessage
         ? CONFIG.LAST_MESSAGES_K_WITH_PENDING
         : CONFIG.LAST_MESSAGES_K;
-    const lastMessages = getLastMessages(chat, lastMessagesCount, excludeLastAi);
+    const lastMessages = getLastMessages(
+        chat,
+        lastMessagesCount,
+        excludeLastAi,
+    );
 
     // Non-blocking preload: keep recall latency stable.
     // If not ready yet, query-builder will gracefully fall back to TF terms.
     getLexicalIndex().catch((e) => {
-        xbLog.warn(MODULE_ID, 'Preload lexical index failed; continue with TF fallback', e);
+        xbLog.warn(
+            MODULE_ID,
+            "Preload lexical index failed; continue with TF fallback",
+            e,
+        );
     });
 
     const bundle = buildQueryBundle(lastMessages, pendingUserMessage);
@@ -1207,30 +1478,39 @@ export async function recallMemory(allEvents, vectorConfig, options = {}) {
     metrics.anchor.focusCharacters = focusCharacters;
 
     if (metrics.query?.lengths) {
-        metrics.query.lengths.v0Chars = bundle.querySegments.reduce((sum, s) => sum + s.text.length, 0);
+        metrics.query.lengths.v0Chars = bundle.querySegments.reduce(
+            (sum, s) => sum + s.text.length,
+            0,
+        );
         metrics.query.lengths.v1Chars = null;
-        metrics.query.lengths.rerankChars = String(bundle.rerankQuery || '').length;
+        metrics.query.lengths.rerankChars = String(
+            bundle.rerankQuery || "",
+        ).length;
     }
 
-    xbLog.info(MODULE_ID,
-        `Query Build: focus_terms=[${focusTerms.join(',')}] focus_characters=[${focusCharacters.join(',')}] segments=${bundle.querySegments.length} lexTerms=[${bundle.lexicalTerms.slice(0, 5).join(',')}]`
+    xbLog.info(
+        MODULE_ID,
+        `Query Build: focus_terms=[${focusTerms.join(",")}] focus_characters=[${focusCharacters.join(",")}] segments=${bundle.querySegments.length} lexTerms=[${bundle.lexicalTerms.slice(0, 5).join(",")}]`,
     );
 
     // ═══════════════════════════════════════════════════════════════════
     // 阶段 2: Round 1 Dense Retrieval（batch embed → 加权平均）
     // ═══════════════════════════════════════════════════════════════════
 
-    const segmentTexts = bundle.querySegments.map(s => s.text);
+    const segmentTexts = bundle.querySegments.map((s) => s.text);
     if (!segmentTexts.length) {
         metrics.timing.total = Math.round(performance.now() - T0);
         return {
-            events: [], l0Selected: [], l1ByFloor: new Map(), causalChain: [],
+            events: [],
+            l0Selected: [],
+            l1ByFloor: new Map(),
+            causalChain: [],
             focusEntities: focusTerms,
             focusTerms,
             focusCharacters,
             mustKeepFloors: [],
             elapsed: metrics.timing.total,
-            logText: 'No query segments.',
+            logText: "No query segments.",
             metrics,
         };
     }
@@ -1240,39 +1520,51 @@ export async function recallMemory(allEvents, vectorConfig, options = {}) {
     try {
         r1Vectors = await embed(segmentTexts, vectorConfig, { timeout: 10000 });
     } catch (e1) {
-        xbLog.warn(MODULE_ID, 'Round 1 向量化失败，500ms 后重试', e1);
+        xbLog.warn(MODULE_ID, "Round 1 向量化失败，500ms 后重试", e1);
         metrics.timing.round1EmbedRetryWait = 500;
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 500));
         try {
-            r1Vectors = await embed(segmentTexts, vectorConfig, { timeout: 15000 });
+            r1Vectors = await embed(segmentTexts, vectorConfig, {
+                timeout: 15000,
+            });
         } catch (e2) {
-            xbLog.error(MODULE_ID, 'Round 1 向量化重试仍失败', e2);
-            metrics.timing.round1Embed = Math.round(performance.now() - T_R1_Embed_Start);
+            xbLog.error(MODULE_ID, "Round 1 向量化重试仍失败", e2);
+            metrics.timing.round1Embed = Math.round(
+                performance.now() - T_R1_Embed_Start,
+            );
             finalizeRecallTiming(metrics, T0);
             return {
-                events: [], l0Selected: [], l1ByFloor: new Map(), causalChain: [],
+                events: [],
+                l0Selected: [],
+                l1ByFloor: new Map(),
+                causalChain: [],
                 focusEntities: focusTerms,
                 focusTerms,
                 focusCharacters,
                 mustKeepFloors: [],
                 elapsed: metrics.timing.total,
-                logText: 'Embedding failed (round 1, after retry).',
+                logText: "Embedding failed (round 1, after retry).",
                 metrics,
             };
         }
     }
-    metrics.timing.round1Embed = Math.round(performance.now() - T_R1_Embed_Start);
+    metrics.timing.round1Embed = Math.round(
+        performance.now() - T_R1_Embed_Start,
+    );
 
-    if (!r1Vectors?.length || r1Vectors.some(v => !v?.length)) {
+    if (!r1Vectors?.length || r1Vectors.some((v) => !v?.length)) {
         finalizeRecallTiming(metrics, T0);
         return {
-            events: [], l0Selected: [], l1ByFloor: new Map(), causalChain: [],
+            events: [],
+            l0Selected: [],
+            l1ByFloor: new Map(),
+            causalChain: [],
             focusEntities: focusTerms,
             focusTerms,
             focusCharacters,
             mustKeepFloors: [],
             elapsed: metrics.timing.total,
-            logText: 'Empty query vectors (round 1).',
+            logText: "Empty query vectors (round 1).",
             metrics,
         };
     }
@@ -1281,19 +1573,24 @@ export async function recallMemory(allEvents, vectorConfig, options = {}) {
     const queryVector_v0 = weightedAverageVectors(r1Vectors, r1Weights);
 
     if (metrics) {
-        metrics.query.segmentWeights = r1Weights.map(w => Number(w.toFixed(3)));
+        metrics.query.segmentWeights = r1Weights.map((w) =>
+            Number(w.toFixed(3)),
+        );
     }
 
     if (!queryVector_v0?.length) {
         metrics.timing.total = Math.round(performance.now() - T0);
         return {
-            events: [], l0Selected: [], l1ByFloor: new Map(), causalChain: [],
+            events: [],
+            l0Selected: [],
+            l1ByFloor: new Map(),
+            causalChain: [],
             focusEntities: focusTerms,
             focusTerms,
             focusCharacters,
             mustKeepFloors: [],
             elapsed: metrics.timing.total,
-            logText: 'Weighted average produced empty vector.',
+            logText: "Weighted average produced empty vector.",
             metrics,
         };
     }
@@ -1301,364 +1598,507 @@ export async function recallMemory(allEvents, vectorConfig, options = {}) {
     let runtimeLease = null;
     const T_Runtime_Begin_Start = performance.now();
     if (chatId) {
-        runtimeLease = await beginRecallRuntimeSession(chatId, { reason: 'recallMemory' });
+        runtimeLease = await beginRecallRuntimeSession(chatId, {
+            reason: "recallMemory",
+        });
         snapshot.meta = await getRecallRuntimeMeta(chatId);
-        metrics.timing.runtimeLoadFromDB = runtimeLease?.stats?.timings?.loadFromDBMs ?? 0;
-        metrics.timing.runtimeBuildEntry = runtimeLease?.stats?.timings?.buildEntryMs ?? 0;
+        metrics.timing.runtimeLoadFromDB =
+            runtimeLease?.stats?.timings?.loadFromDBMs ?? 0;
+        metrics.timing.runtimeBuildEntry =
+            runtimeLease?.stats?.timings?.buildEntryMs ?? 0;
     }
-    metrics.timing.runtimeBeginSession = Math.round(performance.now() - T_Runtime_Begin_Start);
+    metrics.timing.runtimeBeginSession = Math.round(
+        performance.now() - T_Runtime_Begin_Start,
+    );
 
     try {
-    const T_R1_Anchor_Start = performance.now();
-    const { hits: anchorHits_v0 } = await recallAnchors(queryVector_v0, vectorConfig, null, snapshot);
-    const r1AnchorTime = Math.round(performance.now() - T_R1_Anchor_Start);
-    metrics.timing.round1AnchorSearch = r1AnchorTime;
+        const T_R1_Anchor_Start = performance.now();
+        const { hits: anchorHits_v0 } = await recallAnchors(
+            queryVector_v0,
+            vectorConfig,
+            null,
+            snapshot,
+        );
+        const r1AnchorTime = Math.round(performance.now() - T_R1_Anchor_Start);
+        metrics.timing.round1AnchorSearch = r1AnchorTime;
 
-    const T_R1_Event_Start = performance.now();
-    const { events: eventHits_v0 } = await recallEvents(queryVector_v0, allEvents, vectorConfig, focusCharacters, null, snapshot);
-    const r1EventTime = Math.round(performance.now() - T_R1_Event_Start);
-    metrics.timing.round1EventRetrieval = r1EventTime;
+        const T_R1_Event_Start = performance.now();
+        const { events: eventHits_v0 } = await recallEvents(
+            queryVector_v0,
+            allEvents,
+            vectorConfig,
+            focusCharacters,
+            null,
+            snapshot,
+        );
+        const r1EventTime = Math.round(performance.now() - T_R1_Event_Start);
+        metrics.timing.round1EventRetrieval = r1EventTime;
 
-    xbLog.info(MODULE_ID,
-        `Round 1: anchors=${anchorHits_v0.length} events=${eventHits_v0.length} weights=[${r1Weights.map(w => w.toFixed(2)).join(',')}] (anchor=${r1AnchorTime}ms event=${r1EventTime}ms)`
-    );
+        xbLog.info(
+            MODULE_ID,
+            `Round 1: anchors=${anchorHits_v0.length} events=${eventHits_v0.length} weights=[${r1Weights.map((w) => w.toFixed(2)).join(",")}] (anchor=${r1AnchorTime}ms event=${r1EventTime}ms)`,
+        );
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 阶段 3: Query Refinement
-    // ═══════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════
+        // 阶段 3: Query Refinement
+        // ═══════════════════════════════════════════════════════════════════
 
-    const T_Refine_Start = performance.now();
+        const T_Refine_Start = performance.now();
 
-    refineQueryBundle(bundle, anchorHits_v0, eventHits_v0);
+        refineQueryBundle(bundle, anchorHits_v0, eventHits_v0);
 
-    metrics.query.refineTime = Math.round(performance.now() - T_Refine_Start);
+        metrics.query.refineTime = Math.round(
+            performance.now() - T_Refine_Start,
+        );
 
-    if (metrics.query?.lengths && bundle.hintsSegment) {
-        metrics.query.lengths.v1Chars = metrics.query.lengths.v0Chars + bundle.hintsSegment.text.length;
-    }
+        if (metrics.query?.lengths && bundle.hintsSegment) {
+            metrics.query.lengths.v1Chars =
+                metrics.query.lengths.v0Chars + bundle.hintsSegment.text.length;
+        }
 
-    xbLog.info(MODULE_ID,
-        `Refinement: focus_terms=[${focusTerms.join(',')}] focus_characters=[${focusCharacters.join(',')}] hasHints=${!!bundle.hintsSegment} (${metrics.query.refineTime}ms)`
-    );
+        xbLog.info(
+            MODULE_ID,
+            `Refinement: focus_terms=[${focusTerms.join(",")}] focus_characters=[${focusCharacters.join(",")}] hasHints=${!!bundle.hintsSegment} (${metrics.query.refineTime}ms)`,
+        );
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 阶段 4: Round 2 Dense Retrieval（复用 R1 向量 + embed hints）
-    // ═══════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════
+        // 阶段 4: Round 2 Dense Retrieval（复用 R1 向量 + embed hints）
+        // ═══════════════════════════════════════════════════════════════════
 
-    let queryVector_v1;
+        let queryVector_v1;
 
-    if (bundle.hintsSegment) {
-        const T_R2_Embed_Start = performance.now();
-        try {
-            const [hintsVec] = await embed([bundle.hintsSegment.text], vectorConfig, { timeout: 10000 });
-            metrics.timing.round2Embed = Math.round(performance.now() - T_R2_Embed_Start);
-
-            if (hintsVec?.length) {
-                const r2Weights = computeR2Weights(bundle.querySegments, bundle.hintsSegment);
-                queryVector_v1 = weightedAverageVectors([...r1Vectors, hintsVec], r2Weights);
-
-                if (metrics) {
-                    metrics.query.r2Weights = r2Weights.map(w => Number(w.toFixed(3)));
-                }
-
-                xbLog.info(MODULE_ID,
-                    `Round 2 weights: [${r2Weights.map(w => w.toFixed(2)).join(',')}]`
+        if (bundle.hintsSegment) {
+            const T_R2_Embed_Start = performance.now();
+            try {
+                const [hintsVec] = await embed(
+                    [bundle.hintsSegment.text],
+                    vectorConfig,
+                    { timeout: 10000 },
                 );
-            } else {
+                metrics.timing.round2Embed = Math.round(
+                    performance.now() - T_R2_Embed_Start,
+                );
+
+                if (hintsVec?.length) {
+                    const r2Weights = computeR2Weights(
+                        bundle.querySegments,
+                        bundle.hintsSegment,
+                    );
+                    queryVector_v1 = weightedAverageVectors(
+                        [...r1Vectors, hintsVec],
+                        r2Weights,
+                    );
+
+                    if (metrics) {
+                        metrics.query.r2Weights = r2Weights.map((w) =>
+                            Number(w.toFixed(3)),
+                        );
+                    }
+
+                    xbLog.info(
+                        MODULE_ID,
+                        `Round 2 weights: [${r2Weights.map((w) => w.toFixed(2)).join(",")}]`,
+                    );
+                } else {
+                    queryVector_v1 = queryVector_v0;
+                }
+            } catch (e) {
+                metrics.timing.round2Embed = Math.round(
+                    performance.now() - T_R2_Embed_Start,
+                );
+                xbLog.warn(
+                    MODULE_ID,
+                    "Round 2 hints 向量化失败，降级使用 Round 1 向量",
+                    e,
+                );
                 queryVector_v1 = queryVector_v0;
             }
-        } catch (e) {
-            metrics.timing.round2Embed = Math.round(performance.now() - T_R2_Embed_Start);
-            xbLog.warn(MODULE_ID, 'Round 2 hints 向量化失败，降级使用 Round 1 向量', e);
+        } else {
             queryVector_v1 = queryVector_v0;
         }
-    } else {
-        queryVector_v1 = queryVector_v0;
-    }
 
-    const T_R2_Anchor_Start = performance.now();
-    const { hits: anchorHits, floors: anchorFloors_dense } = await recallAnchors(queryVector_v1, vectorConfig, metrics, snapshot);
-    metrics.timing.anchorSearch = Math.round(performance.now() - T_R2_Anchor_Start);
+        const T_R2_Anchor_Start = performance.now();
+        const { hits: anchorHits, floors: anchorFloors_dense } =
+            await recallAnchors(
+                queryVector_v1,
+                vectorConfig,
+                metrics,
+                snapshot,
+            );
+        metrics.timing.anchorSearch = Math.round(
+            performance.now() - T_R2_Anchor_Start,
+        );
 
-    const T_R2_Event_Start = performance.now();
-    let { events: eventHits, scoreMap: eventScoreMap } = await recallEvents(queryVector_v1, allEvents, vectorConfig, focusCharacters, metrics, snapshot);
-    metrics.timing.eventRetrieval = Math.round(performance.now() - T_R2_Event_Start);
+        const T_R2_Event_Start = performance.now();
+        let { events: eventHits, scoreMap: eventScoreMap } = await recallEvents(
+            queryVector_v1,
+            allEvents,
+            vectorConfig,
+            focusCharacters,
+            metrics,
+            snapshot,
+        );
+        metrics.timing.eventRetrieval = Math.round(
+            performance.now() - T_R2_Event_Start,
+        );
 
-    xbLog.info(MODULE_ID,
-        `Round 2: anchors=${anchorHits.length} floors=${anchorFloors_dense.size} events=${eventHits.length}`
-    );
+        xbLog.info(
+            MODULE_ID,
+            `Round 2: anchors=${anchorHits.length} floors=${anchorFloors_dense.size} events=${eventHits.length}`,
+        );
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 阶段 5: Lexical Retrieval + Dense-Gated Event Merge
-    // ═══════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════
+        // 阶段 5: Lexical Retrieval + Dense-Gated Event Merge
+        // ═══════════════════════════════════════════════════════════════════
 
-    const T_Lex_Start = performance.now();
+        const T_Lex_Start = performance.now();
 
-    let lexicalResult = {
-        atomIds: [], atomFloors: new Set(),
-        chunkIds: [], chunkFloors: new Set(),
-        eventIds: [], chunkScores: [], searchTime: 0,
-        idfEnabled: false, idfDocCount: 0, topIdfTerms: [], termSearches: 0,
-        queryTerms: [],
-        termFloorHits: {},
-        floorLexScores: [],
-    };
+        let lexicalResult = {
+            atomIds: [],
+            atomFloors: new Set(),
+            chunkIds: [],
+            chunkFloors: new Set(),
+            eventIds: [],
+            chunkScores: [],
+            searchTime: 0,
+            idfEnabled: false,
+            idfDocCount: 0,
+            topIdfTerms: [],
+            termSearches: 0,
+            queryTerms: [],
+            termFloorHits: {},
+            floorLexScores: [],
+        };
 
-    let indexReadyTime = 0;
-    try {
-        const T_Index_Ready = performance.now();
-        const index = await getLexicalIndex();
-        indexReadyTime = Math.round(performance.now() - T_Index_Ready);
-        if (index) {
-            lexicalResult = await searchLexicalIndex(index, bundle.lexicalTerms);
-        }
-    } catch (e) {
-        xbLog.warn(MODULE_ID, 'Lexical 检索失败', e);
-    }
-
-    const lexTime = Math.round(performance.now() - T_Lex_Start);
-
-    if (metrics) {
-        metrics.lexical.atomHits = lexicalResult.atomIds.length;
-        metrics.lexical.chunkHits = lexicalResult.chunkIds.length;
-        metrics.lexical.eventHits = lexicalResult.eventIds.length;
-        metrics.lexical.searchTime = lexicalResult.searchTime || 0;
-        metrics.lexical.indexReadyTime = indexReadyTime;
-        metrics.lexical.terms = bundle.lexicalTerms.slice(0, 10);
-        metrics.lexical.idfEnabled = !!lexicalResult.idfEnabled;
-        metrics.lexical.idfDocCount = lexicalResult.idfDocCount || 0;
-        metrics.lexical.topIdfTerms = lexicalResult.topIdfTerms || [];
-        metrics.lexical.termSearches = lexicalResult.termSearches || 0;
-    }
-
-    // 合并 L2 events（lexical 命中但 dense 未命中的 events）
-    // ★ Dense 门槛：验证 event 向量与 queryVector_v1 的 cosine similarity
-    const existingEventIds = new Set(eventHits.map(e => e.event?.id).filter(Boolean));
-    const eventIndex = buildEventIndex(allEvents);
-    let lexicalEventCount = 0;
-    let lexicalEventFilteredByDense = 0;
-    let l0LinkedCount = 0;
-    const focusSetForLexical = new Set((focusCharacters || []).map(normalize));
-
-    for (const eid of lexicalResult.eventIds) {
-        if (existingEventIds.has(eid)) continue;
-
-        const ev = eventIndex.get(eid);
-        if (!ev) continue;
-
-        // Dense gate: 验证 event 向量与 query 的语义相关性
-        const sim = eventScoreMap.get(eid) ?? 0;
-        if (!sim) {
-            // 无向量无法验证相关性，丢弃
-            lexicalEventFilteredByDense++;
-            continue;
+        let indexReadyTime = 0;
+        try {
+            const T_Index_Ready = performance.now();
+            const index = await getLexicalIndex();
+            indexReadyTime = Math.round(performance.now() - T_Index_Ready);
+            if (index) {
+                lexicalResult = await searchLexicalIndex(
+                    index,
+                    bundle.lexicalTerms,
+                );
+            }
+        } catch (e) {
+            xbLog.warn(MODULE_ID, "Lexical 检索失败", e);
         }
 
-        if (sim < CONFIG.LEXICAL_EVENT_DENSE_MIN) {
-            lexicalEventFilteredByDense++;
-            continue;
+        const lexTime = Math.round(performance.now() - T_Lex_Start);
+
+        if (metrics) {
+            metrics.lexical.atomHits = lexicalResult.atomIds.length;
+            metrics.lexical.chunkHits = lexicalResult.chunkIds.length;
+            metrics.lexical.eventHits = lexicalResult.eventIds.length;
+            metrics.lexical.searchTime = lexicalResult.searchTime || 0;
+            metrics.lexical.indexReadyTime = indexReadyTime;
+            metrics.lexical.terms = bundle.lexicalTerms.slice(0, 10);
+            metrics.lexical.idfEnabled = !!lexicalResult.idfEnabled;
+            metrics.lexical.idfDocCount = lexicalResult.idfDocCount || 0;
+            metrics.lexical.topIdfTerms = lexicalResult.topIdfTerms || [];
+            metrics.lexical.termSearches = lexicalResult.termSearches || 0;
         }
 
-        // 实体分类：与 Dense 路径统一标准
-        const participants = (ev.participants || []).map(p => normalize(p));
-        const hasEntityMatch = focusSetForLexical.size > 0 && participants.some(p => focusSetForLexical.has(p));
+        // 合并 L2 events（lexical 命中但 dense 未命中的 events）
+        // ★ Dense 门槛：验证 event 向量与 queryVector_v1 的 cosine similarity
+        const existingEventIds = new Set(
+            eventHits.map((e) => e.event?.id).filter(Boolean),
+        );
+        const eventIndex = buildEventIndex(allEvents);
+        let lexicalEventCount = 0;
+        let lexicalEventFilteredByDense = 0;
+        let l0LinkedCount = 0;
+        const focusSetForLexical = new Set(
+            (focusCharacters || []).map(normalize),
+        );
 
-        eventHits.push({
-            event: ev,
-            similarity: sim,
-            _recallType: hasEntityMatch ? 'DIRECT' : 'RELATED',
-        });
-        existingEventIds.add(eid);
-        lexicalEventCount++;
-    }
+        for (const eid of lexicalResult.eventIds) {
+            if (existingEventIds.has(eid)) continue;
 
-    if (metrics) {
-        metrics.lexical.eventFilteredByDense = lexicalEventFilteredByDense;
+            const ev = eventIndex.get(eid);
+            if (!ev) continue;
 
-        if (lexicalEventCount > 0) {
-            metrics.event.byRecallType.lexical = lexicalEventCount;
-            metrics.event.selected += lexicalEventCount;
+            // Dense gate: 验证 event 向量与 query 的语义相关性
+            const sim = eventScoreMap.get(eid) ?? 0;
+            if (!sim) {
+                // 无向量无法验证相关性，丢弃
+                lexicalEventFilteredByDense++;
+                continue;
+            }
+
+            if (sim < CONFIG.LEXICAL_EVENT_DENSE_MIN) {
+                lexicalEventFilteredByDense++;
+                continue;
+            }
+
+            // 实体分类：与 Dense 路径统一标准
+            const participants = (ev.participants || []).map((p) =>
+                normalize(p),
+            );
+            const hasEntityMatch =
+                focusSetForLexical.size > 0 &&
+                participants.some((p) => focusSetForLexical.has(p));
+
+            eventHits.push({
+                event: ev,
+                similarity: sim,
+                _recallType: hasEntityMatch ? "DIRECT" : "RELATED",
+            });
+            existingEventIds.add(eid);
+            lexicalEventCount++;
         }
-    }
 
-    xbLog.info(MODULE_ID,
-        `Lexical: chunks=${lexicalResult.chunkIds.length} events=${lexicalResult.eventIds.length} mergedEvents=+${lexicalEventCount} filteredByDense=${lexicalEventFilteredByDense} floorFiltered=${metrics.lexical.floorFilteredByDense || 0} idfEnabled=${lexicalResult.idfEnabled ? 'yes' : 'no'} idfDocs=${lexicalResult.idfDocCount || 0} termSearches=${lexicalResult.termSearches || 0} (indexReady=${indexReadyTime}ms search=${lexicalResult.searchTime || 0}ms total=${lexTime}ms)`
-    );
+        if (metrics) {
+            metrics.lexical.eventFilteredByDense = lexicalEventFilteredByDense;
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 阶段 6: Floor 粒度融合 + Rerank + L1 配对
-    // ═══════════════════════════════════════════════════════════════════
-
-    const { l0Selected, l1ScoredByFloor, mustKeepFloors } = await locateAndPullEvidence(
-        anchorHits,
-        queryVector_v1,
-        bundle.rerankQuery,
-        lexicalResult,
-        bundle.lexicalTerms,
-        metrics
-    );
-
-    // ═══════════════════════════════════════════════════════════════════
-    // Stage 7.5: PPR Diffusion Activation
-    //
-    // Spread from reranked seeds through entity co-occurrence graph.
-    // Diffused atoms merge into l0Selected at lower scores than seeds,
-    // consumed by prompt.js through the same budget pipeline.
-    // ═══════════════════════════════════════════════════════════════════
-
-    const diffusionResult = await diffuseRecallRuntimeL0(
-        chatId,
-        l0Selected,          // seeds (rerank-verified)
-        getStateAtoms(),     // all L0 atoms; vectors stay in runtime
-        queryVector_v1,      // R2 query vector (for cosine gate)
-        { name1 },
-    );
-    const diffused = diffusionResult?.diffused || [];
-    metrics.diffusion = {
-        ...(metrics.diffusion || {}),
-        ...(diffusionResult?.metrics || {}),
-    };
-    metrics.timing.runtimeDiffuseL0 = metrics.diffusion?.time || metrics.timing.diffusion || 0;
-
-    for (const da of diffused) {
-        l0Selected.push({
-            id: `diffused-${da.atomId}`,
-            atomId: da.atomId,
-            floor: da.floor,
-            similarity: da.finalScore,
-            rerankScore: da.finalScore,
-            atom: da.atom,
-            text: da.atom.semantic || '',
-        });
-    }
-    metrics.timing.diffusion = metrics.diffusion?.time || 0;
-
-    // ═══════════════════════════════════════════════════════════════════
-    // Stage 8: L0 → L2 反向查找（后置，基于最终 l0Selected）
-    // ═══════════════════════════════════════════════════════════════════
-
-    const recalledL0Floors = new Set(l0Selected.map(x => x.floor));
-
-    for (const event of allEvents) {
-        if (existingEventIds.has(event.id)) continue;
-
-        const range = parseFloorRange(event.summary);
-        if (!range) continue;
-
-        let hasOverlap = false;
-        for (const floor of recalledL0Floors) {
-            if (floor >= range.start && floor <= range.end) {
-                hasOverlap = true;
-                break;
+            if (lexicalEventCount > 0) {
+                metrics.event.byRecallType.lexical = lexicalEventCount;
+                metrics.event.selected += lexicalEventCount;
             }
         }
-        if (!hasOverlap) continue;
 
-        // Dense similarity 门槛（与 Lexical Event 对齐）
-        const sim = eventScoreMap.get(event.id) ?? 0;
-        if (sim < CONFIG.LEXICAL_EVENT_DENSE_MIN) continue;
+        xbLog.info(
+            MODULE_ID,
+            `Lexical: chunks=${lexicalResult.chunkIds.length} events=${lexicalResult.eventIds.length} mergedEvents=+${lexicalEventCount} filteredByDense=${lexicalEventFilteredByDense} floorFiltered=${metrics.lexical.floorFilteredByDense || 0} idfEnabled=${lexicalResult.idfEnabled ? "yes" : "no"} idfDocs=${lexicalResult.idfDocCount || 0} termSearches=${lexicalResult.termSearches || 0} (indexReady=${indexReadyTime}ms search=${lexicalResult.searchTime || 0}ms total=${lexTime}ms)`,
+        );
 
-        // 实体分类：与所有路径统一标准
-        const participants = (event.participants || []).map(p => normalize(p));
-        const hasEntityMatch = focusSetForLexical.size > 0
-            && participants.some(p => focusSetForLexical.has(p));
+        // ═══════════════════════════════════════════════════════════════════
+        // 阶段 6: Floor 粒度融合 + Rerank + L1 配对
+        // ═══════════════════════════════════════════════════════════════════
 
-        eventHits.push({
-            event,
-            similarity: sim,
-            _recallType: hasEntityMatch ? 'DIRECT' : 'RELATED',
-        });
-        existingEventIds.add(event.id);
-        l0LinkedCount++;
-    }
+        const { l0Selected, l1ScoredByFloor, mustKeepFloors } =
+            await locateAndPullEvidence(
+                anchorHits,
+                queryVector_v1,
+                bundle.rerankQuery,
+                lexicalResult,
+                bundle.lexicalTerms,
+                metrics,
+            );
 
-    if (metrics && l0LinkedCount > 0) {
-        metrics.event.byRecallType.l0Linked = l0LinkedCount;
-        metrics.event.selected += l0LinkedCount;
-    }
+        // ═══════════════════════════════════════════════════════════════════
+        // Stage 7.5: PPR Diffusion Activation
+        //
+        // Spread from reranked seeds through entity co-occurrence graph.
+        // Diffused atoms merge into l0Selected at lower scores than seeds,
+        // consumed by prompt.js through the same budget pipeline.
+        // ═══════════════════════════════════════════════════════════════════
 
-    xbLog.info(MODULE_ID,
-        `L0-linked events: ${recalledL0Floors.size} floors → ${l0LinkedCount} events linked (sim≥${CONFIG.LEXICAL_EVENT_DENSE_MIN})`
-    );
+        const diffusionResult = await diffuseRecallRuntimeL0(
+            chatId,
+            l0Selected, // seeds (rerank-verified)
+            getStateAtoms(), // all L0 atoms; vectors stay in runtime
+            queryVector_v1, // R2 query vector (for cosine gate)
+            { name1 },
+        );
+        const diffused = diffusionResult?.diffused || [];
+        metrics.diffusion = {
+            ...(metrics.diffusion || {}),
+            ...(diffusionResult?.metrics || {}),
+        };
+        metrics.timing.runtimeDiffuseL0 =
+            metrics.diffusion?.time || metrics.timing.diffusion || 0;
 
-    const l1ByFloor = await buildL1PairsForSelectedFloors(
-        l0Selected,
-        queryVector_v1,
-        l1ScoredByFloor,
-        metrics
-    );
+        for (const da of diffused) {
+            l0Selected.push({
+                id: `diffused-${da.atomId}`,
+                atomId: da.atomId,
+                floor: da.floor,
+                similarity: da.finalScore,
+                rerankScore: da.finalScore,
+                atom: da.atom,
+                text: da.atom.semantic || "",
+            });
+        }
+        metrics.timing.diffusion = metrics.diffusion?.time || 0;
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 阶段 9: Causation Trace
-    // ═══════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════
+        // Stage 8: L0 → L2 反向查找（后置，基于最终 l0Selected）
+        // ═══════════════════════════════════════════════════════════════════
 
-    const { results: causalMap, maxDepth: causalMaxDepth } = traceCausation(eventHits, eventIndex);
+        const recalledL0Floors = new Set(l0Selected.map((x) => x.floor));
 
-    const recalledIdSet = new Set(eventHits.map(x => x?.event?.id).filter(Boolean));
-    const causalChain = causalMap
-        .filter(x => x?.event?.id && !recalledIdSet.has(x.event.id))
-        .map(x => ({
-            event: x.event,
-            similarity: 0,
-            _recallType: 'CAUSAL',
-            _causalDepth: x.depth,
-            chainFrom: x.chainFrom,
-        }));
+        for (const event of allEvents) {
+            if (existingEventIds.has(event.id)) continue;
 
-    if (metrics.event.byRecallType) {
-        metrics.event.byRecallType.causal = causalChain.length;
-    }
-    metrics.event.causalChainDepth = causalMaxDepth;
-    metrics.event.causalCount = causalChain.length;
+            const range = parseFloorRange(event.summary);
+            if (!range) continue;
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 完成
-    // ═══════════════════════════════════════════════════════════════════
+            let hasOverlap = false;
+            for (const floor of recalledL0Floors) {
+                if (floor >= range.start && floor <= range.end) {
+                    hasOverlap = true;
+                    break;
+                }
+            }
+            if (!hasOverlap) continue;
 
-    finalizeRecallTiming(metrics, T0);
-    metrics.event.entityNames = focusCharacters;
-    metrics.event.entitiesUsed = focusCharacters.length;
-    metrics.event.focusTermsCount = focusTerms.length;
+            // Dense similarity 门槛（与 Lexical Event 对齐）
+            const sim = eventScoreMap.get(event.id) ?? 0;
+            if (sim < CONFIG.LEXICAL_EVENT_DENSE_MIN) continue;
 
-    if (xbLog.isEnabled()) {
-        xbLog.info(MODULE_ID, `[Recall v9] Total: ${metrics.timing.total}ms`);
-        xbLog.info(MODULE_ID, `[Recall v9] Timing attribution: external=${metrics.timing.externalTotal || 0}ms localKnown=${metrics.timing.localKnownTotal || 0}ms unattributed=${metrics.timing.unattributed || 0}ms | r1Embed=${metrics.timing.round1Embed || 0}ms r2Embed=${metrics.timing.round2Embed || 0}ms rerank=${metrics.timing.evidenceRerank || 0}ms`);
-        xbLog.info(MODULE_ID, `[Recall v9] Query Build: ${metrics.query.buildTime}ms | Refine: ${metrics.query.refineTime}ms`);
-        xbLog.info(MODULE_ID, `[Recall v9] R1 weights: [${r1Weights.map(w => w.toFixed(2)).join(', ')}]`);
-        xbLog.info(MODULE_ID, `[Recall v9] Focus terms: [${focusTerms.join(', ')}]`);
-        xbLog.info(MODULE_ID, `[Recall v9] Focus characters: [${focusCharacters.join(', ')}]`);
-        xbLog.info(MODULE_ID, `[Recall v9] Round 2 Anchors: ${anchorHits.length} hits -> ${anchorFloors_dense.size} floors`);
-        xbLog.info(MODULE_ID, `[Recall v9] Lexical: chunks=${lexicalResult.chunkIds.length} events=${lexicalResult.eventIds.length} evtMerged=+${lexicalEventCount} evtFiltered=${lexicalEventFilteredByDense} floorFiltered=${metrics.lexical.floorFilteredByDense || 0} (idx=${indexReadyTime}ms search=${lexicalResult.searchTime || 0}ms total=${lexTime}ms)`);
-        xbLog.info(MODULE_ID, `[Recall v9] Fusion (floor, weighted): dense=${metrics.fusion.denseFloors} lex=${metrics.fusion.lexFloors} -> cap=${metrics.fusion.afterCap} (${metrics.fusion.time}ms)`);
-        xbLog.info(MODULE_ID, `[Recall v9] Fusion Guard: mustKeepTerms=${metrics.evidence.mustKeepTermsCount || 0} mustKeepFloors=[${(metrics.evidence.mustKeepFloors || []).join(', ')}]`);
-        xbLog.info(MODULE_ID, `[Recall v9] Floor Rerank: ${metrics.evidence.beforeRerank || 0} -> ${metrics.evidence.floorsSelected || 0} floors -> L0=${metrics.evidence.l0Collected || 0} (${metrics.evidence.rerankTime || 0}ms)`);
-        xbLog.info(MODULE_ID, `[Recall v9] L1: prefetchedAI=${metrics.evidence.l1PrefetchAiFloors || 0} totalFloors=${metrics.evidence.l1PrefetchWithContextFloors || 0} trimmed=${metrics.evidence.l1PrefetchTrimmed || 0} | ${metrics.evidence.l1Pulled || 0} pulled -> ${metrics.evidence.l1Attached || 0} attached (${metrics.evidence.l1CosineTime || 0}ms)`);
-        xbLog.info(MODULE_ID, `[Recall v9] L1 breakdown: chunkDB=${metrics.evidence.l1ChunkFetchTime || 0}ms vectorDB=${metrics.evidence.l1VectorFetchTime || 0}ms cacheWarm=${!!metrics.evidence.l1CacheWarm} chunkCache=${metrics.evidence.l1ChunkCacheHits || 0}/${metrics.evidence.l1ChunkCacheMisses || 0} vectorCache=${metrics.evidence.l1VectorCacheHits || 0}/${metrics.evidence.l1VectorCacheMisses || 0} deserialize=${metrics.evidence.l1DeserializeTime || 0}ms score=${metrics.evidence.l1ScoreTime || 0}ms sort=${metrics.evidence.l1SortTime || 0}ms vectors=${metrics.evidence.l1VectorHits || 0} missing=${metrics.evidence.l1MissingVectors || 0}`);
-        xbLog.info(MODULE_ID, `[Recall v9] Events: ${eventHits.length} hits (l0Linked=+${l0LinkedCount}), ${causalChain.length} causal`);
-        xbLog.info(MODULE_ID, `[Recall v9] Diffusion: ${metrics.diffusion?.seedCount || 0} seeds -> ${metrics.diffusion?.pprActivated || 0} activated -> ${metrics.diffusion?.finalCount || 0} final (${metrics.diffusion?.time || 0}ms | graph=${metrics.diffusion?.buildTime || 0}ms ppr=${metrics.diffusion?.pprTime || 0}ms post=${metrics.diffusion?.postVerifyTime || 0}ms)`);
-    }
+            // 实体分类：与所有路径统一标准
+            const participants = (event.participants || []).map((p) =>
+                normalize(p),
+            );
+            const hasEntityMatch =
+                focusSetForLexical.size > 0 &&
+                participants.some((p) => focusSetForLexical.has(p));
 
-    return {
-        events: eventHits,
-        causalChain,
-        l0Selected,
-        l1ByFloor,
-        focusEntities: focusTerms,
-        focusTerms,
-        focusCharacters,
-        mustKeepFloors: mustKeepFloors || [],
-        elapsed: metrics.timing.total,
-        metrics,
-    };
+            eventHits.push({
+                event,
+                similarity: sim,
+                _recallType: hasEntityMatch ? "DIRECT" : "RELATED",
+            });
+            existingEventIds.add(event.id);
+            l0LinkedCount++;
+        }
+
+        if (metrics && l0LinkedCount > 0) {
+            metrics.event.byRecallType.l0Linked = l0LinkedCount;
+            metrics.event.selected += l0LinkedCount;
+        }
+
+        xbLog.info(
+            MODULE_ID,
+            `L0-linked events: ${recalledL0Floors.size} floors → ${l0LinkedCount} events linked (sim≥${CONFIG.LEXICAL_EVENT_DENSE_MIN})`,
+        );
+
+        const l1ByFloor = await buildL1PairsForSelectedFloors(
+            l0Selected,
+            queryVector_v1,
+            l1ScoredByFloor,
+            metrics,
+        );
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 阶段 9: Causation Trace
+        // ═══════════════════════════════════════════════════════════════════
+
+        const { results: causalMap, maxDepth: causalMaxDepth } = traceCausation(
+            eventHits,
+            eventIndex,
+        );
+
+        const recalledIdSet = new Set(
+            eventHits.map((x) => x?.event?.id).filter(Boolean),
+        );
+        const causalChain = causalMap
+            .filter((x) => x?.event?.id && !recalledIdSet.has(x.event.id))
+            .map((x) => ({
+                event: x.event,
+                similarity: 0,
+                _recallType: "CAUSAL",
+                _causalDepth: x.depth,
+                chainFrom: x.chainFrom,
+            }));
+
+        if (metrics.event.byRecallType) {
+            metrics.event.byRecallType.causal = causalChain.length;
+        }
+        metrics.event.causalChainDepth = causalMaxDepth;
+        metrics.event.causalCount = causalChain.length;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 完成
+        // ═══════════════════════════════════════════════════════════════════
+
+        finalizeRecallTiming(metrics, T0);
+        metrics.event.entityNames = focusCharacters;
+        metrics.event.entitiesUsed = focusCharacters.length;
+        metrics.event.focusTermsCount = focusTerms.length;
+
+        if (xbLog.isEnabled()) {
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] Total: ${metrics.timing.total}ms`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] Timing attribution: external=${metrics.timing.externalTotal || 0}ms localKnown=${metrics.timing.localKnownTotal || 0}ms unattributed=${metrics.timing.unattributed || 0}ms | r1Embed=${metrics.timing.round1Embed || 0}ms r2Embed=${metrics.timing.round2Embed || 0}ms rerank=${metrics.timing.evidenceRerank || 0}ms`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] Query Build: ${metrics.query.buildTime}ms | Refine: ${metrics.query.refineTime}ms`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] R1 weights: [${r1Weights.map((w) => w.toFixed(2)).join(", ")}]`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] Focus terms: [${focusTerms.join(", ")}]`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] Focus characters: [${focusCharacters.join(", ")}]`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] Round 2 Anchors: ${anchorHits.length} hits -> ${anchorFloors_dense.size} floors`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] Lexical: chunks=${lexicalResult.chunkIds.length} events=${lexicalResult.eventIds.length} evtMerged=+${lexicalEventCount} evtFiltered=${lexicalEventFilteredByDense} floorFiltered=${metrics.lexical.floorFilteredByDense || 0} (idx=${indexReadyTime}ms search=${lexicalResult.searchTime || 0}ms total=${lexTime}ms)`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] Fusion (floor, weighted): dense=${metrics.fusion.denseFloors} lex=${metrics.fusion.lexFloors} -> cap=${metrics.fusion.afterCap} (${metrics.fusion.time}ms)`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] Fusion Guard: mustKeepTerms=${metrics.evidence.mustKeepTermsCount || 0} mustKeepFloors=[${(metrics.evidence.mustKeepFloors || []).join(", ")}]`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] Floor Rerank: ${metrics.evidence.beforeRerank || 0} -> ${metrics.evidence.floorsSelected || 0} floors -> L0=${metrics.evidence.l0Collected || 0} (${metrics.evidence.rerankTime || 0}ms)`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] L1: prefetchedAI=${metrics.evidence.l1PrefetchAiFloors || 0} totalFloors=${metrics.evidence.l1PrefetchWithContextFloors || 0} trimmed=${metrics.evidence.l1PrefetchTrimmed || 0} | ${metrics.evidence.l1Pulled || 0} pulled -> ${metrics.evidence.l1Attached || 0} attached (${metrics.evidence.l1CosineTime || 0}ms)`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] L1 breakdown: chunkDB=${metrics.evidence.l1ChunkFetchTime || 0}ms vectorDB=${metrics.evidence.l1VectorFetchTime || 0}ms cacheWarm=${!!metrics.evidence.l1CacheWarm} chunkCache=${metrics.evidence.l1ChunkCacheHits || 0}/${metrics.evidence.l1ChunkCacheMisses || 0} vectorCache=${metrics.evidence.l1VectorCacheHits || 0}/${metrics.evidence.l1VectorCacheMisses || 0} deserialize=${metrics.evidence.l1DeserializeTime || 0}ms score=${metrics.evidence.l1ScoreTime || 0}ms sort=${metrics.evidence.l1SortTime || 0}ms vectors=${metrics.evidence.l1VectorHits || 0} missing=${metrics.evidence.l1MissingVectors || 0}`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] Events: ${eventHits.length} hits (l0Linked=+${l0LinkedCount}), ${causalChain.length} causal`,
+            );
+            xbLog.info(
+                MODULE_ID,
+                `[Recall v9] Diffusion: ${metrics.diffusion?.seedCount || 0} seeds -> ${metrics.diffusion?.pprActivated || 0} activated -> ${metrics.diffusion?.finalCount || 0} final (${metrics.diffusion?.time || 0}ms | graph=${metrics.diffusion?.buildTime || 0}ms ppr=${metrics.diffusion?.pprTime || 0}ms post=${metrics.diffusion?.postVerifyTime || 0}ms)`,
+            );
+        }
+
+        return {
+            events: eventHits,
+            causalChain,
+            l0Selected,
+            l1ByFloor,
+            focusEntities: focusTerms,
+            focusTerms,
+            focusCharacters,
+            mustKeepFloors: mustKeepFloors || [],
+            elapsed: metrics.timing.total,
+            metrics,
+        };
     } finally {
         if (runtimeLease) {
             const T_Runtime_End_Start = performance.now();
             try {
                 await endRecallRuntimeSession(runtimeLease);
             } catch (error) {
-                xbLog.warn(MODULE_ID, 'Recall runtime session release failed', error);
+                xbLog.warn(
+                    MODULE_ID,
+                    "Recall runtime session release failed",
+                    error,
+                );
             }
-            metrics.timing.runtimeEndSession = Math.round(performance.now() - T_Runtime_End_Start);
+            metrics.timing.runtimeEndSession = Math.round(
+                performance.now() - T_Runtime_End_Start,
+            );
         }
     }
 }

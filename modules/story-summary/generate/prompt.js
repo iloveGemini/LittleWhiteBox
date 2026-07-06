@@ -58,6 +58,21 @@ const RELATED_EVENT_MAX = 2000;
 const SUMMARIZED_EVIDENCE_MAX = 2000;
 const UNSUMMARIZED_EVIDENCE_MAX = 2000;
 const TOP_N_STAR = 5;
+
+// weight 参与事件注入排序：同等相关度下高权重（核心/主线/转折）优先。
+// 幅度刻意做小（每档 EVENT_WEIGHT_RANK_STEP），只在 similarity 接近时打破平局、
+// 微调次序，不颠覆语义相关性本身；与召回层的核心加分（recall.js）分工不同。
+const EVENT_WEIGHT_RANK_STEP = 0.02;
+function weightRankOf(weight) {
+    const s = String(weight || "");
+    if (s.includes("核心")) return 5;
+    if (s.includes("主线")) return 4;
+    if (s.includes("转折")) return 4;
+    if (s.includes("点睛")) return 2;
+    if (s.includes("氛围")) return 1;
+    return 0;
+}
+
 // 背景证据：无实体匹配时保留的最低相似度（与 recall.js CONFIG.EVENT_ENTITY_BYPASS_SIM 保持一致）
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1008,8 +1023,10 @@ async function buildVectorPrompt(
         (e) => e?.event?.summary,
     );
 
+    const rankScoreOf = (e) =>
+        (e.similarity || 0) + weightRankOf(e?.event?.weight) * EVENT_WEIGHT_RANK_STEP;
     const candidates = [...eventHits].sort(
-        (a, b) => (b.similarity || 0) - (a.similarity || 0),
+        (a, b) => rankScoreOf(b) - rankScoreOf(a),
     );
     const eventBudget = {
         used: 0,

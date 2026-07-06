@@ -223,6 +223,7 @@ Before generating, observe the USER and analyze carefully:
 - events.id 从 evt-{$nextEventId} 开始编号
 - 仅输出【增量】内容，已有事件绝不重复
 - summary 按 doc 中的“Event Summary Style”执行，不要写成泛化概括
+- 事件切分：一个 event = 一个有独立召回价值的情节单元。当【场景/地点、时间、在场人物、情节焦点或关系状态】发生明显切换时另起一个 event；同一场景内围绕同一焦点的连续推进（如试探→坦白→回避、铺垫→越界→克制）合为一个 event、在 summary 内按顺序写清，既不要拆成多条空泛条目，也不要把无关的两件事塞进同一个 event
 - keywords 是全局关键词，综合已有+新增
 - causedBy 仅在因果明确时填写，允许为[]，0-2个
 - factUpdates 可为空数组
